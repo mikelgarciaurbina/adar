@@ -191,7 +191,8 @@ describe('rebase', () => {
     git(dir, ['checkout', '-q', 'other'])
     commitFile(dir, 'other2.txt', 'x\n', 'other second')
     const res = await ops.rebase(dir, 'main')
-    expect(res).toMatchObject({ ok: false, conflicts: ['f.txt'], state: 'rebase-interactive' })
+    // git writes rebase-merge/interactive for plain merge-backend rebases too: still a plain rebase.
+    expect(res).toMatchObject({ ok: false, conflicts: ['f.txt'], state: 'rebase' })
 
     const v = await ops.getConflictVersions(dir, 'f.txt')
     expect(v.oursLabel).toBe('main (upstream)')

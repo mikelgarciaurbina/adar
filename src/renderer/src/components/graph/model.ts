@@ -197,6 +197,24 @@ export function buildDisplayRows(input: DisplayInput): DisplayModel {
   return { rows, maxLanes: Math.max(maxLanes, rows.length ? 1 : 0), index }
 }
 
+/**
+ * Lanes needed to draw rows `from`..`to` (inclusive, clamped): highest lane any of
+ * them touches (node, lines, curve ends) + 1; 0 for an empty range.
+ */
+export function lanesInRange(rows: readonly DisplayRow[], from: number, to: number): number {
+  let max = -1
+  const end = Math.min(to, rows.length - 1)
+  for (let i = Math.max(0, from); i <= end; i++) {
+    const r = rows[i]
+    if (r.lane > max) max = r.lane
+    for (const e of r.edges) {
+      if (e.from > max) max = e.from
+      if (e.to > max) max = e.to
+    }
+  }
+  return max + 1
+}
+
 // ── Selection & navigation ─────────────────────────────────────────────────
 
 export function selectionKey(sel: Selection): string | null {

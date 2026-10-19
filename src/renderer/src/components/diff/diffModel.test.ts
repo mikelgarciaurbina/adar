@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { DiffHunk, DiffLine, FileDiff } from '@shared/types'
 import {
   anchorRow,
+  blockBarLift,
   blockRangeLabel,
   blockSelection,
   buildDiffModel,
@@ -210,5 +211,33 @@ describe('scroll anchoring', () => {
     expect(anchorRow(fm, fm.unified, { old: null, new: null })).toBe(-1)
     // From the full file to the hunks view: the next shown line.
     expect(anchorRow(hm, hm.unified, { old: 10, new: 11 })).toBe(9)
+  })
+})
+
+describe('blockBarLift (full-file block buttons in the gutter lane)', () => {
+  // Whole file as one hunk: 1-row block at the top, 2-row block in the middle, 1-row block at the very end.
+  const full = fd([h('@@ -1,6 +1,6 @@', ['-a', '+A', ' b', '-c', '-d', ' e', '+f'])])
+  const m = buildDiffModel(full, { hunkHeaders: false })
+  const [first, middle, last] = m.blocks
+
+  it('keeps a stack that fits in its block (or spills into the context row below) in place', () => {
+    expect(blockBarLift(middle, false, m.unified.length, 2)).toBe(0)
+    expect(blockBarLift(first, false, m.unified.length, 2)).toBe(0)
+    expect(blockBarLift(last, false, m.unified.length, 1)).toBe(0)
+  })
+
+  it('lifts a stack that would hang past the last row', () => {
+    expect(last.unifiedRow).toBe(m.unified.length - 1)
+    expect(blockBarLift(last, false, m.unified.length, 2)).toBe(1)
+    expect(blockBarLift(last, true, m.split.length, 2)).toBe(1)
+  })
+
+  it('counts split rows (paired del/add) rather than lines', () => {
+    // "-a +A" is two lines but a single split row.
+    expect(blockBarLift(first, true, m.split.length, 2)).toBe(0)
+    const tiny = buildDiffModel(fd([h('@@ -1,1 +1,1 @@', ['-a', '+A'])]), { hunkHeaders: false })
+    expect(blockBarLift(tiny.blocks[0], false, tiny.unified.length, 2)).toBe(0)
+    // Nowhere to go: a one-row file keeps the stack at the top.
+    expect(blockBarLift(tiny.blocks[0], true, tiny.split.length, 2)).toBe(0)
   })
 })

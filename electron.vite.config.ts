@@ -4,7 +4,8 @@ import { defineConfig } from 'electron-vite'
 import react from '@vitejs/plugin-react'
 
 const shared = resolve(__dirname, 'src/shared')
-const version = JSON.parse(readFileSync(resolve(__dirname, 'package.json'), 'utf8')).version as string
+const version = (process.env['ADAR_VERSION_OVERRIDE'] ||
+  JSON.parse(readFileSync(resolve(__dirname, 'package.json'), 'utf8')).version) as string
 
 export default defineConfig({
   main: {

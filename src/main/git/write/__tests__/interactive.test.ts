@@ -1,7 +1,9 @@
 import fs from 'node:fs'
+import path from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { RebaseTodoItem } from '@shared/types'
 import { cleanupTmp, commitFile, expectCode, git, head, initRepo, isolateGitConfig, makeOps, read, status, subjects, write } from './helpers'
+import { INTERACTIVE_REBASE_MARKER } from '../../context'
 import { repoKey } from '../interactive'
 
 beforeAll(isolateGitConfig)
@@ -173,4 +175,74 @@ describe('interactiveRebase', () => {
     expect(read(dir, 'A.txt')).toBe('local change\n')
     expect(subjects(dir).slice(0, 2)).toEqual(['C subject', 'D subject'])
   })
+})
+
+describe('rebase state', () => {
+  const marker = (dir: string) => path.join(dir, '.git', INTERACTIVE_REBASE_MARKER)
+
+  /** main: base ← ours; other: base ← theirs (both change f.txt). */
+  function divergedRepo(): string {
+    const dir = initRepo()
+    commitFile(dir, 'f.txt', 'base\n', 'base')
+    git(dir, ['checkout', '-q', '-b', 'other'])
+    commitFile(dir, 'f.txt', 'theirs\n', 'theirs')
+    git(dir, ['checkout', '-q', 'main'])
+    commitFile(dir, 'f.txt', 'ours\n', 'ours')
+    git(dir, ['checkout', '-q', 'other'])
+    return dir
+  }
+
+  it('reports a plain (merge-backend) rebase as "rebase", also when started from a terminal', async () => {
+    const { ops, ctx } = makeOps()
+    const dir = divergedRepo()
+    const res = await ops.rebase(dir, 'main')
+    expect(res).toMatchObject({ ok: false, conflicts: ['f.txt'], state: 'rebase' })
+    // git itself marks it "interactive".
+    expect(fs.existsSync(path.join(dir, '.git', 'rebase-merge', 'interactive'))).toBe(true)
+    expect(fs.existsSync(marker(dir))).toBe(false)
+    await ops.abortOperation(dir)
+    expect(await ctx.operationState(dir)).toBe('none')
+
+    // A plain rebase started from a terminal.
+    expect(() => git(dir, ['rebase', 'main'])).toThrow()
+    expect(await ctx.operationState(dir)).toBe('rebase')
+    git(dir, ['rebase', '--abort'])
+  }, 20_000)
+
+  it('reports an interactive rebase as "rebase-interactive" and removes its marker when it ends', async () => {
+    const { ops, ctx } = makeOps()
+    const { dir, base } = linearRepo()
+    const commits = await ops.getRebaseCommits(dir, base)
+    const todo = commits.map((c, i) => ({ action: i === 1 ? ('edit' as const) : ('pick' as const), sha: c.sha, subject: c.subject }))
+    expect((await ops.interactiveRebase(dir, base, todo)).state).toBe('rebase-interactive')
+    expect(fs.existsSync(marker(dir))).toBe(true)
+    expect(await ctx.operationState(dir)).toBe('rebase-interactive')
+    expect((await ops.continueOperation(dir)).state).toBe('none')
+    expect(fs.existsSync(marker(dir))).toBe(false)
+
+    // Aborted from Adar.
+    expect((await ops.interactiveRebase(dir, base, todo)).state).toBe('rebase-interactive')
+    await ops.abortOperation(dir)
+    expect(fs.existsSync(marker(dir))).toBe(false)
+    expect(await ctx.operationState(dir)).toBe('none')
+  }, 20_000)
+
+  it('drops a stale marker once the rebase ended outside Adar, so the next plain rebase is not interactive', async () => {
+    const { ops, ctx } = makeOps()
+    const { dir, base } = linearRepo()
+    const commits = await ops.getRebaseCommits(dir, base)
+    const todo = commits.map((c, i) => ({ action: i === 0 ? ('edit' as const) : ('pick' as const), sha: c.sha, subject: c.subject }))
+    expect((await ops.interactiveRebase(dir, base, todo)).state).toBe('rebase-interactive')
+    git(dir, ['rebase', '--abort'])
+    expect(fs.existsSync(marker(dir))).toBe(true)
+    expect(await ctx.operationState(dir)).toBe('none')
+    expect(fs.existsSync(marker(dir))).toBe(false)
+
+    // A marker left behind (e.g. aborted from a terminal and never observed) does not leak into a plain rebase.
+    const other = divergedRepo()
+    fs.writeFileSync(marker(other), 'stale\n')
+    const res = await ops.rebase(other, 'main')
+    expect(res).toMatchObject({ ok: false, state: 'rebase' })
+    await ops.abortOperation(other)
+  }, 20_000)
 })

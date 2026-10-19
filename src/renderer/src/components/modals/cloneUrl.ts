@@ -158,6 +158,28 @@ export function expandHome(path: string, homeDir: string | undefined): string {
   return p
 }
 
+/**
+ * Clean up a path typed or pasted into a path field: trims it, strips matching surrounding
+ * quotes ('…' / "…", as copied from a terminal), converts file:// URLs, and unescapes
+ * shell-escaped characters in POSIX paths (~/My\ Repo → ~/My Repo).
+ */
+export function normalizePathInput(raw: string): string {
+  let p = raw.trim()
+  if (p.length >= 2 && (p[0] === '"' || p[0] === "'") && p[p.length - 1] === p[0]) p = p.slice(1, -1).trim()
+  if (/^file:\/\//i.test(p)) {
+    try {
+      const url = new URL(p)
+      if (!url.host || url.host === 'localhost') p = safeDecode(url.pathname)
+    } catch {
+      // keep as typed; validation reports it
+    }
+    if (/^\/[A-Za-z]:\//.test(p)) p = p.slice(1) // file:///C:/repo → C:/repo
+    return p
+  }
+  if (p.startsWith('/') || p.startsWith('~')) p = p.replace(/\\([\s'"()&;!$#*?[\]{}<>|`~\\])/g, '$1')
+  return p
+}
+
 /** True when the path looks absolute (POSIX, "~", Windows drive or UNC). */
 export function isAbsolutePath(path: string): boolean {
   const p = path.trim()

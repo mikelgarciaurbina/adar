@@ -8,6 +8,7 @@ import {
   hasWorkingChanges,
   highlightRanges,
   isAncestor,
+  lanesInRange,
   localBranchesIn,
   navigate,
   nearestCommitRow,
@@ -200,6 +201,47 @@ describe('buildDisplayRows', () => {
     const m = model([commit('M', 'A', 'B'), commit('B', 'A'), commit('A')])
     expect((m.rows[0] as CommitRow).isMerge).toBe(true)
     expect((m.rows[1] as CommitRow).isMerge).toBe(false)
+  })
+})
+
+describe('lanesInRange', () => {
+  // Three branches forked from a root and merged back one by one:
+  //   m2 ─┐          lanes: m2 (0) merges c (2), m1 (0) merges b (1)
+  //   c   │ (lane 2)
+  //   m1 ─┤
+  //   b   │ (lane 1)
+  //   a     (lane 0)
+  //   root
+  const commits = [
+    commit('m2', 'm1', 'c'),
+    commit('c', 'root'),
+    commit('m1', 'a', 'b'),
+    commit('b', 'root'),
+    commit('a', 'root'),
+    commit('root')
+  ]
+  const m = model(commits)
+
+  it('counts the lanes touched by the rows in range (nodes and lines)', () => {
+    expect(lanesInRange(m.rows, 0, m.rows.length - 1)).toBe(m.maxLanes)
+    // The root row alone only uses lane 0, but lines from the other lanes converge into it.
+    const rootIdx = m.index.get('root')!
+    expect(lanesInRange(m.rows, rootIdx, rootIdx)).toBe(m.maxLanes)
+    // Any single row reaches at least its own node lane.
+    for (let i = 0; i < m.rows.length; i++) expect(lanesInRange(m.rows, i, i)).toBeGreaterThan(m.rows[i].lane)
+  })
+
+  it('clamps the range and returns 0 when empty', () => {
+    expect(lanesInRange(m.rows, -5, 100)).toBe(m.maxLanes)
+    expect(lanesInRange(m.rows, 3, 2)).toBe(0)
+    expect(lanesInRange([], 0, 10)).toBe(0)
+  })
+
+  it('includes the lanes of stash and WIP connectors', () => {
+    const withStash = model(commits, { headSha: 'm2', showWip: true, stashes: [stash(0, 's0', 'm2')] })
+    const stashIdx = withStash.rows.findIndex((r) => r.kind === 'stash')
+    expect(lanesInRange(withStash.rows, stashIdx, stashIdx)).toBe(withStash.rows[stashIdx].lane + 1)
+    expect(lanesInRange(withStash.rows, 0, withStash.rows.length - 1)).toBe(withStash.maxLanes)
   })
 })
 

@@ -11,7 +11,7 @@ import { ComparePanel } from './ComparePanel'
 import { MultiSelectPanel } from './MultiSelectPanel'
 import { ErrorBlock } from './parts'
 import { StashPanel } from './StashPanel'
-import { hasWorkingChanges, WipPanel } from './WipPanel'
+import { wantsWipPanel, WipPanel } from './WipPanel'
 import './details.css'
 
 function PanelContent({ tab }: { tab: RepoTab }) {
@@ -28,7 +28,7 @@ function PanelContent({ tab }: { tab: RepoTab }) {
     case 'stash':
       return <StashPanel key={sel.sha} tab={tab} index={sel.index} sha={sel.sha} />
     default:
-      if (hasWorkingChanges(tab.status)) return <WipPanel tab={tab} />
+      if (wantsWipPanel(tab)) return <WipPanel tab={tab} />
       return (
         <div className="det-panel">
           <EmptyState icon={<MousePointerClick size={28} />} title="Select a commit to see its details">

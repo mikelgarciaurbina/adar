@@ -11,7 +11,7 @@ import { createGitContext, ensurePrivateDir } from '../git/context'
 import type { AdarError } from '@shared/errors'
 import { MAX_RECENTS, SettingsStore, sanitizeSettings } from './settings'
 import { extractMarkedPath, mergePathLists } from './shellEnv'
-import { WatcherManager, classifyGitDirPath, classifyWorktreePath } from './watcher'
+import { WatcherManager, classifyGitDirPath, classifyWorktreePath, looseRefsSignature } from './watcher'
 
 // Isolate from the user's git configuration (no git command should depend on it).
 const tmpRoots: string[] = []
@@ -306,6 +306,8 @@ describe('watcher classification', () => {
     expect(classifyGitDirPath('COMMIT_EDITMSG')).toBeNull()
     expect(classifyGitDirPath('FETCH_HEAD')).toBeNull()
     expect(classifyGitDirPath('refs\\heads\\win')).toBe('refs')
+    expect(classifyGitDirPath('reftable/tables.list')).toBe('refs')
+    expect(classifyGitDirPath('adar-interactive-rebase')).toBeNull()
   })
 
   it('maps worktree paths, excluding .git and node_modules', () => {
@@ -343,6 +345,53 @@ describe('watcher classification', () => {
       w.stopAll()
     }
     expect(w.isWatching(dir)).toBe(false)
+  })
+
+  it('polls nested loose refs (git branch -f feature/x) when fs.watch is silent', async () => {
+    const repo = tmp()
+    const run = (args: string[]) =>
+      new Promise<void>((resolve, reject) => execFile('git', args, { cwd: repo }, (err) => (err ? reject(err) : resolve())))
+    const commitArgs = ['-c', 'user.name=T', '-c', 'user.email=t@e', '-c', 'commit.gpgsign=false', 'commit', '-q', '--allow-empty']
+    await run(['init', '-q', '-b', 'main'])
+    await run([...commitArgs, '-m', 'one'])
+    await run([...commitArgs, '-m', 'two'])
+    await run(['branch', 'feature/deep/x', 'HEAD~1'])
+    await run(['update-ref', 'refs/remotes/origin/team/topic', 'HEAD~1'])
+    const gitDir = path.join(repo, '.git')
+    const events: AdarEvent[] = []
+    const w = new WatcherManager((e) => events.push(e), { fsWatch: false, pollMs: 50, graceMs: 100, debounceMs: 20, maxWaitMs: 200 })
+    w.start({ repoPath: repo, gitDir, isBare: false })
+    try {
+      await sleep(150)
+      expect(events).toEqual([])
+      await run(['branch', '-f', 'feature/deep/x', 'HEAD'])
+      expect(await until(() => scopesOf(events).has('refs'))).toBe(true)
+      expect(w.healthOf(repo)).toBe('degraded')
+      // Degraded: a nested remote-tracking ref moving is reported as well.
+      await sleep(150)
+      events.length = 0
+      await run(['update-ref', 'refs/remotes/origin/team/topic', 'HEAD'])
+      expect(await until(() => scopesOf(events).has('refs'))).toBe(true)
+    } finally {
+      w.stopAll()
+    }
+  })
+
+  it('computes the loose-ref signature over nested directories, with a cap', async () => {
+    const refs = path.join(tmp(), 'refs')
+    await fs.mkdir(path.join(refs, 'heads', 'feature', 'deep'), { recursive: true })
+    await fs.mkdir(path.join(refs, 'tags'), { recursive: true })
+    const s0 = await looseRefsSignature(refs)
+    expect(s0.split('\n').map((l) => l.split(':')[0])).toEqual(['', 'heads', 'tags', path.join('heads', 'feature'), path.join('heads', 'feature', 'deep')])
+    expect(await looseRefsSignature(refs)).toBe(s0)
+    // A ref rewritten deep down (lock file + rename) changes it.
+    await sleep(5)
+    await fs.writeFile(path.join(refs, 'heads', 'feature', 'deep', 'x.lock'), 'abc\n')
+    await fs.rename(path.join(refs, 'heads', 'feature', 'deep', 'x.lock'), path.join(refs, 'heads', 'feature', 'deep', 'x'))
+    const s1 = await looseRefsSignature(refs)
+    expect(s1).not.toBe(s0)
+    expect((await looseRefsSignature(refs, 2)).split('\n')).toHaveLength(2)
+    expect(await looseRefsSignature(path.join(refs, 'missing'))).toBe(':missing')
   })
 
   it('detects worktree edits through the status signature until fs.watch proves itself', async () => {

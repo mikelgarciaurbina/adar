@@ -146,6 +146,67 @@ describe('RightPanel smoke', () => {
     expect(amend).toContain('Stage all &amp; amend')
   })
 
+  it('replaces the stale WIP lists with the repository error and disables committing', () => {
+    const error = 'Repository folder not found: /tmp/adar-smoke'
+    const draft = { summary: 'Keep my draft', description: '', amend: false }
+    for (const tab of [makeTab({ selection: { kind: 'wip' }, error, draft }), makeTab({ error, draft }), makeTab({ selection: { kind: 'wip' }, error, draft, status: null })]) {
+      const html = render(tab)
+      expect(html).toContain('Repository unavailable')
+      expect(html).toContain(error)
+      expect(html).toContain('>Retry<')
+      expect(html).not.toContain('Unstaged Files')
+      expect(html).not.toContain('Staged Files')
+      expect(html).not.toContain('Stage all')
+      expect(html).not.toContain('Stash all changes')
+      expect(html).not.toContain('Reading working tree')
+      // The draft is kept (and editable) but the commit button is disabled with an explanation.
+      expect(html).toContain('value="Keep my draft"')
+      expect(html).toMatch(/<button[^>]*disabled=""[^>]*title="Commit changes/)
+      expect(html).toContain('The repository is unavailable: committing is disabled')
+    }
+    // Stale operation info does not leak into the composer either.
+    const merge = render(makeTab({ selection: { kind: 'wip' }, error, info: { ...makeTab({}).info!, state: 'merge' } }))
+    expect(merge).not.toContain('Commit merge')
+    // Once a refresh succeeds (tab.error cleared) the lists and the commit button are back.
+    const ok = render(makeTab({ selection: { kind: 'wip' }, draft }))
+    expect(ok).toContain('Unstaged Files')
+    expect(ok).not.toContain('Repository unavailable')
+    expect(ok).toMatch(/<button[^>]*title="Commit changes to 1 file/)
+    expect(ok).not.toMatch(/<button[^>]*disabled=""[^>]*title="Commit changes/)
+  })
+
+  it('keeps the merge composer reachable when the resolved merge has no file changes', () => {
+    const clean = { ...status, staged: [], unstaged: [] }
+    const info = { ...makeTab({}).info!, state: 'merge' as const }
+    // No selection: the right panel defaults to the staging area while a merge waits for its commit.
+    const html = render(makeTab({ status: clean, info, draft: { summary: 'Merge feature', description: '', amend: false } }))
+    expect(html).not.toContain('Select a commit to see its details')
+    expect(html).toContain('No file changes')
+    expect(html).toContain('The merge result matches main')
+    expect(html).not.toContain('Your working tree is clean')
+    expect(html).toContain('Merge commit')
+    expect(html).toMatch(/<button[^>]*title="Commit merge/)
+    expect(html).not.toMatch(/<button[^>]*disabled=""[^>]*title="Commit merge/)
+    // Without a merge a clean tree still shows the hint.
+    expect(render(makeTab({ status: clean }))).toContain('Select a commit to see its details')
+  })
+
+  it('cannot amend during a merge, even with a leftover amend flag', () => {
+    const info = { ...makeTab({}).info!, state: 'merge' as const }
+    const conflicted = { ...status, conflicted: [{ path: 'README.md', kind: 'both-modified' as const }] }
+    const html = render(makeTab({ selection: { kind: 'wip' }, info, status: conflicted, draft: { summary: 'Merge', description: '', amend: true } }))
+    expect(html).toMatch(/<input type="checkbox" disabled=""/)
+    expect(html).not.toMatch(/<input type="checkbox"[^>]*checked=""/)
+    expect(html).not.toContain('Amend previous commit with')
+    expect(html).toContain('Resolve 1 conflicted file before committing')
+  })
+
+  it('names the in-progress operation in the composer note', () => {
+    const info = makeTab({}).info!
+    expect(render(makeTab({ selection: { kind: 'wip' }, info: { ...info, state: 'rebase-interactive' } }))).toContain('An interactive rebase is in progress')
+    expect(render(makeTab({ selection: { kind: 'wip' }, info: { ...info, state: 'rebase' } }))).toContain('A rebase is in progress')
+  })
+
   it('renders a loading WIP panel without status', () => {
     expect(render(makeTab({ selection: { kind: 'wip' }, status: null }))).toContain('Reading working tree')
   })

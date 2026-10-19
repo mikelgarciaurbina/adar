@@ -8,7 +8,7 @@
 
 import { create } from 'zustand'
 import { api, setZoom } from '@renderer/api/client'
-import { describeError } from '@shared/errors'
+import { AdarError, describeError } from '@shared/errors'
 import {
   DEFAULT_SETTINGS,
   type AppInfo,
@@ -241,6 +241,8 @@ function isCurrentGen(path: string, scope: RefreshScope, gen: number): boolean {
 }
 
 let settingsSaveTimer: ReturnType<typeof setTimeout> | null = null
+let pendingSettings: Partial<AppSettings> = {}
+const loadMoreInFlight = new Map<string, Promise<void>>()
 
 // ── Store ──────────────────────────────────────────────────────────────────
 
@@ -253,6 +255,32 @@ export const useApp = create<AppState>()((set, get) => {
   const persistTabs = () => {
     const { tabs, activePath } = get()
     void get().updateSettings({ openTabs: tabs.map((t) => t.path), activeTab: activePath })
+  }
+
+  /** Fetch the next page of the log for `path` (callers go through loadMore, which dedupes). */
+  const loadMorePage = async (path: string): Promise<void> => {
+    const tab = getTab(path)
+    if (!tab || !tab.hasMore) return
+    updateTab(path, (t) => ({ loading: { ...t.loading, more: true } }))
+    const gen = generations.get(path)?.log ?? 0
+    try {
+      const settings = get().settings
+      const page = await api.getLog(path, {
+        maxCount: settings.graphPageSize || 2000,
+        skip: tab.commits.length,
+        revisions: graphRevisions(tab, settings)
+      })
+      // A log refresh replaced the list meanwhile: this page is stale.
+      if ((generations.get(path)?.log ?? 0) !== gen) return
+      updateTab(path, (t) => {
+        const seen = new Set(t.commits.map((c) => c.sha))
+        return { commits: [...t.commits, ...page.commits.filter((c) => !seen.has(c.sha))], hasMore: page.hasMore }
+      })
+    } catch {
+      /* keep what we have; callers detect the lack of progress */
+    } finally {
+      updateTab(path, (t) => ({ loading: { ...t.loading, more: false } }))
+    }
   }
 
   return {
@@ -378,8 +406,11 @@ export const useApp = create<AppState>()((set, get) => {
               if (!isCurrentGen(path, 'status', gen)) return
               updateTab(path, (t) => ({ status, loading: { ...t.loading, status: false } }))
             },
-            () => {
-              if (isCurrentGen(path, 'status', gen)) updateTab(path, (t) => ({ loading: { ...t.loading, status: false } }))
+            (err) => {
+              if (!isCurrentGen(path, 'status', gen)) return
+              // A vanished repository folder must disable the UI right away (not only after the next full refresh).
+              const fatal = err instanceof AdarError && (err.code === 'NOT_FOUND' || err.code === 'NOT_A_REPO')
+              updateTab(path, (t) => ({ loading: { ...t.loading, status: false }, ...(fatal ? { error: describeError(err) } : {}) }))
             }
           )
         )
@@ -413,10 +444,14 @@ export const useApp = create<AppState>()((set, get) => {
                 const page = await api.getLog(path, { maxCount, revisions: graphRevisions(t0, settings) })
                 if (!isCurrentGen(path, 'log', logGen)) return
                 updateTab(path, (t) => {
-                  // Drop selection if the selected commit vanished (e.g. after reset/amend).
+                  // Drop the selection only if the commit really vanished (e.g. after reset/amend):
+                  // with more pages available it may simply lie beyond the first page.
                   let selection = t.selection
                   const sel = t.selection
-                  if (sel.kind === 'commit' && !page.commits.some((c) => c.sha === sel.sha)) {
+                  // The reload covers every commit loaded so far, so a previously loaded commit missing
+                  // from it really vanished; a never-loaded one (being paged in) is kept while more pages exist.
+                  const wasLoaded = sel.kind === 'commit' && t.commits.some((c) => c.sha === sel.sha)
+                  if (sel.kind === 'commit' && !page.commits.some((c) => c.sha === sel.sha) && (wasLoaded || !page.hasMore)) {
                     selection = { kind: 'none' }
                   }
                   return {
@@ -438,30 +473,13 @@ export const useApp = create<AppState>()((set, get) => {
       await Promise.all(tasks)
     },
 
-    async loadMore(path) {
-      const tab = getTab(path)
-      if (!tab || !tab.hasMore || tab.loading.more) return
-      updateTab(path, (t) => ({ loading: { ...t.loading, more: true } }))
-      const gen = generations.get(path)?.log ?? 0
-      try {
-        const settings = get().settings
-        const page = await api.getLog(path, {
-          maxCount: settings.graphPageSize || 2000,
-          skip: tab.commits.length,
-          revisions: graphRevisions(tab, settings)
-        })
-        if ((generations.get(path)?.log ?? 0) !== gen) return
-        updateTab(path, (t) => {
-          const seen = new Set(t.commits.map((c) => c.sha))
-          return {
-            commits: [...t.commits, ...page.commits.filter((c) => !seen.has(c.sha))],
-            hasMore: page.hasMore,
-            loading: { ...t.loading, more: false }
-          }
-        })
-      } catch {
-        updateTab(path, (t) => ({ loading: { ...t.loading, more: false } }))
-      }
+    loadMore(path) {
+      // Concurrent callers share the in-flight page instead of seeing "no progress".
+      const running = loadMoreInFlight.get(path)
+      if (running) return running
+      const p = loadMorePage(path).finally(() => loadMoreInFlight.delete(path))
+      loadMoreInFlight.set(path, p)
+      return p
     },
 
     async ensureCommitLoaded(path, sha) {
@@ -472,8 +490,13 @@ export const useApp = create<AppState>()((set, get) => {
         if (!tab.hasMore) return false
         const before = tab.commits.length
         await get().loadMore(path)
+        // A log refresh may be replacing the list: wait for it before judging progress.
+        for (let w = 0; w < 100 && getTab(path)?.loading.log; w++) await new Promise((r) => setTimeout(r, 50))
+        const after = getTab(path)
+        if (!after) return false
+        if (after.commits.some((c) => c.sha === sha || c.sha.startsWith(sha))) return true
         // Stop when paging fails or yields nothing (avoids hammering a failing getLog).
-        if ((getTab(path)?.commits.length ?? 0) <= before) return false
+        if (after.commits.length <= before && !after.loading.more) return false
       }
       return false
     },
@@ -608,10 +631,14 @@ export const useApp = create<AppState>()((set, get) => {
       const next = { ...get().settings, ...patch }
       set({ settings: next })
       if (patch.zoom !== undefined) setZoom(patch.zoom)
-      // Debounce writes (panel resizing fires many updates).
+      // Debounce writes (panel resizing fires many updates) and send only the keys that changed,
+      // so values written by the backend itself are never overwritten with stale renderer copies.
+      pendingSettings = { ...pendingSettings, ...patch }
       if (settingsSaveTimer) clearTimeout(settingsSaveTimer)
       settingsSaveTimer = setTimeout(() => {
-        void api.updateSettings(get().settings).catch((err) => console.error('[adar] saving settings failed', err))
+        const toSave = pendingSettings
+        pendingSettings = {}
+        void api.updateSettings(toSave).catch((err) => console.error('[adar] saving settings failed', err))
       }, 300)
     },
 

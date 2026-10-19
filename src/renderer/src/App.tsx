@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { ContextMenuHost } from '@renderer/components/common/ContextMenu'
 import { DialogHost } from '@renderer/components/common/dialogs'
+import { ErrorBoundary } from '@renderer/components/common/ErrorBoundary'
 import { Resizer } from '@renderer/components/common/Resizer'
 import { ToastHost } from '@renderer/components/common/toast'
 import { Spinner } from '@renderer/components/common/Button'
@@ -57,7 +58,9 @@ function RepoWorkspace({ tab }: { tab: RepoTab }) {
         {!leftCollapsed && (
           <>
             <div className="app-left" style={{ width: leftWidth }}>
-              <LeftPanel tab={tab} />
+              <ErrorBoundary area="the left panel" resetKey={tab.path}>
+                <LeftPanel tab={tab} />
+              </ErrorBoundary>
             </div>
             <Resizer side="left" width={leftWidth} min={180} max={520} onResize={(w) => void updateSettings({ leftPanelWidth: w })} />
           </>
@@ -65,14 +68,18 @@ function RepoWorkspace({ tab }: { tab: RepoTab }) {
         <div className="app-center">
           <OperationBanner tab={tab} />
           <div className="app-center-body">
-            <CenterPanel tab={tab} />
+            <ErrorBoundary area="this view" resetKey={`${tab.path}:${tab.center.kind}`}>
+              <CenterPanel tab={tab} />
+            </ErrorBoundary>
           </div>
         </div>
         {!rightCollapsed && (
           <>
             <Resizer side="right" width={rightWidth} min={280} max={720} onResize={(w) => void updateSettings({ rightPanelWidth: w })} />
             <div className="app-right" style={{ width: rightWidth }}>
-              <RightPanel tab={tab} />
+              <ErrorBoundary area="the right panel" resetKey={tab.path}>
+                <RightPanel tab={tab} />
+              </ErrorBoundary>
             </div>
           </>
         )}

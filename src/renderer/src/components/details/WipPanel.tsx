@@ -6,7 +6,7 @@
 import { memo, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Archive, ChevronDown, ChevronRight, CircleCheck, FilePen, Minus, Plus, Trash, TriangleAlert, Undo2 } from 'lucide-react'
 import * as actions from '@renderer/actions/git'
-import { EmptyState, IconButton } from '@renderer/components/common/Button'
+import { Button, EmptyState, IconButton } from '@renderer/components/common/Button'
 import { showContextMenu } from '@renderer/components/common/ContextMenu'
 import { markResolvedAndAdvance } from '@renderer/components/conflicts/resolveFlow'
 import { isMod } from '@renderer/lib/keys'
@@ -36,6 +36,15 @@ const CONFLICT_LABEL: Record<ConflictKind, string> = {
 /** True when the working tree has anything to show in the staging area. */
 export function hasWorkingChanges(status: WorkingStatus | null): boolean {
   return !!status && (status.staged.length > 0 || status.unstaged.length > 0 || status.conflicted.length > 0)
+}
+
+/**
+ * True when the right panel should default to the staging area: there are changes, or a merge
+ * waits for its commit (even one whose resolution left no file changes) — the composer is where
+ * it is committed.
+ */
+export function wantsWipPanel(tab: Pick<RepoTab, 'status' | 'info' | 'error'>): boolean {
+  return hasWorkingChanges(tab.status) || (!!tab.status && !tab.error && tab.info?.state === 'merge')
 }
 
 function getTab(repo: string): RepoTab | undefined {
@@ -131,6 +140,32 @@ export function WipPanel({ tab }: { tab: RepoTab }) {
   )
   const toggleUnstaged = useCallback(() => setCollapsed((c) => ({ ...c, unstaged: !c.unstaged })), [])
   const toggleStaged = useCallback(() => setCollapsed((c) => ({ ...c, staged: !c.staged })), [])
+
+  // The repository could not be read (e.g. its folder was deleted or moved): the lists would be
+  // stale, so show the error instead and keep staging/committing off until a refresh succeeds
+  // (a successful repository refresh clears tab.error).
+  if (tab.error) {
+    return (
+      <div className="det-panel det-wip">
+        <div className="ui-panel-header det-header">
+          <FilePen size={14} className="det-header-icon" />
+          <span className="det-header-title">Working directory</span>
+        </div>
+        <div className="det-sections">
+          <div className="det-unavailable" role="alert">
+            <TriangleAlert size={22} />
+            <div className="det-unavailable-title">Repository unavailable</div>
+            <div className="det-unavailable-body selectable">{tab.error}</div>
+            <Button size="sm" onClick={() => void useApp.getState().refresh(repo)}>
+              Retry
+            </Button>
+          </div>
+        </div>
+        {/* Keyed so it remounts (and re-reads the identity) once the repository is back. */}
+        <CommitComposer key="unavailable" tab={tab} staged={0} unstaged={0} conflicted={0} unavailable="The repository is unavailable: committing is disabled" />
+      </div>
+    )
+  }
 
   if (tab.info?.isBare) {
     return (
@@ -253,16 +288,24 @@ export function WipPanel({ tab }: { tab: RepoTab }) {
           unstageAll={unstageAll}
         />
 
-        {total === 0 && (
-          <div className="det-clean">
-            <CircleCheck size={22} />
-            <div className="det-clean-title">No changes</div>
-            <div className="det-clean-body">Your working tree is clean.</div>
-          </div>
-        )}
+        {total === 0 &&
+          (tab.info?.state === 'merge' ? (
+            // Every conflict was resolved in favour of the current branch: still a merge to commit.
+            <div className="det-clean">
+              <CircleCheck size={22} />
+              <div className="det-clean-title">No file changes</div>
+              <div className="det-clean-body">The merge result matches {branch ?? 'HEAD'}. Commit the merge to record it.</div>
+            </div>
+          ) : (
+            <div className="det-clean">
+              <CircleCheck size={22} />
+              <div className="det-clean-title">No changes</div>
+              <div className="det-clean-body">Your working tree is clean.</div>
+            </div>
+          ))}
       </div>
 
-      <CommitComposer tab={tab} staged={staged.length} unstaged={unstaged.length} conflicted={conflicted.length} />
+      <CommitComposer key="ready" tab={tab} staged={staged.length} unstaged={unstaged.length} conflicted={conflicted.length} />
     </div>
   )
 }

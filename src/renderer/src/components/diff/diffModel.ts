@@ -329,3 +329,16 @@ export function hunkRangeLabel(diff: FileDiff, hunkIndex: number): string {
   if (count <= 1) return `Line ${start}`
   return `Lines ${start}-${start + count - 1}`
 }
+
+/**
+ * Rows to lift a change block's button stack (`buttons` tall, one row each) in the
+ * full-file gutter lane. A stack taller than its block spills into the lane of the
+ * context row below (free: blocks are separated by context), except at the end of
+ * the list, where it moves up instead so it never hangs past the last row.
+ */
+export function blockBarLift(block: ChangeBlock, split: boolean, rowCount: number, buttons: number): number {
+  const first = split ? block.splitRow : block.unifiedRow
+  const rows = split ? Math.max(block.adds, block.dels) : block.adds + block.dels
+  if (rows >= buttons) return 0
+  return Math.max(0, Math.min(first, first + buttons - rowCount))
+}

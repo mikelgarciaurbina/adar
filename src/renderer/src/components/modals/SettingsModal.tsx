@@ -1,17 +1,20 @@
 // Preferences. Every control applies immediately through store.updateSettings
 // (persisted, debounced, by the store). The Git section edits the global identity.
 
-import { useEffect, useId, useState } from 'react'
-import { FileDiff, GitBranch, GitGraph, Plug, Settings, SlidersHorizontal } from 'lucide-react'
-import { api } from '@renderer/api/client'
+import { useEffect, useId, useRef, useState } from 'react'
+import { Download, FileDiff, GitBranch, GitGraph, Plug, RefreshCw, Settings, SlidersHorizontal } from 'lucide-react'
+import { api, isElectron, updates } from '@renderer/api/client'
 import { Button, Spinner } from '@renderer/components/common/Button'
 import { Modal } from '@renderer/components/common/Modal'
 import { toast } from '@renderer/components/common/toast'
 import { formatGitVersion } from '@renderer/components/layout/chrome'
+import { checkForUpdatesNow, startUpdate } from '@renderer/components/update/UpdateNotice'
+import { useUpdates } from '@renderer/components/update/updateStore'
 import { useApp, useSettings } from '@renderer/store/appStore'
 import type { AppSettings, DiffViewMode, Identity, PullMode, ThemeSetting } from '@shared/types'
 import { closeIfTopmost, Segmented, SettingRow, Switch } from './controls'
 import { validateIdentity } from './identity'
+import { describeUpdateStatus, type UpdateAction } from './updates'
 
 type SectionId = 'general' | 'graph' | 'diff' | 'integrations' | 'git'
 
@@ -164,6 +167,73 @@ function GeneralSection() {
           ]}
         />
       </SettingRow>
+      <UpdateSettings />
+    </>
+  )
+}
+
+function runUpdateAction(action: UpdateAction) {
+  if (action === 'update' || action === 'retry') void startUpdate()
+  else if (action === 'install' || action === 'open-installer') updates.updateInstall().catch((err) => toast.error(err))
+}
+
+function UpdateSettings() {
+  const s = useSettings()
+  const appInfo = useApp((st) => st.appInfo)
+  const status = useUpdates((u) => u.status)
+  const [checking, setChecking] = useState(false)
+  const mounted = useRef(true)
+  useEffect(() => {
+    mounted.current = true
+    return () => {
+      mounted.current = false
+    }
+  }, [])
+
+  const desktop = appInfo?.isElectron ?? isElectron
+  const summary = describeUpdateStatus(status, { isElectron: desktop, checking, automatic: s.checkForUpdates })
+  const version = status?.currentVersion || appInfo?.version || '—'
+  const hasNotes = !!status?.info && ['available', 'downloading', 'downloaded'].includes(status.state)
+
+  const checkNow = async () => {
+    setChecking(true)
+    try {
+      await checkForUpdatesNow()
+    } finally {
+      if (mounted.current) setChecking(false)
+    }
+  }
+
+  return (
+    <>
+      <SectionTitle>Updates</SectionTitle>
+      <SettingRow label="Check for updates automatically" description="Look for new Adar releases on GitHub in the background.">
+        <Switch label="Check for updates automatically" checked={s.checkForUpdates} onChange={(checkForUpdates) => update({ checkForUpdates })} />
+      </SettingRow>
+      <SettingRow label={`Adar ${version}`} description={<span className={`md-update-status md-update-${summary.tone}`}>{summary.text}</span>}>
+        <div className="md-update-actions">
+          {hasNotes && (
+            <Button size="sm" variant="ghost" onClick={() => useUpdates.getState().setNotesOpen(true)}>
+              What&apos;s new
+            </Button>
+          )}
+          {summary.action && (
+            <Button size="sm" variant="primary" icon={summary.action === 'install' || summary.action === 'open-installer' ? <RefreshCw size={13} /> : <Download size={13} />} loading={summary.busy} onClick={() => runUpdateAction(summary.action)}>
+              {summary.actionLabel}
+            </Button>
+          )}
+          <Button size="sm" icon={<RefreshCw size={13} />} loading={checking} disabled={!desktop || summary.busy} onClick={() => void checkNow()}>
+            Check now
+          </Button>
+        </div>
+      </SettingRow>
+      {s.skippedUpdateVersion && (
+        <SettingRow label={`Skipped version ${s.skippedUpdateVersion}`} description="Adar does not notify you about this version. Manual checks still find it.">
+          <Button size="sm" onClick={() => update({ skippedUpdateVersion: '' })}>
+            Reset
+          </Button>
+        </SettingRow>
+      )}
     </>
   )
 }

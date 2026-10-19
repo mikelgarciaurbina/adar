@@ -19,10 +19,11 @@
   const visible = (el) => !!el && el.getClientRects().length > 0
   const describe = (el) => (el ? `${el.tagName.toLowerCase()}${el.className ? '.' + String(el.className).split(' ').join('.') : ''}` : 'null')
   /** Innermost visible element whose trimmed text equals (or, with partial, contains) `text`. */
+  const SKIP = new Set(['HTML', 'HEAD', 'BODY', 'STYLE', 'SCRIPT', 'NOSCRIPT', 'TEMPLATE'])
   const byText = (text, { selector = '*', partial = false, root = document } = {}) => {
     const els = qa(selector, root).filter((el) => {
-      if (!visible(el)) return false
-      const t = (el.textContent || '').trim()
+      if (SKIP.has(el.tagName) || !visible(el)) return false
+      const t = (el.innerText ?? el.textContent ?? '').trim()
       return partial ? t.includes(text) : t === text
     })
     return els.find((el) => ![...el.children].some((c) => els.includes(c))) || els[els.length - 1] || null
@@ -116,7 +117,9 @@
       new Promise((res) => {
         const t0 = Date.now()
         const check = () => {
-          const ok = typeof what === 'function' ? what() : q(what) || byText(what) || byText(what, { partial: true })
+          // A string that parses as a selector is only matched as a selector (never as text in a <style>).
+          const isSelector = typeof what === 'string' && /^[.#\[]|^[a-z]+[.#\[:]/i.test(what) && (() => { try { document.querySelector(what); return true } catch { return false } })()
+          const ok = typeof what === 'function' ? what() : isSelector ? q(what) : byText(what) || byText(what, { partial: true })
           if (ok) return res(`found ${typeof what === 'string' ? what : 'predicate'} after ${Date.now() - t0}ms`)
           if (Date.now() - t0 > timeout) return res(`TIMEOUT waiting for ${typeof what === 'string' ? what : 'predicate'}`)
           setTimeout(check, 100)

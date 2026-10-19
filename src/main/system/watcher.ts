@@ -5,9 +5,10 @@
 // Primary source: recursive fs.watch (FSEvents on macOS) on the git dir and the worktree.
 // Safety net, because FSEvents can be late or silent (overloaded fseventsd, network
 // volumes, some virtual file systems):
-//  - the key git files (index, HEAD, reflogs, packed-refs, ref directories, FETCH_HEAD...)
-//    are stat-polled every second. A change the poller sees but fs.watch did not report
-//    within a grace period marks the repo "degraded" and is emitted by the poller;
+//  - the key git files (index, HEAD, reflogs, packed-refs, FETCH_HEAD...) and every directory
+//    below refs/ (nested branch namespaces included) are stat-polled every second. A change the
+//    poller sees but fs.watch did not report within a grace period marks the repo "degraded"
+//    and is emitted by the poller;
 //  - while fs.watch has not proven itself (no event yet) or is degraded, worktree edits are
 //    detected by comparing a `git status` signature at an adaptive interval.
 // Worktree batches that only touch git-ignored paths (build output...) are dropped.
@@ -49,6 +50,8 @@ export function classifyGitDirPath(relPath: string): ChangeScope | null {
     p === 'config' ||
     p === 'shallow' ||
     first === 'refs' ||
+    // Repositories using the reftable ref backend keep every ref (HEAD too) in reftable/.
+    first === 'reftable' ||
     first === 'rebase-merge' ||
     first === 'rebase-apply' ||
     first === 'sequencer'
@@ -82,16 +85,59 @@ const POLL_GIT_DIR: ReadonlyArray<[string, ChangeScope]> = [
   ['sequencer', 'refs']
 ]
 
-/** Files / directories stat-polled in the common git dir (shared by linked worktrees). */
+/**
+ * Files / directories stat-polled in the common git dir (shared by linked worktrees). Loose refs
+ * are covered by looseRefsSignature() (every directory below refs/, nested ones included).
+ */
 const POLL_COMMON_DIR: ReadonlyArray<[string, ChangeScope]> = [
   ['packed-refs', 'refs'],
   ['FETCH_HEAD', 'refs'],
   ['logs/refs/stash', 'refs'],
-  ['refs/heads', 'refs'],
-  ['refs/tags', 'refs'],
-  ['refs/remotes', 'refs'],
+  ['reftable', 'refs'],
   ['config', 'refs']
 ]
+
+/** Directories visited under refs/ per poll; beyond that the remaining ones are not polled. */
+export const MAX_REF_DIRS = 1000
+
+/**
+ * Cheap signature of all loose refs below `refsDir`: the mtime of every directory in the tree.
+ * git rewrites a loose ref through `<name>.lock` + rename inside the ref's own directory, which
+ * bumps that directory's mtime — so nested refs (refs/heads/feature/x, refs/remotes/origin/a/b)
+ * are seen, not only the top-level ref directories. Only directories are stat'ed; the walk is
+ * breadth-first (one level at a time, in parallel; names sorted) and capped at `maxDirs`.
+ */
+export async function looseRefsSignature(refsDir: string, maxDirs = MAX_REF_DIRS): Promise<string> {
+  const parts: string[] = []
+  let level = [refsDir]
+  let visited = 0
+  while (level.length && visited < maxDirs) {
+    const batch = level.slice(0, maxDirs - visited)
+    visited += batch.length
+    const results = await Promise.all(
+      batch.map(async (dir) => {
+        const rel = path.relative(refsDir, dir)
+        try {
+          const [st, entries] = await Promise.all([fsp.stat(dir), fsp.readdir(dir, { withFileTypes: true })])
+          const subdirs = entries
+            .filter((e) => e.isDirectory())
+            .map((e) => e.name)
+            .sort()
+            .map((name) => path.join(dir, name))
+          return { sig: `${rel}:${st.mtimeMs}:${st.ino}`, subdirs }
+        } catch {
+          return { sig: `${rel}:missing`, subdirs: [] }
+        }
+      })
+    )
+    level = []
+    for (const r of results) {
+      parts.push(r.sig)
+      level.push(...r.subdirs)
+    }
+  }
+  return parts.join('\n')
+}
 
 /** Worktree paths remembered per batch for the ignore filter; more → emit unfiltered. */
 const MAX_TRACKED_PATHS = 200
@@ -335,17 +381,9 @@ export class WatcherManager {
       ...POLL_GIT_DIR.map(([rel, scope]): [string, ChangeScope] => [path.join(gitDir, rel), scope]),
       ...POLL_COMMON_DIR.map(([rel, scope]): [string, ChangeScope] => [path.join(commonDir, rel), scope])
     ]
-    // Loose remote-tracking refs are rewritten inside refs/remotes/<remote>/ (one level per remote).
-    try {
-      for (const name of await fsp.readdir(path.join(commonDir, 'refs', 'remotes'))) {
-        files.push([path.join(commonDir, 'refs', 'remotes', name), 'refs'])
-      }
-    } catch {
-      /* no remotes */
-    }
     const stamps = new Map<string, string>()
-    await Promise.all(
-      files.map(async ([file, scope]) => {
+    await Promise.all([
+      ...files.map(async ([file, scope]) => {
         let sig = 'missing'
         try {
           const st = await fsp.stat(file)
@@ -354,8 +392,11 @@ export class WatcherManager {
           /* missing */
         }
         stamps.set(`${scope}\0${file}`, sig)
+      }),
+      looseRefsSignature(path.join(commonDir, 'refs')).then((sig) => {
+        stamps.set(`refs\0${path.join(commonDir, 'refs')}/**`, sig)
       })
-    )
+    ])
     return stamps
   }
 

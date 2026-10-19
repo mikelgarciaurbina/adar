@@ -7,12 +7,15 @@ import {
   formatGitVersion,
   headLabel,
   isBusyFor,
+  isFullscreenWindow,
   latestProgressWithPrefix,
+  pendingUpdateVersion,
   pickProgress,
   reorderIndex,
   tildify,
   toUnixSeconds
 } from './chrome'
+import type { UpdateStatus } from '@shared/update'
 
 function move<T>(arr: T[], from: number, to: number): T[] {
   const a = [...arr]
@@ -157,5 +160,62 @@ describe('distinctParents', () => {
       { path: 'C:\\code\\two\\repo', name: 'repo' }
     ])
     expect(m.get('C:\\code\\one\\repo')).toBe('one')
+  })
+})
+
+describe('isFullscreenWindow', () => {
+  const screen = { screenWidth: 1512, screenHeight: 982 }
+  const win = (w: number, h: number, extra: Partial<Parameters<typeof isFullscreenWindow>[0]> = {}) => ({
+    innerWidth: w,
+    innerHeight: h,
+    zoom: 1,
+    ...screen,
+    htmlFullscreen: false,
+    ...extra
+  })
+  it('detects native full screen (viewport exactly covers the screen)', () => {
+    expect(isFullscreenWindow(win(1512, 982))).toBe(true)
+  })
+  it('is false for normal and maximised windows (menu bar stays visible)', () => {
+    expect(isFullscreenWindow(win(1280, 800))).toBe(false)
+    expect(isFullscreenWindow(win(1512, 949))).toBe(false) // zoomed: screen minus menu bar
+    expect(isFullscreenWindow(win(1512, 900))).toBe(false)
+  })
+  it('accounts for the UI zoom (viewport in CSS px, rounded down)', () => {
+    // 1512 / 1.25 = 1209.6 → 1209, 982 / 1.25 = 785.6 → 785
+    expect(isFullscreenWindow(win(1209, 785, { zoom: 1.25 }))).toBe(true)
+    expect(isFullscreenWindow(win(1374, 892, { zoom: 1.1 }))).toBe(true)
+    expect(isFullscreenWindow(win(1209, 759, { zoom: 1.25 }))).toBe(false) // maximised at 125%
+    expect(isFullscreenWindow(win(1680, 1091, { zoom: 0.9 }))).toBe(true)
+    expect(isFullscreenWindow(win(1512, 982, { zoom: 0 }))).toBe(true) // invalid zoom → 1
+  })
+  it('honours the HTML fullscreen API and ignores missing metrics', () => {
+    expect(isFullscreenWindow(win(800, 600, { htmlFullscreen: true }))).toBe(true)
+    expect(isFullscreenWindow(win(1512, 982, { screenWidth: 0, screenHeight: 0 }))).toBe(false)
+    expect(isFullscreenWindow(win(0, 0, { screenWidth: 0, screenHeight: 0 }))).toBe(false)
+  })
+})
+
+describe('pendingUpdateVersion', () => {
+  const info = {
+    currentVersion: '0.1.0',
+    latestVersion: '0.2.0',
+    releaseName: 'Adar 0.2.0',
+    notes: '',
+    releaseUrl: 'https://github.com/mikelgarciaurbina/adar/releases/tag/v0.2.0',
+    publishedAt: '',
+    zip: null,
+    dmg: null
+  }
+  const st = (state: UpdateStatus['state'], withInfo = true): UpdateStatus => ({ state, currentVersion: '0.1.0', info: withInfo ? info : null, canInstall: false })
+  it('is the new version while available or downloaded', () => {
+    expect(pendingUpdateVersion(st('available'))).toBe('0.2.0')
+    expect(pendingUpdateVersion(st('downloaded'))).toBe('0.2.0')
+  })
+  it('is null otherwise', () => {
+    expect(pendingUpdateVersion(null)).toBeNull()
+    expect(pendingUpdateVersion(undefined)).toBeNull()
+    for (const s of ['idle', 'checking', 'not-available', 'downloading', 'error'] as const) expect(pendingUpdateVersion(st(s))).toBeNull()
+    expect(pendingUpdateVersion(st('available', false))).toBeNull()
   })
 })

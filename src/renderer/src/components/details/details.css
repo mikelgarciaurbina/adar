@@ -796,6 +796,30 @@
   font-size: var(--fs-sm);
 }
 
+/* Repository unreadable (tab.error): replaces the stale file lists. */
+.det-unavailable {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px;
+  color: var(--danger);
+  text-align: center;
+}
+.det-unavailable-title {
+  color: var(--text-1);
+  font-weight: 600;
+}
+.det-unavailable-body {
+  max-width: 320px;
+  color: var(--text-2);
+  font-size: var(--fs-sm);
+  line-height: 1.45;
+  word-break: break-word;
+}
+
 /* ── Commit composer ───────────────────────────────────────────────────── */
 
 .det-composer {

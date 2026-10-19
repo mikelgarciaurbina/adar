@@ -5,6 +5,7 @@ import {
   expandHome,
   isAbsolutePath,
   joinPath,
+  normalizePathInput,
   repoNameFromUrl,
   urlHost,
   validateCloneUrl,
@@ -12,6 +13,8 @@ import {
   validateRemoteName
 } from './cloneUrl'
 import { scopeDescription, validateIdentity } from './identity'
+import { describeUpdateStatus, REPO_URL } from './updates'
+import type { UpdateStatus } from '@shared/update'
 import { credentialHint, credentialLabel, credentialTitle, inferKind, parseCredentialTarget } from './credentials'
 
 describe('repoNameFromUrl', () => {
@@ -186,5 +189,75 @@ describe('identity validation', () => {
   it('describes config scopes', () => {
     expect(scopeDescription('global')).toMatch(/gitconfig/)
     expect(scopeDescription('none')).toMatch(/no identity/)
+  })
+})
+
+describe('normalizePathInput', () => {
+  it('trims and strips matching quotes', () => {
+    expect(normalizePathInput('  /Users/me/repo  ')).toBe('/Users/me/repo')
+    expect(normalizePathInput("'/Users/me/My Repo'")).toBe('/Users/me/My Repo')
+    expect(normalizePathInput('"~/code/x"')).toBe('~/code/x')
+    expect(normalizePathInput('"/half')).toBe('"/half')
+  })
+  it('unescapes shell escapes in POSIX paths only', () => {
+    expect(normalizePathInput('/Users/me/My\\ Repo')).toBe('/Users/me/My Repo')
+    expect(normalizePathInput('~/a\\(1\\)')).toBe('~/a(1)')
+    expect(normalizePathInput('C:\\code\\repo')).toBe('C:\\code\\repo')
+  })
+  it('converts file:// URLs', () => {
+    expect(normalizePathInput('file:///Users/me/My%20Repo')).toBe('/Users/me/My Repo')
+    expect(normalizePathInput('file://localhost/srv/repo')).toBe('/srv/repo')
+    expect(normalizePathInput('file:///C:/code/repo')).toBe('C:/code/repo')
+  })
+  it('keeps empty input empty', () => {
+    expect(normalizePathInput('   ')).toBe('')
+    expect(normalizePathInput('""')).toBe('')
+  })
+})
+
+describe('describeUpdateStatus', () => {
+  const info = {
+    currentVersion: '0.1.0',
+    latestVersion: '0.2.0',
+    releaseName: 'Adar 0.2.0',
+    notes: '',
+    releaseUrl: `${REPO_URL}/releases/tag/v0.2.0`,
+    publishedAt: '',
+    zip: null,
+    dmg: null
+  }
+  const st = (patch: Partial<UpdateStatus>): UpdateStatus => ({ state: 'idle', currentVersion: '0.1.0', info: null, canInstall: false, ...patch })
+  const desktop = { isElectron: true }
+
+  it('points to the public repository', () => {
+    expect(REPO_URL).toBe('https://github.com/mikelgarciaurbina/adar')
+  })
+  it('explains that browser mode cannot update', () => {
+    expect(describeUpdateStatus(st({ state: 'available', info }), { isElectron: false })).toMatchObject({ action: null, text: expect.stringMatching(/desktop app/) })
+  })
+  it('offers to update when a release is available', () => {
+    expect(describeUpdateStatus(st({ state: 'available', info }), desktop)).toMatchObject({ text: 'Adar 0.2.0 is available', tone: 'accent', action: 'update', actionLabel: 'Update' })
+  })
+  it('shows download progress as a busy update', () => {
+    const d = describeUpdateStatus(st({ state: 'downloading', info, progress: 41.6 }), desktop)
+    expect(d.text).toContain('42%')
+    expect(d).toMatchObject({ action: 'update', busy: true })
+  })
+  it('offers restart or installer once downloaded', () => {
+    expect(describeUpdateStatus(st({ state: 'downloaded', info, canInstall: true }), desktop)).toMatchObject({ action: 'install', actionLabel: 'Restart to update' })
+    expect(describeUpdateStatus(st({ state: 'downloaded', info, canInstall: false }), desktop)).toMatchObject({ action: 'open-installer', actionLabel: 'Open installer' })
+  })
+  it('reports errors (retry when a release is known)', () => {
+    expect(describeUpdateStatus(st({ state: 'error', info, error: 'disk full' }), desktop)).toMatchObject({ tone: 'error', action: 'retry', text: expect.stringContaining('disk full') })
+    expect(describeUpdateStatus(st({ state: 'error', error: 'offline' }), desktop)).toMatchObject({ tone: 'error', action: null, text: expect.stringContaining('offline') })
+    expect(describeUpdateStatus(st({ state: 'error', error: 'offline' }), { ...desktop, checking: true }).text).toMatch(/Checking/)
+  })
+  it('describes checking, up to date and idle states', () => {
+    expect(describeUpdateStatus(null, { ...desktop, checking: true }).text).toBe('Checking for updates…')
+    const now = Date.UTC(2026, 9, 19, 12)
+    expect(describeUpdateStatus(st({ state: 'not-available', checkedAt: now - 10_000 }), { ...desktop, now }).text).toBe("You're up to date. Last checked just now.")
+    expect(describeUpdateStatus(st({ state: 'not-available' }), desktop).text).toBe("You're up to date.")
+    expect(describeUpdateStatus(null, desktop).text).toBe('Not checked yet.')
+    expect(describeUpdateStatus(st({}), { ...desktop, automatic: false }).text).toBe('Automatic checks are off.')
   })
 })

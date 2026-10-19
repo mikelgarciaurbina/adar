@@ -27,24 +27,88 @@ export function graphContentWidth(lanes: number): number {
   return GRAPH_PAD * 2 + Math.max(1, lanes) * LANE_W
 }
 
-/** Message column width the auto-sized GRAPH column tries not to eat into. */
-export const MIN_MSG_W = 200
-/** Below this message width the optional columns (SHA, date, author) are hidden. */
+/**
+ * Lanes whose node fits entirely inside a GRAPH column `width` px wide
+ * (inverse of graphContentWidth: graphContentWidth(n) fits exactly n lanes).
+ */
+export function lanesFitting(width: number): number {
+  return Math.max(0, Math.floor((width - GRAPH_PAD - LANE_W / 2 - NODE_R) / LANE_W) + 1)
+}
+
+/** Lanes (out of `lanes`) a GRAPH column `width` px wide cannot show. */
+export function hiddenLanes(lanes: number, width: number): number {
+  return Math.max(0, lanes - lanesFitting(width))
+}
+
+/** Gap between a pinned node and the GRAPH column's right edge. */
+const PIN_GAP = 3
+
+/**
+ * Centre x of a node pinned to the right edge of a GRAPH column `colW` px wide,
+ * or null when the node of `lane` fits in place (or the width is unknown).
+ */
+export function pinnedNodeX(lane: number, colW: number): number | null {
+  if (!(colW > 0)) return null
+  if (laneX(lane) + NODE_R <= colW) return null
+  return Math.max(NODE_R, colW - NODE_R - PIN_GAP)
+}
+
+/** Below this message width the optional columns (SHA, date, author) are hidden and the auto GRAPH column stops growing. */
 export const MIN_MSG_HIDE_W = 150
+/** Message column minimum in CSS (.gr-c-msg); an explicit "fit the lanes" may squeeze the messages down to it. */
+export const MIN_MSG_CSS_W = 120
+
+/**
+ * Width for an explicit "fit the lanes in view" (the "+N" badge): the lanes'
+ * width, bounded by the room left after the BRANCH / TAG column and the minimum
+ * message width — but never narrower than the column already is.
+ */
+export function fitGraphWidth(lanes: number, current: number, inner: number, refsW: number): number {
+  const room = Number.isFinite(inner) ? inner - refsW - MIN_MSG_CSS_W : Infinity
+  return Math.max(current, Math.min(graphContentWidth(lanes), room))
+}
+
 /** The auto-sized GRAPH column is never narrower than this (≈7 lanes) when it has lanes to show. */
 const AUTO_FLOOR_W = 140
+/** Narrowest auto GRAPH column. */
+const AUTO_MIN_W = 64
+/** Cap of the auto GRAPH column as a fraction of the centre panel width. */
+export const AUTO_CAP_RATIO = 0.45
+/** Cap used before the panel has been measured. */
 const AUTO_MAX_W = 360
 
 /**
- * Auto width of the GRAPH column: fits the lanes (up to a cap) but gives way to the
- * commit messages when `available` space is short, never dropping below ~7 lanes or
- * the lanes in `mustShow` (HEAD / WIP), so the checked-out branch stays visible.
- * Extra lanes are clipped; the column stays resizable.
+ * Widest the auto GRAPH column may grow in a centre panel `inner` px wide: 45%
+ * (at least ≈7 lanes), and never more than what is left after `reserved` px (the
+ * BRANCH / TAG column + the message column's CSS minimum), so the columns never
+ * overflow the row and get squeezed by flex.
  */
-export function autoGraphWidth(lanes: number, available = Infinity, mustShow = 0): number {
-  const want = Math.min(AUTO_MAX_W, graphContentWidth(lanes))
+export function autoGraphCap(inner: number, reserved = 0): number {
+  if (!Number.isFinite(inner) || inner <= 0) return AUTO_MAX_W
+  const share = Math.max(AUTO_FLOOR_W, Math.floor(inner * AUTO_CAP_RATIO))
+  return Math.min(share, Math.max(AUTO_MIN_W, Math.floor(inner - reserved)))
+}
+
+export interface AutoWidthOptions {
+  /** Room left for the graph after the other columns and the minimum message width. */
+  available?: number
+  /** Lanes that must stay visible even when `available` is short (selection, HEAD, WIP). */
+  mustShow?: number
+  /** Upper bound (see autoGraphCap). */
+  cap?: number
+}
+
+/**
+ * Auto width of the GRAPH column: fits `lanes` (the lanes of the rows in view)
+ * up to `cap`, but gives way to the commit messages when `available` space is
+ * short, never dropping below ~7 lanes or the `mustShow` lanes (still bounded by
+ * `cap`). Lanes beyond it are clipped (CommitGraph then shows a "+N" hint).
+ */
+export function autoGraphWidth(lanes: number, opts: AutoWidthOptions = {}): number {
+  const { available = Infinity, mustShow = 0, cap = AUTO_MAX_W } = opts
+  const want = Math.min(cap, graphContentWidth(lanes))
   const floor = Math.min(want, Math.max(AUTO_FLOOR_W, graphContentWidth(mustShow)))
-  return Math.max(64, floor, Math.min(want, Math.floor(available)))
+  return Math.max(AUTO_MIN_W, floor, Math.min(want, Math.floor(available)))
 }
 
 /** CSS colour for a colour index; negative indexes are neutral (stash connectors). */

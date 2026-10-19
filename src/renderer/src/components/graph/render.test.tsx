@@ -4,6 +4,8 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import type { Commit, RefsResult, Stash } from '@shared/types'
+import { graphContentWidth } from './geometry'
+import { GraphHeader } from './GraphHeader'
 import { GraphRow, type GraphRowProps } from './GraphRow'
 import { computeGraph } from './layout'
 import { buildDisplayRows, buildPillMap } from './model'
@@ -114,5 +116,47 @@ describe('GraphRow rendering', () => {
     expect(html).toContain('stash@{0}')
     expect(html).toContain('gr-node-stash')
     expect(html).toContain('stroke-dasharray')
+  })
+
+  it('pins the selected node to the edge when its lane is clipped', () => {
+    const idx = model.rows.findIndex((r) => r.kind === 'commit' && r.lane > 0)
+    expect(idx).toBeGreaterThan(-1)
+    const row = model.rows[idx]
+    const inPlace = render(idx, { selected: true, pinWidth: graphContentWidth(row.lane + 1) })
+    expect(inPlace).not.toContain('gr-node-pinned')
+    const pinned = render(idx, { selected: true, pinWidth: graphContentWidth(row.lane) - 4 })
+    expect(pinned).toContain('gr-node-pinned')
+    expect(pinned).toMatch(/title="Lane \d+ is outside the GRAPH column/)
+    // Unselected rows never pin.
+    expect(render(idx, { pinWidth: 0 })).not.toContain('gr-node-pinned')
+  })
+
+  it('pins merge and WIP nodes without drawing them in place', () => {
+    const merge = render(1, { selected: true, pinWidth: 1 })
+    expect(merge).toContain('gr-node-pinned-merge')
+    expect(merge).not.toContain('gr-merge-dot')
+    const wip = render(0, { selected: true, pinWidth: 1 })
+    expect(wip).toContain('gr-node-pinned-wip')
+    expect(wip).not.toContain('gr-wip-node')
+  })
+})
+
+describe('GraphHeader', () => {
+  const widths = { refs: 170, graph: 120, author: 130, date: 104, sha: 80 }
+  const header = (hiddenLanes: number) =>
+    renderToStaticMarkup(
+      <GraphHeader widths={widths} scrollbar={0} loading={false} hiddenLanes={hiddenLanes} onFitLanes={noop} onResize={noop} onContextMenu={noop} />
+    )
+
+  it('shows a "+N" badge when lanes are hidden', () => {
+    const html = header(6)
+    expect(html).toContain('gr-lanes-more')
+    expect(html).toContain('+6')
+    expect(html).toContain('6 lanes hidden — drag to widen')
+    expect(header(1)).toContain('1 lane hidden — drag to widen')
+  })
+
+  it('shows no badge when every lane fits', () => {
+    expect(header(0)).not.toContain('gr-lanes-more')
   })
 })

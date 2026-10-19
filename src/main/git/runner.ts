@@ -2,7 +2,7 @@
 // (never a shell), with a deterministic environment suitable for parsing.
 
 import { spawn } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { statSync } from 'node:fs'
 import { AdarError } from '@shared/errors'
 import type { AdarErrorCode } from '@shared/types'
 
@@ -185,10 +185,19 @@ export function runGit(args: string[], opts: GitRunOptions = {}): Promise<GitRes
   })
 }
 
+function isDirectory(p: string): boolean {
+  try {
+    return statSync(p).isDirectory()
+  } catch {
+    return false
+  }
+}
+
 function spawnError(err: unknown, command: string, cwd?: string): AdarError {
   const e = err as NodeJS.ErrnoException
-  // spawn also reports ENOENT when the working directory is missing (repo moved/deleted).
-  if (e?.code === 'ENOENT' && cwd && !existsSync(cwd)) {
+  // spawn also reports ENOENT (ENOTDIR when a parent is a file) for a missing working directory
+  // (repo moved/deleted).
+  if ((e?.code === 'ENOENT' || e?.code === 'ENOTDIR') && cwd && !isDirectory(cwd)) {
     return new AdarError({ message: `Repository folder not found: ${cwd}`, code: 'NOT_FOUND', command })
   }
   if (e?.code === 'ENOENT') {
@@ -209,7 +218,12 @@ export function classifyGitError(stderr: string): AdarErrorCode {
     )
   )
     return 'AUTH_FAILED'
-  if (/could not resolve host|unable to access|connection timed out|connection refused|network is unreachable|failed to connect|operation timed out|ssl/.test(s))
+  // (Not a bare "ssl": file names such as src/ssl.ts appear in dirty-worktree refusals.)
+  if (
+    /could not resolve host|unable to access|connection timed out|connection refused|network is unreachable|failed to connect|operation timed out|ssl certificate|ssl_(?:connect|error|read|write)|ssl routines|ssl protocol|ssl: (?:no|certificate|unable)|gnutls_|schannel:|certificate verification failed/.test(
+      s
+    )
+  )
     return 'NETWORK'
   if (/not a git repository/.test(s)) return 'NOT_A_REPO'
   // Dirty-worktree refusals list file names, which may contain "conflict" — test them first.
@@ -221,13 +235,11 @@ export function classifyGitError(stderr: string): AdarErrorCode {
 
 export function gitError(command: string, result: GitResult): AdarError {
   const stderr = result.stderr.trim()
-  const lines = stderr.split('\n').filter((l) => l.trim() && !l.startsWith('hint:'))
-  const main = lines.find((l) => /^(fatal|error):/i.test(l.trim())) ?? lines[0] ?? `git exited with code ${result.code}`
   const output = stderr + '\n' + result.stdout.slice(0, 2000)
   const code = classifyGitError(output)
-  const plain = main.replace(/^(fatal|error):\s*/i, '').trim()
+  const fallback = summarizeGitOutput(result.stderr) ?? summarizeGitOutput(result.stdout.slice(0, 4000), { preferLast: true }) ?? `git exited with code ${result.code}`
   return new AdarError({
-    message: friendlyMessage(code, output) ?? plain,
+    message: dedupeSentences(friendlyMessage(code, output) ?? fallback),
     code,
     command,
     stderr: stderr || result.stdout.trim().slice(0, 4000),
@@ -235,24 +247,76 @@ export function gitError(command: string, result: GitResult): AdarError {
   })
 }
 
-/** "a", "a and b", "a, b and 3 more". */
-function listFiles(files: string[]): string {
-  if (files.length <= 1) return files[0] ?? ''
-  if (files.length <= 3) return `${files.slice(0, -1).join(', ')} and ${files[files.length - 1]}`
-  return `${files.slice(0, 2).join(', ')} and ${files.length - 2} more`
+/** Strip git's "error: " / "fatal: " / "warning: " prefixes (also when repeated). */
+export function stripGitPrefix(line: string): string {
+  return line.trim().replace(/^(?:(?:fatal|error|warning):\s*)+/i, '').trim()
 }
 
-/** Tab-indented file names git prints below a "...would be overwritten by X:" line. */
+/** "a", "a, b", "a, b, c, d", "a, b, c and 5 more". */
+function listFiles(files: string[]): string {
+  if (files.length <= 4) return files.join(', ')
+  return `${files.slice(0, 3).join(', ')} and ${files.length - 3} more`
+}
+
+/**
+ * Indented entries git prints below `lines[index]` ("...would be overwritten by merge:"):
+ * one tab-indented path per line, or (merge-ort's index check) one space-indented line of
+ * space-separated paths.
+ */
+function itemsBelow(lines: string[], index: number): string[] {
+  const items: string[] = []
+  for (const l of lines.slice(index + 1)) {
+    if (!/^\s/.test(l) || !l.trim()) break
+    if (l.startsWith('\t')) items.push(l.trim())
+    else items.push(...l.trim().split(/\s+/))
+  }
+  return items
+}
+
+/** Entries listed below the first line of `output` matching `header`. */
 function filesAfter(output: string, header: RegExp): string[] {
   const lines = output.split('\n')
   const start = lines.findIndex((l) => header.test(l))
-  if (start < 0) return []
-  const files: string[] = []
-  for (const l of lines.slice(start + 1)) {
-    if (!/^\s/.test(l) || !l.trim()) break
-    files.push(l.trim())
+  return start < 0 ? [] : itemsBelow(lines, start)
+}
+
+/**
+ * git's most relevant line as a clean sentence: the first "error:"/"fatal:" line (else the first —
+ * or with preferLast the last, which sums up status-like stdout — unindented line that is not a
+ * hint), without the prefix and without a trailing ":" — the entries git lists below such a line
+ * are appended instead. Null when there is no text.
+ */
+export function summarizeGitOutput(text: string, opts: { preferLast?: boolean } = {}): string | null {
+  const lines = text.split('\n').map((l) => l.replace(/\s+$/, ''))
+  const candidates = lines.map((l, i) => ({ l, i })).filter(({ l }) => l.trim() && !/^\s*hint:/i.test(l))
+  if (!candidates.length) return null
+  const plain = candidates.filter(({ l }) => !/^\s/.test(l))
+  const main =
+    candidates.find(({ l }) => /^\s*(fatal|error):/i.test(l)) ??
+    (opts.preferLast ? plain[plain.length - 1] : plain[0]) ??
+    candidates[0]
+  let message = stripGitPrefix(main.l)
+  if (message.endsWith(':')) {
+    const items = itemsBelow(lines, main.i)
+    message = message.replace(/\s*:$/, '')
+    if (items.length) message = `${message}: ${listFiles(items)}`
   }
-  return files
+  return message || null
+}
+
+/** Drop sentences that repeat an earlier one (ignoring git prefixes, case and final punctuation). */
+export function dedupeSentences(text: string): string {
+  const parts = text.split(/(?<=[.!?])(\s+)/)
+  const seen = new Set<string>()
+  let out = ''
+  for (let i = 0; i < parts.length; i += 2) {
+    const sentence = parts[i]
+    const key = stripGitPrefix(sentence).replace(/[\s.:!?]+$/, '').toLowerCase()
+    if (key && seen.has(key)) continue
+    if (key) seen.add(key)
+    out += (out ? (parts[i - 1] ?? ' ') : '') + sentence
+  }
+  return out.trim()
 }
 
 /**
@@ -263,16 +327,17 @@ export function friendlyMessage(code: AdarErrorCode, output: string): string | n
   const s = output
   switch (code) {
     case 'DIRTY_WORKTREE': {
-      const local = /your local changes to the following files would be overwritten by (\w[\w-]*)/i.exec(s)
+      const local = /your local changes (?:to the following files )?would be overwritten by (\w[\w-]*)/i.exec(s)
       if (local) {
         const files = filesAfter(s, /your local changes to the following files would be overwritten/i)
         const what = files.length ? `Your local changes to ${listFiles(files)}` : 'Your local changes'
         return `${what} would be overwritten by ${local[1]}. Commit, stash or discard them first.`
       }
-      const untracked = /the following untracked working tree files would be (?:overwritten|removed) by (\w[\w-]*)/i.exec(s)
+      const untracked = /the following untracked working tree files would be (overwritten|removed) by (\w[\w-]*)/i.exec(s)
       if (untracked) {
         const files = filesAfter(s, /untracked working tree files would be/i)
-        return `Untracked file${files.length === 1 ? '' : 's'} ${listFiles(files)} would be overwritten by ${untracked[1]}. Move or remove ${files.length === 1 ? 'it' : 'them'} first.`
+        const what = files.length ? `Untracked file${files.length === 1 ? '' : 's'} ${listFiles(files)}` : 'Untracked files'
+        return `${what} would be ${untracked[1].toLowerCase()} by ${untracked[2]}. Move or remove ${files.length === 1 ? 'it' : 'them'} first.`
       }
       if (/you have unstaged changes|commit your changes or stash them/i.test(s)) {
         return 'You have uncommitted changes. Commit or stash them first.'

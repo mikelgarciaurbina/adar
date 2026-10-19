@@ -170,6 +170,35 @@
   color: var(--text-0);
 }
 
+/* Subtle "new version" indicator at the right end of the tab bar. */
+.tb-update-pill {
+  -webkit-app-region: no-drag;
+  flex: none;
+  align-self: center;
+  height: 20px;
+  margin: 2px 10px 0 4px;
+  padding: 0 8px 0 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  transition: background 0.12s var(--ease), border-color 0.12s var(--ease);
+}
+.tb-update-pill:hover {
+  border-color: var(--accent);
+}
+.tb-update-pill:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
 /* ── Toolbar ───────────────────────────────────────────────────────────── */
 
 .tb-toolbar {

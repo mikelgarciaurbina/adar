@@ -8,7 +8,7 @@ import { useEffect, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { AlertTriangle, CheckCircle2, Info, X, XCircle } from 'lucide-react'
 import { create } from 'zustand'
-import { describeError, toErrorPayload } from '@shared/errors'
+import { describeError, errorDetail } from '@shared/errors'
 
 export type ToastKind = 'success' | 'error' | 'info' | 'warning' | 'loading'
 
@@ -102,8 +102,7 @@ export const toast = {
   /** Accepts a string or any thrown error (AdarError stderr is shown as detail). */
   error: (err: unknown, opts?: ToastOpts) => {
     const message = typeof err === 'string' ? err : describeError(err)
-    const payload = typeof err === 'string' ? null : toErrorPayload(err)
-    const detail = opts?.detail ?? (payload?.stderr && payload.stderr.trim() !== message ? payload.stderr.trim() : undefined)
+    const detail = opts?.detail ?? (typeof err === 'string' ? undefined : errorDetail(err, message))
     return useToasts.getState().add({ kind: 'error', message, duration: defaultDuration('error'), ...defined(opts), detail })
   },
   loading: (message: ReactNode) => useToasts.getState().add({ kind: 'loading', message, duration: 0 }),

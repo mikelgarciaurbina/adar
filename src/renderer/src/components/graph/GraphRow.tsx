@@ -20,6 +20,8 @@ export interface GraphRowProps {
   h: number
   /** Drawing width of the graph (lanes). */
   graphWidth: number
+  /** Rendered GRAPH column width for the selected row (its node is never hidden: pinned when clipped); 0 for other rows. */
+  pinWidth?: number
   pills: readonly Pill[] | undefined
   selected: boolean
   multi: boolean
@@ -91,7 +93,7 @@ function dateText(ts: number, mode: 'relative' | 'absolute', now: number): strin
 }
 
 export const GraphRow = memo(function GraphRow(props: GraphRowProps) {
-  const { row, index, start, h, graphWidth, pills, selected, multi, match, dim, hl, hlField, dateMode, now, wip, ctx } = props
+  const { row, index, start, h, graphWidth, pinWidth, pills, selected, multi, match, dim, hl, hlField, dateMode, now, wip, ctx } = props
   const color = colorOf(row.color)
   const cls =
     'gr-row' +
@@ -151,7 +153,7 @@ export const GraphRow = memo(function GraphRow(props: GraphRowProps) {
     >
       <div className="gr-cell gr-c-refs">{row.kind === 'commit' && <RefPills pills={pills} ctx={ctx} color={color} />}</div>
       <div className="gr-cell gr-c-graph">
-        <GraphCell row={row} h={h} width={graphWidth} connector={row.kind === 'commit' && !!pills?.length} />
+        <GraphCell row={row} h={h} width={graphWidth} connector={row.kind === 'commit' && !!pills?.length} pinWidth={pinWidth} />
       </div>
       <div className="gr-cell gr-c-msg" title={title}>
         {message}

@@ -7,7 +7,7 @@ import type { OperationResult, RepoOperationState } from '@shared/types'
 import type { GitContext } from '../context'
 import type { WriteOps } from '../ops'
 import type { GitResult } from '../runner'
-import { cleanupRebaseFiles } from './interactive'
+import { cleanupRebaseFiles, clearInteractiveRebaseMarker } from './interactive'
 import {
   arg,
   combinedOutput,
@@ -144,7 +144,10 @@ export function createOperationOps(ctx: GitContext): OperationOps {
 
     async rebase(repo, onto) {
       const o = arg(onto, 'branch')
-      return ctx.exclusive(repo, () => runOperation(ctx, repo, ['rebase', '--autostash', o], FAMILY.rebase))
+      return ctx.exclusive(repo, async () => {
+        await clearInteractiveRebaseMarker(ctx, repo)
+        return runOperation(ctx, repo, ['rebase', '--autostash', o], FAMILY.rebase)
+      })
     },
 
     async cherryPick(repo, shas, opts = {}) {

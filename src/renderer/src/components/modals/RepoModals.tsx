@@ -16,6 +16,7 @@ import {
   expandHome,
   isAbsolutePath,
   joinPath,
+  normalizePathInput,
   repoNameFromUrl,
   validateCloneUrl,
   validateFolderName
@@ -306,7 +307,9 @@ export function OpenModal() {
   const [busy, setBusy] = useState(false)
   const mounted = useMounted()
 
-  const error = !path.trim() ? 'Enter the path of a repository' : !isAbsolutePath(path) ? 'Use an absolute path' : null
+  const cleaned = normalizePathInput(path)
+  const error = !cleaned ? 'Enter the path of a repository' : !isAbsolutePath(cleaned) ? 'Use an absolute path (or start with ~)' : null
+  const target = expandHome(cleaned, home)
 
   const openAt = async (p: string) => {
     if (busy) return
@@ -320,8 +323,24 @@ export function OpenModal() {
   const submit = () => {
     setTouched(true)
     if (error) return
-    void openAt(path.trim())
+    void openAt(cleaned)
   }
+
+  // Show what will actually be opened once "~", quotes or shell escapes are resolved.
+  const hint =
+    !error && target !== path.trim() ? (
+      <span className="md-path-preview">{target}</span>
+    ) : (
+      <>
+        Any folder inside a Git working tree works.
+        {home && (
+          <>
+            {' '}
+            <code>~</code> is your home folder (<code>{home}</code>).
+          </>
+        )}
+      </>
+    )
 
   return (
     <Modal
@@ -356,9 +375,9 @@ export function OpenModal() {
           error={touched ? error : null}
           disabled={busy}
           autoFocus
-          placeholder="/path/to/repository"
+          placeholder={home ? '~/path/to/repository' : '/path/to/repository'}
           pickerTitle="Open a Git repository"
-          hint="Any folder inside a Git working tree works."
+          hint={hint}
         />
         {quick.length > 0 && (
           <div className="md-quick">

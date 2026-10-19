@@ -19,6 +19,23 @@ vi.mock('@renderer/components/common/Modal', () => ({
 
 const { ModalHost } = await import('./ModalHost')
 const { CredentialDialog } = await import('./CredentialDialog')
+const { useUpdates } = await import('@renderer/components/update/updateStore')
+
+function seedUpdates(patch: Partial<ReturnType<typeof useUpdates.getState>>) {
+  useUpdates.setState(patch)
+  Object.assign(useUpdates.getInitialState(), patch)
+}
+
+const releaseInfo = {
+  currentVersion: '0.1.0',
+  latestVersion: '0.2.0',
+  releaseName: 'Adar 0.2.0',
+  notes: '',
+  releaseUrl: 'https://github.com/mikelgarciaurbina/adar/releases/tag/v0.2.0',
+  publishedAt: '',
+  zip: null,
+  dmg: null
+}
 
 function seed(patch: Partial<AppState>) {
   useApp.setState(patch)
@@ -49,6 +66,7 @@ beforeEach(() => {
     modal: null,
     credentialQueue: []
   })
+  seedUpdates({ status: null, dismissed: null, notesOpen: false })
 })
 
 const render = (modal: AppState['modal']) => {
@@ -78,6 +96,22 @@ describe('ModalHost', () => {
     expect(about).toContain('2.47.1')
   })
 
+  it('shows the open-source repository, license and an update check in about', () => {
+    const about = render({ kind: 'about' })
+    expect(about).toContain('href="https://github.com/mikelgarciaurbina/adar"')
+    expect(about).toContain('github.com/mikelgarciaurbina/adar<')
+    expect(about).toContain('MIT License')
+    expect(about).toContain('Check for Updates…')
+  })
+
+  it('explains ~ expansion, offers Browse… and submits on Enter in the open modal', () => {
+    const html = render({ kind: 'open' })
+    expect(html).toContain('Browse…')
+    expect(html).toContain('<code>~</code> is your home folder (<code>/Users/me</code>)')
+    expect(html).toContain('placeholder="~/path/to/repository"')
+    expect(html).toMatch(/<form[^>]*>[\s\S]*<button type="submit" hidden="">/) // Enter submits the form
+  })
+
   it('renders every settings section entry and the general controls', () => {
     const html = render({ kind: 'settings' })
     for (const s of ['General', 'Graph', 'Diff', 'Integrations', 'Git']) expect(html).toContain(`>${s}<`)
@@ -92,6 +126,28 @@ describe('ModalHost', () => {
     expect(diff).not.toContain('>Hunk<')
     expect(diff).toContain('Show full file by default')
     expect(diff).toContain('aria-label="Show full file by default"')
+  })
+
+  it('renders the update controls in Settings → General', () => {
+    const html = render({ kind: 'settings' })
+    expect(html).toContain('Check for updates automatically')
+    expect(html).toMatch(/aria-checked="true" aria-label="Check for updates automatically"/)
+    expect(html).toContain('Adar 0.1.0')
+    expect(html).toContain('Check now')
+    expect(html).not.toContain('Skipped version')
+    expect(html).not.toContain('is available')
+  })
+
+  it('offers the available update and the skipped version reset in settings', () => {
+    seedUpdates({ status: { state: 'available', currentVersion: '0.1.0', info: releaseInfo, canInstall: false } })
+    seed({ settings: { ...DEFAULT_SETTINGS, checkForUpdates: false, skippedUpdateVersion: '0.1.5' } })
+    const html = render({ kind: 'settings' })
+    expect(html).toContain('Adar 0.2.0 is available')
+    expect(html).toContain('>Update<')
+    expect(html).toContain('What&#x27;s new')
+    expect(html).toMatch(/aria-checked="false" aria-label="Check for updates automatically"/)
+    expect(html).toContain('Skipped version 0.1.5')
+    expect(html).toContain('>Reset<')
   })
 
   it('reflects diff settings in the controls', () => {

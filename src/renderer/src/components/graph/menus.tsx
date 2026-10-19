@@ -183,11 +183,21 @@ export function commitMenu(repo: string, commit: Commit, pills: readonly Pill[] 
         ]
       }
     )
-    if (!isHead && tab && isAncestor(tab.commits, commit.sha, headSha)) {
+    const inHistory = !!tab && isAncestor(tab.commits, commit.sha, headSha)
+    // "From here" edits the commits after this one; a root commit has no parent to
+    // use as the base, so it gets its own entry that includes it (git rebase -i --root).
+    if (!isHead && inHistory) {
       items.push({
         label: `Interactive rebase ${curLabel} from here…`,
         icon: <ListOrdered size={I} />,
         onClick: () => git.startInteractiveRebase(repo, commit.sha)
+      })
+    }
+    if (commit.parents.length === 0 && inHistory) {
+      items.push({
+        label: `Interactive rebase ${curLabel} from root…`,
+        icon: <ListOrdered size={I} />,
+        onClick: () => git.startInteractiveRebase(repo, 'ROOT')
       })
     }
   }

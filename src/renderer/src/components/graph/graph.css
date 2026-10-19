@@ -93,6 +93,33 @@
   white-space: nowrap;
 }
 
+/* "+N" lanes hidden in the GRAPH header (click = widen to fit). */
+.gr-lanes-more {
+  flex: none;
+  margin-left: auto;
+  height: 16px;
+  min-width: 22px;
+  padding: 0 5px;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  border-radius: 8px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 14px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.gr-lanes-more:hover {
+  background: color-mix(in srgb, var(--accent) 24%, transparent);
+}
+.gr-lanes-more:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
 .gr-col-resizer {
   position: absolute;
   top: 0;
@@ -306,6 +333,18 @@
 
 /* ── Graph drawing ─────────────────────────────────────────────────────── */
 
+.gr-draw {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+/* Lanes are clipped: the drawing fades out at the column's right edge. */
+.gr-root.gr-clipped .gr-draw {
+  -webkit-mask-image: linear-gradient(to left, transparent, #000 20px);
+  mask-image: linear-gradient(to left, transparent, #000 20px);
+}
+
 .gr-svg {
   position: absolute;
   left: 0;
@@ -352,6 +391,29 @@
 .gr-node-stash {
   border: 1.5px dashed var(--text-3);
   color: var(--text-2);
+}
+/* Selected node whose lane is clipped: pinned to the column edge, double ring. */
+.gr-node-pinned {
+  pointer-events: auto;
+  box-shadow:
+    0 0 0 1.5px var(--bg-0),
+    0 0 0 3px color-mix(in srgb, var(--gr-lane) 55%, transparent);
+}
+.gr-node-pinned .ui-avatar {
+  pointer-events: none;
+}
+.gr-node-pinned-wip {
+  border-style: dashed;
+}
+.gr-node-pinned-stash {
+  border: 1.5px dashed var(--text-3);
+  color: var(--text-2);
+}
+.gr-node-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--gr-lane);
 }
 
 /* ── WIP & stash rows ──────────────────────────────────────────────────── */

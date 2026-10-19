@@ -1,8 +1,9 @@
 // Virtualised text diff renderer shared by the diff view and file history:
 // unified and side-by-side ("split") layouts, changed hunks only or the whole
 // file, line numbers, syntax + word-level highlighting, hunk headers with
-// stage/unstage/discard buttons (per change block in full-file mode) and gutter
-// line selection (click, shift-click, drag) for partial staging.
+// stage/unstage/discard buttons (per change block in full-file mode, in a lane
+// at the left of the gutter) and gutter line selection (click, shift-click,
+// drag) for partial staging.
 
 import {
   memo,
@@ -22,6 +23,7 @@ import type { HunkSelection, PatchMode } from '@shared/patch'
 import type { DiffLine, DiffViewMode, FileDiff } from '@shared/types'
 import {
   anchorRow,
+  blockBarLift,
   blockRangeLabel,
   blockSelection,
   buildDiffModel,
@@ -37,12 +39,15 @@ import {
   type SplitRow,
   type UnifiedRow
 } from './diffModel'
+import { shouldTakeFocus } from './focus'
 import type { Token } from './highlight'
 import { useSyntax } from './useSyntax'
 import { wordDiff, type Range, type WordDiff } from './wordDiff'
 
 const ROW_H = 20
 const HUNK_H = 30
+/** Width of the gutter lane holding the change block buttons (full-file staging). */
+const LANE_W = 22
 
 export interface DiffStaging {
   /** Which side of the index the diff shows. */
@@ -76,6 +81,7 @@ export interface DiffRendererProps {
   handle?: MutableRefObject<DiffRendererHandle | null>
   /** New content: scroll back to the top (to the first change in full-file mode) whenever this changes. */
   resetKey?: string | number
+  /** Take the keyboard focus when mounted, unless another list or field has it (see focus.ts). */
   autoFocus?: boolean
 }
 
@@ -97,7 +103,7 @@ export function DiffRenderer({ diff, mode, fullFile = false, path, staging, hand
   const [viewportW, setViewportW] = useState(0)
   /** Change block whose action buttons are hovered (its lines are highlighted). */
   const [hotBlock, setHotBlock] = useState(-1)
-  /** Change block under the mouse (its action buttons show their labels). */
+  /** Change block under the mouse (its action buttons are shown at full strength). */
   const [hoverBlock, setHoverBlock] = useState(-1)
   const hoverRef = useRef(-1)
 
@@ -240,7 +246,9 @@ export function DiffRenderer({ diff, mode, fullFile = false, path, staging, hand
   }, [])
 
   useEffect(() => {
-    if (autoFocus) scrollRef.current?.focus({ preventScroll: true })
+    const el = scrollRef.current
+    // Opened from a file list: leave the focus there so its arrow keys keep walking the files.
+    if (autoFocus && el && shouldTakeFocus(document.activeElement, el)) el.focus({ preventScroll: true })
   }, [autoFocus])
 
   useEffect(() => {
@@ -377,6 +385,8 @@ export function DiffRenderer({ diff, mode, fullFile = false, path, staging, hand
   const selectable = !!staging?.enabled
   const selected = staging?.selected
   const blockActions = fullFile && selectable && !!staging
+  /** Block buttons live in a lane of their own at the left of the gutter: they never cover code. */
+  const lane = blockActions
   const hot = blockActions ? hotBlock : -1
   const trackHover = (b: number) => {
     if (hoverRef.current === b) return
@@ -390,10 +400,14 @@ export function DiffRenderer({ diff, mode, fullFile = false, path, staging, hand
       }
     : undefined
   const items = virtualizer.getVirtualItems()
-  const rootStyle = { '--diff-digits': digits, '--diff-vw': viewportW ? `${viewportW}px` : '100%' } as CSSProperties
+  const rootStyle = {
+    '--diff-digits': digits,
+    '--diff-vw': viewportW ? `${viewportW}px` : '100%',
+    '--diff-lane': `${LANE_W}px`
+  } as CSSProperties
   const sizerStyle: CSSProperties = split
     ? { height: virtualizer.getTotalSize() }
-    : { height: virtualizer.getTotalSize(), minWidth: `calc(${digits * 2}ch + 72px + ${model.maxCols}ch)` }
+    : { height: virtualizer.getTotalSize(), minWidth: `calc(${digits * 2}ch + ${72 + (lane ? LANE_W : 0)}px + ${model.maxCols}ch)` }
 
   return (
     <div
@@ -424,16 +438,17 @@ export function DiffRenderer({ diff, mode, fullFile = false, path, staging, hand
           }
           const blockIndex = rowBlock[v.index] ?? -1
           const isHot = blockIndex >= 0 && blockIndex === hot
+          const block = blockActions && blockIndex >= 0 ? model.blocks[blockIndex] : undefined
           const actions =
-            blockActions && blockIndex >= 0 && model.blocks[blockIndex] && (split ? model.blocks[blockIndex].splitRow : model.blocks[blockIndex].unifiedRow) === v.index ? (
+            block && (split ? block.splitRow : block.unifiedRow) === v.index ? (
               <BlockActions
                 key={`b:${blockIndex}`}
-                top={v.start}
+                top={v.start - blockBarLift(block, split, rows.length, staging!.kind === 'unstaged' ? 2 : 1) * ROW_H}
                 model={model}
-                block={model.blocks[blockIndex]}
+                block={block}
                 index={blockIndex}
                 staging={staging!}
-                expanded={blockIndex === hoverBlock || blockIndex === hot}
+                active={blockIndex === hoverBlock || blockIndex === hot}
                 onHot={setHotBlock}
               />
             ) : null
@@ -456,6 +471,7 @@ export function DiffRenderer({ diff, mode, fullFile = false, path, staging, hand
                 selectable={selectable && line.type !== 'context'}
                 selected={isSel}
                 hot={isHot}
+                lane={lane}
               />
             )
             return actions ? [el, actions] : el
@@ -485,6 +501,7 @@ export function DiffRenderer({ diff, mode, fullFile = false, path, staging, hand
           }
           const el = (
             <div key={v.key} data-index={v.index} ref={virtualizer.measureElement} className="diff-row diff-s-row" style={style}>
+              {lane && <div className="diff-lane diff-s-lane" />}
               {cell('left', row.left, left)}
               {cell('right', row.right, right)}
             </div>
@@ -520,6 +537,8 @@ interface UnifiedLineProps {
   selected: boolean
   /** Part of the change block whose action buttons are hovered. */
   hot: boolean
+  /** Reserve the block-actions lane at the left of the gutter. */
+  lane: boolean
 }
 
 const UnifiedLine = memo(function UnifiedLine({
@@ -533,7 +552,8 @@ const UnifiedLine = memo(function UnifiedLine({
   eol,
   selectable,
   selected,
-  hot
+  hot,
+  lane
 }: UnifiedLineProps) {
   return (
     <div className={`diff-row diff-line diff-${line.type}${selected ? ' diff-sel' : ''}${hot ? ' diff-hot' : ''}`} style={style}>
@@ -549,6 +569,7 @@ const UnifiedLine = memo(function UnifiedLine({
             : undefined
         }
       >
+        {lane && <span className="diff-lane" />}
         <span className="diff-num">{oldNo ?? ''}</span>
         <span className="diff-num">{newNo ?? ''}</span>
         <span className="diff-mark">{MARK[line.type]}</span>
@@ -595,7 +616,8 @@ function sameRowProps(a: UnifiedLineProps, b: UnifiedLineProps): boolean {
     a.eol === b.eol &&
     a.selectable === b.selectable &&
     a.selected === b.selected &&
-    a.hot === b.hot
+    a.hot === b.hot &&
+    a.lane === b.lane
   )
 }
 
@@ -730,16 +752,17 @@ interface BlockActionsProps {
   block: ChangeBlock
   index: number
   staging: DiffStaging
-  /** Show labels (the mouse is over the block); icons only otherwise, to cover less code. */
-  expanded: boolean
+  /** The mouse is over the block: full strength (dimmed otherwise, to stay out of the way). */
+  active: boolean
   onHot(index: number): void
 }
 
 /**
- * Stage / unstage / discard buttons pinned to the right edge of the viewport on
- * the first row of a change block. Hovering them highlights the block's lines.
+ * Stage / unstage / discard buttons stacked in the gutter lane at the left of a
+ * change block's first row (sticky while scrolling sideways), so they never cover
+ * code. Hovering them highlights the block's lines.
  */
-function BlockActions({ top, model, block, index, staging, expanded, onHot }: BlockActionsProps) {
+function BlockActions({ top, model, block, index, staging, active, onHot }: BlockActionsProps) {
   const range = blockRangeLabel(model, block)
   const run = (mode: PatchMode) => {
     onHot(-1)
@@ -751,8 +774,9 @@ function BlockActions({ top, model, block, index, staging, expanded, onHot }: Bl
     <div className="diff-block-anchor" style={{ transform: `translateY(${top}px)` }}>
       <div className="diff-block-sticky">
         <div
-          className={`diff-block-actions${expanded ? ' diff-block-expanded' : ''}`}
+          className={`diff-block-actions${active ? ' diff-block-active' : ''}`}
           role="toolbar"
+          aria-orientation="vertical"
           aria-label={`Change block ${index + 1}`}
           onMouseEnter={() => onHot(index)}
           onMouseLeave={() => onHot(-1)}
@@ -762,29 +786,35 @@ function BlockActions({ top, model, block, index, staging, expanded, onHot }: Bl
             <>
               <button
                 type="button"
-                className="diff-block-btn diff-block-btn-danger"
-                disabled={staging.busy}
-                title={`Discard ${what}`}
-                onClick={() => run('discard')}
-              >
-                <Trash2 size={11} />
-                {expanded && <span>Discard</span>}
-              </button>
-              <button
-                type="button"
                 className="diff-block-btn diff-block-btn-primary"
                 disabled={staging.busy}
                 title={`Stage ${what}`}
+                aria-label={`Stage ${what}`}
                 onClick={() => run('stage')}
               >
                 <Plus size={12} />
-                {expanded && <span>Stage</span>}
+              </button>
+              <button
+                type="button"
+                className="diff-block-btn diff-block-btn-danger"
+                disabled={staging.busy}
+                title={`Discard ${what}`}
+                aria-label={`Discard ${what}`}
+                onClick={() => run('discard')}
+              >
+                <Trash2 size={11} />
               </button>
             </>
           ) : (
-            <button type="button" className="diff-block-btn" disabled={staging.busy} title={`Unstage ${what}`} onClick={() => run('unstage')}>
+            <button
+              type="button"
+              className="diff-block-btn"
+              disabled={staging.busy}
+              title={`Unstage ${what}`}
+              aria-label={`Unstage ${what}`}
+              onClick={() => run('unstage')}
+            >
               <Minus size={12} />
-              {expanded && <span>Unstage</span>}
             </button>
           )}
         </div>

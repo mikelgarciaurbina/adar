@@ -3,10 +3,10 @@
 import type { ForcePushMode, OperationResult, PullMode } from '@shared/types'
 import type { GitContext } from '../context'
 import type { WriteOps } from '../ops'
+import { clearInteractiveRebaseMarker } from './interactive'
 import {
   arg,
   branchUpstream,
-  combinedOutput,
   currentBranch,
   FAMILY,
   finishOperation,
@@ -53,13 +53,17 @@ export function createRemoteOps(ctx: GitContext): RemoteOps {
         const args = ['pull', '--progress']
         if (mode === 'ff-only') args.push('--ff-only')
         else if (mode === 'merge') args.push('--no-rebase', '--ff', '--no-edit')
-        else args.push('--rebase', '--autostash')
+        else {
+          args.push('--rebase', '--autostash')
+          await clearInteractiveRebaseMarker(ctx, repo)
+        }
         const res = await ctx.gitNetwork(repo, args, { opId: opts.opId, allowFailure: true })
         if (res.code !== 0 && mode === 'ff-only' && /not possible to fast-forward|diverg/i.test(res.stderr)) {
           return {
             ok: false,
             conflicts: [],
-            message: `Not possible to fast-forward: ${branch} and its upstream have diverged.\n${combinedOutput(res)}`,
+            // (git's own "fatal: Not possible to fast-forward, aborting." and its hints would only repeat this.)
+            message: `Not possible to fast-forward: ${branch} and its upstream have diverged.`,
             state: await ctx.operationState(repo)
           }
         }

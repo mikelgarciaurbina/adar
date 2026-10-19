@@ -88,7 +88,10 @@ const OPERATION_LABEL: Record<string, string> = {
 export function handleOperationResult(repo: string, res: OperationResult | undefined, successMsg: string): boolean {
   if (!res) return false
   if (res.ok) {
-    if (successMsg) toast.success(successMsg)
+    // Some successes come with a caveat worth showing (e.g. a stash applied without restoring its index).
+    const note = /staging was kept|applied as unstaged/i.test(res.message) ? summarizeOutput(res.message) : ''
+    if (note) toast.info(`${successMsg ? successMsg + '. ' : ''}${note}`)
+    else if (successMsg) toast.success(successMsg)
     return true
   }
   if (res.conflicts.length) {
@@ -104,8 +107,19 @@ export function handleOperationResult(repo: string, res: OperationResult | undef
     store().select(repo, { kind: 'wip' })
     return false
   }
-  toast.error(res.message || 'Operation failed')
+  const summary = summarizeOutput(res.message)
+  toast.error(summary || 'Operation failed', { detail: res.message.trim() !== summary ? res.message.trim() : undefined })
   return false
+}
+
+/** First meaningful line of git output (no hints, status chatter or error:/fatal: prefixes). */
+function summarizeOutput(text: string): string {
+  const lines = (text || '')
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l && !/^(hint:|on branch |your branch |\(use "git|nothing to commit|changes not staged|untracked files:)/i.test(l))
+  const important = lines.find((l) => /^(fatal|error):/i.test(l)) ?? lines[0] ?? ''
+  return important.replace(/^(fatal|error|warning):\s*/i, '').replace(/:$/, '')
 }
 
 function isOverwriteError(err: unknown): boolean {
@@ -133,6 +147,18 @@ export async function openRepoAt(dir: string): Promise<boolean> {
         confirmLabel: 'Initialize'
       })
       if (ok) return initRepoAt(dir)
+    } else if (err instanceof AdarError && err.code === 'NOT_FOUND') {
+      const recent = store().recent.some((r) => r.path === dir)
+      toast.error(`Folder not found: ${dir}`, {
+        actions: recent
+          ? [
+              {
+                label: 'Remove from recent',
+                onClick: () => void api.removeRecentRepo(dir).then(() => store().refreshRecent())
+              }
+            ]
+          : undefined
+      })
     } else toast.error(err)
     return false
   }
@@ -195,9 +221,21 @@ export async function copyText(text: string, what = 'Copied to clipboard'): Prom
   try {
     await navigator.clipboard.writeText(text)
     toast.success(what)
+    return
   } catch {
-    toast.error('Could not access the clipboard')
+    // navigator.clipboard rejects when the document is not focused (e.g. right after a menu click).
   }
+  const area = document.createElement('textarea')
+  area.value = text
+  area.setAttribute('readonly', '')
+  area.style.position = 'fixed'
+  area.style.opacity = '0'
+  document.body.appendChild(area)
+  area.select()
+  const ok = document.execCommand('copy')
+  area.remove()
+  if (ok) toast.success(what)
+  else toast.error('Could not access the clipboard')
 }
 
 // ── Checkout & branches ───────────────────────────────────────────────────
@@ -265,7 +303,11 @@ export async function checkoutRemote(repo: string, remoteRef: Ref): Promise<bool
     }
     return ok
   }
-  return checkout(repo, remoteRef.name)
+  // The backend creates a local tracking branch named like the remote branch.
+  const localName = remoteBranchName(remoteRef)
+  const ok = await checkout(repo, remoteRef.name, { silent: true })
+  if (ok) toast.success(`Created ${localName} tracking ${remoteRef.name}`)
+  return ok
 }
 
 /** Double-click / checkout on any ref. */
@@ -832,6 +874,7 @@ export async function fetchRemote(repo: string, remote: string): Promise<boolean
     () => api.fetch(repo, { remote, prune: true, opId }).then(() => true)
   )
   store().setProgress(opId, null)
+  if (ok) store().markFetched(repo)
   return !!ok
 }
 
@@ -914,9 +957,11 @@ export async function markResolved(repo: string, paths: string[]): Promise<boole
 
 export async function discardFiles(repo: string, paths: string[]): Promise<boolean> {
   if (!paths.length) return false
+  const wanted = new Set(paths)
+  const deletes = (tabOf(repo)?.status?.unstaged ?? []).some((f) => wanted.has(f.path) && (f.status === 'untracked' || f.status === 'added'))
   const ok = await confirm({
     title: paths.length === 1 ? `Discard changes to ${paths[0]}?` : `Discard changes to ${paths.length} files?`,
-    message: 'This cannot be undone. Untracked files will be deleted.',
+    message: deletes ? 'This cannot be undone. New (untracked) files will be deleted.' : 'This cannot be undone.',
     confirmLabel: 'Discard',
     danger: true
   })
@@ -957,7 +1002,7 @@ export async function commit(repo: string, message: string, opts: { amend?: bool
   if (!sha) return null
   if (before && (opts.amend || hadParent)) {
     store().pushHistory(repo, {
-      label: opts.amend ? 'Amend commit' : 'Commit',
+      label: `${opts.amend ? 'Amend' : 'Commit'} "${msg.split('\n')[0].slice(0, 40)}${msg.split('\n')[0].length > 40 ? '…' : ''}"`,
       undo: async () => {
         // Soft reset keeps the committed changes staged.
         await api.reset(repo, opts.amend ? before : `${sha}~1`, 'soft')
@@ -976,8 +1021,14 @@ export async function commit(repo: string, message: string, opts: { amend?: bool
 // ── In-progress operations ────────────────────────────────────────────────
 
 export async function continueOperation(repo: string, message?: string): Promise<void> {
+  const state = tabOf(repo)?.info?.state ?? 'none'
+  if (state === 'none') {
+    toast.info('There is no merge, rebase or cherry-pick in progress')
+    return
+  }
+  const label = OPERATION_LABEL[state] ?? 'Operation'
   const res = await run(repo, { busy: 'continue', busyLabel: 'Continuing…' }, () => api.continueOperation(repo, { message }))
-  if (handleOperationResult(repo, res, 'Operation completed')) showGraph(repo)
+  if (handleOperationResult(repo, res, `${label} completed`)) showGraph(repo)
 }
 
 export async function abortOperation(repo: string): Promise<void> {

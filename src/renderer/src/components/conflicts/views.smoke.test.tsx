@@ -81,7 +81,7 @@ describe('OperationBanner', () => {
     const tab = makeTab('rebase-interactive', [])
     tab.commits = [{ ...COMMIT, sha: 'a'.repeat(40), subject: 'Amend me' }]
     const html = renderToString(<OperationBanner tab={tab} />)
-    expect(html).toContain('Rebase in progress')
+    expect(html).toContain('Interactive rebase in progress')
     expect(html).toContain('Stopped at')
     expect(html).toContain('aaaaaaa')
     expect(html).toContain('Amend me')
@@ -94,6 +94,8 @@ describe('OperationBanner', () => {
     const tab = makeTab('rebase', [])
     tab.status!.staged = [{ path: 'a.txt', status: 'modified' }]
     const html = renderToString(<OperationBanner tab={tab} />)
+    expect(html).toContain('>Rebase in progress<')
+    expect(html).not.toContain('Interactive rebase')
     expect(html).toContain('Ready to continue')
     expect(html).not.toContain('Stopped at')
     expect(html).not.toMatch(/<button[^>]*disabled=""[^>]*title="Continue the rebase"/)

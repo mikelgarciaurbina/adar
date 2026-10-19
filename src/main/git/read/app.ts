@@ -9,6 +9,7 @@ import { AdarError } from '@shared/errors'
 import type { GitCommandResult, Identity } from '@shared/types'
 import type { GitContext } from '../context'
 import type { ReadOps } from '../ops'
+import { summarizeGitOutput } from '../runner'
 import type { SystemServices } from '../../system'
 import { assertRepo, expandHome, invalidArgument, notFound } from './common'
 
@@ -107,7 +108,8 @@ async function existingPath(p: unknown): Promise<{ abs: string; isDir: boolean }
 
 function launchError(what: string, err: unknown): AdarError {
   const e = err as NodeJS.ErrnoException & { stderr?: string }
-  const detail = (e?.stderr || '').trim() || e?.message || String(err)
+  // One clean line in the message; the full output stays in stderr for the UI to show.
+  const detail = summarizeGitOutput(e?.stderr || '') ?? (e?.message || String(err)).split('\n')[0].trim()
   return new AdarError({
     message: e?.code === 'ENOENT' ? `${what}: command not found` : `${what}: ${detail}`,
     code: e?.code === 'ENOENT' ? 'NOT_FOUND' : 'UNKNOWN',

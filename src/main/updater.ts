@@ -65,6 +65,25 @@ export class Updater implements UpdateApi {
 
   /** Start periodic background checks (packaged builds only). */
   start(): void {
+    // Downloads from a previous session are never resumed: free the space (~100 MB per update).
+    void fs.rm(path.join(app.getPath('userData'), 'updates'), { recursive: true, force: true }).catch(() => undefined)
+    // Test hook: with a custom feed, check → download → install immediately (used by scripts/test-updater.sh).
+    if (process.env['ADAR_UPDATE_FEED'] && process.env['ADAR_UPDATE_TEST_AUTOINSTALL'] === '1') {
+      setTimeout(() => {
+        void (async () => {
+          const s = await this.updateCheck(true)
+          console.log(`[updater-test] check → ${s.state} ${s.info?.latestVersion ?? ''}`)
+          if (s.state !== 'available') return app.quit()
+          const d = await this.updateDownload()
+          console.log(`[updater-test] download → ${d.state} canInstall=${d.canInstall}`)
+          await this.updateInstall()
+        })().catch((err) => {
+          console.log(`[updater-test] failed: ${String(err)}`)
+          app.quit()
+        })
+      }, 3000)
+      return
+    }
     if (!app.isPackaged) return
     const tick = () => void this.updateCheck(false).catch(() => undefined)
     this.timers.push(setTimeout(tick, FIRST_CHECK_DELAY))
@@ -97,7 +116,7 @@ export class Updater implements UpdateApi {
   private async doCheck(manual: boolean): Promise<UpdateStatus> {
     const settings = await this.deps.getSettings().catch(() => ({ checkForUpdates: true, skippedUpdateVersion: '' }))
     if (!manual && !settings.checkForUpdates) return this.status
-    this.set({ state: 'checking', manual }, false)
+    this.set({ state: 'checking', manual: false }, manual)
     try {
       const release = await this.fetchLatest()
       if (!release) {
@@ -130,7 +149,9 @@ export class Updater implements UpdateApi {
   }
 
   private async fetchLatest(): Promise<GithubRelease | null> {
-    const res = await net.fetch(`https://api.github.com/repos/${UPDATE_REPO}/releases/latest`, {
+    // ADAR_UPDATE_FEED (testing only) points at a JSON document in GitHub's release format.
+    const feed = process.env['ADAR_UPDATE_FEED'] || `https://api.github.com/repos/${UPDATE_REPO}/releases/latest`
+    const res = await net.fetch(feed, {
       headers: {
         Accept: 'application/vnd.github+json',
         'User-Agent': `Adar/${this.deps.currentVersion}`,

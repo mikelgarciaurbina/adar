@@ -4,10 +4,11 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { CommandPalette } from '@renderer/components/palette/CommandPalette'
+import { useUpdates } from '@renderer/components/update/updateStore'
 import { useApp, type RepoTab } from '@renderer/store/appStore'
 import { DEFAULT_SETTINGS, type RefsResult } from '@shared/types'
 import { StatusBar } from './StatusBar'
-import { TabBar } from './TabBar'
+import { repoLifecycleItems, TabBar } from './TabBar'
 import { Toolbar } from './Toolbar'
 import { Welcome } from './Welcome'
 
@@ -74,9 +75,27 @@ beforeEach(() => {
     activePath: a.path,
     busy: { 'push:/Users/me/Projects/adar': 'Pushing…' },
     progress: { 'push-1': { message: 'Writing objects: 40% (4/10)', percent: 40, repoPath: a.path } },
-    paletteOpen: true
+    paletteOpen: true,
+    modal: null
   })
+  seedUpdates({ status: null })
 })
+
+function seedUpdates(patch: Partial<ReturnType<typeof useUpdates.getState>>) {
+  useUpdates.setState(patch)
+  Object.assign(useUpdates.getInitialState(), patch)
+}
+
+const releaseInfo = {
+  currentVersion: '0.1.0',
+  latestVersion: '0.2.0',
+  releaseName: 'Adar 0.2.0',
+  notes: '',
+  releaseUrl: 'https://github.com/mikelgarciaurbina/adar/releases/tag/v0.2.0',
+  publishedAt: '',
+  zip: null,
+  dmg: null
+}
 
 describe('chrome render smoke tests', () => {
   it('renders the tab bar with one tab per repo', () => {
@@ -85,6 +104,29 @@ describe('chrome render smoke tests', () => {
     expect(html).toContain('>adar<')
     expect(html).toContain('>other<')
     expect(html).toContain('title="/Users/me/Projects/adar"')
+  })
+
+  it('shows the update pill only while an update is available or downloaded', () => {
+    expect(renderToStaticMarkup(<TabBar />)).not.toContain('tb-update-pill')
+    seedUpdates({ status: { state: 'available', currentVersion: '0.1.0', info: releaseInfo, canInstall: false } })
+    const html = renderToStaticMarkup(<TabBar />)
+    expect(html).toContain('tb-update-pill')
+    expect(html).toContain('Adar 0.2.0 is available')
+    seedUpdates({ status: { state: 'downloaded', currentVersion: '0.1.0', info: releaseInfo, canInstall: true } })
+    expect(renderToStaticMarkup(<TabBar />)).toContain('Adar 0.2.0 is ready to install')
+    seedUpdates({ status: { state: 'not-available', currentVersion: '0.1.0', info: null, canInstall: false } })
+    expect(renderToStaticMarkup(<TabBar />)).not.toContain('tb-update-pill')
+  })
+
+  it('offers Open by Path… in the new-tab menu (opens the path modal)', () => {
+    const item = repoLifecycleItems().find((i) => 'label' in i && i.label === 'Open by Path…')
+    expect(item).toBeTruthy()
+    ;(item as { onClick: () => void }).onClick()
+    expect(useApp.getState().modal).toEqual({ kind: 'open' })
+  })
+
+  it('reserves no traffic-light space outside the macOS desktop app', () => {
+    expect(renderToStaticMarkup(<TabBar />)).not.toContain('tb-tabbar-mac')
   })
 
   it('tells apart tabs of repositories with the same folder name', () => {

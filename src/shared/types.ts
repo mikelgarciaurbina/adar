@@ -521,6 +521,8 @@ export const MENU_COMMANDS = [
   'open-in-finder',
   'git-console',
   'check-for-updates',
+  'focus-branch-filter',
+  'open-repo-path',
   'stage-all',
   'commit',
   'about'

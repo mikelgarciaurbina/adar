@@ -12,14 +12,16 @@ import { toast } from '@renderer/components/common/toast'
 import { isMod, shortcutLabel } from '@renderer/lib/keys'
 import { useApp, type CommitDraft, type RepoTab } from '@renderer/store/appStore'
 import { useIdentity } from './identity'
+import { prefillMergeMessage } from './mergeDraft'
 import { joinMessage, splitMessage, summaryLength, SUMMARY_SOFT_LIMIT, type SplitMessage } from './message'
 
+/** "A rebase is in progress…": the operation with its article. */
 const OP_NAME: Record<string, string> = {
-  rebase: 'rebase',
-  'rebase-interactive': 'rebase',
-  'cherry-pick': 'cherry-pick',
-  revert: 'revert',
-  am: 'patch application'
+  rebase: 'A rebase',
+  'rebase-interactive': 'An interactive rebase',
+  'cherry-pick': 'A cherry-pick',
+  revert: 'A revert',
+  am: 'A patch application'
 }
 
 const DESC_MAX_HEIGHT = 220
@@ -29,6 +31,8 @@ export interface CommitComposerProps {
   staged: number
   unstaged: number
   conflicted: number
+  /** Set when the repository cannot be read (tab.error): the draft stays editable but nothing can be committed. */
+  unavailable?: string
 }
 
 function getTab(repo: string): RepoTab | undefined {
@@ -39,7 +43,7 @@ function getDraft(repo: string): CommitDraft {
   return getTab(repo)?.draft ?? { summary: '', description: '', amend: false }
 }
 
-export function CommitComposer({ tab, staged, unstaged, conflicted }: CommitComposerProps) {
+export function CommitComposer({ tab, staged, unstaged, conflicted, unavailable }: CommitComposerProps) {
   const repo = tab.path
   const draft = tab.draft
   const busy = useApp((s) => !!s.busy[`commit:${repo}`] || !!s.busy[`continue:${repo}`])
@@ -49,8 +53,12 @@ export function CommitComposer({ tab, staged, unstaged, conflicted }: CommitComp
   const descRef = useRef<HTMLTextAreaElement>(null)
   const prefilled = useRef<SplitMessage | null>(null)
 
-  const opState = tab.info?.state ?? 'none'
-  const mergeMode = opState === 'merge' && conflicted === 0
+  // Stale repository info must not drive the composer while the repository is unavailable.
+  const opState = unavailable ? 'none' : (tab.info?.state ?? 'none')
+  const inMerge = opState === 'merge'
+  const mergeMode = inMerge && conflicted === 0
+  // A merge cannot be amended (git refuses): ignore a leftover amend flag until it is over.
+  const amend = draft.amend && !inMerge
   const unborn = tab.info?.head.unborn ?? tab.refs?.head.unborn ?? false
   const hasSummary = draft.summary.trim().length > 0
   const inFlight = busy || working
@@ -68,48 +76,32 @@ export function CommitComposer({ tab, staged, unstaged, conflicted }: CommitComp
 
   const update = (patch: Partial<CommitDraft>) => useApp.getState().updateDraft(repo, patch)
 
-  // During a merge, prefill git's prepared message (MERGE_MSG) once, like GitKraken.
-  const mergePrefilled = useRef(false)
+  // During a merge, prefill git's prepared message (MERGE_MSG) once, like GitKraken. It is
+  // removed again if the merge ends without it (see mergeDraft.ts).
   useEffect(() => {
-    if (opState !== 'merge') {
-      mergePrefilled.current = false
-      return
-    }
-    if (mergePrefilled.current) return
-    mergePrefilled.current = true
-    const d = getDraft(repo)
-    if (d.summary.trim() || d.description.trim()) return
-    void api
-      .getMergeMessage(repo)
-      .then((msg) => {
-        const cur = getDraft(repo)
-        if (!msg || cur.summary.trim() || cur.description.trim()) return
-        const split = splitMessage(msg)
-        update({ summary: split.summary, description: split.description })
-      })
-      .catch(() => undefined)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (opState === 'merge') void prefillMergeMessage(repo)
   }, [opState, repo])
 
   // ── Button state ─────────────────────────────────────────────────────────
   let primaryLabel: string
   if (mergeMode) primaryLabel = 'Commit merge'
-  else if (draft.amend) primaryLabel = staged > 0 ? `Amend previous commit with ${staged} file${staged === 1 ? '' : 's'}` : 'Amend previous commit'
+  else if (amend) primaryLabel = staged > 0 ? `Amend previous commit with ${staged} file${staged === 1 ? '' : 's'}` : 'Amend previous commit'
   else primaryLabel = staged > 0 ? `Commit changes to ${staged} file${staged === 1 ? '' : 's'}` : 'Commit changes'
 
-  const canCommit = !inFlight && conflicted === 0 && (mergeMode || ((staged > 0 || draft.amend) && hasSummary))
-  const showStageAll = !mergeMode && conflicted === 0 && staged === 0 && unstaged > 0
+  const canCommit = !unavailable && !inFlight && conflicted === 0 && (mergeMode || ((staged > 0 || amend) && hasSummary))
+  const showStageAll = !unavailable && !mergeMode && conflicted === 0 && staged === 0 && unstaged > 0
   const canStageAll = showStageAll && !inFlight && hasSummary
   // Nothing staged (and not amending): "Stage all & commit" is the only way to commit, so it
   // becomes the single primary button instead of sitting under a disabled one.
-  const stageAllPrimary = showStageAll && !draft.amend
-  const stageAllLabel = draft.amend ? 'Stage all & amend' : `Stage all & commit (${unstaged} file${unstaged === 1 ? '' : 's'})`
+  const stageAllPrimary = showStageAll && !amend
+  const stageAllLabel = amend ? 'Stage all & amend' : `Stage all & commit (${unstaged} file${unstaged === 1 ? '' : 's'})`
 
   let hint: { text: string; tone: 'muted' | 'warn' } | null = null
-  if (conflicted > 0) hint = { text: `Resolve ${conflicted} conflicted file${conflicted === 1 ? '' : 's'} before committing`, tone: 'warn' }
+  if (unavailable) hint = { text: unavailable, tone: 'warn' }
+  else if (conflicted > 0) hint = { text: `Resolve ${conflicted} conflicted file${conflicted === 1 ? '' : 's'} before committing`, tone: 'warn' }
   else if (mergeMode) hint = null
   else if (stageAllPrimary) hint = { text: hasSummary ? 'Nothing is staged: every change will be committed' : 'Enter a commit summary, or stage files', tone: 'muted' }
-  else if (staged === 0 && !draft.amend) hint = { text: 'No changes to commit', tone: 'muted' }
+  else if (staged === 0 && !amend) hint = { text: 'No changes to commit', tone: 'muted' }
   else if (!hasSummary) hint = { text: 'Enter a commit summary', tone: 'muted' }
 
   const otherOp = !mergeMode && opState !== 'none' && opState !== 'merge' && opState !== 'bisect' ? OP_NAME[opState] : undefined
@@ -137,7 +129,7 @@ export function CommitComposer({ tab, staged, unstaged, conflicted }: CommitComp
   }
 
   const doCommit = async (stageAllFirst: boolean) => {
-    if (inFlight) return
+    if (inFlight || unavailable) return
     if (mergeMode) {
       await finishMerge()
       return
@@ -174,6 +166,7 @@ export function CommitComposer({ tab, staged, unstaged, conflicted }: CommitComp
   }
 
   const toggleAmend = async (on: boolean) => {
+    if (on && (unavailable || inMerge)) return
     const d = getDraft(repo)
     if (!on) {
       const p = prefilled.current
@@ -219,10 +212,25 @@ export function CommitComposer({ tab, staged, unstaged, conflicted }: CommitComp
   return (
     <div className="det-composer" aria-label="Commit">
       <div className="det-composer-head">
-        <span className="det-composer-title">{mergeMode ? 'Merge commit' : draft.amend ? 'Amend commit' : 'Commit'}</span>
+        <span className="det-composer-title">{mergeMode ? 'Merge commit' : amend ? 'Amend commit' : 'Commit'}</span>
         <span className="det-spacer" />
-        <label className={`det-amend${unborn || mergeMode ? ' det-disabled' : ''}`} title={unborn ? 'There is no commit to amend yet' : 'Replace the last commit with the staged changes and this message'}>
-          <input type="checkbox" checked={draft.amend} disabled={unborn || mergeMode || inFlight} onChange={(e) => void toggleAmend(e.target.checked)} />
+        <label
+          className={`det-amend${unborn || inMerge || unavailable ? ' det-disabled' : ''}`}
+          title={
+            unborn
+              ? 'There is no commit to amend yet'
+              : inMerge
+                ? 'A merge in progress cannot be amended: commit the merge (or abort it) first'
+                : 'Replace the last commit with the staged changes and this message'
+          }
+        >
+          <input
+            type="checkbox"
+            checked={amend}
+            // Turning amend off stays possible while unavailable (it only edits the draft).
+            disabled={unborn || inMerge || inFlight || (!!unavailable && !draft.amend)}
+            onChange={(e) => void toggleAmend(e.target.checked)}
+          />
           <span>Amend previous commit</span>
         </label>
       </div>
@@ -230,7 +238,7 @@ export function CommitComposer({ tab, staged, unstaged, conflicted }: CommitComp
       {otherOp && (
         <div className="det-composer-note">
           <Info size={13} />
-          <span>A {otherOp} is in progress. When you are done, use Continue in the banner above.</span>
+          <span>{otherOp} is in progress. When you are done, use Continue in the banner above.</span>
         </div>
       )}
       {mergeMode && (
@@ -301,7 +309,9 @@ export function CommitComposer({ tab, staged, unstaged, conflicted }: CommitComp
       {hint && !inFlight && <div className={`det-composer-hint${hint.tone === 'warn' ? ' det-warn' : ''}`}>{hint.text}</div>}
 
       <div className="det-identity">
-        {missingIdentity || identity?.error ? (
+        {unavailable ? (
+          <span className="det-identity-line det-muted">&nbsp;</span>
+        ) : missingIdentity || identity?.error ? (
           <button type="button" className="det-identity-warn" onClick={() => useApp.getState().openModal({ kind: 'identity', repo })}>
             <TriangleAlert size={12} />
             <span>{identity?.error ? 'Could not read your Git identity' : 'Author name/email not set'} — set identity…</span>

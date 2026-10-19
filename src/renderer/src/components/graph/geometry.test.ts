@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { autoGraphWidth, colorOf, edgePath, graphContentWidth, LANE_W, laneX, rowPaths } from './geometry'
+import { autoGraphCap, autoGraphWidth, colorOf, edgePath, fitGraphWidth, graphContentWidth, hiddenLanes, LANE_W, lanesFitting, laneX, NODE_R, pinnedNodeX, rowPaths } from './geometry'
 import { fitColumns, sanitizeWidths, setWidth, DEFAULT_WIDTHS } from './columns'
 
 describe('geometry', () => {
@@ -11,14 +11,71 @@ describe('geometry', () => {
   it('computes widths', () => {
     expect(graphContentWidth(3)).toBeGreaterThan(3 * LANE_W)
     expect(autoGraphWidth(0)).toBe(64)
+    // Unmeasured panel: fixed fallback cap.
     expect(autoGraphWidth(500)).toBe(360)
-    // Limited by the space left for the graph, but keeps ~7 lanes and HEAD's lane visible.
-    expect(autoGraphWidth(17, 200)).toBe(200)
-    expect(autoGraphWidth(3, 1000)).toBe(graphContentWidth(3))
-    expect(autoGraphWidth(3, 10)).toBe(graphContentWidth(3))
-    expect(autoGraphWidth(17, 10)).toBe(140)
-    expect(autoGraphWidth(17, 10, 12)).toBe(graphContentWidth(12))
-    expect(autoGraphWidth(40, 10, 30)).toBe(360)
+    // Fits the lanes up to the cap.
+    expect(autoGraphWidth(17, { cap: 500 })).toBe(graphContentWidth(17))
+    expect(autoGraphWidth(17, { cap: 200 })).toBe(200)
+    // Limited by the space left for the graph, but keeps ~7 lanes and the must-show lanes.
+    expect(autoGraphWidth(17, { cap: 500, available: 200 })).toBe(200)
+    expect(autoGraphWidth(3, { available: 1000 })).toBe(graphContentWidth(3))
+    expect(autoGraphWidth(3, { available: 10 })).toBe(graphContentWidth(3))
+    expect(autoGraphWidth(17, { cap: 500, available: 10 })).toBe(140)
+    expect(autoGraphWidth(17, { cap: 500, available: 10, mustShow: 12 })).toBe(graphContentWidth(12))
+    // Must-show lanes never push past the cap (the selected node is pinned instead).
+    expect(autoGraphWidth(40, { cap: 360, available: 10, mustShow: 30 })).toBe(360)
+  })
+
+  it('caps the auto width at 45% of the panel, never below ~7 lanes', () => {
+    expect(autoGraphCap(Infinity)).toBe(360)
+    expect(autoGraphCap(0)).toBe(360)
+    expect(autoGraphCap(1000)).toBe(450)
+    expect(autoGraphCap(200)).toBe(140)
+    // 17 lanes fit in a 900px panel (the 20k synthetic repo case).
+    expect(autoGraphWidth(17, { cap: autoGraphCap(900) })).toBe(graphContentWidth(17))
+    // Never more than the room left after the reserved columns (no flex squeeze)…
+    expect(autoGraphCap(448, 170 + 120)).toBe(158)
+    expect(autoGraphCap(1000, 170 + 120)).toBe(450)
+    // …and never below the minimum auto width.
+    expect(autoGraphCap(300, 520 + 120)).toBe(64)
+    // Must-show lanes stay within that bound too (the node is pinned instead).
+    expect(autoGraphWidth(17, { cap: autoGraphCap(448, 290), available: 0, mustShow: 13 })).toBe(158)
+  })
+
+  it('counts the lanes a column can show', () => {
+    for (let n = 1; n < 40; n++) {
+      expect(lanesFitting(graphContentWidth(n))).toBe(n)
+      expect(lanesFitting(graphContentWidth(n) - LANE_W)).toBe(n - 1)
+    }
+    expect(lanesFitting(0)).toBe(0)
+    expect(lanesFitting(laneX(0) + NODE_R)).toBe(1)
+    expect(lanesFitting(laneX(0) + NODE_R - 1)).toBe(0)
+    expect(hiddenLanes(17, graphContentWidth(17))).toBe(0)
+    expect(hiddenLanes(17, graphContentWidth(11))).toBe(6)
+    expect(hiddenLanes(3, 1000)).toBe(0)
+  })
+
+  it('fits the lanes in view on request without ever shrinking the column', () => {
+    // Plenty of room: exactly the lanes.
+    expect(fitGraphWidth(17, 140, 1200, 170)).toBe(graphContentWidth(17))
+    // Cramped: bounded by the room (messages keep their CSS minimum)…
+    expect(fitGraphWidth(17, 100, 448, 170)).toBe(448 - 170 - 120)
+    // …but never narrower than the column already is.
+    expect(fitGraphWidth(17, 200, 448, 170)).toBe(200)
+    expect(fitGraphWidth(3, 200, 1200, 170)).toBe(200)
+    // Unmeasured panel: just the lanes.
+    expect(fitGraphWidth(5, 40, Infinity, 170)).toBe(graphContentWidth(5))
+  })
+
+  it('pins a clipped node to the column edge', () => {
+    expect(pinnedNodeX(2, 0)).toBeNull()
+    expect(pinnedNodeX(2, graphContentWidth(3))).toBeNull()
+    const w = graphContentWidth(5)
+    const x = pinnedNodeX(10, w)!
+    expect(x + NODE_R).toBeLessThanOrEqual(w)
+    expect(x).toBeGreaterThan(laneX(3))
+    // A very narrow column still keeps the whole node inside.
+    expect(pinnedNodeX(10, 12)).toBe(NODE_R)
   })
 
   it('builds straight and curved paths', () => {

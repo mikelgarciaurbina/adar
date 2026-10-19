@@ -611,6 +611,28 @@
   font-family: var(--font-mono);
   font-size: 11.5px;
 }
+.md-about-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+  padding: 3px 8px;
+  border-radius: var(--radius);
+  color: var(--accent);
+  font-size: var(--fs-sm);
+  text-decoration: none;
+}
+.md-about-link:hover {
+  background: var(--accent-soft);
+  text-decoration: underline;
+}
+.md-about-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.md-modal .md-footer-start {
+  margin-right: auto;
+}
 .md-about-note {
   margin: 8px 0 0;
   font-size: var(--fs-xs);
@@ -688,4 +710,25 @@
 .md-cred-queue {
   font-size: var(--fs-xs);
   color: var(--text-2);
+}
+
+.md-modal .ui-hint code {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-1);
+}
+
+/* ── Settings → Updates ────────────────────────────────────────────────── */
+
+.md-update-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.md-update-accent {
+  color: var(--accent);
+  font-weight: 500;
+}
+.md-update-error {
+  color: var(--danger);
 }

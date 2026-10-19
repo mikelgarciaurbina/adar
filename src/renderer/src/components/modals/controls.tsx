@@ -1,6 +1,6 @@
 // Small form controls shared by the modals (md- prefix).
 
-import { useId, type ReactNode } from 'react'
+import { useId, useRef, type ReactNode } from 'react'
 import { FolderOpen } from 'lucide-react'
 import { api } from '@renderer/api/client'
 import { Button } from '@renderer/components/common/Button'
@@ -88,7 +88,10 @@ export function SettingRow({ label, description, children, htmlFor }: { label: R
   )
 }
 
-/** Text input with a "Browse…" button opening the native folder picker. */
+/**
+ * Text input with a "Browse…" button opening the native folder picker. After a folder is
+ * picked, focus returns to the input so Enter submits the surrounding form.
+ */
 export function PathField({
   label,
   value,
@@ -111,10 +114,21 @@ export function PathField({
   autoFocus?: boolean
 }) {
   const id = useId()
+  const inputRef = useRef<HTMLInputElement>(null)
   const browse = async () => {
     try {
       const dir = await api.pickDirectory({ title: pickerTitle ?? label, defaultPath: value.trim() || undefined })
-      if (dir) onChange(dir)
+      if (!dir) return
+      onChange(dir)
+      const input = inputRef.current
+      if (input) {
+        input.focus()
+        // Caret at the end so the (often long) path's last folder is visible.
+        requestAnimationFrame(() => {
+          input.setSelectionRange(input.value.length, input.value.length)
+          input.scrollLeft = input.scrollWidth
+        })
+      }
     } catch (err) {
       toast.error(err)
     }
@@ -127,6 +141,7 @@ export function PathField({
       <div className="md-path">
         <input
           id={id}
+          ref={inputRef}
           className={`ui-input ui-mono${error ? ' ui-invalid' : ''}`}
           value={value}
           placeholder={placeholder}

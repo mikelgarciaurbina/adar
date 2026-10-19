@@ -2,14 +2,16 @@
 // the window drag region; tabs and buttons opt out with no-drag.
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Copy, Download, FolderGit2, FolderOpen, FolderPlus, Plus, SquareTerminal, X } from 'lucide-react'
+import { CircleArrowUp, Copy, Download, FolderGit2, FolderInput, FolderOpen, FolderPlus, Plus, SquareTerminal, X } from 'lucide-react'
 import { isElectron, isMac } from '@renderer/api/client'
 import * as git from '@renderer/actions/git'
 import { showContextMenu, showMenuBelow, type MenuItem } from '@renderer/components/common/ContextMenu'
 import { getCommand } from '@renderer/commands'
+import { useUpdates } from '@renderer/components/update/updateStore'
 import { isMod, shortcutLabel } from '@renderer/lib/keys'
 import { useApp } from '@renderer/store/appStore'
-import { distinctParents, reorderIndex } from './chrome'
+import { distinctParents, pendingUpdateVersion, reorderIndex } from './chrome'
+import { useWindowFullscreen } from './hooks'
 import './layout.css'
 
 const TAB_MIME = 'application/x-adar-tab'
@@ -24,6 +26,7 @@ export function repoLifecycleItems(): MenuItem[] {
   const s = useApp.getState()
   return [
     { label: 'Open Repository…', icon: <FolderOpen size={14} />, shortcut: shortcutOf('open-repo'), onClick: () => git.openRepoDialog() },
+    { label: 'Open by Path…', icon: <FolderInput size={14} />, shortcut: shortcutOf('open-repo-path'), onClick: () => s.openModal({ kind: 'open' }) },
     { label: 'Clone Repository…', icon: <Download size={14} />, shortcut: shortcutOf('clone-repo'), onClick: () => s.openModal({ kind: 'clone' }) },
     { label: 'Init Repository…', icon: <FolderPlus size={14} />, shortcut: shortcutOf('init-repo'), onClick: () => s.openModal({ kind: 'init' }) }
   ]
@@ -144,7 +147,14 @@ export function TabBar() {
     if (to !== from) useApp.getState().moveTab(from, to)
   }
 
-  const reserveTrafficLights = isElectron && isMac
+  // macOS traffic lights sit over the bar's left end, except in full screen (hidden there).
+  const macChrome = isElectron && isMac
+  const zoom = useApp((s) => s.settings.zoom || 1)
+  const fullscreen = useWindowFullscreen(macChrome, zoom)
+  const reserveTrafficLights = macChrome && !fullscreen
+
+  const updateVersion = useUpdates((s) => pendingUpdateVersion(s.status))
+  const updateReady = useUpdates((s) => s.status?.state === 'downloaded')
 
   return (
     <div className={`tb-tabbar${reserveTrafficLights ? ' tb-tabbar-mac' : ''}`} role="tablist" aria-label="Open repositories">
@@ -234,6 +244,16 @@ export function TabBar() {
         </button>
         <div className="tb-tabs-fill" />
       </div>
+      {updateVersion && (
+        <button
+          className="tb-update-pill"
+          title={`Adar ${updateVersion} ${updateReady ? 'is ready to install' : 'is available'} — see what's new`}
+          onClick={() => useUpdates.getState().setNotesOpen(true)}
+        >
+          <CircleArrowUp size={12} />
+          <span>Update</span>
+        </button>
+      )}
     </div>
   )
 }

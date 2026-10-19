@@ -1,7 +1,7 @@
 // Pure helpers about diff targets: labels, identity, which revisions hold the
 // old / new side of a file (for image diffs and blame), and image MIME types.
 
-import type { ContentRev, DiffTarget, FileDiff } from '@shared/types'
+import type { ContentRev, DiffTarget, FileDiff, WorkingStatus } from '@shared/types'
 
 /** Context requested in full-file mode: enough for git to emit the whole file as one hunk. */
 export const FULL_FILE_CONTEXT = 1_000_000
@@ -48,6 +48,37 @@ export function sameTarget(a: DiffTarget, b: DiffTarget): boolean {
     default:
       return true
   }
+}
+
+/**
+ * Whether a centre view (the store's `tab.center`) is still showing `target`.
+ * Async work started by a diff view must not navigate once the user has moved on.
+ */
+export function viewShowsTarget(view: { kind: string; target?: DiffTarget } | null | undefined, target: DiffTarget): boolean {
+  return !!view && view.kind === 'diff' && !!view.target && sameTarget(view.target, target)
+}
+
+/** Whether a staged / unstaged target still has changes according to `status` (other targets: always). */
+export function stillChanged(status: WorkingStatus | null | undefined, t: DiffTarget): boolean {
+  if (!status) return true
+  if (t.kind === 'unstaged') return status.unstaged.some((f) => f.path === t.path)
+  if (t.kind === 'staged') return status.staged.some((f) => f.path === t.path)
+  return true
+}
+
+/**
+ * Where to go once `current` ran out of changes: the next sibling that still has
+ * changes, else the closest previous one, else null (back to the graph).
+ */
+export function nextChangedSibling(
+  siblings: readonly DiffTarget[] | undefined,
+  current: DiffTarget,
+  status: WorkingStatus | null | undefined
+): DiffTarget | null {
+  const list = siblings ?? []
+  const idx = list.findIndex((s) => sameTarget(s, current))
+  const ok = (s: DiffTarget) => !sameTarget(s, current) && stillChanged(status, s)
+  return list.slice(idx + 1).find(ok) ?? list.slice(0, Math.max(0, idx)).reverse().find(ok) ?? null
 }
 
 export interface ContentSource {

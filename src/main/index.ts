@@ -12,6 +12,13 @@ import { Updater } from './updater'
 
 // Test hooks (development builds only): isolated user data dir and scripted screenshots.
 if (!app.isPackaged && process.env['ADAR_USER_DATA']) app.setPath('userData', process.env['ADAR_USER_DATA'])
+const CAPTURE_MODE = !app.isPackaged && !!process.env['ADAR_CAPTURE_STEPS']
+if (CAPTURE_MODE) {
+  // e2e windows are usually covered by other windows: keep painting and timers running.
+  for (const sw of ['disable-backgrounding-occluded-windows', 'disable-renderer-backgrounding', 'disable-background-timer-throttling']) {
+    app.commandLine.appendSwitch(sw)
+  }
+}
 
 // The app was called "Rama" before; carry settings and recent repos over once.
 function migrateLegacyUserData(): void {
@@ -83,7 +90,8 @@ function createWindow(): void {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
-      spellcheck: false
+      spellcheck: false,
+      backgroundThrottling: !CAPTURE_MODE
     }
   })
 
@@ -142,6 +150,11 @@ async function runCaptureSteps(file: string): Promise<void> {
         }
       }
       if (step.shot) {
+        // Make sure the latest DOM state is painted before capturing.
+        win.webContents.invalidate()
+        await win.webContents
+          .executeJavaScript('new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r(true))))', true)
+          .catch(() => undefined)
         const img = await win.webContents.capturePage()
         const path = join(outDir, `${step.shot}.png`)
         await fs.writeFile(path, img.toPNG())
@@ -189,6 +202,7 @@ function buildMenu(): void {
       label: 'File',
       submenu: [
         item('Open Repository…', 'open-repo', 'CmdOrCtrl+O'),
+        item('Open Repository by Path…', 'open-repo-path', 'CmdOrCtrl+Shift+O'),
         item('Clone Repository…', 'clone-repo', 'CmdOrCtrl+Shift+N'),
         item('Init Repository…', 'init-repo', 'CmdOrCtrl+Alt+N'),
         { type: 'separator' },
@@ -219,6 +233,7 @@ function buildMenu(): void {
         item('Refresh', 'refresh', 'CmdOrCtrl+R'),
         { type: 'separator' },
         item('Toggle Left Panel', 'toggle-left-panel', 'CmdOrCtrl+J'),
+        item('Filter Branches', 'focus-branch-filter', 'CmdOrCtrl+Alt+F'),
         item('Toggle Right Panel', 'toggle-right-panel', 'CmdOrCtrl+K'),
         { type: 'separator' },
         item('Zoom In', 'zoom-in', 'CmdOrCtrl+='),

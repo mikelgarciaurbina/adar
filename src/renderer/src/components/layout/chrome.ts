@@ -2,6 +2,7 @@
 // No DOM / store access so they can be unit-tested in node.
 
 import type { ProgressState } from '@renderer/store/appStore'
+import type { UpdateStatus } from '@shared/update'
 
 /**
  * Target index for `moveTab(from, to)` (splice semantics: remove `from`, insert at `to`)
@@ -121,4 +122,40 @@ export function clampConsoleHeight(h: number, windowHeight: number): number {
 export function badgeCount(n: number | undefined | null): string {
   if (!n || n <= 0) return ''
   return n > 99 ? '99+' : String(n)
+}
+
+/** Window geometry used to detect native full screen (no Electron API in the renderer). */
+export interface WindowMetrics {
+  /** CSS px (window.innerWidth / innerHeight): shrink as the UI zoom grows. */
+  innerWidth: number
+  innerHeight: number
+  /** UI zoom factor applied to the page (settings.zoom). */
+  zoom: number
+  /** DIPs (window.screen.width / height): not affected by the zoom. */
+  screenWidth: number
+  screenHeight: number
+  /** document.fullscreenElement is set (HTML fullscreen API). */
+  htmlFullscreen: boolean
+}
+
+/**
+ * True when the window covers the whole screen: HTML fullscreen, or native (green button /
+ * View → Toggle Full Screen) full screen, where the viewport is exactly the screen size. A
+ * maximised ("zoomed") macOS window never covers the menu bar, so it does not match.
+ * The viewport is used rather than window.outerWidth/outerHeight because Electron updates the
+ * outer size only after the full-screen animation, without a further resize event.
+ */
+export function isFullscreenWindow(m: WindowMetrics): boolean {
+  if (m.htmlFullscreen) return true
+  if (!(m.screenWidth > 0) || !(m.screenHeight > 0) || !(m.innerWidth > 0) || !(m.innerHeight > 0)) return false
+  const zoom = m.zoom > 0 ? m.zoom : 1
+  // innerWidth is rounded to whole CSS px, so allow up to one CSS px of slack.
+  const slack = Math.max(1, zoom)
+  return m.innerWidth * zoom >= m.screenWidth - slack && m.innerHeight * zoom >= m.screenHeight - slack
+}
+
+/** The tab bar shows an "Update" pill while a newer release is available or downloaded. */
+export function pendingUpdateVersion(status: UpdateStatus | null | undefined): string | null {
+  if (!status?.info) return null
+  return status.state === 'available' || status.state === 'downloaded' ? status.info.latestVersion : null
 }

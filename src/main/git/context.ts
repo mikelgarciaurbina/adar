@@ -61,6 +61,12 @@ export interface CredentialProbe {
   takeCancelled(op: string): boolean
 }
 
+/**
+ * File (in the per-worktree git dir) marking a rebase started by Adar's interactive rebase.
+ * Removed once no rebase is in progress any more.
+ */
+export const INTERACTIVE_REBASE_MARKER = 'adar-interactive-rebase'
+
 /** Environment variable carrying the per-command id to the askpass helper. */
 export const ASKPASS_OP_ENV = 'ADAR_ASKPASS_OP'
 
@@ -87,6 +93,11 @@ export async function ensurePrivateDir(dir: string): Promise<string> {
   }
   if ((st.mode & 0o077) !== 0) await fs.chmod(dir, 0o700)
   return dir
+}
+
+/** The error for a repository folder that does not exist (moved, deleted, unmounted volume). */
+export function repoFolderNotFound(repo: string, command?: string): AdarError {
+  return new AdarError({ message: `Repository folder not found: ${repo}`, code: 'NOT_FOUND', command })
 }
 
 export function createGitContext(platform: PlatformAdapter, emit: (e: AdarEvent) => void): GitContext {
@@ -148,6 +159,9 @@ export function createGitContext(platform: PlatformAdapter, emit: (e: AdarEvent)
     },
 
     async gitDir(repo) {
+      // A repository folder that was moved or deleted is NOT_FOUND, also once its git dir is cached
+      // (operationState() would otherwise report "no operation in progress").
+      if (!existsSync(repo)) throw repoFolderNotFound(repo)
       const cached = gitDirs.get(repo)
       if (cached) return cached
       const res = await runGit(['rev-parse', '--absolute-git-dir'], { cwd: repo, allowFailure: true })
@@ -160,7 +174,15 @@ export function createGitContext(platform: PlatformAdapter, emit: (e: AdarEvent)
     async operationState(repo) {
       const dir = await ctx.gitDir(repo)
       const has = (p: string) => existsSync(path.join(dir, p))
-      if (has('rebase-merge')) return has('rebase-merge/interactive') ? 'rebase-interactive' : 'rebase'
+      // git writes rebase-merge/interactive for every merge-backend rebase (plain ones too), so
+      // only rebases started by interactiveRebase() — which leaves a marker — are interactive.
+      if (has('rebase-merge')) return has(INTERACTIVE_REBASE_MARKER) ? 'rebase-interactive' : 'rebase'
+      // The rebase is over (possibly finished from a terminal): drop the stale marker, unless one
+      // of our own operations is running for this repo (interactiveRebase() writes the marker
+      // before git creates rebase-merge, and cleans up itself).
+      if (!locks.has(repo) && has(INTERACTIVE_REBASE_MARKER)) {
+        await fs.rm(path.join(dir, INTERACTIVE_REBASE_MARKER), { force: true }).catch(() => undefined)
+      }
       if (has('rebase-apply')) return has('rebase-apply/applying') ? 'am' : 'rebase'
       if (has('MERGE_HEAD')) return 'merge'
       if (has('CHERRY_PICK_HEAD')) return 'cherry-pick'

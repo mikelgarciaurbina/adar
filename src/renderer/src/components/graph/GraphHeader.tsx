@@ -1,7 +1,7 @@
 // Sticky column header of the graph with resizable columns and a context menu
 // (column visibility, what the graph shows, reset widths).
 
-import { memo, useCallback } from 'react'
+import { memo, useCallback, type Ref } from 'react'
 import { Spinner } from '@renderer/components/common/Button'
 import { COLUMN_LIMITS, type ColumnId } from './columns'
 
@@ -65,20 +65,45 @@ export interface GraphHeaderProps {
   /** Right padding matching the body's vertical scrollbar. */
   scrollbar: number
   loading: boolean
+  /** Lanes of the rows in view that the GRAPH column is too narrow to show ("+N" badge). */
+  hiddenLanes: number
+  /** Widen the GRAPH column so the lanes in view fit (badge click). */
+  onFitLanes(): void
+  /** The GRAPH header cell (measured: its rendered width is the column's real width). */
+  graphCellRef?: Ref<HTMLDivElement>
   onResize(id: ColumnId, width: number | null): void
   onContextMenu(e: React.MouseEvent): void
 }
 
-export const GraphHeader = memo(function GraphHeader({ widths, scrollbar, loading, onResize, onContextMenu }: GraphHeaderProps) {
+function hiddenLanesTitle(n: number): string {
+  return `${n} ${n === 1 ? 'lane' : 'lanes'} hidden — drag to widen, or click to fit`
+}
+
+export const GraphHeader = memo(function GraphHeader(props: GraphHeaderProps) {
+  const { widths, scrollbar, loading, hiddenLanes, onFitLanes, graphCellRef, onResize, onContextMenu } = props
   return (
     <div className="gr-header" role="row" style={{ paddingRight: scrollbar }} onContextMenu={onContextMenu}>
       <div className="gr-hcell gr-c-refs" role="columnheader">
         <span className="gr-hlabel">Branch / Tag</span>
         <ColResizer id="refs" side="end" width={widths.refs} onResize={onResize} />
       </div>
-      <div className="gr-hcell gr-c-graph" role="columnheader">
+      <div ref={graphCellRef} className="gr-hcell gr-c-graph" role="columnheader">
         <span className="gr-hlabel">Graph</span>
         {loading && <Spinner size="sm" />}
+        {hiddenLanes > 0 && (
+          <button
+            type="button"
+            className="gr-lanes-more"
+            title={hiddenLanesTitle(hiddenLanes)}
+            aria-label={hiddenLanesTitle(hiddenLanes)}
+            onClick={(e) => {
+              e.stopPropagation()
+              onFitLanes()
+            }}
+          >
+            +{hiddenLanes}
+          </button>
+        )}
         <ColResizer id="graph" side="end" width={widths.graph} onResize={onResize} />
       </div>
       <div className="gr-hcell gr-c-msg" role="columnheader">

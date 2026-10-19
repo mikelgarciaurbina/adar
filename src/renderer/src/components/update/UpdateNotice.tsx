@@ -12,6 +12,7 @@ import { toast } from '@renderer/components/common/toast'
 import { AdarLogo } from '@renderer/components/layout/Logo'
 import type { UpdateStatus } from '@shared/update'
 import { ReleaseNotes } from './ReleaseNotes'
+import { useApp } from '@renderer/store/appStore'
 import { useUpdates } from './updateStore'
 import './update.css'
 
@@ -47,7 +48,8 @@ export async function checkForUpdatesNow(): Promise<void> {
   }
 }
 
-async function startUpdate() {
+/** Download the available update, then install it when it can be replaced in place. */
+export async function startUpdate(): Promise<void> {
   try {
     const s = await updates.updateDownload()
     if (s.state === 'downloaded' && s.canInstall) await updates.updateInstall()
@@ -130,6 +132,7 @@ export function UpdateNotice() {
                         onClick: () => {
                           useUpdates.getState().dismiss(info.latestVersion)
                           void updates.updateSkip(info.latestVersion)
+                          void useApp.getState().updateSettings({ skippedUpdateVersion: info.latestVersion })
                         }
                       }
                     ])
@@ -155,6 +158,11 @@ export function UpdateNotice() {
           footer={
             <>
               <Button onClick={() => void api.openExternal(info.releaseUrl)}>View on GitHub</Button>
+              {status.state === 'downloaded' && (
+                <Button variant="primary" icon={<RefreshCw size={14} />} onClick={() => void updates.updateInstall()}>
+                  {status.canInstall ? 'Restart to update' : 'Open installer'}
+                </Button>
+              )}
               {status.state === 'available' && (
                 <Button
                   variant="primary"

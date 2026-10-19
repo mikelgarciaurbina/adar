@@ -17,8 +17,8 @@ export interface OperationInfo {
 export const OPERATION_INFO: Record<ActiveOperation, OperationInfo> = {
   merge: { title: 'Merge in progress', noun: 'merge', canSkip: false, canContinue: true },
   rebase: { title: 'Rebase in progress', noun: 'rebase', canSkip: true, canContinue: true },
-  // git's merge backend marks plain rebases as interactive too, so both read "Rebase in progress".
-  'rebase-interactive': { title: 'Rebase in progress', noun: 'rebase', canSkip: true, canContinue: true },
+  // The backend tells them apart by git's own marker (rebase-merge/interactive), not by the backend used.
+  'rebase-interactive': { title: 'Interactive rebase in progress', noun: 'rebase', canSkip: true, canContinue: true },
   'cherry-pick': { title: 'Cherry-pick in progress', noun: 'cherry-pick', canSkip: true, canContinue: true },
   revert: { title: 'Revert in progress', noun: 'revert', canSkip: true, canContinue: true },
   bisect: { title: 'Bisect in progress', noun: 'bisect', canSkip: false, canContinue: false },

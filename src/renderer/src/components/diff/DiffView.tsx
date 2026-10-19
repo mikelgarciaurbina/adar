@@ -20,7 +20,7 @@ import { remapKeys, selectionFromKeys, validKeys } from './diffModel'
 import { ChangeStats, DiffMoreButton, FullFileToggle, PathLabel, StatusBadge, ViewModeSwitch } from './parts'
 import { applyPartial, type PartialUnit } from './staging'
 import { setFullFile, toggleFullFile, useDiffPrefs } from './prefs'
-import { blameRev, describeTarget, modeChangeText, sameTarget } from './targets'
+import { blameRev, describeTarget, modeChangeText, nextChangedSibling, sameTarget, stillChanged, viewShowsTarget } from './targets'
 import './diff.css'
 
 const tabOf = (repo: string) => useApp.getState().tabs.find((t) => t.path === repo)
@@ -30,14 +30,6 @@ function statusFileOf(status: WorkingStatus | null, target: DiffTarget): FileSta
   if (target.kind === 'unstaged') return status.unstaged.find((f) => f.path === target.path)?.status ?? null
   if (target.kind === 'staged') return status.staged.find((f) => f.path === target.path)?.status ?? null
   return null
-}
-
-/** Whether a sibling target still has changes according to the latest status. */
-function stillChanged(status: WorkingStatus | null | undefined, t: DiffTarget): boolean {
-  if (!status) return true
-  if (t.kind === 'unstaged') return status.unstaged.some((f) => f.path === t.path)
-  if (t.kind === 'staged') return status.staged.some((f) => f.path === t.path)
-  return true
 }
 
 const isEmptyDiff = (d: FileDiff) => !d.hunks.length && !d.binary && !d.isImage && !d.tooLarge && !modeChangeText(d)
@@ -65,32 +57,50 @@ export function DiffView({ tab, target, siblings }: { tab: RepoTab; target: Diff
   const propsRef = useRef({ siblings, target })
   propsRef.current = { siblings, target }
 
+  // App keys this view by its target, so another file (or the staged copy of this
+  // one) is a new instance: loads still in flight when this one goes away must
+  // neither update it nor navigate on its behalf.
+  const alive = useRef(true)
+  useEffect(() => {
+    alive.current = true
+    return () => {
+      alive.current = false
+      gen.current++
+    }
+  }, [])
+
+  /**
+   * Whether this view may still navigate: mounted and still what the centre panel
+   * shows (the store may already point elsewhere before React unmounts us).
+   */
+  const ownsCenter = useCallback(
+    () => alive.current && viewShowsTarget(tabOf(repo)?.center, propsRef.current.target),
+    [repo]
+  )
+
   // ── Navigation ────────────────────────────────────────────────────────────
   const siblingIndex = useMemo(() => (siblings ? siblings.findIndex((s) => sameTarget(s, target)) : -1), [siblings, target])
   const hasSiblings = !!siblings && siblings.length > 1 && siblingIndex >= 0
 
   const goSibling = useCallback(
     (dir: 1 | -1) => {
-      if (!siblings || siblingIndex < 0) return
+      if (!siblings || siblingIndex < 0 || !ownsCenter()) return
       const next = siblings[siblingIndex + dir]
       if (next) git.openDiff(repo, next, siblings)
     },
-    [repo, siblings, siblingIndex]
+    [repo, siblings, siblingIndex, ownsCenter]
   )
 
   const close = useCallback(() => git.showGraph(repo), [repo])
 
   /** After the file ran out of changes for this target: next / previous changed sibling, else the graph. */
   const leaveEmpty = useCallback(() => {
+    if (!ownsCenter()) return
     const { siblings: sibs, target: cur } = propsRef.current
-    const status = tabOf(repo)?.status
-    const list = sibs ?? []
-    const idx = list.findIndex((s) => sameTarget(s, cur))
-    const ok = (s: DiffTarget) => !sameTarget(s, cur) && stillChanged(status, s)
-    const next = list.slice(idx + 1).find(ok) ?? list.slice(0, Math.max(0, idx)).reverse().find(ok)
+    const next = nextChangedSibling(sibs, cur, tabOf(repo)?.status)
     if (next) git.openDiff(repo, next, sibs)
     else git.showGraph(repo)
-  }, [repo])
+  }, [repo, ownsCenter])
 
   // ── Loading ───────────────────────────────────────────────────────────────
   const load = useCallback(
@@ -155,10 +165,13 @@ export function DiffView({ tab, target, siblings }: { tab: RepoTab; target: Diff
           navigateFromGen.current = gen.current + 1
         }
         await useApp.getState().refresh(repo, ['status'])
+        if (!alive.current) return
         await load(true)
       } finally {
-        setBusy(false)
-        handle.current?.focus()
+        if (alive.current) {
+          setBusy(false)
+          handle.current?.focus()
+        }
       }
     },
     [repo, stagingKind, target.path, busy, load]
@@ -200,7 +213,8 @@ export function DiffView({ tab, target, siblings }: { tab: RepoTab; target: Diff
         else await git.discardFiles(repo, [path])
         await useApp.getState().refresh(repo, ['status'])
         const st = tabOf(repo)?.status
-        if (!st) return
+        // The user may have opened something else meanwhile: leave their view alone.
+        if (!st || !ownsCenter()) return
         if (action === 'stage' && st.staged.some((f) => f.path === path)) {
           // Keep the file open, now showing what is staged (like GitKraken).
           git.openDiff(
@@ -218,10 +232,10 @@ export function DiffView({ tab, target, siblings }: { tab: RepoTab; target: Diff
           leaveEmpty()
         }
       } finally {
-        setBusy(false)
+        if (alive.current) setBusy(false)
       }
     },
-    [repo, target, busy, leaveEmpty]
+    [repo, target, busy, leaveEmpty, ownsCenter]
   )
 
   // ── Keyboard ──────────────────────────────────────────────────────────────

@@ -15,20 +15,31 @@ import { toast } from '@renderer/components/common/toast'
 import { runCommand } from '@renderer/commands'
 import { REF_DRAG_MIME } from '@renderer/lib/dnd'
 import { isEditableTarget, isMod } from '@renderer/lib/keys'
-import { useApp, useSettings, type RepoTab, type Selection } from '@renderer/store/appStore'
+import { useApp, useSettings, type RepoTab } from '@renderer/store/appStore'
 import type { Commit, Stash } from '@shared/types'
 import { DEFAULT_WIDTHS, fitColumns, loadWidths, saveWidths, setWidth, type ColumnId, type ColumnWidths } from './columns'
-import { autoGraphWidth, DEFAULT_ROW_H, graphContentWidth, MIN_MSG_HIDE_W, MIN_MSG_W } from './geometry'
+import {
+  autoGraphCap,
+  autoGraphWidth,
+  DEFAULT_ROW_H,
+  fitGraphWidth,
+  graphContentWidth,
+  hiddenLanes as countHiddenLanes,
+  MIN_MSG_CSS_W,
+  MIN_MSG_HIDE_W
+} from './geometry'
 import { GraphHeader } from './GraphHeader'
 import { GraphRow } from './GraphRow'
 import { GraphSearch } from './GraphSearch'
 import { computeGraph, type LayoutRow } from './layout'
+import { createCommitRevealer } from './reveal'
 import { commitMenu, headerMenu, multiCommitMenu, refMenu, stashMenu, wipMenu } from './menus'
 import {
   buildDisplayRows,
   buildPillMap,
   findSelectionIndex,
   hasWorkingChanges,
+  lanesInRange,
   localBranchesIn,
   navigate,
   nearestCommitRow,
@@ -45,6 +56,11 @@ const NO_STASHES: Stash[] = []
 const LOAD_MORE_THRESHOLD = 200
 const OVERSCAN = 12
 const MORE_KEY = '__more__'
+/** Rows whose lanes size the auto GRAPH column before the virtualiser has measured the viewport. */
+const FALLBACK_VIEW_ROWS = 40
+/** The auto GRAPH column shrinks back this long after scrolling stops (grows immediately). */
+const LANE_SHRINK_DELAY = 700
+const NOT_IN_GRAPH = 'That commit is not shown in the graph (its branch may be hidden or filtered).'
 
 /** Scroll offset per repo so returning from a diff / switching tabs restores the position. */
 const savedOffsets = new Map<string, number>()
@@ -83,6 +99,22 @@ function useStableStashes(stashes: Stash[]): Stash[] {
   return ref.current
 }
 
+/**
+ * `value`, except that decreases only take effect once `paused` is false and
+ * `delay` ms have passed — keeps the auto-sized GRAPH column from jittering while
+ * the user scrolls through rows with fewer lanes.
+ */
+function useHeldMax(value: number, delay: number, paused: boolean): number {
+  const [held, setHeld] = useState(value)
+  useEffect(() => {
+    if (value > held) setHeld(value)
+    if (value >= held || paused) return
+    const id = setTimeout(() => setHeld(value), delay)
+    return () => clearTimeout(id)
+  }, [value, held, delay, paused])
+  return Math.max(value, held)
+}
+
 function shortRefName(fullName: string): string {
   return fullName.replace(/^refs\/(heads|remotes|tags)\//, '')
 }
@@ -111,10 +143,12 @@ export function CommitGraph({ tab }: { tab: RepoTab }) {
   const [widths, setWidths] = useState<ColumnWidths>(loadWidths)
   const [scrollbar, setScrollbar] = useState(0)
   const [rootW, setRootW] = useState(0)
+  const [graphColW, setGraphColW] = useState(0)
   const [now, setNow] = useState(() => Date.now())
   const rootRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const innerRef = useRef<HTMLDivElement>(null)
+  const graphHeadRef = useRef<HTMLDivElement>(null)
   const lastOffset = useRef(savedOffsets.get(path) ?? 0)
 
   // ── View model ──────────────────────────────────────────────────────────
@@ -124,7 +158,8 @@ export function CommitGraph({ tab }: { tab: RepoTab }) {
   const head = tab.refs?.head ?? tab.info?.head ?? null
   const headSha = head?.sha ?? null
   const unborn = !!head?.unborn
-  const showWip = hasWorkingChanges(tab.status)
+  // Also during a merge whose resolution left no changes: the WIP row leads back to the merge composer.
+  const showWip = hasWorkingChanges(tab.status) || (!!tab.status && !tab.error && tab.info?.state === 'merge')
   const stashes = useStableStashes(settings.graphShowStashes ? (tab.refs?.stashes ?? NO_STASHES) : NO_STASHES)
   const model: DisplayModel = useMemo(
     () => buildDisplayRows({ commits, layout, headSha, showWip, stashes, cache: rowCache }),
@@ -150,23 +185,7 @@ export function CommitGraph({ tab }: { tab: RepoTab }) {
   const hlField: 'message' | 'author' | null = matchSet && query.trim() ? (mode === 'message' ? 'message' : mode === 'author' ? 'author' : null) : null
   const hl = hlField ? query.trim() : ''
 
-  // ── Columns ─────────────────────────────────────────────────────────────
-  const headRow = headSha ? model.rows[model.index.get(headSha) ?? -1] : undefined
-  const mustShowLanes = Math.max(headRow ? headRow.lane + 1 : 0, showWip && model.rows[0] ? model.rows[0].lane + 1 : 0)
-  const inner = rootW ? rootW - scrollbar : Infinity
-  // Optional columns give way first when the panel is narrow (SHA, date, author)…
-  const cols = useMemo(
-    () => fitColumns(settings.graphColumns, widths, inner - widths.refs - (widths.graph ?? autoGraphWidth(model.maxLanes, 0, mustShowLanes)) - MIN_MSG_HIDE_W),
-    [settings.graphColumns, widths, inner, model.maxLanes, mustShowLanes]
-  )
-  // …then the auto-sized graph takes what is left without squeezing the messages.
-  const graphRoom = inner - widths.refs - (cols.author ? widths.author : 0) - (cols.date ? widths.date : 0) - (cols.sha ? widths.sha : 0) - MIN_MSG_W
-  const graphW = widths.graph ?? autoGraphWidth(model.maxLanes, graphRoom, mustShowLanes)
-  const drawW = graphContentWidth(model.maxLanes)
-  const headerWidths = useMemo(
-    () => ({ refs: widths.refs, graph: graphW, author: widths.author, date: widths.date, sha: widths.sha }),
-    [widths, graphW]
-  )
+  // ── Column widths (persistence) ─────────────────────────────────────────
   const firstWidths = useRef(true)
   useEffect(() => {
     if (firstWidths.current) {
@@ -206,6 +225,48 @@ export function CommitGraph({ tab }: { tab: RepoTab }) {
   const items = virtualizer.getVirtualItems()
   const lastRendered = items.length ? items[items.length - 1].index : -1
 
+  // ── Columns ─────────────────────────────────────────────────────────────
+  // The auto GRAPH column fits the lanes of the rows in view (incl. overscan),
+  // capped at 45% of the panel; it grows at once and shrinks after scrolling.
+  const viewFirst = items.length ? items[0].index : 0
+  const viewLast = Math.min(items.length ? lastRendered : FALLBACK_VIEW_ROWS - 1, model.rows.length - 1)
+  const viewLanes = useMemo(() => lanesInRange(model.rows, viewFirst, viewLast), [model.rows, viewFirst, viewLast])
+  const fitLanes = useHeldMax(viewLanes, LANE_SHRINK_DELAY, virtualizer.isScrolling)
+  // Lanes that stay visible even when the messages are short of room (bounded by the
+  // cap; beyond it the selected node is pinned to the column edge instead).
+  const laneInView = (i: number) => (i >= viewFirst && i <= viewLast ? model.rows[i].lane + 1 : 0)
+  const mustShowLanes = Math.max(
+    laneInView(selIndex),
+    headSha ? laneInView(model.index.get(headSha) ?? -1) : 0,
+    showWip ? laneInView(0) : 0
+  )
+  const inner = rootW ? rootW - scrollbar : Infinity
+  const cap = autoGraphCap(inner, widths.refs + MIN_MSG_CSS_W)
+  // Lanes come before the optional columns, which give way first (SHA, date, author)…
+  const graphWant = widths.graph ?? autoGraphWidth(fitLanes, { cap, mustShow: mustShowLanes })
+  const cols = useMemo(
+    () => fitColumns(settings.graphColumns, widths, inner - widths.refs - graphWant - MIN_MSG_HIDE_W),
+    [settings.graphColumns, widths, inner, graphWant]
+  )
+  // …then the graph takes what is left while keeping the messages readable.
+  const graphRoom = inner - widths.refs - (cols.author ? widths.author : 0) - (cols.date ? widths.date : 0) - (cols.sha ? widths.sha : 0) - MIN_MSG_HIDE_W
+  const graphW = widths.graph ?? autoGraphWidth(fitLanes, { cap, available: graphRoom, mustShow: mustShowLanes })
+  const drawW = graphContentWidth(model.maxLanes)
+  // Real rendered width (flex may shrink a manual width in a cramped panel).
+  const colW = graphColW || graphW
+  const lanesHidden = countHiddenLanes(viewLanes, colW)
+  const headerWidths = useMemo(
+    () => ({ refs: widths.refs, graph: graphW, author: widths.author, date: widths.date, sha: widths.sha }),
+    [widths, graphW]
+  )
+  const fitInput = useRef({ viewLanes, colW, inner, refs: widths.refs })
+  fitInput.current = { viewLanes, colW, inner, refs: widths.refs }
+  /** "+N" badge: widen the GRAPH column (explicit width) so the lanes in view fit. */
+  const onFitLanes = useCallback(() => {
+    const { viewLanes, colW, inner, refs } = fitInput.current
+    setWidths((prev) => setWidth(prev, 'graph', fitGraphWidth(viewLanes, colW, inner, refs)))
+  }, [])
+
   // Restore the scroll position on mount (initialOffset only seeds the first range).
   useLayoutEffect(() => {
     const saved = savedOffsets.get(path)
@@ -232,22 +293,39 @@ export function CommitGraph({ tab }: { tab: RepoTab }) {
     return () => ro.disconnect()
   }, [])
 
+  // Rendered GRAPH column width, re-measured before paint whenever the column
+  // layout may have changed (so the "+N" badge and pinned node never lag a frame).
+  useLayoutEffect(() => {
+    const el = graphHeadRef.current
+    if (el) setGraphColW(el.offsetWidth)
+  }, [graphW, inner, cols, widths])
+
   // Infinite scroll. Auto-loads at most once per history length, so a failing
   // page load does not retry in a loop (the footer row offers a manual retry).
   const loadingMore = tab.loading.more
   const loadingLog = tab.loading.log
   const autoRequestedAt = useRef(-1)
-  /** A selected commit that is not loaded yet (being paged in by ensureCommitLoaded). */
-  const pending = useRef<Selection | null>(null)
+  /** Pages in a selected commit that is not loaded yet (see reveal.ts). */
+  const revealer = useMemo(
+    () =>
+      createCommitRevealer({
+        getTab: () => useApp.getState().tabs.find((t) => t.path === path),
+        ensureCommitLoaded: (sha) => useApp.getState().ensureCommitLoaded(path, sha),
+        onNotFound: () => toast.info(NOT_IN_GRAPH),
+        onFailed: () => toast.warning('Could not load enough history to show that commit.')
+      }),
+    [path]
+  )
+  useEffect(() => () => revealer.cancel(), [revealer])
   useEffect(() => {
     if (!tab.hasMore || loadingMore || loadingLog || !commits.length) return
-    // ensureCommitLoaded is paging: a concurrent auto-load would make its loadMore a no-op.
-    if (pending.current) return
+    // The revealer is paging (ensureCommitLoaded): it loads the pages itself.
+    if (revealer.sha) return
     if (lastRendered < model.rows.length - LOAD_MORE_THRESHOLD) return
     if (autoRequestedAt.current === commits.length) return
     autoRequestedAt.current = commits.length
     void useApp.getState().loadMore(path)
-  }, [lastRendered, tab.hasMore, loadingMore, loadingLog, model.rows.length, commits.length, path])
+  }, [lastRendered, tab.hasMore, loadingMore, loadingLog, model.rows.length, commits.length, path, revealer])
 
   // ── Scroll the selection into view ──────────────────────────────────────
   const modelRef = useRef(model)
@@ -266,47 +344,33 @@ export function CommitGraph({ tab }: { tab: RepoTab }) {
 
   useEffect(() => {
     const sel = tab.selection
-    if (sel.kind === 'none') {
-      pending.current = null
-      return
-    }
     const idx = findSelectionIndex(modelRef.current, sel)
     if (idx >= 0) {
-      pending.current = null
+      revealer.cancel()
       scrollToRow(idx)
     } else if (sel.kind === 'commit') {
-      pending.current = sel
-      const sha = sel.sha
-      const load = (attempt: number): void =>
-        void useApp
-          .getState()
-          .ensureCommitLoaded(path, sha)
-          .then((found) => {
-            const t = useApp.getState().tabs.find((x) => x.path === path)
-            const cur = t?.selection
-            if (found || !(cur?.kind === 'commit' && cur.sha === sha)) return
-            // Paging was interrupted (a concurrent page load or refresh) while more
-            // history remains: try again shortly instead of giving up.
-            if (t?.hasMore && attempt < 3) {
-              setTimeout(() => load(attempt + 1), 250)
-              return
-            }
-            pending.current = null
-            toast.info('That commit is not shown in the graph (its branch may be hidden or filtered).')
-          })
-      load(0)
+      revealer.start(sel.sha)
+    } else {
+      // Nothing selected, or a WIP / stash row that is not drawn (stashes hidden).
+      revealer.cancel()
     }
-  }, [tab.selection, path, scrollToRow])
+  }, [tab.selection, scrollToRow, revealer])
 
+  // The commit being revealed got loaded: scroll to it.
   useEffect(() => {
-    const sel = pending.current
-    if (!sel) return
-    const idx = findSelectionIndex(model, sel)
+    const sha = revealer.sha
+    if (!sha) return
+    const idx = findSelectionIndex(model, { kind: 'commit', sha })
     if (idx >= 0) {
-      pending.current = null
+      revealer.cancel()
       scrollToRow(idx, 'center')
     }
-  }, [model, scrollToRow])
+  }, [model, scrollToRow, revealer])
+
+  // Resume a reveal that waited for a refresh / page load to settle.
+  useEffect(() => {
+    if (!loadingLog && !loadingMore) revealer.resume()
+  }, [loadingLog, loadingMore, tab.hasMore, commits, revealer])
 
   // ── Drag & drop feedback (drags may start in the left panel) ────────────
   useEffect(() => {
@@ -438,6 +502,7 @@ export function CommitGraph({ tab }: { tab: RepoTab }) {
     (cols.author ? '' : ' gr-hide-author') +
     (cols.date ? '' : ' gr-hide-date') +
     (cols.sha ? '' : ' gr-hide-sha') +
+    (lanesHidden > 0 ? ' gr-clipped' : '') +
     (matchSet ? ' gr-searching' : '')
   const rootStyle = {
     '--gr-w-refs': `${widths.refs}px`,
@@ -496,7 +561,16 @@ export function CommitGraph({ tab }: { tab: RepoTab }) {
           <GraphSearch tab={tab} onClose={focusGraph} />
         </div>
       )}
-      <GraphHeader widths={headerWidths} scrollbar={scrollbar} loading={loadingLog && !noCommits} onResize={onResize} onContextMenu={onHeaderMenu} />
+      <GraphHeader
+        widths={headerWidths}
+        scrollbar={scrollbar}
+        loading={loadingLog && !noCommits}
+        hiddenLanes={lanesHidden}
+        onFitLanes={onFitLanes}
+        graphCellRef={graphHeadRef}
+        onResize={onResize}
+        onContextMenu={onHeaderMenu}
+      />
       <div className="gr-body">
         <div
           ref={scrollRef}
@@ -534,6 +608,7 @@ export function CommitGraph({ tab }: { tab: RepoTab }) {
                   start={item.start}
                   h={rowH}
                   graphWidth={drawW}
+                  pinWidth={item.index === selIndex ? colW : 0}
                   pills={sha ? pillMap.get(sha) : undefined}
                   selected={item.index === selIndex}
                   multi={!!(sha && multiSet?.has(sha))}

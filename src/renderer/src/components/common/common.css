@@ -394,7 +394,8 @@ select.ui-input {
 
 .ui-toasts {
   position: fixed;
-  right: 16px;
+  left: 50%;
+  transform: translateX(-50%);
   bottom: calc(var(--statusbar-h) + 12px);
   z-index: 3000;
   display: flex;

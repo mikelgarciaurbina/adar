@@ -2,10 +2,10 @@
 // non-interactively with a todo built from the UI's list.
 
 import { createHash } from 'node:crypto'
-import { promises as fs } from 'node:fs'
+import { existsSync, promises as fs } from 'node:fs'
 import path from 'node:path'
 import type { Commit, OperationResult } from '@shared/types'
-import type { GitContext } from '../context'
+import { INTERACTIVE_REBASE_MARKER, type GitContext } from '../context'
 import type { WriteOps } from '../ops'
 import { getGitExecutable } from '../runner'
 import { LOG_FORMAT, parseLog } from './log'
@@ -23,10 +23,13 @@ export function repoKey(repo: string): string {
  * Remove the message files of finished interactive rebases of `repo`. Message
  * files must outlive the `git rebase -i` call while the rebase is stopped
  * (edit / conflicts): the remaining exec lines still reference them.
+ * Also removes the interactive-rebase marker once no rebase is in progress.
  */
 export async function cleanupRebaseFiles(ctx: GitContext, repo: string): Promise<void> {
   try {
-    if ((await ctx.operationState(repo)) !== 'none') return
+    const state = await ctx.operationState(repo)
+    if (state !== 'rebase' && state !== 'rebase-interactive') await clearInteractiveRebaseMarker(ctx, repo)
+    if (state !== 'none') return
     const prefix = `rebase-${repoKey(repo)}-`
     const entries = await fs.readdir(ctx.tmpDir)
     await Promise.all(
@@ -34,6 +37,26 @@ export async function cleanupRebaseFiles(ctx: GitContext, repo: string): Promise
     )
   } catch {
     /* tmp dir missing or unreadable: nothing to clean */
+  }
+}
+
+/** Path of the marker telling operationState() that the rebase in progress is an interactive one. */
+async function markerPath(ctx: GitContext, repo: string): Promise<string> {
+  return path.join(await ctx.gitDir(repo), INTERACTIVE_REBASE_MARKER)
+}
+
+/**
+ * Remove the interactive-rebase marker when no rebase is in progress (a leftover of an
+ * interactive rebase finished or aborted outside Adar would make the next plain rebase look
+ * interactive). Call before starting a non-interactive rebase.
+ */
+export async function clearInteractiveRebaseMarker(ctx: GitContext, repo: string): Promise<void> {
+  try {
+    const gitDir = await ctx.gitDir(repo)
+    if (existsSync(path.join(gitDir, 'rebase-merge'))) return
+    await fs.rm(path.join(gitDir, INTERACTIVE_REBASE_MARKER), { force: true })
+  } catch {
+    /* not a repository any more / unreadable: nothing to clean */
   }
 }
 
@@ -93,6 +116,9 @@ export function createInteractiveOps(ctx: GitContext): InteractiveOps {
 
         let result: OperationResult
         try {
+          // Written before git creates rebase-merge; cleanupRebaseFiles() removes it once the rebase is over.
+          // (Not fatal: without it a paused rebase is merely reported as a plain one.)
+          await fs.writeFile(await markerPath(ctx, repo), `${new Date().toISOString()}\n`, 'utf8').catch(() => undefined)
           const res = await ctx.git(repo, args, {
             allowFailure: true,
             env: { GIT_SEQUENCE_EDITOR: `cp ${shellQuote(shellPath(todoFile))}`, GIT_EDITOR: 'true' }

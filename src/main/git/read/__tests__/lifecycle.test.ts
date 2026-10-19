@@ -3,7 +3,7 @@ import { cleanupTempDirs, commitAll, git, initTestRepo, isolateGitConfig, makeBa
 
 const globalConfig = isolateGitConfig()
 
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { API_METHODS } from '@shared/api'
@@ -101,6 +101,48 @@ describe('openRepo / getRepoInfo', () => {
     await expect(backend.openRepo('/no/such/folder/anywhere')).rejects.toMatchObject({ code: 'NOT_FOUND' })
     await expect(backend.getRepoInfo(tempDir())).rejects.toMatchObject({ code: 'NOT_A_REPO' })
     await expect(backend.getRepoInfo('relative/path')).rejects.toMatchObject({ code: 'NOT_A_REPO' })
+  })
+
+  it('reports a missing repository folder as NOT_FOUND on every path', async () => {
+    const parent = tempDir()
+    writeFileSync(path.join(parent, 'a-file'), 'x')
+    for (const p of [path.join(parent, 'gone'), `${path.join(parent, 'gone')}/`, path.join(parent, 'a-file', 'sub'), '~/adar-definitely-missing-folder']) {
+      await expect(backend.openRepo(p)).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    }
+    await expect(backend.getRepoInfo(path.join(parent, 'gone'))).rejects.toMatchObject({ code: 'NOT_FOUND' })
+
+    // Opened, then moved/deleted while open: reads, writes, operation controls and file-based ops.
+    const repo = initTestRepo()
+    write(repo, 'a.txt', 'a\n')
+    commitAll(repo, 'a')
+    await backend.openRepo(repo)
+    await backend.getStatus(repo)
+    rmSync(repo, { recursive: true, force: true })
+    const calls: Array<[string, () => Promise<unknown>]> = [
+      ['openRepo', () => backend.openRepo(repo)],
+      ['getRepoInfo', () => backend.getRepoInfo(repo)],
+      ['getStatus', () => backend.getStatus(repo)],
+      ['getLog', () => backend.getLog(repo)],
+      ['getRefs', () => backend.getRefs(repo)],
+      ['stageAll', () => backend.stageAll(repo)],
+      ['checkout', () => backend.checkout(repo, 'main')],
+      ['stashApply', () => backend.stashApply(repo, 0)],
+      ['continueOperation', () => backend.continueOperation(repo)],
+      ['abortOperation', () => backend.abortOperation(repo)],
+      ['skipOperation', () => backend.skipOperation(repo)],
+      ['addToGitignore', () => backend.addToGitignore(repo, 'dist/')],
+      ['getMergeMessage', () => backend.getMergeMessage(repo)],
+      ['runGit', () => backend.runGit(repo, ['status'])]
+    ]
+    for (const [name, call] of calls) {
+      const err = await call().then(
+        () => null,
+        (e: unknown) => e as { code: string; message: string }
+      )
+      expect({ name, code: err?.code }).toEqual({ name, code: 'NOT_FOUND' })
+      expect(err?.message).toMatch(/not found/i)
+    }
+    await backend.closeRepo(repo)
   })
 })
 

@@ -60,6 +60,8 @@ function isAdarCode(code: string): code is AdarErrorCode {
 /** Short human message for toasts: the most relevant stderr line, else the message. */
 export function describeError(err: unknown): string {
   const p = toErrorPayload(err)
+  // The backend writes plain-language messages; only fall back to parsing git's stderr without one.
+  if (p.message && p.message.trim()) return p.message.trim()
   const stderr = (p.stderr || '').trim()
   if (stderr) {
     const lines = stderr
@@ -69,5 +71,27 @@ export function describeError(err: unknown): string {
     const important = lines.find((l) => /^(fatal|error):/i.test(l)) || lines[0]
     if (important) return important.replace(/^(fatal|error):\s*/i, '')
   }
-  return p.message
+  return 'Something went wrong'
+}
+
+/**
+ * Raw git output worth showing under a friendly message: stderr minus hints, blank lines and
+ * lines that merely repeat the message. Returns undefined when nothing new remains.
+ */
+export function errorDetail(err: unknown, message: string): string | undefined {
+  const p = toErrorPayload(err)
+  const raw = (p.stderr || '').trim()
+  // The backend's dirty-worktree message already names the files; git's text would only restate it.
+  if (!raw || p.code === 'DIRTY_WORKTREE' || p.code === 'CANCELLED') return undefined
+  const norm = (s: string) => s.replace(/^(fatal|error|warning):\s*/i, '').replace(/[:.]\s*$/, '').trim().toLowerCase()
+  const msg = norm(message)
+  const lines = raw
+    .split('\n')
+    .map((l) => l.replace(/\s+$/, ''))
+    .filter((l) => l.trim() && !/^hint:/i.test(l.trim()))
+    .filter((l) => {
+      const n = norm(l)
+      return n && n !== msg && !(n.length > 12 && msg.includes(n))
+    })
+  return lines.length ? lines.join('\n') : undefined
 }

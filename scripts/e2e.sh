@@ -20,7 +20,9 @@ fi
 ADAR_USER_DATA="$WORK/ud" ADAR_CAPTURE_STEPS="$STEPS" ADAR_CAPTURE_DIR="$WORK/shots" \
   ./node_modules/.bin/electron "$WORK/out/main/index.js" 2>&1 | grep -E "^\[capture\]|Error|error" &
 PID=$!
-( sleep "${E2E_TIMEOUT:-180}"; pkill -f "$WORK/out/main/index.js" 2>/dev/null ) &
-WATCHDOG=$!
+# Watchdog: kill the app if the steps hang. The sleep itself is killed afterwards so it never holds stdout.
+sleep "${E2E_TIMEOUT:-180}" &
+SLEEP_PID=$!
+( wait $SLEEP_PID 2>/dev/null; pkill -f "$WORK/out/main/index.js" 2>/dev/null ) &
 wait $PID || true
-kill $WATCHDOG 2>/dev/null || true
+kill $SLEEP_PID 2>/dev/null || true
