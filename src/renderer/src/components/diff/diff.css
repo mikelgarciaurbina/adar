@@ -1,0 +1,1270 @@
+/* Diff viewer, file history and blame (diff- prefix). Theme variables only. */
+
+/* ── View shell ────────────────────────────────────────────────────────── */
+
+.diff-view {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-0);
+}
+
+.diff-header {
+  flex: none;
+  background: var(--bg-2);
+  border-bottom: 1px solid var(--border);
+}
+
+.diff-titlebar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 6px 0 12px;
+  min-width: 0;
+}
+
+.diff-title-icon {
+  color: var(--text-2);
+  flex: none;
+}
+
+.diff-title-label {
+  font-weight: 600;
+  color: var(--text-1);
+  font-size: var(--fs-md);
+  flex: none;
+}
+
+.diff-status {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: 1px solid;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.diff-path {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-md);
+  direction: ltr;
+}
+
+.diff-path-dir {
+  color: var(--text-2);
+}
+
+.diff-path-name {
+  color: var(--text-0);
+  font-weight: 600;
+}
+
+.diff-renamed {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-2);
+  font-size: var(--fs-sm);
+}
+
+.diff-target {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 1px 8px;
+  border-radius: 10px;
+  background: var(--bg-3);
+  color: var(--text-1);
+  font-size: var(--fs-xs);
+}
+
+.diff-target-sub {
+  color: var(--text-2);
+}
+
+.diff-spacer {
+  flex: 1;
+  min-width: 4px;
+}
+
+.diff-stats {
+  flex: none;
+  display: inline-flex;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.diff-stats-add {
+  color: var(--c-added);
+}
+
+.diff-stats-del {
+  color: var(--c-deleted);
+}
+
+.diff-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-height: 34px;
+  padding: 3px 8px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-1);
+  container: difftb / inline-size;
+}
+
+.diff-hd .diff-toolbar {
+  container-name: diffhd;
+}
+
+/* Narrow toolbars (small windows, the file history pane): labels give way to icons
+   (least important first) instead of wrapping. */
+@container difftb (max-width: 740px) {
+  .diff-tb-btn > span {
+    display: none;
+  }
+}
+
+@container difftb (max-width: 640px) {
+  .diff-seg-btn > span {
+    display: none;
+  }
+}
+
+@container difftb (max-width: 560px) {
+  .diff-toggle > span {
+    display: none;
+  }
+}
+
+@container diffhd (max-width: 480px) {
+  .diff-tb-btn > span {
+    display: none;
+  }
+}
+
+@container diffhd (max-width: 380px) {
+  .diff-seg-btn > span {
+    display: none;
+  }
+}
+
+@container diffhd (max-width: 300px) {
+  .diff-toggle > span {
+    display: none;
+  }
+}
+
+.diff-tb-sep {
+  width: 1px;
+  height: 18px;
+  margin: 0 4px;
+  background: var(--border);
+  flex: none;
+}
+
+.diff-nav {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  margin-right: 4px;
+}
+
+.diff-nav-count {
+  min-width: 46px;
+  text-align: center;
+  font-size: var(--fs-xs);
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.diff-seg {
+  display: inline-flex;
+  height: 24px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--bg-input);
+  flex: none;
+}
+
+.diff-seg-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 9px;
+  border: none;
+  border-right: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-1);
+  font-size: var(--fs-sm);
+  transition:
+    background 0.12s var(--ease),
+    color 0.12s var(--ease);
+}
+
+.diff-seg-btn:last-child {
+  border-right: none;
+}
+
+.diff-seg-btn:hover {
+  background: var(--bg-3);
+  color: var(--text-0);
+}
+
+.diff-seg-btn.diff-seg-on {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.diff-toggle {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 9px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg-input);
+  color: var(--text-1);
+  font-size: var(--fs-sm);
+  transition:
+    background 0.12s var(--ease),
+    color 0.12s var(--ease),
+    border-color 0.12s var(--ease);
+}
+
+.diff-toggle:hover {
+  background: var(--bg-3);
+  color: var(--text-0);
+}
+
+.diff-toggle.diff-toggle-on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* "⋯" options button; a small dot flags hidden whitespace changes. */
+.ui-icon-btn.diff-more-btn {
+  position: relative;
+  width: 26px;
+  height: 24px;
+}
+
+.diff-more-dot {
+  position: absolute;
+  top: 3px;
+  right: 2px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 1.5px var(--bg-1);
+  pointer-events: none;
+}
+
+.ui-btn.diff-btn-danger {
+  color: var(--danger);
+}
+
+.ui-btn.diff-btn-danger:hover:not(:disabled) {
+  background: var(--danger-soft);
+}
+
+.diff-info {
+  padding: 4px 12px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-1);
+  color: var(--text-2);
+  font-size: var(--fs-sm);
+}
+
+.diff-body {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.diff-center {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-2);
+}
+
+.diff-empty-text {
+  margin: 0 0 10px;
+  word-break: break-word;
+}
+
+.diff-empty-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 4px;
+}
+
+.diff-error-strip {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 4;
+  padding: 4px 12px;
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: var(--fs-sm);
+}
+
+/* Floating bar for selected lines. */
+.diff-selbar {
+  position: absolute;
+  left: 50%;
+  bottom: 16px;
+  z-index: 6;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 6px 5px 14px;
+  background: var(--bg-2);
+  border: 1px solid var(--border-strong);
+  border-radius: 18px;
+  box-shadow: var(--shadow-2);
+  white-space: nowrap;
+  animation: diff-pop 0.14s var(--ease);
+}
+
+.diff-selbar .ui-btn {
+  border-radius: 14px;
+}
+
+.diff-selbar-count {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--text-1);
+  margin-right: 4px;
+}
+
+@keyframes diff-pop {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 6px);
+  }
+}
+
+/* ── Text diff renderer ────────────────────────────────────────────────── */
+
+.diff-scroll {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  position: relative;
+  overflow: auto;
+  outline: none;
+  background: var(--bg-0);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 20px;
+  tab-size: 4;
+  -moz-tab-size: 4;
+  contain: content;
+}
+
+.diff-scroll:focus-visible,
+.diff-hl-scroll:focus-visible {
+  outline: none;
+}
+
+.diff-split {
+  overflow-x: hidden;
+}
+
+.diff-sizer {
+  position: relative;
+  width: 100%;
+}
+
+.diff-row {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  display: flex;
+  min-height: 20px;
+}
+
+.diff-unified .diff-line {
+  height: 20px;
+}
+
+.diff-line.diff-add,
+.diff-s-cell.diff-add {
+  background: var(--diff-add-bg);
+}
+
+.diff-line.diff-del,
+.diff-s-cell.diff-del {
+  background: var(--diff-del-bg);
+}
+
+.diff-gutter {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  flex: none;
+  display: flex;
+  background: var(--diff-gutter);
+  border-right: 1px solid var(--border);
+  color: var(--text-3);
+  user-select: none;
+}
+
+.diff-split .diff-gutter {
+  position: relative;
+}
+
+.diff-add > .diff-gutter {
+  background: linear-gradient(var(--diff-add-bg), var(--diff-add-bg)), var(--diff-gutter);
+}
+
+.diff-del > .diff-gutter {
+  background: linear-gradient(var(--diff-del-bg), var(--diff-del-bg)), var(--diff-gutter);
+}
+
+.diff-num {
+  flex: none;
+  width: calc(var(--diff-digits, 3) * 1ch + 14px);
+  padding: 0 6px 0 4px;
+  text-align: right;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-3);
+  user-select: none;
+}
+
+.diff-mark {
+  flex: none;
+  width: 16px;
+  text-align: center;
+  user-select: none;
+}
+
+.diff-add .diff-mark,
+.diff-add .diff-num {
+  color: var(--c-added);
+}
+
+.diff-del .diff-mark,
+.diff-del .diff-num {
+  color: var(--c-deleted);
+}
+
+.diff-code {
+  flex: 1;
+  min-width: 0;
+  padding: 0 16px 0 8px;
+  white-space: pre;
+  color: var(--text-0);
+  user-select: text;
+  cursor: text;
+}
+
+.diff-split .diff-code {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.diff-w-add {
+  background: var(--diff-add-strong);
+  border-radius: 2px;
+}
+
+.diff-w-del {
+  background: var(--diff-del-strong);
+  border-radius: 2px;
+}
+
+.diff-eol {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 0 4px;
+  border: 1px solid var(--border-strong);
+  border-radius: 3px;
+  font-family: var(--font-ui);
+  font-size: 9.5px;
+  font-weight: 700;
+  line-height: 14px;
+  vertical-align: 1px;
+  color: var(--text-2);
+  user-select: none;
+}
+
+.diff-nonl {
+  display: inline-flex;
+  margin-left: 6px;
+  vertical-align: -1px;
+  color: var(--text-3);
+  user-select: none;
+}
+
+/* Line selection for partial staging. */
+.diff-gutter-sel {
+  cursor: pointer;
+}
+
+.diff-gutter-sel:hover {
+  background: linear-gradient(var(--accent-soft), var(--accent-soft)), var(--diff-gutter);
+  color: var(--text-1);
+}
+
+.diff-sel > .diff-gutter,
+.diff-sel > .diff-gutter:hover {
+  background:
+    linear-gradient(var(--accent-soft), var(--accent-soft)), linear-gradient(var(--accent-soft), var(--accent-soft)), var(--diff-gutter);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.diff-sel > .diff-gutter .diff-num,
+.diff-sel > .diff-gutter .diff-mark {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.diff-line.diff-sel.diff-add,
+.diff-s-cell.diff-sel.diff-add {
+  background: var(--diff-add-strong);
+}
+
+.diff-line.diff-sel.diff-del,
+.diff-s-cell.diff-sel.diff-del {
+  background: var(--diff-del-strong);
+}
+
+.diff-sel .diff-w-add,
+.diff-sel .diff-w-del {
+  box-shadow: inset 0 -1px 0 var(--text-2);
+}
+
+/* Hunk headers. */
+.diff-hunk-row {
+  align-items: stretch;
+  background: var(--bg-0);
+  font-family: var(--font-ui);
+  line-height: normal;
+}
+
+.diff-hunk-inner {
+  position: sticky;
+  left: 0;
+  width: var(--diff-vw, 100%);
+  max-width: 100%;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px 0 12px;
+  background: linear-gradient(var(--diff-hunk-bg), var(--diff-hunk-bg)), var(--bg-1);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.diff-unified .diff-hunk-inner {
+  max-width: none;
+}
+
+.diff-split .diff-hunk-inner {
+  position: static;
+  width: 100%;
+  min-height: 30px;
+}
+
+.diff-hunk-title {
+  flex: none;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--text-1);
+  white-space: nowrap;
+}
+
+.diff-hunk-sep {
+  margin: 0 5px 0 1px;
+  color: var(--text-3);
+}
+
+.diff-hunk-section {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text-2);
+}
+
+.diff-hunk-spacer {
+  flex: 1;
+}
+
+.diff-hunk-btn {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 9px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg-2);
+  color: var(--text-1);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  white-space: nowrap;
+  opacity: 0.8;
+  transition:
+    opacity 0.12s var(--ease),
+    background 0.12s var(--ease),
+    color 0.12s var(--ease),
+    border-color 0.12s var(--ease);
+}
+
+.diff-hunk-row:hover .diff-hunk-btn {
+  opacity: 1;
+}
+
+.diff-hunk-btn:hover:not(:disabled) {
+  background: var(--bg-3);
+  color: var(--text-0);
+}
+
+.diff-hunk-btn-primary {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.diff-hunk-btn-primary:hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+.diff-hunk-btn-danger:hover:not(:disabled) {
+  border-color: var(--danger);
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.diff-hunk-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* Change block actions (full-file view): pinned to the right edge of the viewport. */
+.diff-block-anchor {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.diff-block-sticky {
+  position: sticky;
+  left: 0;
+  width: var(--diff-vw, 100%);
+  height: 0;
+}
+
+.diff-block-actions {
+  position: absolute;
+  top: 1px;
+  right: 10px;
+  display: flex;
+  gap: 1px;
+  padding: 1px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg-2);
+  box-shadow: var(--shadow-1);
+  font-family: var(--font-ui);
+  line-height: normal;
+  pointer-events: auto;
+  opacity: 0.88;
+  transition: opacity 0.12s var(--ease);
+}
+
+.diff-block-actions:hover {
+  opacity: 1;
+}
+
+.diff-block-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 20px;
+  height: 16px;
+  padding: 0 4px;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text-1);
+  font-size: 10.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.diff-block-expanded .diff-block-btn {
+  padding: 0 6px;
+}
+
+.diff-block-btn:hover:not(:disabled) {
+  background: var(--bg-4);
+  color: var(--text-0);
+}
+
+.diff-block-btn-primary {
+  color: var(--accent);
+}
+
+.diff-block-btn-primary:hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+.diff-block-btn-danger:hover:not(:disabled) {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.diff-block-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* Lines of the block whose actions are hovered (what the button will act on). */
+.diff-line.diff-hot.diff-add,
+.diff-s-cell.diff-hot.diff-add {
+  background: var(--diff-add-strong);
+}
+
+.diff-line.diff-hot.diff-del,
+.diff-s-cell.diff-hot.diff-del {
+  background: var(--diff-del-strong);
+}
+
+.diff-hot > .diff-gutter {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+/* Split view. */
+.diff-s-row {
+  align-items: stretch;
+}
+
+.diff-s-cell {
+  flex: 1 1 0;
+  width: 50%;
+  min-width: 0;
+  display: flex;
+  align-items: stretch;
+}
+
+.diff-s-cell + .diff-s-cell {
+  border-left: 1px solid var(--border-strong);
+}
+
+.diff-s-empty {
+  background: repeating-linear-gradient(135deg, var(--bg-1) 0 5px, var(--bg-0) 5px 10px);
+}
+
+/* ── Syntax colours (highlight.js classes) ─────────────────────────────── */
+
+.diff-scroll .hljs-comment,
+.diff-scroll .hljs-quote {
+  color: var(--text-2);
+  font-style: italic;
+}
+
+.diff-scroll .hljs-keyword,
+.diff-scroll .hljs-selector-tag,
+.diff-scroll .hljs-doctag,
+.diff-scroll .hljs-template-tag,
+.diff-scroll .hljs-meta .hljs-keyword {
+  color: var(--ref-stash);
+}
+
+.diff-scroll .hljs-string,
+.diff-scroll .hljs-regexp,
+.diff-scroll .hljs-addition,
+.diff-scroll .hljs-code,
+.diff-scroll .hljs-meta .hljs-string {
+  color: var(--c-added);
+}
+
+.diff-scroll .hljs-number,
+.diff-scroll .hljs-literal,
+.diff-scroll .hljs-bullet,
+.diff-scroll .hljs-symbol {
+  color: var(--c-conflict);
+}
+
+.diff-scroll .hljs-title,
+.diff-scroll .hljs-title.function_,
+.diff-scroll .hljs-section,
+.diff-scroll .hljs-property,
+.diff-scroll .hljs-selector-id,
+.diff-scroll .hljs-link {
+  color: var(--link);
+}
+
+.diff-scroll .hljs-title.class_,
+.diff-scroll .hljs-type,
+.diff-scroll .hljs-built_in,
+.diff-scroll .hljs-selector-class,
+.diff-scroll .hljs-attribute {
+  color: var(--c-modified);
+}
+
+.diff-scroll .hljs-attr,
+.diff-scroll .hljs-name,
+.diff-scroll .hljs-variable,
+.diff-scroll .hljs-template-variable,
+.diff-scroll .hljs-deletion,
+.diff-scroll .hljs-selector-attr,
+.diff-scroll .hljs-selector-pseudo {
+  color: var(--c-deleted);
+}
+
+.diff-scroll .hljs-meta,
+.diff-scroll .hljs-subst {
+  color: var(--accent);
+}
+
+.diff-scroll .hljs-params {
+  color: var(--text-1);
+}
+
+.diff-scroll .hljs-emphasis {
+  font-style: italic;
+}
+
+.diff-scroll .hljs-strong,
+.diff-scroll .hljs-section {
+  font-weight: 700;
+}
+
+.diff-scroll .hljs-link {
+  text-decoration: underline;
+}
+
+/* ── Image diff ────────────────────────────────────────────────────────── */
+
+.diff-image-view {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 16px;
+  padding: 16px;
+}
+
+.diff-image-pane {
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: 900px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-1);
+  overflow: hidden;
+}
+
+.diff-image-del {
+  border-color: var(--diff-del-strong);
+}
+
+.diff-image-add {
+  border-color: var(--diff-add-strong);
+}
+
+.diff-image-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  font-size: var(--fs-sm);
+}
+
+.diff-image-tag {
+  font-weight: 700;
+}
+
+.diff-image-del .diff-image-tag {
+  color: var(--c-deleted);
+}
+
+.diff-image-add .diff-image-tag {
+  color: var(--c-added);
+}
+
+.diff-image-meta {
+  color: var(--text-2);
+  font-size: var(--fs-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.diff-image-frame {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 180px;
+  padding: 12px;
+  background-color: var(--bg-2);
+  background-image:
+    linear-gradient(45deg, var(--bg-3) 25%, transparent 25%), linear-gradient(-45deg, var(--bg-3) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--bg-3) 75%), linear-gradient(-45deg, transparent 75%, var(--bg-3) 75%);
+  background-size: 16px 16px;
+  background-position:
+    0 0,
+    0 8px,
+    8px -8px,
+    -8px 0;
+}
+
+.diff-image-frame img {
+  max-width: 100%;
+  max-height: 70vh;
+  object-fit: contain;
+  box-shadow: var(--shadow-1);
+}
+
+.diff-image-missing {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-2);
+  font-size: var(--fs-sm);
+}
+
+.diff-image-note,
+.diff-image-error {
+  align-self: center;
+  color: var(--text-2);
+  font-size: var(--fs-sm);
+}
+
+.diff-image-error {
+  color: var(--danger);
+}
+
+/* ── File history ──────────────────────────────────────────────────────── */
+
+.diff-history-main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.diff-history-list {
+  flex: none;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-1);
+}
+
+.diff-hl-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  outline: none;
+}
+
+.diff-hl-item {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 10px 0 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.diff-hl-item:hover {
+  background: var(--bg-3);
+}
+
+.diff-hl-item.diff-hl-active {
+  background: var(--bg-4);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.diff-hl-scroll:focus .diff-hl-active {
+  background: linear-gradient(var(--accent-soft), var(--accent-soft)), var(--bg-4);
+}
+
+.diff-hl-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.diff-hl-subject {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-0);
+  font-size: var(--fs-md);
+}
+
+.diff-hl-meta,
+.diff-hd-meta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  color: var(--text-2);
+  font-size: var(--fs-xs);
+}
+
+.diff-hl-author {
+  color: var(--text-1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.diff-hl-dot {
+  color: var(--text-3);
+}
+
+.diff-hl-side {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.diff-hl-sha {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-2);
+}
+
+.diff-history-diff {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.diff-hd {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.diff-hd-header {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--bg-2);
+}
+
+.diff-hd-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.diff-hd-subject {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  color: var(--text-0);
+}
+
+.diff-sha-link {
+  border: none;
+  background: none;
+  padding: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--link);
+  cursor: pointer;
+}
+
+.diff-sha-link:hover {
+  text-decoration: underline;
+}
+
+.diff-hd .diff-toolbar {
+  border-bottom: 1px solid var(--border);
+}
+
+/* ── Blame ─────────────────────────────────────────────────────────────── */
+
+.diff-blame-wrap {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  display: flex;
+}
+
+.diff-blame-row {
+  height: 20px;
+}
+
+.diff-blame-first {
+  box-shadow: inset 0 1px 0 var(--border);
+}
+
+.diff-blame-fixed {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  flex: none;
+  display: flex;
+  background: var(--diff-gutter);
+  border-right: 1px solid var(--border);
+}
+
+.diff-blame-gutter {
+  flex: none;
+  width: var(--diff-blame-w, 400px);
+  min-width: 0;
+  overflow: hidden;
+  padding: 0 8px 0 10px;
+  font-family: var(--font-ui);
+  font-size: var(--fs-xs);
+  color: var(--text-2);
+  cursor: pointer;
+  user-select: none;
+}
+
+.diff-blame-odd .diff-blame-fixed {
+  background: var(--bg-1);
+}
+
+.diff-blame-hover {
+  background: var(--bg-1);
+}
+
+.diff-blame-hover .diff-blame-fixed {
+  background: linear-gradient(var(--accent-soft), var(--accent-soft)), var(--bg-2);
+}
+
+.diff-blame-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 20px;
+  min-width: 0;
+}
+
+.diff-blame-author {
+  flex: 0 1 auto;
+  max-width: 130px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-1);
+  font-weight: 600;
+}
+
+.diff-blame-summary {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.diff-blame-date {
+  flex: none;
+  color: var(--text-3);
+}
+
+.diff-blame-sha {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-3);
+}
+
+.diff-blame-hover .diff-blame-sha {
+  color: var(--link);
+}
+
+.diff-blame-uncommitted {
+  color: var(--accent);
+  font-style: italic;
+}
+
+.diff-blame-heat {
+  flex: none;
+  width: 3px;
+}
+
+.diff-blame-resizer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 3;
+  display: flex;
+}
+
+.diff-blame-resizer .ui-resizer::after {
+  background: transparent;
+}
+
+.diff-blame-resizer .ui-resizer:hover::after {
+  background: var(--accent);
+}

@@ -1,0 +1,340 @@
+/* Command palette and Git console (pal-). Theme variables only. */
+
+/* ── Command palette ───────────────────────────────────────────────────── */
+
+.pal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 9vh;
+  background: var(--bg-overlay);
+  -webkit-app-region: no-drag;
+  animation: ui-fade 0.1s var(--ease);
+}
+.pal-panel {
+  width: 620px;
+  max-width: calc(100vw - 32px);
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-2);
+  animation: ui-pop 0.12s var(--ease);
+}
+.pal-input-row {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px;
+  height: 48px;
+  border-bottom: 1px solid var(--border);
+}
+.pal-input-icon {
+  flex: none;
+  color: var(--text-2);
+}
+.pal-input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--text-0);
+  font-size: 15px;
+  user-select: text;
+}
+.pal-input::placeholder {
+  color: var(--text-3);
+}
+.pal-results {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px 6px 6px;
+  transition: opacity 0.1s;
+}
+.pal-stale {
+  opacity: 0.75;
+}
+.pal-group-header {
+  padding: 8px 10px 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+.pal-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 32px;
+  padding: 4px 10px;
+  border-radius: var(--radius);
+  color: var(--text-0);
+  cursor: default;
+}
+.pal-item.pal-active {
+  background: var(--accent-soft);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+.pal-item-icon {
+  flex: none;
+  width: 16px;
+  display: inline-flex;
+  justify-content: center;
+  color: var(--text-2);
+}
+.pal-active .pal-item-icon {
+  color: var(--accent);
+}
+.pal-item-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.pal-item-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pal-item-detail {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+}
+.pal-item-path {
+  direction: rtl;
+  text-align: left;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+}
+.pal-match {
+  background: transparent;
+  color: var(--accent);
+  font-weight: 700;
+}
+.pal-item-group {
+  flex: none;
+  padding: 1px 7px;
+  border-radius: 9px;
+  background: var(--bg-4);
+  color: var(--text-2);
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.pal-item-kbd {
+  flex: none;
+}
+.pal-empty {
+  padding: 24px 12px;
+  text-align: center;
+  color: var(--text-2);
+  font-size: var(--fs-sm);
+}
+.pal-footer {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 6px 12px;
+  border-top: 1px solid var(--border);
+  font-size: var(--fs-xs);
+  color: var(--text-2);
+}
+.pal-footer .ui-kbd {
+  margin-right: 3px;
+}
+.pal-footer-count {
+  margin-left: auto;
+}
+
+/* ── Git console ───────────────────────────────────────────────────────── */
+
+.pal-console {
+  /* In the app's flex column, between the workspace and the status bar (which comes
+     earlier in the DOM), so the workspace shrinks instead of being covered. */
+  order: 1;
+  position: relative;
+  flex: none;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-0);
+  border-top: 1px solid var(--border-strong);
+  -webkit-app-region: no-drag;
+  animation: pal-slide 0.14s var(--ease);
+}
+@keyframes pal-slide {
+  from {
+    transform: translateY(12px);
+    opacity: 0;
+  }
+}
+.pal-console-resize {
+  position: absolute;
+  top: -3px;
+  left: 0;
+  right: 0;
+  height: 6px;
+  cursor: row-resize;
+  z-index: 1;
+}
+.pal-console-resize:hover {
+  background: var(--accent-soft);
+}
+body.pal-resizing,
+body.pal-resizing * {
+  cursor: row-resize !important;
+  user-select: none !important;
+}
+.pal-console-header {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 6px 0 12px;
+  background: var(--bg-2);
+  border-bottom: 1px solid var(--border);
+  font-size: var(--fs-sm);
+}
+.pal-console-icon {
+  color: var(--accent);
+}
+.pal-console-title {
+  font-weight: 600;
+  color: var(--text-0);
+}
+.pal-console-repo {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 1px 7px;
+  border-radius: 9px;
+  background: var(--bg-4);
+  color: var(--text-1);
+  font-size: var(--fs-xs);
+}
+.pal-console-spacer {
+  flex: 1;
+}
+.pal-console-output {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 8px 12px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-0);
+}
+.pal-console-hint {
+  font-family: var(--font-ui);
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+}
+.pal-console-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-2);
+  font-size: var(--fs-sm);
+}
+.pal-line {
+  margin: 0;
+  font-family: inherit;
+  font-size: inherit;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.pal-line-cmd {
+  margin-top: 8px;
+  color: var(--text-0);
+  font-weight: 600;
+}
+.pal-line-cmd:first-child {
+  margin-top: 0;
+}
+.pal-line-prompt {
+  color: var(--accent);
+}
+.pal-line-out {
+  color: var(--text-1);
+}
+.pal-line-err {
+  color: var(--warning);
+}
+.pal-line-info {
+  color: var(--info);
+  font-style: italic;
+}
+.pal-line-exit {
+  color: var(--text-3);
+  font-size: 11px;
+}
+.pal-line-exit-fail {
+  color: var(--danger);
+}
+.pal-console-prompt {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 12px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-1);
+}
+.pal-console-git {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+}
+.pal-console-input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--text-0);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  user-select: text;
+}
+.pal-console-input::placeholder {
+  color: var(--text-3);
+}
+.pal-running .pal-console-git {
+  opacity: 0.6;
+}
+
+/* These inputs sit in a container that already shows focus; beat the global :focus-visible ring. */
+.pal-input:focus-visible,
+.pal-console-input:focus-visible {
+  outline: none;
+}

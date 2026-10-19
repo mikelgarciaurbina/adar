@@ -1,0 +1,632 @@
+/* ── Commit graph (gr-) ─────────────────────────────────────────────────────
+   Column widths come from CSS variables set on .gr-root (--gr-w-*), so resizing
+   a column never re-renders rows. Per-row lane colour arrives as --gr-lane. */
+
+.gr-root {
+  --gr-row-h: var(--row-h);
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  background: var(--bg-0);
+  font-size: var(--fs-md);
+}
+
+/* ── Banners ───────────────────────────────────────────────────────────── */
+
+.gr-error {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px 5px 12px;
+  background: var(--danger-soft);
+  color: var(--danger);
+  border-bottom: 1px solid var(--border);
+  font-size: var(--fs-sm);
+}
+.gr-error-msg {
+  flex: 1;
+  min-width: 0;
+  color: var(--text-0);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  user-select: text;
+}
+
+.gr-filterbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 12px;
+  font-size: var(--fs-sm);
+  color: var(--text-1);
+  background: var(--accent-soft);
+  border-bottom: 1px solid var(--border);
+}
+.gr-filterbar b {
+  color: var(--text-0);
+  font-weight: 600;
+}
+.gr-filterbar svg {
+  color: var(--accent);
+  flex: none;
+}
+
+/* ── Header ────────────────────────────────────────────────────────────── */
+
+.gr-header {
+  flex: none;
+  display: flex;
+  height: 26px;
+  background: var(--bg-1);
+  border-bottom: 1px solid var(--border);
+  color: var(--text-2);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  position: relative;
+  z-index: 3;
+  overflow: hidden;
+}
+.gr-hcell {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 0 8px;
+}
+.gr-hcell + .gr-hcell {
+  box-shadow: inset 1px 0 0 var(--border);
+}
+.gr-hlabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gr-col-resizer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  cursor: col-resize;
+  z-index: 2;
+  touch-action: none;
+}
+.gr-col-resizer-end {
+  right: -4px;
+}
+.gr-col-resizer-start {
+  left: -4px;
+}
+.gr-col-resizer::after {
+  content: '';
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 3px;
+  width: 2px;
+  border-radius: 1px;
+  background: transparent;
+  transition: background 0.12s var(--ease);
+}
+.gr-col-resizer:hover::after,
+.gr-col-resizer.gr-active::after {
+  background: var(--accent);
+}
+
+/* ── Columns (shared by header and rows) ───────────────────────────────── */
+/* Fixed columns may shrink (same rules for header and rows, so they stay aligned)
+   when the panel is too narrow; the message column keeps a usable minimum. */
+
+.gr-root .gr-c-refs {
+  flex: 0 1 var(--gr-w-refs);
+  min-width: 48px;
+}
+.gr-root .gr-c-graph {
+  flex: 0 1 var(--gr-w-graph);
+  min-width: 40px;
+}
+.gr-root .gr-c-msg {
+  flex: 1 1 0;
+  min-width: 120px;
+}
+.gr-root .gr-c-author {
+  flex: 0 1 var(--gr-w-author);
+  min-width: 48px;
+}
+.gr-root .gr-c-date {
+  flex: 0 1 var(--gr-w-date);
+  min-width: 48px;
+}
+.gr-root .gr-c-sha {
+  flex: 0 1 var(--gr-w-sha);
+  min-width: 44px;
+}
+/* Higher specificity than the row cell rules below (which set display). */
+.gr-root.gr-hide-author .gr-c-author,
+.gr-root.gr-hide-date .gr-c-date,
+.gr-root.gr-hide-sha .gr-c-sha {
+  display: none;
+}
+
+/* ── Body & rows ───────────────────────────────────────────────────────── */
+
+.gr-body {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+.gr-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  position: relative;
+  outline: none;
+  overscroll-behavior: contain;
+}
+/* Focus is shown by the stronger selected-row tint, not a ring around the list. */
+.gr-root .gr-scroll:focus-visible {
+  outline: none;
+}
+.gr-inner {
+  position: relative;
+  width: 100%;
+}
+
+.gr-row {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: stretch;
+  color: var(--text-0);
+  contain: layout style;
+}
+.gr-row:hover {
+  background: color-mix(in srgb, var(--text-0) 4.5%, transparent);
+}
+.gr-row-wip {
+  background: color-mix(in srgb, var(--gr-lane) 7%, transparent);
+}
+/* Search: non-matches are dimmed (.gr-dim); the current match gets a frame. */
+.gr-match-current {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+  background: var(--accent-soft);
+}
+/* Multi-selection: one uniform band (lane tints would stripe the range). */
+.gr-row.gr-multi {
+  background: color-mix(in srgb, var(--accent) 13%, transparent);
+  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--accent) 70%, transparent);
+}
+.gr-row.gr-multi:hover {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+.gr-row.gr-selected {
+  background: color-mix(in srgb, var(--gr-lane) 20%, transparent);
+  box-shadow: inset 3px 0 0 var(--gr-lane);
+}
+.gr-row.gr-selected:hover {
+  background: color-mix(in srgb, var(--gr-lane) 25%, transparent);
+}
+.gr-scroll:focus .gr-row.gr-selected {
+  background: color-mix(in srgb, var(--gr-lane) 26%, transparent);
+}
+.gr-row.gr-multi.gr-selected,
+.gr-scroll:focus .gr-row.gr-multi.gr-selected {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+/* Dim non-matching rows' text and nodes, but keep the lane lines continuous:
+   while searching every line is drawn at one uniform, softer opacity. */
+.gr-row.gr-dim .gr-cell:not(.gr-c-graph),
+.gr-row.gr-dim .gr-node > *,
+.gr-row.gr-dim .gr-connector {
+  opacity: 0.36;
+}
+.gr-row.gr-dim:hover .gr-cell:not(.gr-c-graph),
+.gr-row.gr-dim:hover .gr-node > * {
+  opacity: 0.7;
+}
+/* Nodes stay opaque (no line showing through) and fade by colour instead. */
+.gr-row.gr-dim .gr-node {
+  border-color: color-mix(in srgb, var(--gr-lane) 40%, var(--bg-0));
+}
+.gr-row.gr-dim .gr-merge-dot {
+  fill: color-mix(in srgb, var(--gr-lane) 40%, var(--bg-0));
+}
+.gr-row.gr-dim .gr-wip-node {
+  stroke: color-mix(in srgb, var(--gr-lane) 40%, var(--bg-0));
+}
+.gr-searching .gr-edge {
+  opacity: 0.55;
+}
+
+.gr-cell {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.gr-row .gr-c-refs {
+  padding-left: 6px;
+}
+.gr-row .gr-c-graph {
+  position: relative;
+}
+.gr-row .gr-c-msg {
+  gap: 8px;
+  padding: 0 10px 0 4px;
+}
+.gr-row .gr-c-author,
+.gr-row .gr-c-date,
+.gr-row .gr-c-sha {
+  display: block;
+  padding: 0 8px;
+  line-height: var(--gr-row-h);
+  text-overflow: ellipsis;
+  color: var(--text-1);
+  font-size: var(--fs-sm);
+}
+.gr-row .gr-c-sha {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-2);
+}
+
+.gr-subject {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.gr-row-merge .gr-subject {
+  color: var(--text-2);
+}
+.gr-hl {
+  background: color-mix(in srgb, var(--warning) 38%, transparent);
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 1px;
+}
+
+/* ── Graph drawing ─────────────────────────────────────────────────────── */
+
+.gr-svg {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: block;
+  overflow: visible;
+  pointer-events: none;
+}
+.gr-edge {
+  fill: none;
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+.gr-connector {
+  fill: none;
+  stroke-width: 1;
+  opacity: 0.8;
+}
+.gr-merge-dot {
+  stroke: var(--bg-0);
+  stroke-width: 1.5;
+}
+.gr-wip-node {
+  fill: var(--bg-0);
+  stroke-width: 2;
+  stroke-dasharray: 3 2.3;
+}
+.gr-node {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--gr-lane);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-0);
+  overflow: hidden;
+  pointer-events: none;
+}
+.gr-node .ui-avatar {
+  pointer-events: auto;
+}
+.gr-node-stash {
+  border: 1.5px dashed var(--text-3);
+  color: var(--text-2);
+}
+
+/* ── WIP & stash rows ──────────────────────────────────────────────────── */
+
+.gr-wip-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-style: italic;
+  color: var(--text-1);
+}
+.gr-wip-draft {
+  font-style: normal;
+  color: var(--text-0);
+}
+.gr-wip-counts {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.gr-wip-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.gr-wip-modified {
+  color: var(--c-modified);
+}
+.gr-wip-added {
+  color: var(--c-added);
+}
+.gr-wip-deleted {
+  color: var(--c-deleted);
+}
+.gr-wip-conflict {
+  color: var(--c-conflict);
+}
+
+.gr-stash-ref {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-3);
+}
+.gr-stash-msg {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-style: italic;
+  color: var(--text-2);
+}
+
+/* ── Ref pills ─────────────────────────────────────────────────────────── */
+
+.gr-refs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+}
+.gr-refs-line {
+  flex: 1 1 0;
+  min-width: 4px;
+  height: 1px;
+  align-self: flex-start;
+  margin-top: calc(var(--gr-row-h) / 2);
+  background: var(--gr-lane);
+  opacity: 0.8;
+}
+.gr-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: calc(100% - 8px);
+  height: 20px;
+  padding: 0 6px 0 5px;
+  border: 1px solid color-mix(in srgb, var(--gr-lane) 65%, transparent);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--gr-lane) 20%, var(--bg-1));
+  color: var(--text-0);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  line-height: 1;
+  transition: background 0.1s var(--ease);
+}
+.gr-pill:hover {
+  background: color-mix(in srgb, var(--gr-lane) 32%, var(--bg-1));
+}
+.gr-pill-head {
+  border-color: var(--gr-lane);
+  background: color-mix(in srgb, var(--gr-lane) 36%, var(--bg-1));
+  font-weight: 700;
+}
+.gr-pill-remote {
+  background: color-mix(in srgb, var(--gr-lane) 11%, var(--bg-1));
+  color: var(--text-1);
+}
+.gr-pill-tag {
+  border-radius: 10px;
+  padding-left: 6px;
+}
+.gr-pill-detached {
+  border-style: dashed;
+}
+.gr-pill-icon {
+  flex: none;
+  color: var(--text-1);
+}
+.gr-pill-check {
+  flex: none;
+  color: var(--accent);
+}
+.gr-pill-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.gr-pill-more {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 18px;
+  padding: 0 5px;
+  border: 1px solid var(--border-strong);
+  border-radius: 9px;
+  background: var(--bg-3);
+  color: var(--text-1);
+  font-size: 10px;
+  font-weight: 700;
+}
+.gr-pill-more:hover,
+.gr-pill-more.gr-open {
+  background: var(--bg-4);
+  color: var(--text-0);
+}
+
+.gr-dragging .gr-pill:not(.gr-pill-detached) {
+  outline: 1px dashed color-mix(in srgb, var(--accent) 65%, transparent);
+  outline-offset: 1px;
+}
+.gr-pill.gr-drop-over {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  background: var(--accent-soft);
+}
+
+.gr-pop {
+  position: fixed;
+  z-index: 1500;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  max-width: 340px;
+  max-height: 50vh;
+  overflow: auto;
+  padding: 6px;
+  background: var(--bg-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-2);
+  animation: ui-fade 0.08s var(--ease);
+}
+.gr-pop .gr-pill {
+  max-width: 100%;
+}
+
+/* ── Footer row & overlays ─────────────────────────────────────────────── */
+
+.gr-more-row {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--text-2);
+  font-size: var(--fs-sm);
+}
+.gr-overlay {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  min-height: 160px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ── Search ────────────────────────────────────────────────────────────── */
+
+/* A strip above the column header (in flow, so it never covers a match). */
+.gr-search-wrap {
+  flex: none;
+  display: flex;
+  align-items: center;
+  height: 40px;
+  padding: 0 10px;
+  background: var(--bg-1);
+  border-bottom: 1px solid var(--border);
+  animation: ui-fade 0.12s var(--ease);
+}
+.gr-search {
+  flex: 1;
+  min-width: 0;
+  max-width: 640px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 3px 0 9px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.gr-search:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+.gr-search-icon {
+  flex: none;
+  color: var(--text-2);
+}
+.gr-search-input {
+  flex: 1;
+  width: 0;
+  min-width: 60px;
+  padding: 0 4px;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--text-0);
+  font-size: var(--fs-md);
+  user-select: text;
+}
+.gr-search-input::placeholder {
+  color: var(--text-3);
+}
+.gr-search-mode {
+  height: 22px;
+  padding: 0 4px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-1);
+  font-size: var(--fs-xs);
+  outline: none;
+}
+.gr-search-mode:focus {
+  border-color: var(--accent);
+}
+.gr-search-count {
+  display: inline-flex;
+  justify-content: flex-end;
+  min-width: 70px;
+  padding: 0 4px;
+  font-size: var(--fs-xs);
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.gr-search-count.gr-none {
+  color: var(--danger);
+}

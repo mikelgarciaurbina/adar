@@ -1,0 +1,986 @@
+/* Conflicts module (cf-): operation banner, merge tool, conflict chooser.
+   Colours come exclusively from theme.css tokens (tints via color-mix). */
+
+/* ── Operation banner ──────────────────────────────────────────────────── */
+
+.cf-banner {
+  container-type: inline-size;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 3px 8px 3px 12px;
+  background: color-mix(in srgb, var(--warning) 15%, var(--bg-1));
+  border-bottom: 1px solid color-mix(in srgb, var(--warning) 45%, transparent);
+  box-shadow: inset 3px 0 0 var(--warning);
+  color: var(--text-0);
+  font-size: var(--fs-sm);
+  animation: cf-slide-in 0.16s var(--ease);
+  overflow: hidden;
+}
+.cf-banner-icon {
+  display: inline-flex;
+  color: var(--warning);
+  flex: none;
+}
+.cf-banner-title {
+  flex: none;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.cf-banner-sep {
+  width: 1px;
+  height: 16px;
+  background: color-mix(in srgb, var(--warning) 40%, transparent);
+  flex: none;
+}
+.cf-banner-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  min-width: 0;
+  overflow: hidden;
+}
+.cf-banner-state > svg,
+.cf-banner-state > .ui-btn {
+  flex: none;
+}
+.cf-banner-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cf-banner-conflicts {
+  color: var(--c-conflict);
+  font-weight: 600;
+}
+.cf-banner-ok {
+  color: var(--success);
+  font-weight: 600;
+}
+.cf-banner-resolve {
+  margin-left: 4px;
+}
+.cf-banner-paused {
+  color: var(--text-1);
+  overflow: hidden;
+}
+.cf-banner-paused > svg {
+  color: var(--info);
+  flex: none;
+}
+.cf-banner-paused-text {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 60px;
+  overflow: hidden;
+}
+.cf-banner-sha {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--text-0);
+}
+.cf-banner-subject {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-0);
+  font-weight: 600;
+}
+.cf-banner-hint {
+  /* Gives way first when the banner is narrow (the commit subject matters more). */
+  flex-shrink: 50;
+  min-width: 0;
+  color: var(--text-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cf-banner-spacer {
+  flex: 1;
+  min-width: 8px;
+}
+.cf-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+.cf-banner .ui-btn-ghost {
+  color: var(--text-1);
+}
+.cf-banner .ui-btn-ghost:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--warning) 18%, transparent);
+  color: var(--text-0);
+}
+.cf-banner .cf-banner-abort:hover:not(:disabled) {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+@container (max-width: 920px) {
+  /* Narrow centre panel: keep the commit subject, drop the hint (still in the tooltip). */
+  .cf-banner-hint {
+    display: none;
+  }
+}
+@container (max-width: 560px) {
+  /* Very narrow: the operation icon (title in its tooltip) is enough. */
+  .cf-banner-title {
+    display: none;
+  }
+}
+@keyframes cf-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+/* ── Merge tool shell ──────────────────────────────────────────────────── */
+
+.cf-root {
+  container-type: inline-size;
+  /* Side colours: A (ours) and B (theirs). */
+  --cf-a: var(--ref-local);
+  --cf-b: var(--ref-stash);
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-0);
+  color: var(--text-0);
+}
+
+.cf-header {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: var(--panel-header-h);
+  padding: 0 6px 0 12px;
+  background: var(--bg-2);
+  border-bottom: 1px solid var(--border);
+}
+.cf-header-icon {
+  color: var(--c-conflict);
+  flex: none;
+}
+.cf-header-path {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-md);
+  direction: ltr;
+}
+.cf-header-dir {
+  color: var(--text-2);
+}
+.cf-header-file {
+  color: var(--text-0);
+  font-weight: 600;
+}
+.cf-kind {
+  flex: none;
+  padding: 1px 7px;
+  border-radius: 9px;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--c-conflict);
+  background: color-mix(in srgb, var(--c-conflict) 16%, transparent);
+}
+.cf-kind-muted {
+  color: var(--text-1);
+  background: var(--bg-4);
+}
+.cf-header-spacer,
+.cf-toolbar-spacer,
+.cf-pane-header-spacer {
+  flex: 1;
+  min-width: 0;
+}
+.cf-file-nav {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  margin-right: 4px;
+  color: var(--text-2);
+  font-size: var(--fs-sm);
+  flex: none;
+}
+.cf-file-nav-label {
+  margin-right: 4px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.cf-notice {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  font-size: var(--fs-sm);
+  border-bottom: 1px solid var(--border);
+}
+.cf-notice-info {
+  background: var(--diff-hunk-bg);
+  color: var(--text-1);
+}
+.cf-notice-info svg {
+  color: var(--info);
+  flex: none;
+}
+
+.cf-center {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.cf-error-text {
+  margin-bottom: 12px;
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--text-2);
+  word-break: break-word;
+  user-select: text;
+}
+.cf-error-actions {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+}
+
+@container (max-width: 640px) {
+  .cf-file-nav-label,
+  .cf-wide-only {
+    display: none;
+  }
+}
+
+/* ── Toolbar ───────────────────────────────────────────────────────────── */
+
+.cf-editor {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  outline: none;
+}
+.cf-editor:focus-visible {
+  /* Focused programmatically so the keyboard shortcuts work; the current chunk is the focus cue. */
+  outline: none;
+}
+.cf-toolbar {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-height: 38px;
+  padding: 6px 10px;
+  background: var(--bg-1);
+  border-bottom: 1px solid var(--border);
+}
+.cf-toolbar-sep {
+  width: 1px;
+  height: 18px;
+  margin: 0 4px;
+  background: var(--border-strong);
+  flex: none;
+}
+.cf-toolbar-info {
+  color: var(--info);
+  flex: none;
+}
+.cf-toolbar-text {
+  font-size: var(--fs-sm);
+  color: var(--text-1);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cf-chunk-nav {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  flex: none;
+}
+.cf-chunk-nav-label {
+  min-width: 96px;
+  text-align: center;
+  font-size: var(--fs-sm);
+  color: var(--text-1);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.cf-seg {
+  display: inline-flex;
+  margin-left: 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  overflow: hidden;
+  flex: none;
+}
+.cf-seg-btn {
+  height: 24px;
+  padding: 0 9px;
+  border: none;
+  background: var(--bg-3);
+  color: var(--text-1);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  transition: background 0.1s var(--ease);
+}
+.cf-seg-btn + .cf-seg-btn {
+  border-left: 1px solid var(--border-strong);
+}
+.cf-seg-btn:hover:not(:disabled) {
+  background: var(--bg-4);
+  color: var(--text-0);
+}
+.cf-seg-btn.cf-active {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+.cf-seg-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.cf-progress {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+  padding: 2px 9px;
+  border-radius: 10px;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  color: var(--c-conflict);
+  background: color-mix(in srgb, var(--c-conflict) 14%, transparent);
+}
+.cf-progress-done {
+  color: var(--success);
+  background: color-mix(in srgb, var(--success) 14%, transparent);
+}
+.cf-progress-manual {
+  color: var(--warning);
+  background: var(--warning-soft);
+}
+
+/* ── Split: panes / output ─────────────────────────────────────────────── */
+
+.cf-split {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.cf-panes {
+  flex-grow: 0;
+  flex-shrink: 0;
+  min-height: 90px;
+  display: flex;
+}
+.cf-hresizer {
+  flex: none;
+  position: relative;
+  z-index: 3;
+  height: 7px;
+  margin: -3px 0;
+  cursor: row-resize;
+}
+.cf-hresizer::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 3px;
+  height: 1px;
+  background: var(--border-strong);
+  transition: background 0.12s;
+}
+.cf-hresizer:hover::after {
+  top: 2.5px;
+  height: 2px;
+  background: var(--accent);
+}
+body.cf-resizing,
+body.cf-resizing * {
+  cursor: row-resize !important;
+  user-select: none !important;
+}
+
+/* ── Side panes ────────────────────────────────────────────────────────── */
+
+.cf-pane {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.cf-pane + .cf-pane {
+  border-left: 1px solid var(--border);
+}
+.cf-pane-ours {
+  --cf-side: var(--cf-a);
+}
+.cf-pane-theirs {
+  --cf-side: var(--cf-b);
+}
+.cf-pane-header {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 30px;
+  padding: 0 4px 0 7px;
+  background: var(--bg-2);
+  border-bottom: 1px solid var(--border);
+  box-shadow: inset 0 2px 0 var(--cf-side);
+  font-size: var(--fs-sm);
+}
+.cf-pane-checkall {
+  display: inline-flex;
+  align-items: center;
+}
+.cf-pane-checkall input,
+.cf-check input {
+  margin: 0;
+  cursor: pointer;
+  accent-color: var(--cf-side);
+}
+.cf-pane-checkall input:disabled {
+  cursor: default;
+}
+.cf-pane-letter {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-xs);
+  font-weight: 800;
+  color: var(--cf-side);
+  background: color-mix(in srgb, var(--cf-side) 22%, transparent);
+  border: 1px solid color-mix(in srgb, var(--cf-side) 55%, transparent);
+}
+.cf-pane-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  color: var(--text-0);
+}
+.cf-pane-header .ui-btn-ghost {
+  color: var(--text-2);
+  flex: none;
+}
+.cf-pane-header .ui-btn-ghost:hover:not(:disabled) {
+  color: var(--text-0);
+}
+
+.cf-pane-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  position: relative;
+  background: var(--bg-0);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.cf-pane-sizer {
+  position: relative;
+  min-width: 100%;
+}
+
+.cf-row {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  display: flex;
+  align-items: stretch;
+  line-height: 20px;
+  white-space: pre;
+  color: var(--text-1);
+}
+.cf-gutter {
+  flex: none;
+  width: calc(var(--cf-gutter-ch, 4) * 1ch + 14px);
+  padding-right: 8px;
+  text-align: right;
+  color: var(--text-3);
+  background: var(--diff-gutter);
+  user-select: none;
+  font-variant-numeric: tabular-nums;
+}
+.cf-check {
+  flex: none;
+  width: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.cf-text {
+  flex: 1;
+  min-width: 0;
+  padding-right: 12px;
+  tab-size: 4;
+}
+.cf-text-placeholder {
+  font-family: var(--font-ui);
+  font-size: var(--fs-xs);
+  font-style: italic;
+  color: var(--text-3);
+}
+
+/* Chunk rows: unresolved (orange), taken (side colour), rejected (dimmed). */
+.cf-row-chunk {
+  cursor: pointer;
+}
+.cf-row-chunk .cf-check {
+  box-shadow: inset 3px 0 0 var(--cf-bar, var(--c-conflict));
+}
+.cf-row-chunk.cf-unresolved {
+  background-color: color-mix(in srgb, var(--c-conflict) 10%, transparent);
+  color: var(--text-0);
+}
+.cf-row-chunk.cf-taken {
+  --cf-bar: var(--cf-side);
+  background-color: color-mix(in srgb, var(--cf-side) 20%, transparent);
+  color: var(--text-0);
+}
+.cf-row-chunk.cf-rejected,
+.cf-row-chunk.cf-neither {
+  --cf-bar: var(--border-strong);
+  background-color: color-mix(in srgb, var(--text-3) 7%, transparent);
+  color: var(--text-3);
+}
+.cf-row-chunk.cf-rejected .cf-text {
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--text-3) 70%, transparent);
+}
+.cf-row-chunk:hover {
+  filter: brightness(1.08);
+}
+.cf-row-filler {
+  background-image: repeating-linear-gradient(
+    135deg,
+    transparent 0 5px,
+    color-mix(in srgb, var(--border-strong) 45%, transparent) 5px 6px
+  );
+}
+.cf-chunk-first::before,
+.cf-chunk-last::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: color-mix(in srgb, var(--cf-bar, var(--c-conflict)) 55%, transparent);
+  pointer-events: none;
+}
+.cf-chunk-first::before {
+  top: 0;
+}
+.cf-chunk-last::after {
+  bottom: 0;
+}
+.cf-current .cf-gutter {
+  color: var(--text-0);
+  background: color-mix(in srgb, var(--accent) 22%, var(--diff-gutter));
+}
+.cf-current .cf-check {
+  box-shadow: inset 4px 0 0 var(--cf-bar, var(--c-conflict));
+}
+
+/* ── Output ────────────────────────────────────────────────────────────── */
+
+.cf-output {
+  flex: 1;
+  min-height: 90px;
+  display: flex;
+  flex-direction: column;
+}
+.cf-output-header {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 34px;
+  padding: 0 8px 0 12px;
+  background: var(--bg-2);
+  border-bottom: 1px solid var(--border);
+  font-size: var(--fs-sm);
+  overflow: hidden;
+}
+.cf-output-title {
+  flex: none;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-0);
+}
+.cf-output-hint {
+  color: var(--success);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.cf-output-hint-warn {
+  color: var(--c-conflict);
+}
+.cf-manual {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 2px 6px;
+  margin-left: -6px;
+  border-radius: var(--radius-sm);
+  color: var(--warning);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.cf-pulse {
+  animation: cf-pulse 0.7s var(--ease);
+}
+@keyframes cf-pulse {
+  0%,
+  40% {
+    background: var(--warning-soft);
+  }
+  100% {
+    background: transparent;
+  }
+}
+.cf-reset-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+}
+.cf-output-header .ui-btn {
+  flex: none;
+}
+.cf-output-meta {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+}
+
+.cf-out-editor {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  background: var(--bg-0);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 20px;
+}
+.cf-out-gutter {
+  flex: none;
+  width: calc(var(--cf-out-gutter-ch, 3) * 1ch + 22px);
+  overflow: hidden;
+  background: var(--diff-gutter);
+  border-right: 1px solid var(--border);
+  color: var(--text-3);
+  user-select: none;
+}
+.cf-out-gutter pre {
+  margin: 0;
+  padding: 0 8px 0 0;
+  text-align: right;
+  font: inherit;
+  line-height: 20px;
+  will-change: transform;
+}
+.cf-out-main {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+  overflow: hidden;
+}
+.cf-out-bands {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  pointer-events: none;
+  will-change: transform;
+}
+.cf-band {
+  position: absolute;
+  left: 0;
+  right: 0;
+}
+.cf-band-ours {
+  background: color-mix(in srgb, var(--cf-a) 15%, transparent);
+  box-shadow: inset 3px 0 0 var(--cf-a);
+}
+.cf-band-theirs {
+  background: color-mix(in srgb, var(--cf-b) 15%, transparent);
+  box-shadow: inset 3px 0 0 var(--cf-b);
+}
+.cf-band-unresolved {
+  background: color-mix(in srgb, var(--c-conflict) 13%, transparent);
+  box-shadow: inset 3px 0 0 var(--c-conflict);
+}
+.cf-band-none {
+  background: var(--text-3);
+}
+.cf-band-current.cf-band-ours {
+  background: color-mix(in srgb, var(--cf-a) 26%, transparent);
+}
+.cf-band-current.cf-band-theirs {
+  background: color-mix(in srgb, var(--cf-b) 26%, transparent);
+}
+.cf-band-current.cf-band-unresolved {
+  background: color-mix(in srgb, var(--c-conflict) 22%, transparent);
+}
+.cf-band-current.cf-band-none {
+  background: var(--accent);
+}
+.cf-out-textarea {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0 12px 0 10px;
+  border: none;
+  outline: none;
+  resize: none;
+  background: transparent;
+  color: var(--text-0);
+  caret-color: var(--accent);
+  font: inherit;
+  line-height: 20px;
+  white-space: pre;
+  overflow: auto;
+  tab-size: 4;
+}
+.cf-out-textarea[readonly] {
+  color: var(--text-1);
+}
+
+/* ── Chooser (binary / delete / add conflicts) ─────────────────────────── */
+
+.cf-chooser {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  max-width: 780px;
+  margin: 0 auto;
+  padding: 24px 20px;
+}
+.cf-chooser-intro {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.cf-chooser-intro > svg {
+  color: var(--c-conflict);
+  flex: none;
+  margin-top: 1px;
+}
+.cf-chooser-title {
+  font-size: var(--fs-lg);
+  font-weight: 600;
+}
+.cf-chooser-sub {
+  margin-top: 3px;
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+}
+.cf-chooser-sides {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.cf-side-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-1);
+  box-shadow: inset 3px 0 0 var(--cf-side);
+  min-width: 0;
+}
+.cf-side-card-ours {
+  --cf-side: var(--cf-a);
+}
+.cf-side-card-theirs {
+  --cf-side: var(--cf-b);
+}
+.cf-side-card-body {
+  min-width: 0;
+}
+.cf-side-card-label {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cf-side-card-text {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 3px;
+  font-size: var(--fs-sm);
+  color: var(--text-1);
+}
+.cf-side-card-missing .cf-side-card-text {
+  color: var(--c-deleted);
+}
+.cf-chooser-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.cf-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 11px 14px;
+  text-align: left;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg-1);
+  color: var(--text-0);
+  transition:
+    border-color 0.12s var(--ease),
+    background 0.12s var(--ease);
+}
+.cf-option:hover:not(:disabled),
+.cf-option:focus-visible {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.cf-option-danger:hover:not(:disabled),
+.cf-option-danger:focus-visible {
+  border-color: var(--danger);
+  background: var(--danger-soft);
+}
+.cf-option:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.cf-option-recommended {
+  border-color: color-mix(in srgb, var(--accent) 60%, var(--border-strong));
+}
+.cf-option-icon {
+  display: inline-flex;
+  color: var(--text-2);
+  margin-top: 1px;
+}
+.cf-option-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.cf-option-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+.cf-option-tag {
+  padding: 0 6px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.cf-option-desc {
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+}
+.cf-chooser-busy {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+}
+.cf-chooser-preview {
+  display: flex;
+  flex-direction: column;
+  min-height: 160px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.cf-chooser-preview-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 4px 4px 0;
+  background: var(--bg-2);
+  border-bottom: 1px solid var(--border);
+}
+.cf-chooser-preview-tabs button {
+  border: none;
+  background: transparent;
+  color: var(--text-2);
+  padding: 5px 10px;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  font-size: var(--fs-sm);
+}
+.cf-chooser-preview-tabs button:hover {
+  color: var(--text-0);
+}
+.cf-chooser-preview-tabs button.cf-active {
+  background: var(--bg-0);
+  color: var(--text-0);
+  font-weight: 600;
+}
+.cf-chooser-preview-body {
+  margin: 0;
+  max-height: 360px;
+  overflow: auto;
+  background: var(--bg-0);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 20px;
+}
+.cf-preview-line {
+  display: flex;
+  white-space: pre;
+  color: var(--text-1);
+}
+.cf-preview-line .cf-gutter {
+  width: 5ch;
+  margin-right: 10px;
+}
+.cf-preview-more {
+  padding: 6px 12px;
+  font-family: var(--font-ui);
+  font-size: var(--fs-xs);
+  font-style: italic;
+  color: var(--text-3);
+}

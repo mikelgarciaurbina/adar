@@ -1,0 +1,103 @@
+/* In-app update notice (up- prefix). */
+
+.up-card {
+  position: fixed;
+  left: 16px;
+  bottom: calc(var(--statusbar-h) + 12px);
+  z-index: 2500;
+  width: 340px;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 12px 10px 12px 12px;
+  background: var(--bg-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-2);
+  animation: up-in 0.22s var(--ease);
+  -webkit-app-region: no-drag;
+}
+.up-body {
+  flex: 1;
+  min-width: 0;
+}
+.up-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  color: var(--text-0);
+}
+.up-title svg {
+  color: var(--accent);
+}
+.up-sub {
+  margin-top: 2px;
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+}
+.up-progress {
+  height: 4px;
+  margin-top: 8px;
+  border-radius: 2px;
+  background: var(--bg-4);
+  overflow: hidden;
+}
+.up-progress > div {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.2s var(--ease);
+}
+.up-actions {
+  display: flex;
+  gap: 4px;
+  margin-top: 10px;
+  margin-left: -2px;
+}
+.up-close {
+  margin-top: -4px;
+}
+.up-meta {
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+  margin-bottom: 10px;
+}
+.up-notes {
+  max-height: 50vh;
+  overflow: auto;
+  word-break: break-word;
+  font-size: var(--fs-md);
+  line-height: 1.55;
+  color: var(--text-1);
+}
+.up-notes h4 {
+  margin: 14px 0 6px;
+  font-size: var(--fs-md);
+  color: var(--text-0);
+}
+.up-notes h4:first-child {
+  margin-top: 0;
+}
+.up-notes p {
+  margin: 0 0 8px;
+}
+.up-notes ul {
+  margin: 0 0 8px;
+  padding-left: 20px;
+}
+.up-notes li {
+  margin: 2px 0;
+}
+.up-notes code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: var(--bg-3);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+@keyframes up-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}

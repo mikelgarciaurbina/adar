@@ -1,0 +1,134 @@
+/* Design tokens. Every module stylesheet must use these variables (never hard-coded
+   colours) so dark/light themes work. Class prefixes per module:
+   app- (shell), ui- (common), tb- (toolbar/tabs/status), sb- (left panel),
+   gr- (graph), det- (right panel), diff- (diff/blame/history), cf- (conflicts),
+   rb- (interactive rebase), md- (modals), pal- (palette/console), wl- (welcome). */
+
+:root,
+[data-theme='dark'] {
+  color-scheme: dark;
+  --bg-0: #15171c; /* graph / deepest */
+  --bg-1: #1b1e24; /* panels */
+  --bg-2: #22252c; /* toolbar, headers */
+  --bg-3: #2a2e36; /* hover */
+  --bg-4: #343943; /* selected */
+  --bg-input: #121418;
+  --bg-overlay: rgba(6, 8, 12, 0.6);
+  --border: #2d3139;
+  --border-strong: #3c414c;
+
+  --text-0: #e7e9ee;
+  --text-1: #b6bbc5;
+  --text-2: #7e8592;
+  --text-3: #5b616c;
+
+  --accent: #17c3a5;
+  --accent-hover: #22d6b7;
+  --accent-text: #06231e;
+  --accent-soft: rgba(23, 195, 165, 0.14);
+  --link: #4fa3ff;
+  --focus: rgba(23, 195, 165, 0.55);
+
+  --danger: #f0506e;
+  --danger-soft: rgba(240, 80, 110, 0.14);
+  --warning: #f5a623;
+  --warning-soft: rgba(245, 166, 35, 0.14);
+  --success: #2fcc8f;
+  --info: #4fa3ff;
+
+  --c-added: #4ec97b;
+  --c-deleted: #f0506e;
+  --c-modified: #f5b942;
+  --c-renamed: #4aa3f0;
+  --c-conflict: #ff7b3a;
+
+  --diff-add-bg: rgba(78, 201, 123, 0.13);
+  --diff-add-strong: rgba(78, 201, 123, 0.32);
+  --diff-del-bg: rgba(240, 80, 110, 0.13);
+  --diff-del-strong: rgba(240, 80, 110, 0.32);
+  --diff-hunk-bg: rgba(79, 163, 255, 0.08);
+  --diff-gutter: #191c21;
+
+  --ref-local: #3d7cf5;
+  --ref-remote: #6b7280;
+  --ref-tag: #c9a227;
+  --ref-head: #17c3a5;
+  --ref-stash: #9b4dff;
+
+  --shadow-1: 0 2px 8px rgba(0, 0, 0, 0.35);
+  --shadow-2: 0 12px 40px rgba(0, 0, 0, 0.55);
+  --scrollbar: #3a3f49;
+}
+
+[data-theme='light'] {
+  color-scheme: light;
+  --bg-0: #ffffff;
+  --bg-1: #f6f7f9;
+  --bg-2: #eceef2;
+  --bg-3: #e2e5ea;
+  --bg-4: #d5dae2;
+  --bg-input: #ffffff;
+  --bg-overlay: rgba(20, 24, 32, 0.35);
+  --border: #d9dde3;
+  --border-strong: #c3c9d2;
+
+  --text-0: #1b1e24;
+  --text-1: #424852;
+  --text-2: #6b7280;
+  --text-3: #9aa1ab;
+
+  --accent: #0ea58b;
+  --accent-hover: #0b927b;
+  --accent-text: #ffffff;
+  --accent-soft: rgba(14, 165, 139, 0.12);
+  --link: #1f6feb;
+  --focus: rgba(14, 165, 139, 0.45);
+
+  --danger: #d6334f;
+  --danger-soft: rgba(214, 51, 79, 0.1);
+  --warning: #c77c00;
+  --warning-soft: rgba(199, 124, 0, 0.12);
+  --success: #12945e;
+  --info: #1f6feb;
+
+  --c-added: #1e9e52;
+  --c-deleted: #d6334f;
+  --c-modified: #b7791f;
+  --c-renamed: #1f6feb;
+  --c-conflict: #d9480f;
+
+  --diff-add-bg: rgba(30, 158, 82, 0.1);
+  --diff-add-strong: rgba(30, 158, 82, 0.25);
+  --diff-del-bg: rgba(214, 51, 79, 0.1);
+  --diff-del-strong: rgba(214, 51, 79, 0.25);
+  --diff-hunk-bg: rgba(31, 111, 235, 0.07);
+  --diff-gutter: #f1f3f6;
+
+  --ref-local: #1f6feb;
+  --ref-remote: #6b7280;
+  --ref-tag: #a8820c;
+  --ref-head: #0ea58b;
+  --ref-stash: #7c3aed;
+
+  --shadow-1: 0 2px 8px rgba(0, 0, 0, 0.1);
+  --shadow-2: 0 12px 40px rgba(0, 0, 0, 0.18);
+  --scrollbar: #c3c9d2;
+}
+
+:root {
+  --font-ui: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', system-ui, sans-serif;
+  --font-mono: 'SF Mono', ui-monospace, 'JetBrains Mono', Menlo, Consolas, monospace;
+  --fs-xs: 11px;
+  --fs-sm: 12px;
+  --fs-md: 13px;
+  --fs-lg: 15px;
+  --radius-sm: 4px;
+  --radius: 6px;
+  --radius-lg: 10px;
+  --row-h: 28px; /* graph row height */
+  --tabbar-h: 38px;
+  --toolbar-h: 52px;
+  --statusbar-h: 24px;
+  --panel-header-h: 34px;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+}

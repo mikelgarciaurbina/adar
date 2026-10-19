@@ -1,0 +1,1039 @@
+/* Right panel (det-): commit details, staging area + composer, stash, compare. */
+
+.det-root {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-1);
+  color: var(--text-0);
+}
+
+.det-panel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.det-spacer {
+  flex: 1;
+  min-width: 4px;
+}
+
+.det-muted {
+  color: var(--text-2);
+}
+
+.det-warn {
+  color: var(--warning) !important;
+}
+
+/* ── Header ────────────────────────────────────────────────────────────── */
+
+.det-header {
+  gap: 6px;
+  min-width: 0;
+  white-space: nowrap;
+}
+.det-header-icon {
+  color: var(--text-2);
+  flex: none;
+}
+.det-stash-icon {
+  color: var(--ref-stash);
+}
+.det-header-label {
+  color: var(--text-2);
+  font-weight: 500;
+}
+.det-header-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-0);
+  font-weight: 600;
+}
+.det-sha {
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  color: var(--text-0);
+  font-weight: 500;
+}
+.det-sha-link {
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  border-radius: var(--radius-sm);
+  padding: 1px 3px;
+}
+.det-sha-link:focus-visible {
+  outline: 2px solid var(--focus);
+}
+.det-parents {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 500;
+}
+.det-branch {
+  color: var(--ref-local);
+  font-weight: 600;
+}
+.det-branch-detached {
+  color: var(--warning);
+}
+
+/* ── Info block (subject, body, people) ────────────────────────────────── */
+
+.det-info {
+  flex: none;
+  max-height: 45%;
+  overflow: auto;
+  padding: 10px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.det-subject {
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--text-0);
+  word-break: break-word;
+}
+.det-body-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+}
+.det-body {
+  align-self: stretch;
+  font-size: var(--fs-md);
+  line-height: 1.5;
+  color: var(--text-1);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.det-body-clamped {
+  max-height: calc(1.5em * 7);
+  overflow: hidden;
+}
+.det-body-fade {
+  mask-image: linear-gradient(to bottom, #000 65%, transparent);
+}
+.det-more {
+  font-size: var(--fs-sm);
+  padding: 0;
+}
+.det-info-expanded {
+  max-height: 70%;
+}
+.det-link {
+  color: var(--link);
+  cursor: pointer;
+}
+.det-link:hover {
+  text-decoration: underline;
+}
+
+.det-person {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 2px;
+  min-width: 0;
+}
+.det-person-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.det-person-line {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+.det-person-name {
+  font-weight: 600;
+  color: var(--text-0);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.det-person-email {
+  color: var(--text-2);
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.det-person-meta,
+.det-date {
+  color: var(--text-2);
+  font-size: var(--fs-sm);
+}
+.det-committer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.det-committer .det-person-name {
+  font-weight: 500;
+  color: var(--text-1);
+}
+.det-committer-plain {
+  padding-left: 42px;
+  margin-top: -6px;
+}
+
+.det-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+}
+.det-meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+.det-actions-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+}
+.det-btn-danger-ghost {
+  color: var(--danger);
+}
+.det-btn-danger-ghost:hover:not(:disabled) {
+  background: var(--danger-soft);
+}
+
+.det-hint {
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+}
+.det-hint strong {
+  color: var(--text-1);
+}
+.det-wide-btn {
+  width: 100%;
+}
+
+/* ── Ref chips ─────────────────────────────────────────────────────────── */
+
+.det-refs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.det-ref {
+  --det-ref-c: var(--ref-local);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  height: 20px;
+  padding: 0 7px 0 5px;
+  border-radius: var(--radius-sm);
+  border: 1px solid color-mix(in srgb, var(--det-ref-c) 55%, transparent);
+  background: color-mix(in srgb, var(--det-ref-c) 16%, transparent);
+  color: var(--text-0);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+}
+.det-ref svg {
+  color: var(--det-ref-c);
+  flex: none;
+}
+.det-ref-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.det-ref-head {
+  --det-ref-c: var(--ref-head);
+}
+.det-ref-remote {
+  --det-ref-c: var(--ref-remote);
+}
+.det-ref-tag {
+  --det-ref-c: var(--ref-tag);
+}
+
+/* ── Files block (read-only lists) ─────────────────────────────────────── */
+
+.det-files {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.det-files-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 8px 0 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-1);
+}
+.det-files-title {
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+  font-weight: 600;
+}
+.det-stats {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+}
+.det-stats-files {
+  color: var(--text-1);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.det-add {
+  color: var(--c-added);
+  font-variant-numeric: tabular-nums;
+}
+.det-del {
+  color: var(--c-deleted);
+  font-variant-numeric: tabular-nums;
+}
+.det-bar {
+  display: inline-flex;
+  gap: 1px;
+  margin-left: 2px;
+}
+.det-bar-cell {
+  width: 7px;
+  height: 7px;
+  border-radius: 1px;
+  background: var(--bg-4);
+}
+.det-bar-add {
+  background: var(--c-added);
+}
+.det-bar-del {
+  background: var(--c-deleted);
+}
+
+/* Path / Tree toggle */
+.det-seg {
+  display: inline-flex;
+  flex: none;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--bg-input);
+}
+.det-seg-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  padding: 0 7px;
+  border: none;
+  background: transparent;
+  color: var(--text-2);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+}
+.det-seg-btn + .det-seg-btn {
+  border-left: 1px solid var(--border-strong);
+}
+.det-seg-btn:hover {
+  color: var(--text-0);
+  background: var(--bg-3);
+}
+.det-seg-btn.det-seg-on {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.det-loading,
+.det-list-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 20px 12px;
+  color: var(--text-2);
+  font-size: var(--fs-sm);
+}
+.det-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 10px 12px;
+  padding: 8px 10px;
+  border-radius: var(--radius);
+  border: 1px solid color-mix(in srgb, var(--danger) 45%, transparent);
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: var(--fs-sm);
+}
+.det-error svg {
+  flex: none;
+  margin-top: 2px;
+}
+.det-error-msg {
+  flex: 1;
+  min-width: 0;
+  color: var(--text-0);
+  word-break: break-word;
+  line-height: 1.45;
+}
+
+/* ── File list rows ────────────────────────────────────────────────────── */
+
+.det-list {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  outline: none;
+  padding: 2px 0 6px;
+  position: relative;
+}
+/* Ring around the list only while no row shows its own focus ring (overrides the global outline). */
+.det-list:focus-visible {
+  outline: none;
+}
+.det-list:focus-visible:not(:has(.det-row-focus)) {
+  box-shadow: inset 0 0 0 1px var(--focus);
+}
+.det-list-virtual {
+  position: relative;
+  width: 100%;
+}
+
+.det-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding-right: 8px;
+  font-size: var(--fs-md);
+  color: var(--text-0);
+  white-space: nowrap;
+  cursor: default;
+  border-left: 2px solid transparent;
+}
+/* --det-row-bg is the row's opaque background; the hover-actions overlay fades into it. */
+.det-row:hover,
+.det-row-focus {
+  --det-row-bg: var(--bg-3);
+  background: var(--det-row-bg);
+}
+.det-row-selected,
+.det-row-selected:hover {
+  --det-row-bg: var(--bg-4);
+  background: var(--det-row-bg);
+}
+.det-row-active,
+.det-row-active:hover {
+  --det-row-bg: color-mix(in srgb, var(--accent) 16%, var(--bg-1));
+  background: var(--det-row-bg);
+  border-left-color: var(--accent);
+}
+/* Drawn above the hover-actions overlay so the ring is not cut where the buttons start. */
+.det-row-focus::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  box-shadow: inset 0 0 0 1px var(--focus);
+  pointer-events: none;
+}
+.det-row-pending {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.det-status {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid currentColor;
+  border-radius: 3px;
+}
+
+.det-row-chevron {
+  flex: none;
+  display: inline-flex;
+  width: 12px;
+  color: var(--text-2);
+}
+.det-row-folder {
+  flex: none;
+  display: inline-flex;
+  color: var(--text-2);
+}
+.det-row-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  overflow: hidden;
+}
+.det-row-dir {
+  /* The directory shrinks (ellipsis on the left) long before the file name does. */
+  flex: 0 1000 auto;
+  min-width: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  direction: rtl;
+  text-align: left;
+  color: var(--text-2);
+}
+.det-row-dir bdi {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+.det-row-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-0);
+}
+.det-row-dirname {
+  color: var(--text-1);
+  font-weight: 500;
+}
+.det-row-old {
+  flex: 0 500 auto;
+  min-width: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-2);
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--text-2) 60%, transparent);
+}
+.det-row-arrow {
+  flex: none;
+  padding: 0 4px;
+  color: var(--c-renamed);
+}
+.det-row-count {
+  flex: none;
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+.det-row-meta {
+  flex: none;
+  font-size: var(--fs-xs);
+  color: var(--text-2);
+}
+.det-row-stats {
+  flex: none;
+  display: inline-flex;
+  gap: 5px;
+  font-size: var(--fs-xs);
+  font-variant-numeric: tabular-nums;
+}
+.det-row-bin {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-3);
+  letter-spacing: 0.04em;
+}
+
+/* Hover actions overlay the right side of the row. */
+.det-row-actions {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  display: none;
+  align-items: center;
+  gap: 4px;
+  padding: 0 6px 0 18px;
+  background: linear-gradient(to right, transparent, var(--det-row-bg, var(--bg-3)) 14px);
+}
+.det-row:hover .det-row-actions,
+.det-row-focus .det-row-actions {
+  display: flex;
+}
+
+.det-row-btn {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+.det-row-btn-stage {
+  background: var(--c-added);
+  color: var(--bg-0);
+}
+.det-row-btn-unstage {
+  background: var(--c-deleted);
+  color: var(--bg-0);
+}
+.det-row-btn-conflict {
+  background: var(--c-conflict);
+  color: var(--bg-0);
+}
+.det-row-btn:hover {
+  filter: brightness(1.1);
+}
+.det-row-btn:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+.det-row-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 18px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-1);
+}
+.det-row-icon-btn:hover {
+  background: var(--bg-4);
+}
+.det-row-discard:hover {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+.det-row-resolved {
+  color: var(--success);
+}
+.det-row-resolved:hover {
+  color: var(--success);
+  background: color-mix(in srgb, var(--success) 16%, transparent);
+}
+
+.det-conflict-kind {
+  color: var(--c-conflict);
+  font-weight: 600;
+}
+
+/* ── Staging area ──────────────────────────────────────────────────────── */
+
+.det-toolbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 34px;
+  padding: 0 6px 0 10px;
+  border-bottom: 1px solid var(--border);
+}
+.det-btn-stage {
+  background: color-mix(in srgb, var(--c-added) 18%, transparent);
+  border-color: color-mix(in srgb, var(--c-added) 55%, transparent);
+  color: var(--c-added);
+  font-weight: 600;
+}
+.det-btn-stage:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--c-added) 28%, transparent);
+}
+.det-btn-unstage {
+  background: color-mix(in srgb, var(--c-deleted) 14%, transparent);
+  border-color: color-mix(in srgb, var(--c-deleted) 50%, transparent);
+  color: var(--c-deleted);
+  font-weight: 600;
+}
+.det-btn-unstage:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--c-deleted) 24%, transparent);
+}
+.det-icon-danger:hover:not(:disabled) {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
+.det-sections {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.det-section {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-bottom: 1px solid var(--border);
+}
+.det-section-open {
+  /* Open sections share the free space (GitKraken keeps Staged Files mid-panel). */
+  flex: 1 1 auto;
+  /* header + ~3 rows stay visible when space is shared */
+  min-height: calc(30px + 3 * 24px + 8px);
+}
+.det-section-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 8px 0 6px;
+  background: var(--bg-2);
+}
+.det-section-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  height: 22px;
+  padding: 0 6px 0 2px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-1);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+.det-section-toggle:hover {
+  color: var(--text-0);
+}
+.det-section-toggle svg {
+  flex: none;
+  color: var(--text-2);
+}
+.det-section-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.det-section-count {
+  color: var(--text-2);
+  font-weight: 500;
+}
+.det-section-conflict .det-section-head {
+  background: color-mix(in srgb, var(--c-conflict) 12%, var(--bg-2));
+}
+.det-section-conflict .det-section-title,
+.det-conflict-icon {
+  color: var(--c-conflict) !important;
+}
+.det-section-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.det-section-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  white-space: nowrap;
+}
+.det-section-btn-stage {
+  background: var(--c-added);
+  color: var(--bg-0);
+}
+.det-section-btn-unstage {
+  background: var(--c-deleted);
+  color: var(--bg-0);
+}
+.det-section-btn:hover {
+  filter: brightness(1.1);
+}
+
+.det-clean {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 24px;
+  color: var(--success);
+  text-align: center;
+}
+.det-clean-title {
+  color: var(--text-1);
+  font-weight: 600;
+}
+.det-clean-body {
+  color: var(--text-2);
+  font-size: var(--fs-sm);
+}
+
+/* ── Commit composer ───────────────────────────────────────────────────── */
+
+.det-composer {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 8px 10px 8px;
+  border-top: 1px solid var(--border-strong);
+  background: var(--bg-2);
+}
+.det-composer-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 20px;
+}
+.det-composer-title {
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  color: var(--text-1);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.det-amend {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-sm);
+  color: var(--text-1);
+  cursor: pointer;
+}
+.det-amend input {
+  margin: 0;
+  accent-color: var(--accent);
+}
+.det-amend.det-disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.det-composer-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: var(--radius);
+  background: var(--warning-soft);
+  color: var(--text-1);
+  font-size: var(--fs-sm);
+  line-height: 1.4;
+}
+.det-composer-note svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--warning);
+}
+.det-summary {
+  position: relative;
+}
+/* Two classes: beat .ui-input's padding (common.css loads after this file). */
+.det-summary .det-summary-input {
+  padding-right: 38px;
+  font-weight: 500;
+}
+.det-summary-count {
+  position: absolute;
+  right: 9px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+.det-desc {
+  min-height: 60px;
+  max-height: 220px;
+  resize: none !important;
+  overflow-y: auto;
+  font-size: var(--fs-md);
+}
+.det-commit-btn {
+  width: 100%;
+  height: 32px;
+}
+.det-commit-btn > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.det-stage-commit-btn {
+  height: 26px;
+  font-size: var(--fs-sm);
+}
+.det-composer-hint {
+  margin-top: -2px;
+  text-align: center;
+  font-size: var(--fs-xs);
+  color: var(--text-2);
+}
+.det-identity {
+  display: flex;
+  justify-content: center;
+  min-width: 0;
+}
+.det-identity-line,
+.det-identity-warn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  min-width: 0;
+  padding: 1px 4px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font-size: var(--fs-xs);
+  color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.det-identity-line:hover {
+  color: var(--text-1);
+  background: var(--bg-3);
+}
+.det-identity-line strong {
+  color: var(--text-1);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.det-identity-email {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.det-identity-warn {
+  color: var(--warning);
+  font-weight: 600;
+}
+.det-identity-warn:hover {
+  background: var(--warning-soft);
+  text-decoration: underline;
+}
+
+/* ── Compare ───────────────────────────────────────────────────────────── */
+
+.det-compare {
+  gap: 6px;
+}
+.det-compare-end {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: var(--fs-sm);
+}
+.det-compare-label {
+  flex: none;
+  width: 34px;
+  color: var(--text-2);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.det-compare-subject {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-1);
+}
+
+/* ── Multi-select ──────────────────────────────────────────────────────── */
+
+.det-multi-list {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 4px 0;
+}
+.det-multi-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 28px;
+  padding: 0 12px;
+  font-size: var(--fs-md);
+  outline: none;
+}
+.det-multi-row:hover {
+  background: var(--bg-3);
+}
+.det-multi-row:focus-visible {
+  box-shadow: inset 0 0 0 1px var(--focus);
+}
+.det-multi-num {
+  flex: none;
+  width: 20px;
+  text-align: right;
+  color: var(--text-3);
+  font-size: var(--fs-xs);
+  font-variant-numeric: tabular-nums;
+}
+.det-multi-subject {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.det-multi-sha {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--text-2);
+}
+
+.det-header {
+  overflow: hidden;
+  container-type: inline-size;
+}
+/* Narrow panel: drop the "parent(s):" / "base:" labels so both merge parents stay visible. */
+@container (max-width: 330px) {
+  .det-parents .det-header-label {
+    display: none;
+  }
+}
+
+/* Narrow panel: icon-only Path/Tree toggle so stats and toolbars keep fitting. */
+.det-files-head,
+.det-toolbar {
+  container-type: inline-size;
+}
+@container (max-width: 300px) {
+  .det-seg-btn span {
+    display: none;
+  }
+  .det-seg-btn {
+    padding: 0 6px;
+  }
+}

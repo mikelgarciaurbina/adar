@@ -1,0 +1,28 @@
+appId: dev.adar.gitclient
+productName: Adar
+copyright: Copyright © 2026 Mikel García
+directories:
+  buildResources: build
+  output: release
+files:
+  - out/**
+  - package.json
+artifactName: ${productName}-${version}-${arch}.${ext}
+mac:
+  category: public.app-category.developer-tools
+  icon: build/icon.icns
+  # Unsigned build (no Apple Developer ID). The in-app updater (src/main/updater.ts) installs the
+  # .zip asset of a GitHub Release in place, so Squirrel.Mac / code signing are not required.
+  identity: null
+  target:
+    - target: dmg
+      arch: [arm64, x64]
+    - target: zip
+      arch: [arm64, x64]
+dmg:
+  title: ${productName} ${version}
+publish:
+  provider: github
+  owner: mikelgarciaurbina
+  repo: adar
+  releaseType: release

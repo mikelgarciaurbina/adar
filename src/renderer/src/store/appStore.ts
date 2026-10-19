@@ -1,0 +1,683 @@
+// Central application state (zustand). Holds open repository tabs and their
+// loaded data, selection, the centre-panel view, UI chrome state and settings.
+//
+// Components read with selectors:   const tab = useActiveTab()
+// and mutate through store actions: useApp.getState().select(path, {...})
+// User-facing git operations (with confirmations/toasts/undo) live in
+// src/renderer/src/actions/git.ts — prefer those over calling `api` directly.
+
+import { create } from 'zustand'
+import { api, setZoom } from '@renderer/api/client'
+import { describeError } from '@shared/errors'
+import {
+  DEFAULT_SETTINGS,
+  type AppInfo,
+  type AppSettings,
+  type Commit,
+  type CommitSearch,
+  type DiffTarget,
+  type RecentRepo,
+  type RefsResult,
+  type RepoInfo,
+  type WorkingStatus
+} from '@shared/types'
+
+// ── Types ──────────────────────────────────────────────────────────────────
+
+export type Selection =
+  | { kind: 'none' }
+  /** The "// WIP" node: working tree changes. */
+  | { kind: 'wip' }
+  | { kind: 'commit'; sha: string }
+  | { kind: 'stash'; index: number; sha: string }
+
+export type CenterView =
+  | { kind: 'graph' }
+  /** File diff replaces the graph (like GitKraken). `siblings` enables prev/next file navigation. */
+  | { kind: 'diff'; target: DiffTarget; siblings?: DiffTarget[] }
+  | { kind: 'conflict'; path: string }
+  | { kind: 'rebase'; base: string }
+  | { kind: 'history'; path: string }
+  | { kind: 'blame'; path: string; rev?: string }
+
+export interface HistoryEntry {
+  label: string
+  undo: () => Promise<void>
+  redo: () => Promise<void>
+}
+
+export interface SearchState {
+  open: boolean
+  query: string
+  mode: CommitSearch['mode']
+  /** Matching shas, newest first. */
+  results: string[]
+  index: number
+  loading: boolean
+}
+
+export interface CommitDraft {
+  summary: string
+  description: string
+  amend: boolean
+}
+
+export interface RepoTab {
+  path: string
+  name: string
+  info: RepoInfo | null
+  refs: RefsResult | null
+  commits: Commit[]
+  hasMore: boolean
+  status: WorkingStatus | null
+  loading: { log: boolean; refs: boolean; status: boolean; more: boolean }
+  error: string | null
+  selection: Selection
+  /** Shas selected with Cmd/Shift-click (includes the primary selected commit). */
+  multiSelect: string[]
+  /** Anchor for Shift-click / Shift+Arrow range selection (first commit clicked). */
+  selectionAnchor?: string | null
+  center: CenterView
+  search: SearchState
+  /** Full ref names hidden from the graph. */
+  hiddenRefs: string[]
+  /** Full ref name shown alone in the graph. */
+  soloRef: string | null
+  undoStack: HistoryEntry[]
+  redoStack: HistoryEntry[]
+  draft: CommitDraft
+  lastFetch: number | null
+}
+
+export type ModalState =
+  | { kind: 'clone'; url?: string }
+  | { kind: 'init' }
+  | { kind: 'open' }
+  | { kind: 'settings'; section?: string }
+  | { kind: 'identity'; repo: string | null }
+  | { kind: 'remotes'; repo: string }
+  | { kind: 'about' }
+
+export interface CredentialRequest {
+  id: string
+  prompt: string
+  kind: 'username' | 'password' | 'passphrase' | 'yesno' | 'other'
+  secret: boolean
+}
+
+export interface ProgressState {
+  message: string
+  percent?: number
+  repoPath?: string
+}
+
+export interface AppState {
+  ready: boolean
+  appInfo: AppInfo | null
+  settings: AppSettings
+  recent: RecentRepo[]
+  tabs: RepoTab[]
+  activePath: string | null
+  leftCollapsed: boolean
+  rightCollapsed: boolean
+  modal: ModalState | null
+  paletteOpen: boolean
+  consoleOpen: boolean
+  /** Long-running operations in flight: key → label (e.g. "push:/repo" → "Pushing…"). */
+  busy: Record<string, string>
+  /** Latest progress line per opId. */
+  progress: Record<string, ProgressState>
+  credentialQueue: CredentialRequest[]
+
+  // lifecycle
+  init(): Promise<void>
+  openRepo(path: string): Promise<boolean>
+  closeTab(path: string): Promise<void>
+  setActive(path: string | null): void
+  moveTab(from: number, to: number): void
+
+  // data loading
+  refresh(path: string, what?: RefreshScope[]): Promise<void>
+  loadMore(path: string): Promise<void>
+  /** Page in commits until `sha` is loaded (or history is exhausted). Returns true if found. */
+  ensureCommitLoaded(path: string, sha: string): Promise<boolean>
+  refreshRecent(): Promise<void>
+
+  // selection & views
+  select(path: string, selection: Selection, opts?: { additive?: boolean; range?: boolean }): void
+  setCenter(path: string, view: CenterView): void
+  setSearch(path: string, patch: Partial<SearchState>): void
+  runSearch(path: string): Promise<void>
+  setRefHidden(path: string, fullName: string, hidden: boolean): void
+  /** Hide/show several refs with a single log refresh. */
+  setRefsHidden(path: string, fullNames: string[], hidden: boolean): void
+  /** Record that a fetch completed now (status bar "fetched … ago"). */
+  markFetched(path: string): void
+  setSoloRef(path: string, fullName: string | null): void
+  updateDraft(path: string, patch: Partial<CommitDraft>): void
+
+  // undo / redo
+  pushHistory(path: string, entry: HistoryEntry): void
+  undo(path: string): Promise<void>
+  redo(path: string): Promise<void>
+
+  // settings & chrome
+  updateSettings(patch: Partial<AppSettings>): Promise<void>
+  openModal(modal: ModalState): void
+  closeModal(): void
+  setPaletteOpen(open: boolean): void
+  setConsoleOpen(open: boolean): void
+  toggleLeft(): void
+  toggleRight(): void
+  setBusy(key: string, label: string | null): void
+  setProgress(opId: string, progress: ProgressState | null): void
+  pushCredentialRequest(req: CredentialRequest): void
+  shiftCredentialRequest(id: string): void
+}
+
+export type RefreshScope = 'info' | 'refs' | 'log' | 'status'
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+
+const EMPTY_SEARCH: SearchState = { open: false, query: '', mode: 'message', results: [], index: 0, loading: false }
+
+function newTab(path: string, name: string): RepoTab {
+  return {
+    path,
+    name,
+    info: null,
+    refs: null,
+    commits: [],
+    hasMore: false,
+    status: null,
+    loading: { log: false, refs: false, status: false, more: false },
+    error: null,
+    selection: { kind: 'none' },
+    multiSelect: [],
+    selectionAnchor: null,
+    center: { kind: 'graph' },
+    search: { ...EMPTY_SEARCH },
+    hiddenRefs: [],
+    soloRef: null,
+    undoStack: [],
+    redoStack: [],
+    draft: { summary: '', description: '', amend: false },
+    lastFetch: null
+  }
+}
+
+function basename(p: string): string {
+  const parts = p.replace(/[\\/]+$/, '').split(/[\\/]/)
+  return parts[parts.length - 1] || p
+}
+
+/** Revisions the graph should show given hidden/solo refs and settings. undefined = --all. */
+export function graphRevisions(tab: RepoTab, settings: AppSettings): string[] | undefined {
+  if (tab.soloRef) return [tab.soloRef]
+  const refs = tab.refs
+  const needsFilter = tab.hiddenRefs.length > 0 || !settings.graphShowRemotes
+  if (!refs || !needsFilter) return undefined
+  const hidden = new Set(tab.hiddenRefs)
+  const revs: string[] = []
+  for (const r of refs.branches) if (!hidden.has(r.fullName)) revs.push(r.fullName)
+  if (settings.graphShowRemotes) {
+    for (const r of refs.remotes) if (!r.isSymbolic && !hidden.has(r.fullName)) revs.push(r.fullName)
+  }
+  for (const r of refs.tags) if (!hidden.has(r.fullName)) revs.push(r.fullName)
+  if (refs.head.sha && refs.head.detached) revs.push('HEAD')
+  return revs.length ? revs : ['HEAD']
+}
+
+// Per-tab generation counters so stale async results are dropped.
+const generations = new Map<string, Record<RefreshScope, number>>()
+function nextGen(path: string, scope: RefreshScope): number {
+  const g = generations.get(path) ?? { info: 0, refs: 0, log: 0, status: 0 }
+  g[scope] += 1
+  generations.set(path, g)
+  return g[scope]
+}
+function isCurrentGen(path: string, scope: RefreshScope, gen: number): boolean {
+  return generations.get(path)?.[scope] === gen
+}
+
+let settingsSaveTimer: ReturnType<typeof setTimeout> | null = null
+
+// ── Store ──────────────────────────────────────────────────────────────────
+
+export const useApp = create<AppState>()((set, get) => {
+  const updateTab = (path: string, fn: (tab: RepoTab) => Partial<RepoTab>) => {
+    set((s) => ({ tabs: s.tabs.map((t) => (t.path === path ? { ...t, ...fn(t) } : t)) }))
+  }
+  const getTab = (path: string) => get().tabs.find((t) => t.path === path)
+
+  const persistTabs = () => {
+    const { tabs, activePath } = get()
+    void get().updateSettings({ openTabs: tabs.map((t) => t.path), activeTab: activePath })
+  }
+
+  return {
+    ready: false,
+    appInfo: null,
+    settings: { ...DEFAULT_SETTINGS },
+    recent: [],
+    tabs: [],
+    activePath: null,
+    leftCollapsed: false,
+    rightCollapsed: false,
+    modal: null,
+    paletteOpen: false,
+    consoleOpen: false,
+    busy: {},
+    progress: {},
+    credentialQueue: [],
+
+    async init() {
+      try {
+        const [appInfo, settings, recent] = await Promise.all([api.getAppInfo(), api.getSettings(), api.getRecentRepos()])
+        set({ appInfo, settings: { ...DEFAULT_SETTINGS, ...settings }, recent })
+        if (settings.zoom && settings.zoom !== 1) setZoom(settings.zoom)
+        const toRestore = settings.openTabs ?? []
+        for (const p of toRestore) {
+          try {
+            const info = await api.openRepo(p)
+            set((s) => ({ tabs: [...s.tabs, { ...newTab(info.path, info.name), info }] }))
+          } catch {
+            // Repo moved or deleted — skip silently.
+          }
+        }
+        const tabs = get().tabs
+        const active = tabs.find((t) => t.path === settings.activeTab)?.path ?? tabs[0]?.path ?? null
+        set({ activePath: active })
+        for (const t of tabs) void get().refresh(t.path)
+      } catch (err) {
+        console.error('[adar] init failed', err)
+      } finally {
+        set({ ready: true })
+      }
+    },
+
+    async openRepo(path) {
+      const existing = get().tabs.find((t) => t.path === path)
+      if (existing) {
+        get().setActive(existing.path)
+        return true
+      }
+      const info = await api.openRepo(path)
+      const already = get().tabs.find((t) => t.path === info.path)
+      if (already) {
+        get().setActive(already.path)
+        return true
+      }
+      set((s) => ({ tabs: [...s.tabs, { ...newTab(info.path, info.name), info }], activePath: info.path }))
+      persistTabs()
+      void get().refreshRecent()
+      await get().refresh(info.path)
+      return true
+    },
+
+    async closeTab(path) {
+      const { tabs, activePath } = get()
+      const idx = tabs.findIndex((t) => t.path === path)
+      if (idx < 0) return
+      const remaining = tabs.filter((t) => t.path !== path)
+      let nextActive = activePath
+      if (activePath === path) nextActive = remaining[Math.min(idx, remaining.length - 1)]?.path ?? null
+      set({ tabs: remaining, activePath: nextActive })
+      generations.delete(path)
+      persistTabs()
+      try {
+        await api.closeRepo(path)
+      } catch {
+        /* ignore */
+      }
+    },
+
+    setActive(path) {
+      if (get().activePath === path) return
+      set({ activePath: path })
+      persistTabs()
+      if (path) void get().refresh(path, ['status'])
+    },
+
+    moveTab(from, to) {
+      set((s) => {
+        const tabs = [...s.tabs]
+        const [moved] = tabs.splice(from, 1)
+        if (!moved) return {}
+        tabs.splice(Math.max(0, Math.min(to, tabs.length)), 0, moved)
+        return { tabs }
+      })
+      persistTabs()
+    },
+
+    async refresh(path, what = ['info', 'refs', 'log', 'status']) {
+      const tab = getTab(path)
+      if (!tab) return
+      const tasks: Promise<void>[] = []
+
+      if (what.includes('info')) {
+        const gen = nextGen(path, 'info')
+        tasks.push(
+          api.getRepoInfo(path).then(
+            (info) => {
+              if (isCurrentGen(path, 'info', gen)) updateTab(path, () => ({ info, error: null }))
+            },
+            (err) => {
+              if (isCurrentGen(path, 'info', gen)) updateTab(path, () => ({ error: describeError(err) }))
+            }
+          )
+        )
+      }
+
+      if (what.includes('status')) {
+        const gen = nextGen(path, 'status')
+        updateTab(path, (t) => ({ loading: { ...t.loading, status: true } }))
+        tasks.push(
+          api.getStatus(path).then(
+            (status) => {
+              if (!isCurrentGen(path, 'status', gen)) return
+              updateTab(path, (t) => ({ status, loading: { ...t.loading, status: false } }))
+            },
+            () => {
+              if (isCurrentGen(path, 'status', gen)) updateTab(path, (t) => ({ loading: { ...t.loading, status: false } }))
+            }
+          )
+        )
+      }
+
+      // Log depends on refs (for hidden/solo revisions) so chain them.
+      if (what.includes('refs') || what.includes('log')) {
+        const refsGen = what.includes('refs') ? nextGen(path, 'refs') : 0
+        const logGen = what.includes('log') ? nextGen(path, 'log') : 0
+        updateTab(path, (t) => ({
+          loading: { ...t.loading, refs: what.includes('refs') || t.loading.refs, log: what.includes('log') || t.loading.log }
+        }))
+        tasks.push(
+          (async () => {
+            if (what.includes('refs')) {
+              try {
+                const refs = await api.getRefs(path)
+                if (isCurrentGen(path, 'refs', refsGen)) updateTab(path, (t) => ({ refs, loading: { ...t.loading, refs: false } }))
+              } catch (err) {
+                if (isCurrentGen(path, 'refs', refsGen))
+                  updateTab(path, (t) => ({ error: describeError(err), loading: { ...t.loading, refs: false } }))
+              }
+            }
+            if (what.includes('log')) {
+              const t0 = getTab(path)
+              if (!t0) return
+              const settings = get().settings
+              const pageSize = settings.graphPageSize || 2000
+              const maxCount = Math.max(pageSize, t0.commits.length)
+              try {
+                const page = await api.getLog(path, { maxCount, revisions: graphRevisions(t0, settings) })
+                if (!isCurrentGen(path, 'log', logGen)) return
+                updateTab(path, (t) => {
+                  // Drop selection if the selected commit vanished (e.g. after reset/amend).
+                  let selection = t.selection
+                  const sel = t.selection
+                  if (sel.kind === 'commit' && !page.commits.some((c) => c.sha === sel.sha)) {
+                    selection = { kind: 'none' }
+                  }
+                  return {
+                    commits: page.commits,
+                    hasMore: page.hasMore,
+                    selection,
+                    loading: { ...t.loading, log: false }
+                  }
+                })
+              } catch (err) {
+                if (isCurrentGen(path, 'log', logGen))
+                  updateTab(path, (t) => ({ error: describeError(err), loading: { ...t.loading, log: false } }))
+              }
+            }
+          })()
+        )
+      }
+
+      await Promise.all(tasks)
+    },
+
+    async loadMore(path) {
+      const tab = getTab(path)
+      if (!tab || !tab.hasMore || tab.loading.more) return
+      updateTab(path, (t) => ({ loading: { ...t.loading, more: true } }))
+      const gen = generations.get(path)?.log ?? 0
+      try {
+        const settings = get().settings
+        const page = await api.getLog(path, {
+          maxCount: settings.graphPageSize || 2000,
+          skip: tab.commits.length,
+          revisions: graphRevisions(tab, settings)
+        })
+        if ((generations.get(path)?.log ?? 0) !== gen) return
+        updateTab(path, (t) => {
+          const seen = new Set(t.commits.map((c) => c.sha))
+          return {
+            commits: [...t.commits, ...page.commits.filter((c) => !seen.has(c.sha))],
+            hasMore: page.hasMore,
+            loading: { ...t.loading, more: false }
+          }
+        })
+      } catch {
+        updateTab(path, (t) => ({ loading: { ...t.loading, more: false } }))
+      }
+    },
+
+    async ensureCommitLoaded(path, sha) {
+      for (let i = 0; i < 50; i++) {
+        const tab = getTab(path)
+        if (!tab) return false
+        if (tab.commits.some((c) => c.sha === sha || c.sha.startsWith(sha))) return true
+        if (!tab.hasMore) return false
+        const before = tab.commits.length
+        await get().loadMore(path)
+        // Stop when paging fails or yields nothing (avoids hammering a failing getLog).
+        if ((getTab(path)?.commits.length ?? 0) <= before) return false
+      }
+      return false
+    },
+
+    async refreshRecent() {
+      try {
+        set({ recent: await api.getRecentRepos() })
+      } catch {
+        /* ignore */
+      }
+    },
+
+    select(path, selection, opts) {
+      updateTab(path, (t) => {
+        if (selection.kind !== 'commit') return { selection, multiSelect: [], selectionAnchor: null }
+        if (opts?.additive) {
+          const set_ = new Set(t.multiSelect.length ? t.multiSelect : t.selection.kind === 'commit' ? [t.selection.sha] : [])
+          if (set_.has(selection.sha)) set_.delete(selection.sha)
+          else set_.add(selection.sha)
+          const multi = [...set_]
+          return {
+            selection: multi.length ? { kind: 'commit', sha: multi[multi.length - 1] } : { kind: 'none' },
+            multiSelect: multi,
+            selectionAnchor: selection.sha
+          }
+        }
+        const anchor = t.selectionAnchor ?? (t.selection.kind === 'commit' ? t.selection.sha : null)
+        if (opts?.range && anchor) {
+          const a = t.commits.findIndex((c) => c.sha === anchor)
+          const b = t.commits.findIndex((c) => c.sha === selection.sha)
+          if (a >= 0 && b >= 0) {
+            const [lo, hi] = a < b ? [a, b] : [b, a]
+            return { selection, multiSelect: t.commits.slice(lo, hi + 1).map((c) => c.sha), selectionAnchor: anchor }
+          }
+        }
+        return { selection, multiSelect: [], selectionAnchor: selection.sha }
+      })
+    },
+
+    setCenter(path, view) {
+      updateTab(path, () => ({ center: view }))
+    },
+
+    setSearch(path, patch) {
+      updateTab(path, (t) => ({ search: { ...t.search, ...patch } }))
+    },
+
+    async runSearch(path) {
+      const tab = getTab(path)
+      if (!tab) return
+      const { query, mode } = tab.search
+      if (!query.trim()) {
+        get().setSearch(path, { results: [], index: 0, loading: false })
+        return
+      }
+      get().setSearch(path, { loading: true })
+      try {
+        const page = await api.getLog(path, {
+          maxCount: 2000,
+          search: { text: query.trim(), mode },
+          revisions: graphRevisions(tab, get().settings)
+        })
+        const cur = getTab(path)
+        if (!cur) return
+        // A newer search superseded this one: let it own the loading flag.
+        if (cur.search.query !== query || cur.search.mode !== mode) return
+        get().setSearch(path, { results: page.commits.map((c) => c.sha), index: 0, loading: false })
+      } catch (err) {
+        const cur = getTab(path)
+        if (cur && cur.search.query === query && cur.search.mode === mode) get().setSearch(path, { results: [], index: 0, loading: false })
+        throw err
+      }
+    },
+
+    setRefHidden(path, fullName, hidden) {
+      updateTab(path, (t) => {
+        const set_ = new Set(t.hiddenRefs)
+        if (hidden) set_.add(fullName)
+        else set_.delete(fullName)
+        return { hiddenRefs: [...set_], soloRef: t.soloRef === fullName && hidden ? null : t.soloRef }
+      })
+      void get().refresh(path, ['log'])
+    },
+
+    setRefsHidden(path, fullNames, hidden) {
+      if (!fullNames.length) return
+      updateTab(path, (t) => {
+        const set_ = new Set(t.hiddenRefs)
+        for (const n of fullNames) {
+          if (hidden) set_.add(n)
+          else set_.delete(n)
+        }
+        return { hiddenRefs: [...set_], soloRef: hidden && t.soloRef && fullNames.includes(t.soloRef) ? null : t.soloRef }
+      })
+      void get().refresh(path, ['log'])
+    },
+
+    markFetched(path) {
+      updateTab(path, () => ({ lastFetch: Date.now() }))
+    },
+
+    setSoloRef(path, fullName) {
+      updateTab(path, () => ({ soloRef: fullName }))
+      void get().refresh(path, ['log'])
+    },
+
+    updateDraft(path, patch) {
+      updateTab(path, (t) => ({ draft: { ...t.draft, ...patch } }))
+    },
+
+    pushHistory(path, entry) {
+      updateTab(path, (t) => ({ undoStack: [...t.undoStack.slice(-49), entry], redoStack: [] }))
+    },
+
+    async undo(path) {
+      const tab = getTab(path)
+      const entry = tab?.undoStack[tab.undoStack.length - 1]
+      if (!entry) return
+      await entry.undo()
+      updateTab(path, (t) => ({ undoStack: t.undoStack.slice(0, -1), redoStack: [...t.redoStack, entry] }))
+    },
+
+    async redo(path) {
+      const tab = getTab(path)
+      const entry = tab?.redoStack[tab.redoStack.length - 1]
+      if (!entry) return
+      await entry.redo()
+      updateTab(path, (t) => ({ redoStack: t.redoStack.slice(0, -1), undoStack: [...t.undoStack, entry] }))
+    },
+
+    async updateSettings(patch) {
+      const next = { ...get().settings, ...patch }
+      set({ settings: next })
+      if (patch.zoom !== undefined) setZoom(patch.zoom)
+      // Debounce writes (panel resizing fires many updates).
+      if (settingsSaveTimer) clearTimeout(settingsSaveTimer)
+      settingsSaveTimer = setTimeout(() => {
+        void api.updateSettings(get().settings).catch((err) => console.error('[adar] saving settings failed', err))
+      }, 300)
+    },
+
+    openModal(modal) {
+      set({ modal })
+    },
+    closeModal() {
+      set({ modal: null })
+    },
+    setPaletteOpen(open) {
+      set({ paletteOpen: open })
+    },
+    setConsoleOpen(open) {
+      set({ consoleOpen: open })
+    },
+    toggleLeft() {
+      set((s) => ({ leftCollapsed: !s.leftCollapsed }))
+    },
+    toggleRight() {
+      set((s) => ({ rightCollapsed: !s.rightCollapsed }))
+    },
+    setBusy(key, label) {
+      set((s) => {
+        const busy = { ...s.busy }
+        if (label) busy[key] = label
+        else delete busy[key]
+        return { busy }
+      })
+    },
+    setProgress(opId, progress) {
+      set((s) => {
+        const next = { ...s.progress }
+        if (progress) next[opId] = progress
+        else delete next[opId]
+        return { progress: next }
+      })
+    },
+    pushCredentialRequest(req) {
+      set((s) => ({ credentialQueue: [...s.credentialQueue, req] }))
+    },
+    shiftCredentialRequest(id) {
+      set((s) => ({ credentialQueue: s.credentialQueue.filter((r) => r.id !== id) }))
+    }
+  }
+})
+
+// ── Selector hooks ─────────────────────────────────────────────────────────
+
+export function useActiveTab(): RepoTab | null {
+  return useApp((s) => s.tabs.find((t) => t.path === s.activePath) ?? null)
+}
+
+export function useTab(path: string | null | undefined): RepoTab | null {
+  return useApp((s) => (path ? (s.tabs.find((t) => t.path === path) ?? null) : null))
+}
+
+export function useSettings(): AppSettings {
+  return useApp((s) => s.settings)
+}
+
+/** Non-reactive access for event handlers. */
+export function getActiveTab(): RepoTab | null {
+  const s = useApp.getState()
+  return s.tabs.find((t) => t.path === s.activePath) ?? null
+}
+
+export function isBusy(key: string): boolean {
+  return key in useApp.getState().busy
+}

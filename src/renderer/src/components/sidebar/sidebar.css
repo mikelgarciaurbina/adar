@@ -1,0 +1,529 @@
+/* Left panel (sb- prefix). Dense GitKraken-like tree; theme variables only. */
+
+.sb-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  background: var(--bg-1);
+  font-size: var(--fs-md);
+  color: var(--text-1);
+}
+
+/* ── Filter ────────────────────────────────────────────────────────────── */
+
+.sb-filter {
+  flex: none;
+  display: flex;
+  align-items: center;
+  height: var(--panel-header-h);
+  padding: 0 8px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-1);
+}
+
+.sb-filter-box {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 4px 0 7px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  transition: border-color 0.12s var(--ease), box-shadow 0.12s var(--ease);
+}
+.sb-filter-box:hover {
+  border-color: var(--border-strong);
+}
+.sb-filter-box:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+.sb-filter-icon {
+  flex: none;
+  color: var(--text-3);
+}
+.sb-filter-box:focus-within .sb-filter-icon {
+  color: var(--text-2);
+}
+
+.sb-filter-input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--text-0);
+  font-size: var(--fs-sm);
+  user-select: text;
+}
+.sb-filter-input:focus-visible {
+  outline: none; /* the box shows the focus ring */
+}
+.sb-filter-input::placeholder {
+  color: var(--text-3);
+}
+
+.sb-filter-clear {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--bg-3);
+  color: var(--text-1);
+}
+.sb-filter-clear:hover {
+  background: var(--bg-4);
+  color: var(--text-0);
+}
+
+/* ── Tree ──────────────────────────────────────────────────────────────── */
+
+.sb-tree {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  outline: none;
+  overscroll-behavior: contain;
+}
+.sb-tree:focus-visible {
+  outline: none;
+}
+
+.sb-inner {
+  position: relative;
+  width: 100%;
+}
+
+.sb-row {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding-right: 6px;
+  white-space: nowrap;
+  color: var(--text-1);
+  font-size: var(--fs-md);
+  line-height: 1;
+  cursor: default;
+}
+.sb-row:hover {
+  background: var(--bg-3);
+}
+.sb-row.sb-selected {
+  background: var(--bg-4);
+  color: var(--text-0);
+}
+.sb-row.sb-menu-open {
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+}
+.sb-row.sb-menu-open:not(.sb-selected) {
+  background: var(--bg-3);
+}
+.sb-tree.sb-focused .sb-row.sb-cursor {
+  box-shadow: inset 0 0 0 1px var(--focus);
+}
+.sb-tree.sb-focused .sb-row.sb-selected.sb-cursor {
+  box-shadow: inset 2px 0 0 var(--accent), inset 0 0 0 1px var(--focus);
+}
+
+.sb-chevron,
+.sb-chevron-space {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-3);
+}
+.sb-chevron svg {
+  transition: transform 0.12s var(--ease);
+}
+.sb-chevron.sb-open svg {
+  transform: rotate(90deg);
+}
+.sb-row:hover .sb-chevron {
+  color: var(--text-1);
+}
+
+.sb-icon {
+  flex: none;
+  width: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-2);
+}
+.sb-icon-branch {
+  color: var(--ref-local);
+}
+.sb-icon-remote {
+  color: var(--text-2);
+}
+.sb-icon-tag {
+  color: var(--ref-tag);
+}
+.sb-icon-stash {
+  color: var(--ref-stash);
+}
+.sb-icon-head {
+  color: var(--ref-head);
+}
+.sb-icon-folder {
+  color: var(--text-2);
+}
+
+.sb-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 2px 0;
+}
+.sb-name-em {
+  font-style: italic;
+}
+
+.sb-spacer {
+  flex: 1;
+  min-width: 4px;
+}
+
+/* Current branch */
+.sb-row.sb-head .sb-name {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* Search matches */
+mark.sb-match {
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
+  color: var(--text-0);
+  font-weight: 600;
+  border-radius: 2px;
+}
+.sb-row.sb-head mark.sb-match {
+  color: var(--accent);
+}
+
+/* ── Section headers ───────────────────────────────────────────────────── */
+
+.sb-row.sb-section {
+  z-index: 1;
+  gap: 4px;
+  background: var(--bg-1);
+  color: var(--text-2);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border-top: 1px solid var(--border);
+}
+.sb-row.sb-section:hover {
+  background: var(--bg-2);
+  color: var(--text-1);
+}
+.sb-row.sb-section[data-index='0'] {
+  border-top-color: transparent;
+}
+.sb-row.sb-sticky {
+  position: sticky;
+  top: var(--sb-sticky-top, 0px);
+  z-index: 3;
+}
+/* Only a header that is actually stuck over scrolled rows casts a shadow. */
+.sb-tree[data-scrolled] .sb-row.sb-sticky {
+  box-shadow: 0 1px 0 var(--border), 0 3px 6px -4px var(--bg-overlay);
+}
+.sb-section-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sb-count {
+  flex: none;
+  min-width: 18px;
+  height: 16px;
+  padding: 0 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: var(--bg-3);
+  color: var(--text-2);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+.sb-row.sb-section:hover .sb-count {
+  background: var(--bg-4);
+  color: var(--text-1);
+}
+.sb-count-dim {
+  background: transparent;
+  color: var(--text-3);
+  font-weight: 600;
+}
+
+/* ── Remote nodes ──────────────────────────────────────────────────────── */
+
+.sb-remote-avatar {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  color: var(--text-0);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+}
+.sb-row.sb-remote .sb-name {
+  color: var(--text-0);
+  font-weight: 500;
+}
+
+.sb-busy {
+  margin: 0 2px;
+}
+
+/* ── Badges & indicators ───────────────────────────────────────────────── */
+
+.sb-ab {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 16px;
+  padding: 0 5px;
+  border-radius: 8px;
+  background: var(--bg-3);
+  color: var(--text-1);
+  font-size: 10px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.sb-row:hover .sb-ab,
+.sb-row.sb-selected .sb-ab {
+  background: var(--bg-2);
+}
+
+.sb-warn {
+  flex: none;
+  display: inline-flex;
+  color: var(--warning);
+}
+
+.sb-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  margin-right: 4px;
+  border-radius: 50%;
+  background: var(--text-3);
+}
+.sb-dot-modified {
+  background: var(--c-modified);
+}
+.sb-dot-conflict {
+  background: var(--c-conflict);
+}
+.sb-dot-uninitialized {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--text-3);
+}
+.sb-row.sb-uninit .sb-name,
+.sb-row.sb-uninit .sb-icon {
+  opacity: 0.55;
+}
+
+/* ── Hover actions ─────────────────────────────────────────────────────── */
+
+.sb-actions {
+  flex: none;
+  display: none;
+  align-items: center;
+  gap: 1px;
+}
+.sb-row:hover .sb-actions,
+.sb-tree.sb-focused .sb-row.sb-cursor .sb-actions,
+.sb-actions.sb-actions-pinned {
+  display: inline-flex;
+}
+
+.sb-act {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-2);
+}
+.sb-act:hover {
+  background: var(--bg-4);
+  color: var(--text-0);
+}
+.sb-act.sb-act-on {
+  color: var(--accent);
+}
+.sb-row.sb-hidden .sb-act.sb-act-on {
+  color: var(--text-2);
+}
+.sb-eye-some {
+  opacity: 0.55;
+}
+
+/* ── Hidden / solo ─────────────────────────────────────────────────────── */
+
+.sb-row.sb-hidden .sb-name,
+.sb-row.sb-hidden .sb-icon,
+.sb-row.sb-hidden .sb-remote-avatar,
+.sb-row.sb-hidden .sb-ab {
+  opacity: 0.42;
+}
+
+.sb-row.sb-is-solo {
+  background: var(--accent-soft);
+}
+.sb-row.sb-is-solo .sb-name {
+  color: var(--text-0);
+  font-weight: 600;
+}
+.sb-tree.sb-solo-mode .sb-row.sb-ref:not(.sb-is-solo):not(.sb-hidden) .sb-name,
+.sb-tree.sb-solo-mode .sb-row.sb-ref:not(.sb-is-solo):not(.sb-hidden) .sb-icon {
+  opacity: 0.55;
+}
+
+/* ── Drag & drop ───────────────────────────────────────────────────────── */
+
+.sb-row.sb-dragging {
+  opacity: 0.5;
+}
+.sb-row.sb-drop {
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.sb-row.sb-drop .sb-name {
+  color: var(--text-0);
+}
+
+/* ── Hints & states ────────────────────────────────────────────────────── */
+
+.sb-row.sb-hint:hover {
+  background: transparent;
+}
+.sb-hint-text {
+  color: var(--text-3);
+  font-size: var(--fs-sm);
+  font-style: italic;
+}
+
+.sb-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 28px 16px;
+  text-align: center;
+  color: var(--text-2);
+  font-size: var(--fs-sm);
+}
+.sb-state-icon {
+  color: var(--text-3);
+}
+.sb-state-error {
+  color: var(--danger);
+}
+.sb-state-title {
+  color: var(--text-1);
+  font-weight: 600;
+  font-size: var(--fs-md);
+}
+.sb-state-text {
+  max-width: 240px;
+  line-height: 1.45;
+  word-break: break-word;
+}
+.sb-state-q {
+  color: var(--text-0);
+  font-weight: 600;
+}
+
+/* ── Skeleton ──────────────────────────────────────────────────────────── */
+
+.sb-skeleton {
+  padding: 4px 0;
+}
+.sb-skel-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 24px;
+  padding-right: 12px;
+}
+.sb-skel-section {
+  height: 28px;
+}
+.sb-skel-icon {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  margin-left: 16px;
+  border-radius: 3px;
+  background: var(--bg-3);
+}
+.sb-skel-bar {
+  height: 8px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, var(--bg-3) 0%, var(--bg-4) 50%, var(--bg-3) 100%);
+  background-size: 200% 100%;
+  animation: sb-shimmer 1.3s linear infinite;
+}
+.sb-skel-section .sb-skel-bar {
+  height: 7px;
+  max-width: 72px;
+  margin-left: 4px;
+}
+
+@keyframes sb-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sb-skel-bar {
+    animation: none;
+  }
+  .sb-chevron svg {
+    transition: none;
+  }
+}
