@@ -4,10 +4,11 @@
 // Components read with selectors:   const tab = useActiveTab()
 // and mutate through store actions: useApp.getState().select(path, {...})
 // User-facing git operations (with confirmations/toasts/undo) live in
-// src/renderer/src/actions/git.ts — prefer those over calling `api` directly.
+// src/renderer/src/actions/git.tsx — prefer those over calling `api` directly.
 
 import { create } from 'zustand'
 import { api, setZoom } from '@renderer/api/client'
+import { toast } from '@renderer/components/common/toast'
 import { AdarError, describeError } from '@shared/errors'
 import {
   DEFAULT_SETTINGS,
@@ -40,10 +41,27 @@ export type CenterView =
   | { kind: 'history'; path: string }
   | { kind: 'blame'; path: string; rev?: string }
 
+export interface HeadSnapshot {
+  sha: string | null
+  branch: string | null
+}
+
 export interface HistoryEntry {
   label: string
   undo: () => Promise<void>
   redo: () => Promise<void>
+  /** HEAD right after the action (captured by pushHistory): undo refuses to run from any other state. */
+  head?: HeadSnapshot
+  /** HEAD right after the undo: redo refuses to run from any other state. */
+  headAfterUndo?: HeadSnapshot
+}
+
+/** Thrown when the repository changed since a history entry was recorded (its inverse would be unsafe). */
+export class StaleHistoryError extends Error {
+  constructor(label: string) {
+    super(`The repository changed since "${label}"`)
+    this.name = 'StaleHistoryError'
+  }
 }
 
 export interface SearchState {
@@ -158,8 +176,10 @@ export interface AppState {
 
   // undo / redo
   pushHistory(path: string, entry: HistoryEntry): void
-  undo(path: string): Promise<void>
-  redo(path: string): Promise<void>
+  /** Returns false when there was nothing to do or another undo/redo is still running. */
+  undo(path: string): Promise<boolean>
+  redo(path: string): Promise<boolean>
+  clearHistory(path: string): void
 
   // settings & chrome
   updateSettings(patch: Partial<AppSettings>): Promise<void>
@@ -240,6 +260,17 @@ function isCurrentGen(path: string, scope: RefreshScope, gen: number): boolean {
   return generations.get(path)?.[scope] === gen
 }
 
+const historyBusy = new Set<string>()
+
+async function currentHead(path: string): Promise<HeadSnapshot> {
+  const info = await api.getRepoInfo(path)
+  return { sha: info.head.sha, branch: info.head.branch }
+}
+
+function sameHead(a: HeadSnapshot, b: HeadSnapshot): boolean {
+  return a.sha === b.sha && a.branch === b.branch
+}
+
 let settingsSaveTimer: ReturnType<typeof setTimeout> | null = null
 let pendingSettings: Partial<AppSettings> = {}
 const loadMoreInFlight = new Map<string, Promise<void>>()
@@ -309,7 +340,14 @@ export const useApp = create<AppState>()((set, get) => {
           try {
             const info = await api.openRepo(p)
             set((s) => ({ tabs: [...s.tabs, { ...newTab(info.path, info.name), info }] }))
-          } catch {
+          } catch (err) {
+            // A repo that gained command-running config since it was last opened needs a fresh decision.
+            if (err instanceof AdarError && err.code === 'UNTRUSTED_REPO') {
+              toast.warning(`${basename(p)} now has configuration that runs commands, so it was not reopened.`, {
+                duration: 0,
+                actions: [{ label: 'Review…', onClick: () => void import('@renderer/actions/git').then((m) => m.openRepoAt(p)) }]
+              })
+            }
             // Repo moved or deleted — skip silently.
           }
         }
@@ -609,22 +647,42 @@ export const useApp = create<AppState>()((set, get) => {
 
     pushHistory(path, entry) {
       updateTab(path, (t) => ({ undoStack: [...t.undoStack.slice(-49), entry], redoStack: [] }))
+      // Record where HEAD is right after the action; undo only runs from exactly that state.
+      if (!entry.head) void currentHead(path).then((h) => (entry.head = entry.head ?? h), () => undefined)
     },
 
     async undo(path) {
-      const tab = getTab(path)
-      const entry = tab?.undoStack[tab.undoStack.length - 1]
-      if (!entry) return
-      await entry.undo()
-      updateTab(path, (t) => ({ undoStack: t.undoStack.slice(0, -1), redoStack: [...t.redoStack, entry] }))
+      const entry = getTab(path)?.undoStack.at(-1)
+      if (!entry || historyBusy.has(path)) return false
+      historyBusy.add(path)
+      try {
+        if (entry.head && !sameHead(entry.head, await currentHead(path))) throw new StaleHistoryError(entry.label)
+        await entry.undo()
+        entry.headAfterUndo = await currentHead(path).catch(() => undefined)
+        updateTab(path, (t) => ({ undoStack: t.undoStack.slice(0, -1), redoStack: [...t.redoStack, entry] }))
+        return true
+      } finally {
+        historyBusy.delete(path)
+      }
     },
 
     async redo(path) {
-      const tab = getTab(path)
-      const entry = tab?.redoStack[tab.redoStack.length - 1]
-      if (!entry) return
-      await entry.redo()
-      updateTab(path, (t) => ({ redoStack: t.redoStack.slice(0, -1), undoStack: [...t.undoStack, entry] }))
+      const entry = getTab(path)?.redoStack.at(-1)
+      if (!entry || historyBusy.has(path)) return false
+      historyBusy.add(path)
+      try {
+        if (entry.headAfterUndo && !sameHead(entry.headAfterUndo, await currentHead(path))) throw new StaleHistoryError(entry.label)
+        await entry.redo()
+        entry.head = await currentHead(path).catch(() => undefined)
+        updateTab(path, (t) => ({ redoStack: t.redoStack.slice(0, -1), undoStack: [...t.undoStack, entry] }))
+        return true
+      } finally {
+        historyBusy.delete(path)
+      }
+    },
+
+    clearHistory(path) {
+      updateTab(path, () => ({ undoStack: [], redoStack: [] }))
     },
 
     async updateSettings(patch) {

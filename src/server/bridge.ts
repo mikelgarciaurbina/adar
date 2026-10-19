@@ -3,7 +3,12 @@
 //
 // Security model (the bridge can run arbitrary git commands through runGit):
 //  - listen on 127.0.0.1 only;
-//  - every request must carry the random x-adar-token header (constant-time compare);
+//  - every request must carry the random token (constant-time compare). It authenticates the real
+//    client: `npm run web` hands it out of band (the URL it prints, http://127.0.0.1:5898/#t=<token>;
+//    the page keeps it in sessionStorage and sends it as x-adar-token). Nothing adds it on the way —
+//    the Vite proxy forwards the caller's own header — so other local users / sandboxed apps that can
+//    reach the loopback ports get 403. The token is accepted in the URL (?t=) only for the
+//    /api/events stream, because EventSource cannot set headers;
 //  - browsers may only reach it from the dev page's own origin: requests whose Origin /
 //    Sec-Fetch-Site say they come from another site are refused (CSRF, DNS rebinding);
 //  - POST bodies must be application/json, which a cross-site page cannot send without a
@@ -34,6 +39,14 @@ export function tokenMatches(header: string | string[] | undefined, token: strin
   const a = Buffer.from(header)
   const b = Buffer.from(token)
   return a.length === b.length && timingSafeEqual(a, b)
+}
+
+/** The token a request presents: the x-adar-token header, or ?t= on the events stream only. */
+export function requestToken(req: http.IncomingMessage, url: URL): string | string[] | undefined {
+  const header = req.headers['x-adar-token']
+  if (header !== undefined) return header
+  if (req.method === 'GET' && url.pathname === '/api/events') return url.searchParams.get('t') ?? undefined
+  return undefined
 }
 
 const LOOPBACK_HOST = /^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/i
@@ -78,11 +91,17 @@ export function createBridge(opts: BridgeOptions): Bridge {
   }
 
   const server = http.createServer(async (req, res) => {
-    if (!tokenMatches(req.headers['x-adar-token'], opts.token) || !isSameSite(req, opts.allowedOrigins)) {
+    let url: URL
+    try {
+      url = new URL(req.url || '/', 'http://localhost')
+    } catch {
+      res.writeHead(400).end('bad request')
+      return
+    }
+    if (!tokenMatches(requestToken(req, url), opts.token) || !isSameSite(req, opts.allowedOrigins)) {
       res.writeHead(403).end('forbidden')
       return
     }
-    const url = new URL(req.url || '/', 'http://localhost')
 
     if (req.method === 'GET' && url.pathname === '/api/events') {
       res.writeHead(200, {

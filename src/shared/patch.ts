@@ -41,10 +41,11 @@ export function patchApplyOptions(mode: PatchMode): { cached?: boolean; reverse?
 /**
  * True when line/hunk level patches can be built for this diff in `mode`.
  * New, untracked, deleted, binary, type-changed and conflicted files only support
- * whole-file operations.
+ * whole-file operations, and so do files whose diff is not valid UTF-8 (the decoded
+ * text has U+FFFD in place of the original bytes: a patch would write those).
  */
 export function supportsPartialPatch(diff: FileDiff, mode: PatchMode): boolean {
-  if (diff.binary || diff.tooLarge || !diff.hunks.length) return false
+  if (diff.binary || diff.tooLarge || diff.encodingLossy || !diff.hunks.length) return false
   switch (diff.status) {
     case 'modified':
     case 'renamed':

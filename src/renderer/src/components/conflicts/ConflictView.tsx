@@ -42,6 +42,7 @@ import {
   maxLineColumns,
   needsChooser,
   parseConflicts,
+  restoreLineEndings,
   sideChecked,
   splitLines,
   stripEol,
@@ -50,28 +51,13 @@ import {
   type Segment,
   type Side
 } from './conflictParser'
+import { CACHE_LIMIT, cacheKeyOf, editorCache, type Choices } from './editorCache'
 import { MergePane, type MergePaneHandle } from './MergePane'
 import { OutputEditor, type OutputEditorHandle } from './OutputEditor'
 import { markResolvedAndAdvance, resolveAndAdvance, resolveBusyKey } from './resolveFlow'
 import './conflicts.css'
 
 type LoadState = { status: 'loading' } | { status: 'error'; error: string } | { status: 'ready'; versions: ConflictVersions }
-
-type Choices = Array<ChunkChoice | undefined>
-
-// ── Per-file editor state cache ────────────────────────────────────────────
-// Switching between conflicted files (or closing the tool) keeps the chunk
-// choices / manual edits as long as the working-tree text did not change.
-
-interface CachedEditor {
-  merged: string | null
-  choices: Choices
-  manualText: string | null
-  current: number
-}
-const editorCache = new Map<string, CachedEditor>()
-const CACHE_LIMIT = 50
-const cacheKeyOf = (repo: string, path: string) => `${repo}\u0000${path}`
 
 function readSplitRatio(): number {
   try {
@@ -122,6 +108,7 @@ export function ConflictView({ tab, path }: { tab: RepoTab; path: string }) {
   const theirsLabel = versions?.theirsLabel || firstChunk?.theirsLabel || 'Incoming'
 
   const close = useCallback(() => showGraph(repo), [repo])
+  const reload = useCallback(() => setReloadKey((k) => k + 1), [])
 
   const goFile = (delta: 1 | -1) => {
     if (!files.length) return
@@ -178,7 +165,9 @@ export function ConflictView({ tab, path }: { tab: RepoTab; path: string }) {
           <span className="cf-header-file">{basename(path)}</span>
         </div>
         {kind && <span className="cf-kind">{CONFLICT_KIND_LABEL[kind]}</span>}
-        {versions?.binary && <span className="cf-kind cf-kind-muted">Binary</span>}
+        {versions?.binary && (
+          <span className="cf-kind cf-kind-muted">{versions.symlink ? 'Symbolic link' : versions.nonUtf8 ? 'Not UTF-8' : 'Binary'}</span>
+        )}
         <span className="cf-header-spacer" />
         {files.length > 0 && (
           <div className="cf-file-nav">
@@ -252,6 +241,7 @@ export function ConflictView({ tab, path }: { tab: RepoTab; path: string }) {
             oursLabel={oursLabel}
             theirsLabel={theirsLabel}
             resolving={resolving}
+            onReload={reload}
           />
         ))}
     </div>
@@ -268,10 +258,29 @@ export interface MergeEditorProps {
   oursLabel: string
   theirsLabel: string
   resolving: boolean
+  /** Load the file again from disk (offered when it changed outside Adar since it was loaded). */
+  onReload?: () => void
+}
+
+/**
+ * The resolution "Save and mark resolved" sends.
+ * - Hand-edited output comes from a <textarea>, which turns every CRLF into LF: the file's line
+ *   endings are put back so a CRLF file is not rewritten line by line.
+ * - `expected` is the working-tree text the editor was built from: the backend refuses to write
+ *   when the file changed on disk since (e.g. edited in an external editor meanwhile).
+ */
+export function saveResolution(
+  outputText: string,
+  manual: boolean,
+  versions: Pick<ConflictVersions, 'merged' | 'ours'>,
+  eol: '\n' | '\r\n'
+): Extract<ConflictResolution, { kind: 'content' }> {
+  const content = manual ? restoreLineEndings(outputText, versions.merged ?? versions.ours ?? '', eol) : outputText
+  return { kind: 'content', content, expected: versions.merged }
 }
 
 /** Text merge tool for one file (exported for tests; mounted by ConflictView). */
-export function MergeEditor({ repo, path, versions, segments, oursLabel, theirsLabel, resolving }: MergeEditorProps) {
+export function MergeEditor({ repo, path, versions, segments, oursLabel, theirsLabel, resolving, onReload }: MergeEditorProps) {
   const merged = versions.merged
   const cacheKey = cacheKeyOf(repo, path)
   const chunks = useMemo(() => conflictSegments(segments), [segments])
@@ -512,7 +521,8 @@ export function MergeEditor({ repo, path, versions, segments, oursLabel, theirsL
 
   const save = async () => {
     if (busy) return
-    const content = outputText
+    const resolution = saveResolution(outputText, manual, versions, eol)
+    const content = resolution.content
     const pending = manual ? 0 : unresolved
     if (pending > 0 || hasConflictMarkers(content)) {
       const ok = await confirm({
@@ -527,7 +537,8 @@ export function MergeEditor({ repo, path, versions, segments, oursLabel, theirsL
       if (!ok) return
     }
     setSaving(true)
-    const ok = await resolveAndAdvance(repo, path, { kind: 'content', content })
+    // Changed on disk since it was loaded → resolveAndAdvance asks: reload, or overwrite.
+    const ok = await resolveAndAdvance(repo, path, resolution, { onReload })
     if (ok) editorCache.delete(cacheKey)
     else setSaving(false)
   }

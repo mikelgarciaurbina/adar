@@ -283,6 +283,21 @@ describe('settings', () => {
     expect(reloaded.map((r) => r.path)).not.toContain('/repos/r10')
     expect(reloaded).toHaveLength(MAX_RECENTS - 1)
   })
+
+  it('stores trusted repositories; a corrupt file trusts nothing and is never re-seeded from recents', async () => {
+    const dir = tmp()
+    await fs.writeFile(path.join(dir, 'recents.json'), JSON.stringify([{ path: '/repos/old', name: 'old', lastOpened: 1 }]))
+    await fs.writeFile(path.join(dir, 'trusted.json'), '{ not json')
+    const store = new SettingsStore(dir)
+    expect(await store.isTrustedRepo(['/repos/old'])).toBe(false)
+    await store.trustRepo('/repos/new')
+    await store.trustRepo('relative/ignored')
+    expect(await store.isTrustedRepo(['/x', '/repos/new'])).toBe(true)
+    await store.flush()
+    const reloaded = new SettingsStore(dir)
+    expect(await reloaded.isTrustedRepo(['/repos/new'])).toBe(true)
+    expect(await reloaded.isTrustedRepo(['/repos/old', 'relative/ignored'])).toBe(false)
+  })
 })
 
 describe('watcher classification', () => {

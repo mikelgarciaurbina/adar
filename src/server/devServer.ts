@@ -1,6 +1,6 @@
 // Browser dev bridge: exposes the same backend over HTTP so the renderer can run
 // in a regular browser tab (npm run web). Binds to 127.0.0.1 only and requires the
-// x-adar-token header (injected by the Vite proxy) to block cross-site requests.
+// random ADAR_DEV_TOKEN, which the page receives out of band (see bridge.ts).
 //
 //   POST /api/invoke   body: {"method": "...", "args": [...]}  → InvokeResponse
 //   GET  /api/events   Server-Sent Events stream of AdarEvent

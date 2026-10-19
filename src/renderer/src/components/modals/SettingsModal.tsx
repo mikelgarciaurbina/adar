@@ -3,12 +3,12 @@
 
 import { useEffect, useId, useRef, useState } from 'react'
 import { Download, FileDiff, GitBranch, GitGraph, Plug, RefreshCw, Settings, SlidersHorizontal } from 'lucide-react'
-import { api, isElectron, updates } from '@renderer/api/client'
+import { api, isElectron } from '@renderer/api/client'
 import { Button, Spinner } from '@renderer/components/common/Button'
 import { Modal } from '@renderer/components/common/Modal'
 import { toast } from '@renderer/components/common/toast'
 import { formatGitVersion } from '@renderer/components/layout/chrome'
-import { checkForUpdatesNow, startUpdate } from '@renderer/components/update/UpdateNotice'
+import { checkForUpdatesNow, installUpdate, startUpdate } from '@renderer/components/update/UpdateNotice'
 import { useUpdates } from '@renderer/components/update/updateStore'
 import { useApp, useSettings } from '@renderer/store/appStore'
 import type { AppSettings, DiffViewMode, Identity, PullMode, ThemeSetting } from '@shared/types'
@@ -174,7 +174,7 @@ function GeneralSection() {
 
 function runUpdateAction(action: UpdateAction) {
   if (action === 'update' || action === 'retry') void startUpdate()
-  else if (action === 'install' || action === 'open-installer') updates.updateInstall().catch((err) => toast.error(err))
+  else if (action === 'install' || action === 'open-installer') void installUpdate()
 }
 
 function UpdateSettings() {
@@ -331,7 +331,7 @@ function IntegrationsSection() {
   return (
     <>
       <SectionTitle>Integrations</SectionTitle>
-      <SettingRow label="Editor" description="Command used by “Open in editor”. Leave empty to use the system default app." htmlFor={editorId}>
+      <SettingRow label="Editor" description="Command used by “Open in editor” (e.g. code, cursor, zed). Leave empty to use the system text editor; apps and scripts are never launched." htmlFor={editorId}>
         <div className="md-editor">
           <input
             id={editorId}

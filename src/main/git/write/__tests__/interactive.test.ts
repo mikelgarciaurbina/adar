@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { RebaseTodoItem } from '@shared/types'
-import { cleanupTmp, commitFile, expectCode, git, head, initRepo, isolateGitConfig, makeOps, read, status, subjects, write } from './helpers'
+import { cleanupTmp, commitFile, exists, expectCode, git, head, initRepo, isolateGitConfig, makeOps, nextDate, read, status, subjects, write } from './helpers'
 import { INTERACTIVE_REBASE_MARKER } from '../../context'
 import { repoKey } from '../interactive'
 
@@ -164,6 +164,47 @@ describe('interactiveRebase', () => {
     await expectCode(ops.interactiveRebase(dir, '--root', pick), 'INVALID_ARGUMENT')
     expect(head(dir)).toBe(before)
     expect(status(dir)).toBe('')
+  })
+
+  it('refuses to silently flatten merge commits (and the changes made in them) unless asked', async () => {
+    const { ops, ctx } = makeOps()
+    // A ← B ← Merge(side S, plus a fix made while merging) ← C
+    const dir = initRepo()
+    const a = commitFile(dir, 'a.txt', 'a\n', 'A')
+    git(dir, ['checkout', '-q', '-b', 'side'])
+    commitFile(dir, 's.txt', 's\n', 'S')
+    git(dir, ['checkout', '-q', 'main'])
+    commitFile(dir, 'b.txt', 'b\n', 'B')
+    git(dir, ['merge', '-q', '--no-ff', '--no-commit', 'side'])
+    write(dir, 'merge-fixup.txt', 'only in the merge\n')
+    git(dir, ['add', 'merge-fixup.txt'])
+    const date = nextDate()
+    git(dir, ['commit', '-q', '-m', 'Merge side'], { env: { GIT_AUTHOR_DATE: date, GIT_COMMITTER_DATE: date } })
+    commitFile(dir, 'c.txt', 'c\n', 'C')
+    const before = head(dir)
+
+    expect(await ops.getRebaseMergeCount(dir, a)).toBe(1)
+    expect(await ops.getRebaseMergeCount(dir, 'ROOT')).toBe(1)
+    expect(await ops.getRebaseMergeCount(dir, 'HEAD~1')).toBe(0)
+    await expectCode(ops.getRebaseMergeCount(dir, 'nope'), 'NOT_FOUND')
+
+    // The todo lists B, S, C only; starting it unchanged would linearise the history and lose merge-fixup.txt.
+    const todo = await todoFrom(dir, a, (items) => items)
+    expect(todo.map((t) => t.subject).sort()).toEqual(['B', 'C', 'S'])
+    const err = await expectCode(ops.interactiveRebase(dir, a, todo), 'INVALID_ARGUMENT')
+    expect(err.message).toMatch(/merge commit/)
+    expect(head(dir)).toBe(before)
+    expect(await ctx.operationState(dir)).toBe('none')
+    expect(exists(dir, 'merge-fixup.txt')).toBe(true)
+
+    // Explicit opt-in (after the UI confirmed): flattened, as git does with --no-rebase-merges.
+    const res = await ops.interactiveRebase(dir, a, todo, { flattenMerges: true })
+    expect(res.ok).toBe(true)
+    expect(git(dir, ['rev-list', '--merges', '--count', 'HEAD']).trim()).toBe('0')
+
+    // Linear ranges need no opt-in.
+    const linear = linearRepo()
+    expect(await ops.getRebaseMergeCount(linear.dir, linear.base)).toBe(0)
   })
 
   it('autostashes local changes', async () => {

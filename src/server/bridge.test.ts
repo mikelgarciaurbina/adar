@@ -43,6 +43,18 @@ function request(opts: { method?: string; path?: string; headers?: Record<string
   })
 }
 
+/** Status of a request whose response may be an endless stream (closed as soon as headers arrive). */
+function statusOf(pathname: string, headers: Record<string, string> = {}, method = 'GET'): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const req = http.request({ host: '127.0.0.1', port, method, path: pathname, headers }, (res) => {
+      resolve(res.statusCode ?? 0)
+      res.destroy()
+    })
+    req.on('error', reject)
+    req.end()
+  })
+}
+
 const invoke = JSON.stringify({ method: 'runGit', args: ['/repo', ['-c', 'alias.x=!touch /tmp/pwned', 'x']] })
 const json = { 'content-type': 'application/json', 'x-adar-token': TOKEN }
 
@@ -82,6 +94,27 @@ describe('dev bridge', () => {
     const bad = await request({ headers: json, body: '{nope' })
     expect(bad.status).toBe(400)
     expect((await request({ method: 'OPTIONS', headers: { 'x-adar-token': TOKEN } })).status).toBe(404)
+  })
+
+  it('accepts the token in the URL for the event stream only (EventSource cannot set headers)', async () => {
+    expect(await statusOf('/api/events')).toBe(403)
+    expect(await statusOf(`/api/events?t=${TOKEN.slice(1)}b`)).toBe(403)
+    expect(await statusOf(`/api/events?t=${TOKEN}`, { 'sec-fetch-site': 'same-origin' })).toBe(200)
+    expect(await statusOf('/api/events', { 'x-adar-token': TOKEN })).toBe(200)
+    expect(await statusOf('//')).toBe(400)
+    // Cross-site pages cannot use the query form either.
+    expect(await statusOf(`/api/events?t=${TOKEN}`, { origin: 'https://evil.example' })).toBe(403)
+    const before = calls.length
+    expect((await request({ path: `/api/invoke?t=${TOKEN}`, headers: { 'content-type': 'application/json' }, body: invoke })).status).toBe(403)
+    expect(calls.length).toBe(before)
+  })
+
+  it('is not reachable through the Vite dev proxy without the caller presenting the token', async () => {
+    // The proxy used to add x-adar-token itself, letting any local process that reached port 5898 run git commands.
+    const { default: config } = await import('../../vite.web.config')
+    const proxy = (config as { server?: { proxy?: Record<string, { headers?: unknown }> } }).server?.proxy ?? {}
+    expect(Object.keys(proxy)).toContain('/api')
+    for (const entry of Object.values(proxy)) expect(entry.headers).toBeUndefined()
   })
 
   it('compares tokens and sites strictly', () => {

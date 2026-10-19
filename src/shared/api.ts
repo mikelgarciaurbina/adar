@@ -57,8 +57,15 @@ export interface AdarApi {
   answerCredentialRequest(id: string, value: string | null): Promise<void>
 
   // ── Repository lifecycle ────────────────────────────────────────────────
-  /** Resolve the worktree root for any path inside a repo, start watching it, add to recents. */
+  /**
+   * Resolve the worktree root for any path inside a repo, start watching it, add to recents.
+   * Rejects with code UNTRUSTED_REPO (details = the offending config entries) when a repository Adar has not
+   * seen before carries repo-local config that makes git run commands (core.fsmonitor, core.sshCommand,
+   * credential helpers, filters, hooksPath…). Call trustRepo() after the user agrees, then openRepo() again.
+   */
   openRepo(path: string): Promise<RepoInfo>
+  /** Mark a repository (any path inside it) as trusted so openRepo() stops refusing it. */
+  trustRepo(path: string): Promise<void>
   /** Stop watching. */
   closeRepo(repo: string): Promise<void>
   initRepo(path: string, opts?: { initialBranch?: string }): Promise<RepoInfo>
@@ -137,8 +144,13 @@ export interface AdarApi {
   // ── Interactive rebase ──────────────────────────────────────────────────
   /** Commits in base..HEAD, OLDEST first (the order of a rebase todo list). */
   getRebaseCommits(repo: string, base: string): Promise<Commit[]>
-  /** Runs `git rebase -i base` non-interactively with the given todo list. */
-  interactiveRebase(repo: string, base: string, todo: RebaseTodoItem[]): Promise<OperationResult>
+  /** Number of merge commits in base..HEAD: an interactive rebase would flatten them (and drop merge-only changes). */
+  getRebaseMergeCount(repo: string, base: string): Promise<number>
+  /**
+   * Runs `git rebase -i base` non-interactively with the given todo list. Refuses (INVALID_ARGUMENT) when the
+   * range contains merge commits unless opts.flattenMerges is true.
+   */
+  interactiveRebase(repo: string, base: string, todo: RebaseTodoItem[], opts?: { flattenMerges?: boolean }): Promise<OperationResult>
 
   // ── Conflicts ───────────────────────────────────────────────────────────
   getConflictVersions(repo: string, path: string): Promise<ConflictVersions>
@@ -221,6 +233,7 @@ export const API_METHODS = [
   'removeRecentRepo',
   'answerCredentialRequest',
   'openRepo',
+  'trustRepo',
   'closeRepo',
   'initRepo',
   'cloneRepo',
@@ -260,6 +273,7 @@ export const API_METHODS = [
   'abortOperation',
   'skipOperation',
   'getRebaseCommits',
+  'getRebaseMergeCount',
   'interactiveRebase',
   'getConflictVersions',
   'resolveConflict',

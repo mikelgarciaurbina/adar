@@ -44,9 +44,33 @@ import './rebase.css'
 
 const ROW_DRAG_MIME = 'application/x-adar-rebase-row'
 
-type LoadState = { status: 'loading' } | { status: 'error'; error: string } | { status: 'ready'; commits: Commit[] }
+type LoadState = { status: 'loading' } | { status: 'error'; error: string } | { status: 'ready'; commits: Commit[]; mergeCount: number }
 
 const tabOf = (repo: string) => useApp.getState().tabs.find((t) => t.path === repo)
+
+/**
+ * Options for api.interactiveRebase, or null when the user backed out. The rebase replays only the
+ * regular commits of the range: merge commits are flattened away, and with them any change made
+ * while resolving them. The backend refuses such a range unless flattenMerges is set, so ask first.
+ */
+export async function confirmRebaseOptions(mergeCount: number): Promise<{ flattenMerges?: boolean } | null> {
+  if (mergeCount <= 0) return {}
+  const ok = await confirm({
+    title: `Flatten ${pluralize(mergeCount, 'merge commit')}?`,
+    message: mergeMessage(mergeCount),
+    confirmLabel: 'Flatten and rebase',
+    danger: true
+  })
+  return ok ? { flattenMerges: true } : null
+}
+
+function mergeMessage(mergeCount: number): string {
+  const these = mergeCount === 1 ? 'This range contains a merge commit' : `This range contains ${mergeCount} merge commits`
+  return (
+    `${these}. An interactive rebase replays only the regular commits listed here: the history becomes linear and ` +
+    `any change made in the merge itself (conflict resolutions, fixes added while merging) is lost.`
+  )
+}
 
 function isDirty(tab: RepoTab | undefined | null): boolean {
   const st = tab?.status
@@ -63,8 +87,8 @@ export function RebaseView({ tab, base }: { tab: RepoTab; base: string }) {
   useEffect(() => {
     let alive = true
     setLoad({ status: 'loading' })
-    api.getRebaseCommits(repo, base).then(
-      (commits) => alive && setLoad({ status: 'ready', commits }),
+    Promise.all([api.getRebaseCommits(repo, base), api.getRebaseMergeCount(repo, base)]).then(
+      ([commits, mergeCount]) => alive && setLoad({ status: 'ready', commits, mergeCount }),
       (err) => alive && setLoad({ status: 'error', error: describeError(err) })
     )
     return () => {
@@ -133,7 +157,7 @@ export function RebaseView({ tab, base }: { tab: RepoTab; base: string }) {
             </div>
           </EmptyState>
         ) : (
-          <RebaseEditor key={reloadKey} tab={tab} base={base} commits={load.commits} />
+          <RebaseEditor key={reloadKey} tab={tab} base={base} commits={load.commits} mergeCount={load.mergeCount} />
         ))}
     </div>
   )
@@ -155,10 +179,12 @@ export interface RebaseEditorProps {
   base: string
   /** OLDEST first. */
   commits: Commit[]
+  /** Merge commits in the range: they are not listed, and the rebase would flatten them. */
+  mergeCount?: number
 }
 
 /** The editable todo list (exported for tests; mounted by RebaseView once commits are loaded). */
-export function RebaseEditor({ tab, base, commits }: RebaseEditorProps) {
+export function RebaseEditor({ tab, base, commits, mergeCount = 0 }: RebaseEditorProps) {
   const repo = tab.path
   const settings = useSettings()
   const [entries, setEntries] = useState<RebaseEntry[]>(() => initialEntries(commits))
@@ -419,11 +445,21 @@ export function RebaseEditor({ tab, base, commits }: RebaseEditorProps) {
     showGraph(repo)
   }
 
+  const confirming = useRef(false)
   const start = async () => {
     if (!canStart) {
       if (blockedReason && !running) toast.warning(blockedReason)
       return
     }
+    if (confirming.current) return
+    confirming.current = true
+    let opts: { flattenMerges?: boolean } | null
+    try {
+      opts = await confirmRebaseOptions(mergeCount)
+    } finally {
+      confirming.current = false
+    }
+    if (!opts) return
     const todo = buildTodo(entries)
     const before = tab.info?.head.sha ?? tab.refs?.head.sha ?? null
     const store = useApp.getState()
@@ -432,7 +468,7 @@ export function RebaseEditor({ tab, base, commits }: RebaseEditorProps) {
     store.setBusy(busyKey, 'Rebasing…')
     let res: OperationResult | undefined
     try {
-      res = await api.interactiveRebase(repo, base, todo)
+      res = await api.interactiveRebase(repo, base, todo, opts)
     } catch (err) {
       toast.error(err)
     } finally {
@@ -457,8 +493,16 @@ export function RebaseEditor({ tab, base, commits }: RebaseEditorProps) {
 
   return (
     <div className="rb-editor">
-      {(opState !== 'none' || dirty || pushedCount > 0) && (
+      {(opState !== 'none' || dirty || pushedCount > 0 || mergeCount > 0) && (
         <div className="rb-notices">
+          {mergeCount > 0 && (
+            <div className="rb-notice rb-notice-error rb-notice-merges" role="alert">
+              <AlertTriangle size={14} />
+              <span>
+                <strong>Merge commits will be flattened.</strong> {mergeMessage(mergeCount)} The merges are not listed below.
+              </span>
+            </div>
+          )}
           {opState !== 'none' && (
             <div className="rb-notice rb-notice-error">
               <AlertTriangle size={14} /> Another operation is in progress. Finish or abort it before starting an interactive rebase.
@@ -641,7 +685,6 @@ const RebaseRow = memo(function RebaseRow(p: RowProps) {
   const { commit, action } = entry
   const info = ACTION_INFO[action]
   const meld = isMeld(action)
-  const isMerge = commit.parents.length > 1
 
   const cls = [
     'rb-item',
@@ -699,7 +742,6 @@ const RebaseRow = memo(function RebaseRow(p: RowProps) {
               {action} into {p.meldTarget ? shortSha(p.meldTarget.sha) : '—'}
             </span>
           )}
-          {isMerge && <span className="rb-merge-badge">merge</span>}
           <span className="rb-subject-text">{action === 'reword' && entry.message ? firstLineOf(entry.message) : commit.subject}</span>
         </span>
         <span className="rb-author" title={`${commit.authorName} <${commit.authorEmail}>`}>

@@ -1,5 +1,6 @@
-// Persistent app settings (<userDataDir>/settings.json) and recent repositories
-// (<userDataDir>/recents.json). Writes are atomic (tmp file + rename) and serialised.
+// Persistent app settings (<userDataDir>/settings.json), recent repositories
+// (<userDataDir>/recents.json) and trusted repositories (<userDataDir>/trusted.json).
+// Writes are atomic (tmp file + rename) and serialised.
 
 import { randomBytes } from 'node:crypto'
 import { promises as fs } from 'node:fs'
@@ -7,6 +8,8 @@ import path from 'node:path'
 import { DEFAULT_SETTINGS, type AppSettings, type RecentRepo } from '@shared/types'
 
 export const MAX_RECENTS = 30
+/** Trusted repositories kept (most recently trusted first). */
+export const MAX_TRUSTED = 1000
 
 /** Allowed values for enum-like string settings (anything else is ignored). */
 const ENUMS: Partial<Record<keyof AppSettings, readonly string[]>> = {
@@ -97,6 +100,11 @@ async function readJson(file: string): Promise<unknown> {
   }
 }
 
+function sanitizeTrusted(raw: unknown): string[] {
+  const list = isPlainObject(raw) && Array.isArray(raw.repos) ? raw.repos : []
+  return [...new Set(list.filter((p): p is string => typeof p === 'string' && path.isAbsolute(p)))].slice(0, MAX_TRUSTED)
+}
+
 /** Write JSON atomically: mkdir -p, write a sibling tmp file, rename over the target. */
 export async function writeJsonAtomic(file: string, data: unknown): Promise<void> {
   await fs.mkdir(path.dirname(file), { recursive: true })
@@ -113,22 +121,35 @@ export async function writeJsonAtomic(file: string, data: unknown): Promise<void
 export class SettingsStore {
   private readonly settingsFile: string
   private readonly recentsFile: string
+  private readonly trustedFile: string
   private settings: AppSettings | null = null
   private recents: RecentRepo[] | null = null
+  private trusted: string[] | null = null
   private loading: Promise<void> | null = null
   private writeChain: Promise<void> = Promise.resolve()
 
   constructor(userDataDir: string) {
     this.settingsFile = path.join(userDataDir, 'settings.json')
     this.recentsFile = path.join(userDataDir, 'recents.json')
+    this.trustedFile = path.join(userDataDir, 'trusted.json')
   }
 
   private load(): Promise<void> {
     if (!this.loading) {
       this.loading = (async () => {
-        const [s, r] = await Promise.all([readJson(this.settingsFile), readJson(this.recentsFile)])
+        const [s, r, t] = await Promise.all([readJson(this.settingsFile), readJson(this.recentsFile), readJson(this.trustedFile)])
         this.settings = sanitizeSettings(DEFAULT_SETTINGS, s)
         this.recents = sanitizeRecents(r)
+        const firstRun = t === undefined && !(await fs.stat(this.trustedFile).then(() => true, () => false))
+        if (firstRun) {
+          // The trust gate is new: repositories the user already opened in Adar (open tabs, recents) stay trusted.
+          const known = [...this.settings.openTabs, ...this.recents.map((x) => x.path)]
+          this.trusted = sanitizeTrusted({ repos: known })
+          void this.persist(this.trustedFile, { version: 1, repos: this.trusted }).catch(() => undefined)
+        } else {
+          // A corrupt file trusts nothing (fail closed); it is rewritten on the next trustRepo().
+          this.trusted = sanitizeTrusted(t)
+        }
       })()
     }
     return this.loading
@@ -173,6 +194,21 @@ export class SettingsStore {
     const before = this.recents!.length
     this.recents = this.recents!.filter((r) => r.path !== repoPath)
     if (this.recents.length !== before) await this.persist(this.recentsFile, this.recents)
+  }
+
+  /** True when any of `repoPaths` (worktree roots / bare git dirs as git reports them) was trusted. */
+  async isTrustedRepo(repoPaths: readonly string[]): Promise<boolean> {
+    await this.load()
+    return repoPaths.some((p) => this.trusted!.includes(p))
+  }
+
+  /** Remember a repository as trusted: openRepo() then skips the repo-config check for it. */
+  async trustRepo(repoPath: string): Promise<void> {
+    await this.load()
+    if (!path.isAbsolute(repoPath)) return
+    if (this.trusted![0] === repoPath) return
+    this.trusted = [repoPath, ...this.trusted!.filter((p) => p !== repoPath)].slice(0, MAX_TRUSTED)
+    await this.persist(this.trustedFile, { version: 1, repos: this.trusted })
   }
 
   /** Wait for pending writes (used on dispose). */

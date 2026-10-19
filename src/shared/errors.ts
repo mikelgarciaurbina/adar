@@ -6,6 +6,7 @@ export class AdarError extends Error {
   readonly command?: string
   readonly stderr?: string
   readonly exitCode?: number
+  readonly details?: string[]
 
   constructor(payload: AdarErrorPayload) {
     super(payload.message)
@@ -14,6 +15,7 @@ export class AdarError extends Error {
     this.command = payload.command
     this.stderr = payload.stderr
     this.exitCode = payload.exitCode
+    this.details = payload.details
   }
 
   toPayload(): AdarErrorPayload {
@@ -22,7 +24,8 @@ export class AdarError extends Error {
       code: this.code,
       command: this.command,
       stderr: this.stderr,
-      exitCode: this.exitCode
+      exitCode: this.exitCode,
+      details: this.details
     }
   }
 }
@@ -50,6 +53,7 @@ const CODES: ReadonlySet<string> = new Set<AdarErrorCode>([
   'INVALID_ARGUMENT',
   'CANCELLED',
   'GIT_NOT_INSTALLED',
+  'UNTRUSTED_REPO',
   'UNKNOWN'
 ])
 

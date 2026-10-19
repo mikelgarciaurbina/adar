@@ -305,6 +305,38 @@ export function detectEol(text: string): '\n' | '\r\n' {
   return crlf > lf ? '\r\n' : '\n'
 }
 
+/**
+ * Put the file's line endings back on text edited in the Output <textarea>, whose value always
+ * uses "\n" (the browser normalises CRLF). A line that also exists in `reference` (the file as it
+ * was loaded) gets the terminator it had there, so untouched lines of a mixed file keep theirs;
+ * new or edited lines get `eol`, the file's dominant ending. Lines still ending in "\r\n" were
+ * never normalised and are kept as they are.
+ */
+export function restoreLineEndings(text: string, reference: string, eol: '\n' | '\r\n'): string {
+  // Pure LF file: nothing to restore.
+  if (eol === '\n' && !reference.includes('\r\n')) return text
+  const known = new Map<string, { ends: string[]; next: number }>()
+  for (const line of splitLines(reference)) {
+    if (!line.endsWith('\n')) continue
+    const end = line.endsWith('\r\n') ? '\r\n' : '\n'
+    const body = line.slice(0, -end.length)
+    const k = known.get(body)
+    if (k) k.ends.push(end)
+    else known.set(body, { ends: [end], next: 0 })
+  }
+  const out: string[] = []
+  for (const line of splitLines(text)) {
+    if (!line.endsWith('\n') || line.endsWith('\r\n')) {
+      out.push(line)
+      continue
+    }
+    const body = line.slice(0, -1)
+    const k = known.get(body)
+    out.push(body, k && k.next < k.ends.length ? k.ends[k.next++] : eol)
+  }
+  return out.join('')
+}
+
 /** Build the merged text from per-chunk choices, with the line regions of every chunk. */
 export function buildOutputWithRegions(segments: readonly Segment[], choices: ChunkChoices, eol: '\n' | '\r\n' = '\n'): BuiltOutput {
   const pieces: string[][] = []

@@ -4,13 +4,13 @@
 // it is never logged or persisted.
 
 import { useEffect, useRef, useState } from 'react'
-import { Eye, EyeOff, KeyRound, ShieldCheck } from 'lucide-react'
+import { Eye, EyeOff, KeyRound, ServerCog, ShieldCheck } from 'lucide-react'
 import { api } from '@renderer/api/client'
 import { Button } from '@renderer/components/common/Button'
 import { Modal } from '@renderer/components/common/Modal'
 import { toast } from '@renderer/components/common/toast'
 import { useApp, type CredentialRequest } from '@renderer/store/appStore'
-import { credentialHint, credentialLabel, credentialTitle, inferKind, parseCredentialTarget } from './credentials'
+import { credentialHint, credentialIsSecret, credentialLabel, credentialTitle, inferKind, parseCredentialTarget, parseSshServerPrompt } from './credentials'
 import './modals.css'
 
 export function CredentialDialog() {
@@ -28,8 +28,10 @@ function CredentialPrompt({ req, queued }: { req: CredentialRequest; queued: num
   const answered = useRef(false)
 
   const kind = inferKind(req.kind, req.prompt)
-  const secret = req.secret || kind === 'password' || kind === 'passphrase'
+  const secret = credentialIsSecret(req)
   const target = parseCredentialTarget(req.prompt)
+  // Free text chosen by an SSH server (keyboard-interactive): shown as the server's words, never trusted.
+  const server = parseSshServerPrompt(req.prompt)
   const hint = credentialHint(req.kind, req.prompt)
 
   useEffect(() => {
@@ -62,7 +64,7 @@ function CredentialPrompt({ req, queued }: { req: CredentialRequest; queued: num
     <Modal
       title={
         <span className="md-title">
-          {kind === 'yesno' ? <ShieldCheck size={16} /> : <KeyRound size={16} />} {credentialTitle(req.kind, req.prompt)}
+          {kind === 'yesno' ? <ShieldCheck size={16} /> : server ? <ServerCog size={16} /> : <KeyRound size={16} />} {credentialTitle(req.kind, req.prompt)}
         </span>
       }
       className="md-modal md-credential"
@@ -99,7 +101,23 @@ function CredentialPrompt({ req, queued }: { req: CredentialRequest; queued: num
           submit()
         }}
       >
-        <div className="md-cred-prompt selectable">{req.prompt.trim() || 'Git is asking for input.'}</div>
+        {server ? (
+          <>
+            <div className="md-cred-target">
+              <span className="md-tag">SSH</span>
+              <span className="md-cred-host">{server.host}</span>
+              <span className="md-cred-user">as {server.user}</span>
+            </div>
+            <div className="md-cred-server-caption">The server says:</div>
+            <blockquote className="md-cred-prompt md-cred-server-text selectable">{server.message || '(no text)'}</blockquote>
+            <div className="md-cred-warn" role="note">
+              This text comes from the SSH server {server.host}, not from Adar or git, and the server can write anything here. Only answer
+              if you expect {server.host} itself to ask for it — never enter a password or token for another service (such as GitHub).
+            </div>
+          </>
+        ) : (
+          <div className="md-cred-prompt selectable">{req.prompt.trim() || 'Git is asking for input.'}</div>
+        )}
         {target && (
           <div className="md-cred-target">
             <span className="md-tag">{target.protocol.toUpperCase()}</span>

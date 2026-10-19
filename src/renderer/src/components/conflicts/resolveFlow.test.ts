@@ -16,19 +16,23 @@ const toasts = vi.hoisted(() => {
   type Opts = { actions: { label: string; onClick: () => void }[]; duration: number }
   return { success: vi.fn((_message: string, _opts?: Opts) => ++id), error: vi.fn(), info: vi.fn(), dismiss: vi.fn() }
 })
-const apiMock = vi.hoisted(() => ({ resolveConflict: vi.fn(async () => undefined) }))
+const apiMock = vi.hoisted(() => ({ resolveConflict: vi.fn(async (_repo: string, _path: string, _resolution: unknown) => undefined) }))
+const dialogs = vi.hoisted(() => ({ choose: vi.fn(async (_opts: unknown): Promise<unknown> => null) }))
 
 vi.mock('@renderer/actions/git', () => actions)
 vi.mock('@renderer/components/common/toast', () => ({ toast: toasts }))
 vi.mock('@renderer/api/client', () => ({ api: apiMock, isMac: true, newOpId: () => 'op', onAdarEvent: () => () => undefined }))
+vi.mock('@renderer/components/common/dialogs', () => dialogs)
 
 import { useApp } from '@renderer/store/appStore'
+import { AdarError } from '@shared/errors'
 import {
   advanceAfterResolve,
   CONTINUE_OFFER_MS,
   continueWithDraft,
   dismissContinueOffer,
   hasContinueOffer,
+  isChangedOnDisk,
   markResolvedAndAdvance,
   resolveAndAdvance
 } from './resolveFlow'
@@ -257,5 +261,67 @@ describe('resolveAndAdvance / markResolvedAndAdvance', () => {
 
     actions.markResolved.mockResolvedValueOnce(false)
     expect(await markResolvedAndAdvance(REPO, 'b.txt')).toBe(false)
+  })
+})
+
+describe('resolveAndAdvance: file changed on disk since the merge tool loaded it', () => {
+  const changed = () => new AdarError({ code: 'CONFLICT', message: 'a.txt changed on disk since it was loaded' })
+  const content = { kind: 'content' as const, content: 'resolved\n', expected: 'a\n<<<<<<< HEAD\n' }
+
+  function stubRefresh() {
+    const refresh = vi.fn(async () => patchTab({ status: { ...tab().status!, conflicted: [] } }))
+    useApp.setState({ refresh })
+    return refresh
+  }
+
+  it('recognises only the CONFLICT refusal of a content resolution that carried `expected`', () => {
+    expect(isChangedOnDisk(changed(), content)).toBe(true)
+    expect(isChangedOnDisk({ code: 'CONFLICT', message: 'x' }, content)).toBe(true)
+    expect(isChangedOnDisk(changed(), { kind: 'content', content: 'x' })).toBe(false)
+    expect(isChangedOnDisk(changed(), { kind: 'ours' })).toBe(false)
+    expect(isChangedOnDisk(new Error('disk full'), content)).toBe(false)
+  })
+
+  it('asks before overwriting; "Overwrite" saves again without the check', async () => {
+    setTab(makeTab('merge', ['a.txt'], 'a.txt'))
+    stubRefresh()
+    apiMock.resolveConflict.mockRejectedValueOnce(changed())
+    dialogs.choose.mockResolvedValueOnce('overwrite')
+    expect(await resolveAndAdvance(REPO, 'a.txt', content, { onReload: vi.fn() })).toBe(true)
+    expect(dialogs.choose).toHaveBeenCalledTimes(1)
+    const opts = dialogs.choose.mock.calls[0][0] as { title: string; options: Array<{ value: string }> }
+    expect(opts.title).toBe('a.txt changed on disk')
+    expect(opts.options.map((o) => o.value)).toEqual(['reload', 'overwrite'])
+    expect(apiMock.resolveConflict.mock.calls.map((c) => c[2])).toEqual([content, { kind: 'content', content: 'resolved\n' }])
+    expect(toasts.error).not.toHaveBeenCalled()
+    expect(Object.keys(useApp.getState().busy)).toEqual([])
+  })
+
+  it('"Reload from disk" reloads instead of writing; cancelling writes nothing either', async () => {
+    setTab(makeTab('merge', ['a.txt'], 'a.txt'))
+    const refresh = stubRefresh()
+    const onReload = vi.fn()
+    apiMock.resolveConflict.mockRejectedValueOnce(changed())
+    dialogs.choose.mockResolvedValueOnce('reload')
+    expect(await resolveAndAdvance(REPO, 'a.txt', content, { onReload })).toBe(false)
+    expect(onReload).toHaveBeenCalledTimes(1)
+    expect(apiMock.resolveConflict).toHaveBeenCalledTimes(1)
+
+    apiMock.resolveConflict.mockRejectedValueOnce(changed())
+    dialogs.choose.mockResolvedValueOnce(null)
+    expect(await resolveAndAdvance(REPO, 'a.txt', content, { onReload })).toBe(false)
+    expect(onReload).toHaveBeenCalledTimes(1)
+    expect(apiMock.resolveConflict).toHaveBeenCalledTimes(2)
+    expect(refresh).not.toHaveBeenCalled()
+    expect(actions.showGraph).not.toHaveBeenCalled()
+    expect(toasts.error).not.toHaveBeenCalled()
+  })
+
+  it('other failures are reported as before, without asking', async () => {
+    setTab(makeTab('merge', ['a.txt'], 'a.txt'))
+    apiMock.resolveConflict.mockRejectedValueOnce(new AdarError({ code: 'GIT_FAILED', message: 'index.lock exists' }))
+    expect(await resolveAndAdvance(REPO, 'a.txt', content, { onReload: vi.fn() })).toBe(false)
+    expect(dialogs.choose).not.toHaveBeenCalled()
+    expect(toasts.error).toHaveBeenCalled()
   })
 })

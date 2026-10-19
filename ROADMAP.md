@@ -30,6 +30,8 @@ dark/light themes · credential prompts for HTTPS tokens and SSH passphrases · 
 - [ ] **Homebrew cask** — `brew install --cask adar`.
 - [ ] **Update channels** (stable / beta) and a "What's new" panel after updating.
 - [ ] Delta updates (smaller downloads) once the app is signed.
+- [ ] Sign update archives with an offline maintainer key (ed25519) and verify them in the updater, on top of today's
+      GitHub digest, host, bundle-identity and version checks.
 
 ### Localization (i18n)
 - [ ] Lightweight translation layer (`t()` + JSON catalogs, `Intl` for plurals, dates and numbers); a test that flags
@@ -85,7 +87,8 @@ dark/light themes · credential prompts for HTTPS tokens and SSH passphrases · 
 - [ ] Multiple identities: per-folder profiles (`includeIf`), SSH key helper.
 
 ### Scale and performance
-- [ ] Graph layout and log parsing in a worker; use git's commit-graph file for 500k+ commit repositories.
+- [ ] Graph layout and log parsing in a worker, incremental layout when paging; use git's commit-graph file for 500k+ commit
+      repositories.
 - [ ] Watch the working tree respecting `.gitignore` (or use `core.fsmonitor`) to avoid refresh noise from build output.
 - [ ] Faster status for huge monorepos (untracked cache, partial status).
 
@@ -121,4 +124,7 @@ Bring-your-own-key or local models only, disabled by default, and never sending 
 - The git console waits for a command to finish (no streaming, no cancel); interactive commands are not supported.
 - File history shows up to 2000 commits and older paths across renames are resolved best-effort.
 - Clones cannot be cancelled once started.
-- The working-tree watcher does not apply `.gitignore`, so heavy build output can trigger extra refreshes.
+- When macOS file events are unavailable, Adar falls back to polling: changes show up after 1–2 s instead of instantly.
+- An interactive rebase started outside Adar (e.g. in a terminal) is shown as a plain "Rebase in progress".
+- A stash whose base commit is not loaded in the graph appears only in the left panel.
+- Paging through very long histories recomputes the whole graph layout (about 100 ms per page at 20k commits).

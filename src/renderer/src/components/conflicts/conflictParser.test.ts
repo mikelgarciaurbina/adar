@@ -13,6 +13,7 @@ import {
   nextConflictPath,
   needsChooser,
   parseConflicts,
+  restoreLineEndings,
   sideChecked,
   sideExists,
   sideText,
@@ -315,6 +316,29 @@ describe('detectEol', () => {
     expect(detectEol('a\r\nb\r\nc\n')).toBe('\r\n')
     expect(detectEol('a\nb\n')).toBe('\n')
     expect(detectEol('')).toBe('\n')
+  })
+})
+
+describe('restoreLineEndings', () => {
+  it('puts CRLF back on a CRLF file edited in the textarea (whose value is LF-only)', () => {
+    const file = 'one\r\n<<<<<<< HEAD\r\nmine\r\n=======\r\ntheirs\r\n>>>>>>> b\r\nlast\r\n'
+    // What a textarea hands back after the user typed one character.
+    const edited = 'one\nmine!\nlast\n'
+    expect(restoreLineEndings(edited, file, '\r\n')).toBe('one\r\nmine!\r\nlast\r\n')
+    expect(restoreLineEndings('a\nb', file, '\r\n')).toBe('a\r\nb')
+  })
+
+  it('keeps the original terminator of untouched lines in a mixed file; new lines get the dominant one', () => {
+    const file = 'a\r\nb\nc\r\nd\r\n'
+    expect(restoreLineEndings('a\nb\nnew\nc\nd\n', file, '\r\n')).toBe('a\r\nb\nnew\r\nc\r\nd\r\n')
+    // An LF-majority file with one CRLF line keeps it.
+    expect(restoreLineEndings('x\ny\nz\n', 'x\ny\r\nz\n', '\n')).toBe('x\ny\r\nz\n')
+  })
+
+  it('leaves LF files and lines that still carry CRLF alone', () => {
+    expect(restoreLineEndings('a\nb\n', 'a\nb\n', '\n')).toBe('a\nb\n')
+    expect(restoreLineEndings('a\r\nb\r\n', 'a\r\nb\r\n', '\r\n')).toBe('a\r\nb\r\n')
+    expect(restoreLineEndings('', 'a\r\n', '\r\n')).toBe('')
   })
 })
 

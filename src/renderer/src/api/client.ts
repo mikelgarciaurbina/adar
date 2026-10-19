@@ -13,12 +13,56 @@ const bridge = typeof window !== 'undefined' ? window.adarBridge : undefined
 
 export const isElectron = !!bridge
 
+const DEV_TOKEN_KEY = 'adar-dev-token'
+
+/** Token in a dev page URL fragment ("#t=<token>", as printed by `npm run web`), or null. */
+export function tokenFromHash(hash: string): string | null {
+  const m = /(?:^#|&)t=([^&]+)/.exec(hash)
+  if (!m) return null
+  try {
+    return decodeURIComponent(m[1]) || null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Browser dev mode: the API bridge token arrives out of band in the URL fragment. Keep it for this
+ * tab (sessionStorage survives reloads) and drop it from the address bar.
+ */
+function takeDevToken(): string {
+  if (bridge || typeof window === 'undefined') return ''
+  const fromHash = tokenFromHash(window.location.hash)
+  if (fromHash) {
+    try {
+      window.sessionStorage.setItem(DEV_TOKEN_KEY, fromHash)
+    } catch {
+      /* storage blocked: the token lives in memory until the tab reloads */
+    }
+    window.history.replaceState(window.history.state, '', window.location.pathname + window.location.search)
+    return fromHash
+  }
+  try {
+    return window.sessionStorage.getItem(DEV_TOKEN_KEY) ?? ''
+  } catch {
+    return ''
+  }
+}
+
+const devToken = takeDevToken()
+
 const httpTransport: Transport = async (method, args) => {
   const res = await fetch('/api/invoke', {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', 'x-adar-token': devToken },
     body: JSON.stringify({ method, args })
   })
+  if (res.status === 403) {
+    return {
+      ok: false,
+      error: { message: 'The dev bridge refused the request: open the URL printed by `npm run web` (it carries the access token).', code: 'UNKNOWN' }
+    }
+  }
   if (!res.ok && res.status !== 400) {
     return { ok: false, error: { message: `Dev bridge error ${res.status}`, code: 'UNKNOWN' } }
   }
@@ -64,7 +108,8 @@ function connectEvents(): void {
     bridge.onEvent(deliver)
   } else {
     const open = () => {
-      const es = new EventSource('/api/events')
+      // EventSource cannot send headers: the bridge accepts the token in the URL for this stream only.
+      const es = new EventSource(`/api/events?t=${encodeURIComponent(devToken)}`)
       es.onmessage = (m) => deliver(JSON.parse(m.data))
       es.onerror = () => {
         es.close()

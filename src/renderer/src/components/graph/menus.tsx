@@ -1,6 +1,6 @@
 // Context menus of the commit graph (commit rows, multi-selection, ref pills,
 // stash rows, the WIP row and the column header). Every mutating entry goes
-// through the user-level actions in actions/git.ts.
+// through the user-level actions in actions/git.tsx.
 
 import {
   Archive,

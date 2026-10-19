@@ -13,6 +13,7 @@ import { AdarLogo } from '@renderer/components/layout/Logo'
 import type { UpdateStatus } from '@shared/update'
 import { ReleaseNotes } from './ReleaseNotes'
 import { useApp } from '@renderer/store/appStore'
+import { installUpdate, startUpdate } from './restart'
 import { useUpdates } from './updateStore'
 import './update.css'
 
@@ -48,15 +49,7 @@ export async function checkForUpdatesNow(): Promise<void> {
   }
 }
 
-/** Download the available update, then install it when it can be replaced in place. */
-export async function startUpdate(): Promise<void> {
-  try {
-    const s = await updates.updateDownload()
-    if (s.state === 'downloaded' && s.canInstall) await updates.updateInstall()
-  } catch (err) {
-    toast.error(err)
-  }
-}
+export { installUpdate, startUpdate } from './restart'
 
 export function UpdateNotice() {
   const status = useUpdates((s) => s.status)
@@ -103,7 +96,7 @@ export function UpdateNotice() {
             )}
             <div className="up-actions">
               {status.state === 'downloaded' ? (
-                <Button size="sm" variant="primary" icon={<RefreshCw size={13} />} onClick={() => void updates.updateInstall()}>
+                <Button size="sm" variant="primary" icon={<RefreshCw size={13} />} onClick={() => void installUpdate()}>
                   {status.canInstall ? 'Restart to update' : 'Open installer'}
                 </Button>
               ) : (
@@ -112,6 +105,7 @@ export function UpdateNotice() {
                   variant="primary"
                   icon={<Download size={13} />}
                   loading={status.state === 'downloading'}
+                  title="Download the update. You choose when Adar restarts to install it."
                   onClick={() => void startUpdate()}
                 >
                   {status.state === 'error' ? 'Retry' : 'Update'}
@@ -159,7 +153,7 @@ export function UpdateNotice() {
             <>
               <Button onClick={() => void api.openExternal(info.releaseUrl)}>View on GitHub</Button>
               {status.state === 'downloaded' && (
-                <Button variant="primary" icon={<RefreshCw size={14} />} onClick={() => void updates.updateInstall()}>
+                <Button variant="primary" icon={<RefreshCw size={14} />} onClick={() => void installUpdate()}>
                   {status.canInstall ? 'Restart to update' : 'Open installer'}
                 </Button>
               )}

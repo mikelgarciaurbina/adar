@@ -19,6 +19,9 @@ const MAX_BODY = 64 * 1024
 
 /** Classify a git/ssh prompt into the kind of input the UI should ask for. */
 export function classifyPrompt(prompt: string): { kind: CredentialKind; secret: boolean } {
+  // OpenSSH prefixes keyboard-interactive prompts (text chosen by the server) with "(user@host) ":
+  // never trust their wording to decide whether the answer is shown in clear.
+  if (/^\s*\([^@\s()]+@[^\s()]+\)\s/.test(prompt)) return { kind: 'other', secret: true }
   if (/^\s*username\b/i.test(prompt) || /username for/i.test(prompt)) return { kind: 'username', secret: false }
   if (/\(yes\/no/i.test(prompt) || /yes\/no\/\[fingerprint\]/i.test(prompt)) return { kind: 'yesno', secret: false }
   if (/passphrase/i.test(prompt)) return { kind: 'passphrase', secret: true }

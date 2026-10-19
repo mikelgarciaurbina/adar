@@ -1,4 +1,4 @@
-// Left-panel glue on top of the user-level actions in actions/git.ts: prompts
+// Left-panel glue on top of the user-level actions in actions/git.tsx: prompts
 // that belong to the sidebar (edit URL / rename remote), the per-remote fetch
 // spinner, opening submodules / remotes and the graph selection helpers.
 

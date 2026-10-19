@@ -317,6 +317,16 @@ describe('buildPartialPatch (string level)', () => {
     expect(supportsPartialPatch(fd('x', base, { status: 'copied' }), 'unstage')).toBe(true)
   })
 
+  it('refuses diffs whose text was not valid UTF-8 (a patch would write U+FFFD over the original bytes)', () => {
+    const lossy = fd('latin1.properties', [h('@@ -1,1 +1,2 @@', [' a', '+caf�'])], { encodingLossy: true })
+    for (const mode of ['stage', 'unstage', 'discard'] as PatchMode[]) {
+      expect(supportsPartialPatch(lossy, mode)).toBe(false)
+      expect(buildPartialPatch(lossy, [{ hunkIndex: 0 }], mode)).toBeNull()
+    }
+    // The same diff without the flag (a genuine U+FFFD in UTF-8 text) still works.
+    expect(buildPartialPatch({ ...lossy, encodingLossy: false }, [{ hunkIndex: 0 }], 'stage')).toContain('+caf�')
+  })
+
   it('maps apply options per mode', () => {
     expect(patchApplyOptions('stage')).toEqual({ cached: true })
     expect(patchApplyOptions('unstage')).toEqual({ cached: true, reverse: true })

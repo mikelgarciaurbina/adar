@@ -228,6 +228,8 @@ export interface FileDiff {
   newMode?: string
   /** True when the diff was too large and hunks were omitted. */
   tooLarge?: boolean
+  /** The diff text was not valid UTF-8 (legacy encodings): line-level staging is disabled to avoid corrupting bytes. */
+  encodingLossy?: boolean
   additions: number
   deletions: number
 }
@@ -293,12 +295,17 @@ export interface ConflictVersions {
   oursLabel: string
   theirsLabel: string
   binary: boolean
+  /** Text that is not valid UTF-8 (binary is also true): only whole-side resolutions are safe. */
+  nonUtf8?: boolean
+  /** A side is a symbolic link (binary is also true): only whole-side resolutions are safe. */
+  symlink?: boolean
 }
 
 export type ConflictResolution =
   | { kind: 'ours' }
   | { kind: 'theirs' }
-  | { kind: 'content'; content: string }
+  /** expected = the working-tree text the editor started from; the backend refuses if the file changed since. */
+  | { kind: 'content'; content: string; expected?: string | null }
   | { kind: 'delete' }
 
 /** Result of operations that may stop on conflicts instead of failing. */
@@ -442,6 +449,8 @@ export interface AdarErrorPayload {
   command?: string
   stderr?: string
   exitCode?: number
+  /** Extra structured information, e.g. the command-running config keys for UNTRUSTED_REPO. */
+  details?: string[]
 }
 
 export type AdarErrorCode =
@@ -455,6 +464,7 @@ export type AdarErrorCode =
   | 'INVALID_ARGUMENT'
   | 'CANCELLED'
   | 'GIT_NOT_INSTALLED'
+  | 'UNTRUSTED_REPO'
   | 'UNKNOWN'
 
 /** Events pushed from the backend to the renderer. */

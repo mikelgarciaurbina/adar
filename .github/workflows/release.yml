@@ -2,6 +2,9 @@
 # tag is pushed. The app's in-app updater reads the latest release, so:
 #   1. bump "version" in package.json, commit
 #   2. git tag v0.2.0 && git push origin main --tags
+# electron-builder uploads into a DRAFT release (electron-builder.yml releaseType: draft), which the
+# updater ignores; the last step checks that every asset is there and matches the local build, then
+# publishes the draft with its tag pointing at the commit that was built.
 name: Release
 
 on:
@@ -9,14 +12,25 @@ on:
     tags: ['v*']
   workflow_dispatch:
 
+# Two runs for the same version (tag push + manual run) must not race on the same draft.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   release:
+    # Manual runs only from main (tag pushes build the tagged commit).
+    if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main'
     runs-on: macos-latest
+    permissions:
+      contents: write # create the draft release, upload assets, publish
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-node@v4
         with:
@@ -38,8 +52,27 @@ jobs:
             echo "Tag ${GITHUB_REF_NAME} does not match package.json version $PKG"; exit 1
           fi
 
-      - name: Build and publish
+      - name: Build and upload to a draft release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
         run: npm run release
+
+      - name: Verify assets and publish the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          V="$(node -p "require('./package.json').version")"
+          TAG="v$V"
+          if [ "$(gh release view "$TAG" --json isDraft --jq .isDraft)" != "true" ]; then
+            echo "::error::Release $TAG is not a draft (already published?): refusing to change it"; exit 1
+          fi
+          ASSETS="$(gh release view "$TAG" --json assets --jq '.assets[] | "\(.name) \(.size)"')"
+          for f in "Adar-$V-arm64.zip" "Adar-$V-x64.zip" "Adar-$V-arm64.dmg" "Adar-$V-x64.dmg"; do
+            SIZE="$(stat -f %z "release/$f")"
+            if ! printf '%s\n' "$ASSETS" | grep -qxF "$f $SIZE"; then
+              echo "::error::$f is missing from draft $TAG or differs from the local build ($SIZE bytes)"; exit 1
+            fi
+          done
+          gh release edit "$TAG" --draft=false --target "$GITHUB_SHA" --latest

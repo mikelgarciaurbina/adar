@@ -8,6 +8,7 @@ import { toErrorPayload } from '@shared/errors'
 import { createBackend, type Backend } from './backend'
 import { dispatch } from './dispatch'
 import type { PlatformAdapter } from './platform'
+import { bypassQuitGuard, isQuitGuardBypassed } from './quitGuard'
 import { Updater } from './updater'
 
 // Test hooks (development builds only): isolated user data dir and scripted screenshots.
@@ -164,6 +165,7 @@ async function runCaptureSteps(file: string): Promise<void> {
   } catch (err) {
     console.log(`[capture] failed: ${String(err)}`)
   } finally {
+    bypassQuitGuard()
     app.quit()
   }
 }
@@ -326,7 +328,25 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
 })
 
-app.on('before-quit', () => {
+let quitCheckRunning = false
+app.on('before-quit', (e) => {
+  // Ask the renderer before quitting when work would be lost (git operation running, drafts…).
+  if (!isQuitGuardBypassed() && mainWindow && !mainWindow.isDestroyed()) {
+    e.preventDefault()
+    if (quitCheckRunning) return
+    quitCheckRunning = true
+    mainWindow.webContents
+      .executeJavaScript('window.__adarConfirmQuit ? window.__adarConfirmQuit() : true', true)
+      .catch(() => true)
+      .then((ok) => {
+        quitCheckRunning = false
+        if (ok) {
+          bypassQuitGuard()
+          app.quit()
+        }
+      })
+    return
+  }
   updater?.stop()
   void backend?.dispose()
 })

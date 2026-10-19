@@ -25,4 +25,6 @@ publish:
   provider: github
   owner: mikelgarciaurbina
   repo: adar
-  releaseType: release
+  # Upload to a draft: the in-app updater reads /releases/latest, which ignores drafts. The release
+  # workflow publishes it once every asset is there (and never overwrites a published release's assets).
+  releaseType: draft

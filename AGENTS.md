@@ -10,11 +10,11 @@ credential helpers, private hosts). Clean-room implementation: do not copy GitKr
 - `src/shared/` — contract: `types.ts` (domain types), `api.ts` (`AdarApi`, the ONLY renderer↔backend API), `errors.ts` (`AdarError`, `describeError`).
 - `src/main/` — Electron main. `index.ts` (window/menu/IPC), `dispatch.ts`, `backend.ts` (`createBackend` composes read ops + `git/write` ops), `git/runner.ts` (spawn git), `git/context.ts` (`GitContext`: git/gitNetwork/exclusive/gitDir/operationState), `git/ops.ts` (read/write split).
 - `src/preload/` — exposes `window.adarBridge` (generic invoke/onEvent/setZoom).
-- `src/server/devServer.ts` — HTTP bridge so the renderer runs in a browser: `npm run web` → http://127.0.0.1:5898.
+- `src/server/devServer.ts` — HTTP bridge so the renderer runs in a browser: `npm run web` → open the printed `http://127.0.0.1:5898/#t=<token>` URL (the token authenticates the bridge).
 - `src/renderer/src/` — UI.
   - `api/client.ts` — `api` (typed AdarApi proxy), `onAdarEvent`, `newOpId`, `isMac`.
   - `store/appStore.ts` — zustand `useApp`: tabs (`RepoTab`), selection, centre view, settings, undo stacks. Hooks: `useActiveTab`, `useTab`, `useSettings`.
-  - `actions/git.ts` — user-level git actions (confirm dialogs, toasts, busy, refresh, undo). UI must call these rather than `api` for mutating operations.
+  - `actions/git.tsx` — user-level git actions (confirm dialogs, toasts, busy, refresh, undo). UI must call these rather than `api` for mutating operations.
   - `commands.ts` — command registry (menu, shortcuts, palette).
   - `components/common/` — `Modal`, `Button`/`IconButton`/`Spinner`/`EmptyState`/`Kbd`, `dialogs` (`confirm`/`prompt`/`choose`/`form`/`validateRefName`), `ContextMenu` (`showContextMenu`, `showMenuBelow`), `toast`, `Avatar`, `Resizer`.
   - `lib/` — `colors.ts` (lane palette), `format.ts` (dates, status letters/colours), `refs.ts` (refsBySha...), `dnd.ts` (ref drag & drop), `keys.ts`.

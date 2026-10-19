@@ -711,6 +711,24 @@
   font-size: var(--fs-xs);
   color: var(--text-2);
 }
+.md-cred-server-caption {
+  margin-bottom: -6px;
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+}
+.md-cred-server-text {
+  margin: 0;
+  border-left: 3px solid var(--warning);
+}
+.md-cred-warn {
+  padding: 8px 10px;
+  border-left: 3px solid var(--warning);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: var(--warning-soft);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  color: var(--text-0);
+}
 
 .md-modal .ui-hint code {
   font-family: var(--font-mono);

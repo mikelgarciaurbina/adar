@@ -101,3 +101,12 @@
     transform: translateY(8px);
   }
 }
+
+/* "Restart to update" confirmation: work a restart would interrupt or discard. */
+.up-restart-list {
+  margin: 6px 0 8px;
+  padding-left: 18px;
+}
+.up-restart-list li {
+  margin: 2px 0;
+}

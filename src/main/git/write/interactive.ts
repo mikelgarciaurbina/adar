@@ -12,7 +12,7 @@ import { LOG_FORMAT, parseLog } from './log'
 import { buildTodo, messagesNeeded, resolveTodo } from './rebaseTodo'
 import { arg, describeCommit, FAMILY, finishOperation, gitAtLeast, invalid, isUnborn, resolveCommit, shellPath, shellQuote } from './util'
 
-type InteractiveOps = Pick<WriteOps, 'getRebaseCommits' | 'interactiveRebase'>
+type InteractiveOps = Pick<WriteOps, 'getRebaseCommits' | 'getRebaseMergeCount' | 'interactiveRebase'>
 
 /** Prefix key of a repository's rebase scratch dirs (exported for tests). */
 export function repoKey(repo: string): string {
@@ -60,12 +60,30 @@ export async function clearInteractiveRebaseMarker(ctx: GitContext, repo: string
   }
 }
 
+/** Revision range of an interactive rebase from `base` (validated; NOT_FOUND when base does not resolve). */
+async function rebaseRange(ctx: GitContext, repo: string, base: string): Promise<string> {
+  if (base === 'ROOT') return 'HEAD'
+  const range = `${arg(base, 'base')}..HEAD`
+  await resolveCommit(ctx, repo, base)
+  return range
+}
+
 export async function loadRebaseCommits(ctx: GitContext, repo: string, base: string): Promise<Commit[]> {
   if (await isUnborn(ctx, repo)) return []
-  const range = base === 'ROOT' ? 'HEAD' : `${arg(base, 'base')}..HEAD`
-  if (base !== 'ROOT') await resolveCommit(ctx, repo, base)
+  const range = await rebaseRange(ctx, repo, base)
   const res = await ctx.git(repo, ['log', '--no-show-signature', '--reverse', '--topo-order', '--no-merges', '-z', `--format=${LOG_FORMAT}`, range, '--'])
   return parseLog(res.stdout)
+}
+
+/**
+ * Merge commits in the rebase range. The todo only lists non-merge commits and the rebase runs with
+ * --no-rebase-merges, so these merges would be flattened and any change made in the merge itself lost.
+ */
+export async function countRebaseMerges(ctx: GitContext, repo: string, base: string): Promise<number> {
+  if (await isUnborn(ctx, repo)) return 0
+  const range = await rebaseRange(ctx, repo, base)
+  const res = await ctx.git(repo, ['rev-list', '--merges', '--count', range, '--'])
+  return Number.parseInt(res.stdout.trim(), 10) || 0
 }
 
 export function createInteractiveOps(ctx: GitContext): InteractiveOps {
@@ -74,12 +92,25 @@ export function createInteractiveOps(ctx: GitContext): InteractiveOps {
       return loadRebaseCommits(ctx, repo, base)
     },
 
-    async interactiveRebase(repo, base, todo) {
+    getRebaseMergeCount(repo, base) {
+      return countRebaseMerges(ctx, repo, base)
+    },
+
+    async interactiveRebase(repo, base, todo, opts) {
       const isRoot = base === 'ROOT'
       if (!isRoot) arg(base, 'base')
+      const flattenMerges = !!opts && typeof opts === 'object' && opts.flattenMerges === true
       return ctx.exclusive(repo, async (): Promise<OperationResult> => {
         const before = await ctx.operationState(repo)
         if (before !== 'none') throw invalid(`Cannot start an interactive rebase while a ${before} is in progress`)
+        // Counted under the lock: the range may have gained merges since the UI asked.
+        const merges = await countRebaseMerges(ctx, repo, base)
+        if (merges > 0 && !flattenMerges) {
+          const what = merges === 1 ? 'a merge commit' : `${merges} merge commits`
+          throw invalid(
+            `This range contains ${what}: an interactive rebase would flatten ${merges === 1 ? 'it' : 'them'} into a linear history and drop any changes made in the merge itself. Confirm flattening to continue.`
+          )
+        }
         const commits = await loadRebaseCommits(ctx, repo, base)
         if (!commits.length) throw invalid('There are no commits to rebase')
         const items = resolveTodo(todo, commits)

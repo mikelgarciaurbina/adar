@@ -15,7 +15,16 @@ import {
 import { scopeDescription, validateIdentity } from './identity'
 import { describeUpdateStatus, REPO_URL } from './updates'
 import type { UpdateStatus } from '@shared/update'
-import { credentialHint, credentialLabel, credentialTitle, inferKind, parseCredentialTarget } from './credentials'
+import {
+  credentialHint,
+  credentialIsSecret,
+  credentialLabel,
+  credentialTitle,
+  hostingProvider,
+  inferKind,
+  parseCredentialTarget,
+  parseSshServerPrompt
+} from './credentials'
 
 describe('repoNameFromUrl', () => {
   const cases: Array<[string, string]> = [
@@ -162,6 +171,42 @@ describe('credential helpers', () => {
     expect(credentialHint('password', "Password for 'https://git.mycorp.net':")).toMatch(/personal access token/)
     expect(credentialHint('password', 'Password:')).toBeNull()
     expect(credentialHint('passphrase', 'Enter passphrase')).toMatch(/SSH/)
+  })
+
+  it('only trusts git\'s own "Username/Password for \'<url>\'" prompt for the target', () => {
+    expect(parseCredentialTarget("Password for 'https://me@github.com/org/repo.git':")).toEqual({ protocol: 'https', host: 'github.com', user: 'me' })
+    expect(parseCredentialTarget("Username for 'https://git.example.com:8443'")).toEqual({ protocol: 'https', host: 'git.example.com', user: undefined })
+    expect(parseCredentialTarget("Password for 'https://[::1]:8443':")?.host).toBe('[::1]')
+    // A URL anywhere else in free text names nothing.
+    expect(parseCredentialTarget("Verification code (see https://github.com/login):")).toBeNull()
+    expect(parseCredentialTarget("Please re-enter Password for 'https://github.com': ")).toBeNull()
+    expect(parseCredentialTarget("Password for 'https://github.com': and more")).toBeNull()
+  })
+
+  it('treats an SSH keyboard-interactive prompt as untrusted server text (no spoofed GitHub target or hint)', () => {
+    const spoof = "(git@gitlab-mirror.evil.example) Password for 'https://github.com':"
+    expect(parseSshServerPrompt(spoof)).toEqual({ user: 'git', host: 'gitlab-mirror.evil.example', message: "Password for 'https://github.com':" })
+    expect(parseCredentialTarget(spoof)).toBeNull()
+    expect(credentialHint('password', spoof)).toBeNull()
+    expect(credentialTitle('password', spoof)).toBe('Prompt from SSH server gitlab-mirror.evil.example')
+    expect(credentialTitle('password', spoof)).not.toMatch(/github/i)
+    expect(inferKind('password', spoof)).toBe('other')
+    expect(inferKind('yesno', '(git@evil.example) Trust github.com? (yes/no)')).toBe('other')
+    expect(credentialLabel('username', "(git@evil.example) Username for 'https://github.com':")).toBe('Response')
+    // Always masked, whatever the server claims to want.
+    expect(credentialIsSecret({ kind: 'username', prompt: "(git@evil.example) Username for 'https://github.com':", secret: false })).toBe(true)
+    // The host is what follows the last "@" of OpenSSH's prefix (the user part comes from the URL).
+    expect(parseSshServerPrompt("(a@github.com@evil.example) Password for 'https://github.com':")?.host).toBe('evil.example')
+    expect(parseSshServerPrompt("Password for 'https://github.com':")).toBeNull()
+  })
+
+  it('gives provider-branded advice only for the providers\' own domains', () => {
+    expect(hostingProvider('gitlab.evil.example', { exact: true })).toBeNull()
+    expect(hostingProvider('bitbucket.evil.example', { exact: true })).toBeNull()
+    expect(hostingProvider('gitlab.com', { exact: true })).toBe('GitLab')
+    expect(hostingProvider('gitlab.mycorp.net')).toBe('GitLab') // remotes list still labels self-hosted installs
+    expect(credentialHint('password', "Password for 'https://gitlab.evil.example':")).not.toMatch(/^GitLab/)
+    expect(credentialHint('password', "Password for 'https://gitlab.com':")).toMatch(/^GitLab/)
   })
 })
 

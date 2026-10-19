@@ -42,6 +42,9 @@ no contiene código, recursos ni marca de GitKraken y no tiene relación con Git
 - **Deshacer / rehacer** acciones git (checkout, commits, ramas, tags, resets, stashes…).
 - **Paleta de comandos** (⌘P), **consola git** integrada (⌃\`), pestañas para varios repos, temas oscuro y claro, atajos.
 - **Actualizaciones** desde GitHub Releases (*Adar → Check for Updates…*).
+- **Seguro por defecto**: las acciones destructivas piden confirmación y se pueden deshacer, y los repositorios cuya
+  configuración haría que git ejecute comandos (hooks, `core.fsmonitor`, helpers de credenciales…) solo se abren si
+  confías en ellos.
 
 ## Descarga
 
@@ -62,7 +65,7 @@ git clone https://github.com/mikelgarciaurbina/adar.git
 cd adar
 npm install
 npm run dev        # app de escritorio con recarga en caliente
-npm run web        # la misma interfaz en el navegador: http://127.0.0.1:5898
+npm run web        # la misma interfaz en el navegador: abre la URL http://127.0.0.1:5898/#t=… que imprime
 npm run typecheck
 npm test           # tests unitarios y de integración sobre repos git temporales
 npm run dist       # genera release/Adar-<versión>-<arch>.dmg y .zip

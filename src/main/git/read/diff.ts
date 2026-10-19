@@ -1,10 +1,12 @@
 // getDiff for every DiffTarget kind (unstaged, untracked, staged, commit, compare, stash).
 
+import { isUtf8 } from 'node:buffer'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import type { DiffOptions, DiffTarget, FileDiff, FileStatusCode } from '@shared/types'
 import type { GitContext } from '../context'
 import type { ReadOps } from '../ops'
+import type { GitResult } from '../runner'
 import { emptyFileDiff, parseUnifiedDiff } from '../parsers/diff'
 import { parseNameStatusZ } from '../parsers/files'
 import { gitAtLeast } from '../write/util'
@@ -53,13 +55,23 @@ export function pickFileDiff(files: FileDiff[], p: string, oldPath?: string): Fi
   )
 }
 
+/**
+ * True when git's raw output was not valid UTF-8 (a file in a legacy encoding): its decoded text
+ * carries U+FFFD in place of the original bytes, so patches built from it would corrupt the file.
+ * (Run the command with `binary: true`.)
+ */
+export function isLossyOutput(res: Pick<GitResult, 'stdoutBuffer' | 'truncated'>): boolean {
+  return !res.truncated && !!res.stdoutBuffer && !isUtf8(res.stdoutBuffer)
+}
+
 /** Parse raw diff output into one FileDiff, applying the size limits. */
 export function toFileDiff(
   stdout: string,
   truncated: boolean,
   p: string,
   fallbackStatus: FileStatusCode,
-  oldPath?: string
+  oldPath?: string,
+  encodingLossy = false
 ): FileDiff | null {
   if (!stdout.trim() && !truncated) return null
   const tooLarge = truncated || Buffer.byteLength(stdout, 'utf8') > MAX_DIFF_BYTES || countNewlines(stdout, MAX_DIFF_LINES) > MAX_DIFF_LINES
@@ -75,12 +87,13 @@ export function toFileDiff(
     picked.hunks = []
     picked.tooLarge = true
   }
+  if (encodingLossy) picked.encodingLossy = true
   return picked
 }
 
 export function createDiffOps(ctx: GitContext): Pick<ReadOps, 'getDiff'> {
   const run = async (repo: string, args: string[], okCodes = [0]) => {
-    const res = await ctx.git(repo, args, { allowFailure: true, maxBuffer: MAX_DIFF_BUFFER, env: LITERAL_PATHSPECS })
+    const res = await ctx.git(repo, args, { allowFailure: true, maxBuffer: MAX_DIFF_BUFFER, env: LITERAL_PATHSPECS, binary: true })
     if (!res.truncated && !okCodes.includes(res.code)) failed(args, res)
     return res
   }
@@ -94,7 +107,7 @@ export function createDiffOps(ctx: GitContext): Pick<ReadOps, 'getDiff'> {
     okCodes?: number[]
   ): Promise<FileDiff | null> => {
     const res = await run(repo, args, okCodes)
-    return toFileDiff(res.stdout, !!res.truncated, p, fallbackStatus, oldPath)
+    return toFileDiff(res.stdout, !!res.truncated, p, fallbackStatus, oldPath, isLossyOutput(res))
   }
 
   const pathspec = (p: string, oldPath?: string) => (oldPath && oldPath !== p ? [oldPath, p] : [p])
@@ -153,14 +166,14 @@ export function createDiffOps(ctx: GitContext): Pick<ReadOps, 'getDiff'> {
           if (await gitAtLeast(ctx, 2, 31)) {
             // One process: root commits diff against the empty tree, merges against their first parent.
             const args = ['show', '--format=', '--no-show-signature', '--diff-merges=first-parent', ...flags, `${sha}^{commit}`, '--', ...pathspec(p, oldPath)]
-            const res = await ctx.git(repo, args, { allowFailure: true, maxBuffer: MAX_DIFF_BUFFER, env: LITERAL_PATHSPECS })
+            const res = await ctx.git(repo, args, { allowFailure: true, maxBuffer: MAX_DIFF_BUFFER, env: LITERAL_PATHSPECS, binary: true })
             if (!res.truncated && res.code !== 0) {
               if (/bad revision|unknown revision|bad object|not a valid object|ambiguous argument/i.test(res.stderr)) {
                 throw notFound(`Commit ${sha} was not found in this repository`)
               }
               failed(args, res)
             }
-            return toFileDiff(res.stdout, !!res.truncated, p, 'modified', oldPath) ?? emptyFileDiff(p, 'modified', oldPath)
+            return toFileDiff(res.stdout, !!res.truncated, p, 'modified', oldPath, isLossyOutput(res)) ?? emptyFileDiff(p, 'modified', oldPath)
           }
           const info = await revParents(ctx, repo, `${sha}^{commit}`)
           if (!info) throw notFound(`Commit ${sha} was not found in this repository`)

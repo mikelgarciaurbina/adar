@@ -2,10 +2,17 @@
 // library is available, so effects and interactions are not exercised here).
 
 import { renderToString } from 'react-dom/server'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { RepoTab } from '@renderer/store/appStore'
 import type { Commit, WorkingStatus } from '@shared/types'
-import { RebaseEditor, RebaseView } from './RebaseView'
+
+const dialogs = vi.hoisted(() => ({ confirm: vi.fn(async (_opts: { title: string; message?: unknown; danger?: boolean }) => false) }))
+vi.mock('@renderer/components/common/dialogs', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@renderer/components/common/dialogs')>()),
+  confirm: dialogs.confirm
+}))
+
+import { confirmRebaseOptions, RebaseEditor, RebaseView } from './RebaseView'
 
 function commit(n: number): Commit {
   const sha = String(n).repeat(40).slice(0, 40)
@@ -92,5 +99,34 @@ describe('RebaseEditor', () => {
     )
     expect(html).toContain('You have uncommitted changes')
     expect(html).toMatch(/<button[^>]*disabled=""[^>]*title="Commit or stash your changes/)
+  })
+})
+
+describe('merge commits in the range (they would be flattened)', () => {
+  const commits = [commit(1), commit(2)]
+
+  it('shows a prominent warning when the range contains merges', () => {
+    const html = renderToString(<RebaseEditor tab={makeTab()} base="ROOT" commits={commits} mergeCount={2} />)
+    expect(html).toContain('Merge commits will be flattened.')
+    expect(html).toContain('This range contains 2 merge commits')
+    expect(html).toContain('role="alert"')
+    expect(renderToString(<RebaseEditor tab={makeTab()} base="ROOT" commits={commits} />)).not.toContain('flattened')
+  })
+
+  it('starts without asking (and without flattenMerges) when there are no merges', async () => {
+    dialogs.confirm.mockClear()
+    expect(await confirmRebaseOptions(0)).toEqual({})
+    expect(dialogs.confirm).not.toHaveBeenCalled()
+  })
+
+  it('asks with a danger confirm and only then passes flattenMerges: true', async () => {
+    dialogs.confirm.mockClear()
+    dialogs.confirm.mockResolvedValueOnce(false)
+    expect(await confirmRebaseOptions(1)).toBeNull()
+    expect(dialogs.confirm.mock.calls[0][0]).toMatchObject({ title: 'Flatten 1 merge commit?', danger: true })
+
+    dialogs.confirm.mockResolvedValueOnce(true)
+    expect(await confirmRebaseOptions(3)).toEqual({ flattenMerges: true })
+    expect(dialogs.confirm.mock.calls[1][0].title).toBe('Flatten 3 merge commits?')
   })
 })

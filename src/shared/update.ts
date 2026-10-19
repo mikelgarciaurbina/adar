@@ -4,6 +4,10 @@
 // surfaced in the renderer by components/update.
 
 export const UPDATE_REPO = 'mikelgarciaurbina/adar'
+/** CFBundleIdentifier of release builds (electron-builder.yml appId). */
+export const APP_BUNDLE_ID = 'dev.adar.gitclient'
+/** Hosts GitHub serves release downloads from (browser_download_url and its redirect targets). */
+export const UPDATE_DOWNLOAD_HOSTS: readonly string[] = ['github.com', 'objects.githubusercontent.com', 'release-assets.githubusercontent.com']
 
 export type UpdateState = 'idle' | 'checking' | 'available' | 'not-available' | 'downloading' | 'downloaded' | 'error'
 
@@ -11,6 +15,19 @@ export interface UpdateAsset {
   name: string
   url: string
   size: number
+  /** SHA-256 (lower-case hex) from the release API's asset "digest" ("sha256:<hex>"), when GitHub provides it. */
+  sha256?: string | null
+}
+
+/** Asset as returned by GET /repos/{owner}/{repo}/releases/latest. */
+export interface GithubReleaseAsset {
+  name: string
+  browser_download_url: string
+  size: number
+  /** "sha256:<hex>" (GitHub computes it on upload; null for assets uploaded before it existed). */
+  digest?: string | null
+  /** "uploaded" once complete ("open" while an upload is in progress). */
+  state?: string
 }
 
 export interface UpdateInfo {
@@ -74,19 +91,78 @@ export function compareVersions(a: string, b: string): number {
   return pa.pre.localeCompare(pb.pre, undefined, { numeric: true }) > 0 ? 1 : -1
 }
 
+/** Hex SHA-256 from an asset digest ("sha256:<64 hex>"), or null when absent / another algorithm. */
+export function parseAssetDigest(digest: unknown): string | null {
+  if (typeof digest !== 'string') return null
+  const m = /^sha256:([0-9a-f]{64})$/i.exec(digest.trim())
+  return m ? m[1].toLowerCase() : null
+}
+
 /** Pick the .zip / .dmg assets matching the CPU architecture (falls back to universal / arch-less names). */
-export function pickAssets(
-  assets: Array<{ name: string; browser_download_url: string; size: number }>,
-  arch: string
-): { zip: UpdateAsset | null; dmg: UpdateAsset | null } {
+export function pickAssets(assets: GithubReleaseAsset[], arch: string): { zip: UpdateAsset | null; dmg: UpdateAsset | null } {
   const otherArch = arch === 'arm64' ? /x64|x86_64|intel/i : /arm64|aarch64|apple-silicon/i
   const score = (name: string) => (new RegExp(arch, 'i').test(name) ? 3 : /universal/i.test(name) ? 2 : otherArch.test(name) ? 0 : 1)
   const best = (ext: string): UpdateAsset | null => {
     const list = assets
       .filter((a) => a.name.toLowerCase().endsWith(ext) && !a.name.toLowerCase().endsWith('.blockmap') && score(a.name) > 0)
+      // An upload still in progress (or failed) is not offered.
+      .filter((a) => a.state === undefined || a.state === 'uploaded')
       .sort((x, y) => score(y.name) - score(x.name))
     const a = list[0]
-    return a ? { name: a.name, url: a.browser_download_url, size: a.size } : null
+    if (!a) return null
+    const sha256 = parseAssetDigest(a.digest)
+    return { name: a.name, url: a.browser_download_url, size: a.size, ...(sha256 ? { sha256 } : {}) }
   }
   return { zip: best('.zip'), dmg: best('.dmg') }
+}
+
+/**
+ * Whether the updater may download from `url`: https on GitHub's release hosts only (on github.com,
+ * only this repository's release downloads). With a test feed (ADAR_UPDATE_FEED,
+ * scripts/test-updater.sh) plain http on 127.0.0.1 is allowed too.
+ */
+export function isAllowedDownloadUrl(url: string, opts: { allowLoopbackHttp?: boolean } = {}): boolean {
+  let u: URL
+  try {
+    u = new URL(url)
+  } catch {
+    return false
+  }
+  if (u.username || u.password) return false
+  if (u.protocol === 'https:' && !u.port) {
+    const host = u.hostname.toLowerCase()
+    if (host === 'github.com') return u.pathname.toLowerCase().startsWith(`/${UPDATE_REPO.toLowerCase()}/releases/download/`)
+    return UPDATE_DOWNLOAD_HOSTS.includes(host)
+  }
+  return !!opts.allowLoopbackHttp && u.protocol === 'http:' && u.hostname === '127.0.0.1'
+}
+
+/** The release page to open: GitHub's html_url when it is one, else the repository's releases page. */
+export function releasePageUrl(htmlUrl: unknown): string {
+  const fallback = `https://github.com/${UPDATE_REPO}/releases`
+  if (typeof htmlUrl !== 'string') return fallback
+  try {
+    const u = new URL(htmlUrl)
+    return u.protocol === 'https:' && u.hostname === 'github.com' && !u.port && !u.username ? u.href : fallback
+  } catch {
+    return fallback
+  }
+}
+
+/**
+ * Why an extracted update bundle must not replace the running app (null when it may): it has to be
+ * the same app (bundle identifier) at exactly the advertised version, and newer than the running one.
+ */
+export function bundleMismatch(
+  bundle: { id: unknown; version: unknown },
+  expected: { id: string; version: string; currentVersion: string }
+): string | null {
+  if (bundle.id !== expected.id) return `The update is a different app (${String(bundle.id)}, expected ${expected.id})`
+  if (typeof bundle.version !== 'string' || bundle.version !== expected.version) {
+    return `The update contains version ${String(bundle.version)}, expected ${expected.version}`
+  }
+  if (compareVersions(bundle.version, expected.currentVersion) <= 0) {
+    return `Refusing to replace Adar ${expected.currentVersion} with ${bundle.version} (not newer)`
+  }
+  return null
 }

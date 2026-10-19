@@ -13,6 +13,7 @@ import { appendIgnorePattern, normalizeIgnorePattern } from '../gitignore'
 import { LOG_FORMAT, parseLog } from '../log'
 import { buildTodo, messagesNeeded, resolveTodo } from '../rebaseTodo'
 import { arg, isInside, nameArg, repoPaths, shellQuote, splitRemoteRef } from '../util'
+import { parseApplyNumstatZ } from '../worktree'
 
 const sha = (c: string) => c.repeat(40)
 
@@ -38,6 +39,15 @@ const item = (action: RebaseTodoItem['action'], c: string, message?: string): Re
   sha: sha(c),
   subject: 'ignored',
   message
+})
+
+describe('parseApplyNumstatZ', () => {
+  it('lists every path, binary entries and rename triples included, without duplicates', () => {
+    expect(parseApplyNumstatZ('1\t1\tnew name.txt\x001\t0\tplain.txt\x00-\t-\timg.png\x00')).toEqual(['new name.txt', 'plain.txt', 'img.png'])
+    expect(parseApplyNumstatZ('3\t1\t\x00a/old\x00b/new\x002\t2\tb/new\x00')).toEqual(['a/old', 'b/new'])
+    expect(parseApplyNumstatZ('1\t0\twith\ttab\nand newline\x00')).toEqual(['with\ttab\nand newline'])
+    expect(parseApplyNumstatZ('')).toEqual([])
+  })
 })
 
 describe('appendIgnorePattern', () => {

@@ -17,7 +17,7 @@ git clone https://github.com/mikelgarciaurbina/adar.git
 cd adar
 npm install
 npm run dev     # Electron app with hot reload
-npm run web     # renderer in a browser at http://127.0.0.1:5898 (fast UI iteration)
+npm run web     # renderer in a browser (fast UI iteration): open the printed http://127.0.0.1:5898/#t=… URL
 ```
 
 Requirements: Node.js 22+, Git 2.26+, macOS (other platforms are not supported yet).
@@ -37,7 +37,7 @@ node scripts/make-big-repo.mjs /tmp/adar-big 20000   # 20k commits for performan
 2. Create a branch from `main` and keep pull requests focused on one change.
 3. Follow the existing style. Key rules:
    - The renderer talks to the backend only through `AdarApi` (`src/shared/api.ts`).
-   - Mutating git operations from the UI go through `src/renderer/src/actions/git.ts`.
+   - Mutating git operations from the UI go through `src/renderer/src/actions/git.tsx`.
    - git is always spawned with argument arrays, never through a shell.
    - Styles use the CSS variables in `src/renderer/src/styles/theme.css`; check both dark and light themes.
    - Don't add npm dependencies without discussing it in an issue first.

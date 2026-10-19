@@ -161,6 +161,13 @@
   background: var(--warning-soft);
   color: var(--warning);
 }
+.rb-notice-merges {
+  align-items: flex-start;
+  border: 1px solid var(--danger);
+}
+.rb-notice-merges svg {
+  margin-top: 2px;
+}
 
 /* ── Columns ───────────────────────────────────────────────────────────── */
 
@@ -372,16 +379,6 @@
 }
 .rb-item-fixup .rb-subject-text {
   color: var(--text-2);
-}
-.rb-merge-badge {
-  flex: none;
-  padding: 0 5px;
-  border-radius: 7px;
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  color: var(--text-2);
-  background: var(--bg-4);
 }
 .rb-author {
   overflow: hidden;

@@ -4,10 +4,12 @@
 
 import { api } from '@renderer/api/client'
 import { continueOperation, markResolved, openConflict, showGraph } from '@renderer/actions/git'
+import { choose } from '@renderer/components/common/dialogs'
 import { toast } from '@renderer/components/common/toast'
 import { joinMessage } from '@renderer/components/details/message'
 import { basename } from '@renderer/lib/format'
 import { useApp, type AppState, type RepoTab } from '@renderer/store/appStore'
+import { toErrorPayload } from '@shared/errors'
 import type { ConflictResolution } from '@shared/types'
 import { nextConflictPath } from './conflictParser'
 import { operationInfo, type ActiveOperation } from './operationInfo'
@@ -19,18 +21,72 @@ export function resolveBusyKey(repo: string): string {
   return `resolve:${repo}`
 }
 
-/** Write + stage a resolution, then advance. Returns false when it failed (already toasted). */
-export async function resolveAndAdvance(repo: string, path: string, resolution: ConflictResolution): Promise<boolean> {
+export interface ResolveOptions {
+  /**
+   * For content resolutions that carry `expected`: offered as "Reload from disk" when the backend
+   * refuses because the file changed on disk since the editor loaded it.
+   */
+  onReload?: () => void
+}
+
+/**
+ * The backend's refusal of a content resolution whose `expected` text no longer matches the
+ * working-tree file (it was edited outside Adar after the merge tool loaded it).
+ */
+export function isChangedOnDisk(err: unknown, resolution: ConflictResolution): boolean {
+  return resolution.kind === 'content' && resolution.expected !== undefined && toErrorPayload(err).code === 'CONFLICT'
+}
+
+type ChangedOnDiskChoice = 'reload' | 'overwrite'
+
+function askChangedOnDisk(path: string, canReload: boolean): Promise<ChangedOnDiskChoice | null> {
+  const name = basename(path)
+  return choose<ChangedOnDiskChoice>({
+    title: `${name} changed on disk`,
+    message: `${name} was modified outside Adar (for example in an editor) after the merge tool loaded it. Saving now would replace those changes.`,
+    options: [
+      ...(canReload
+        ? [
+            {
+              value: 'reload' as const,
+              label: 'Reload from disk',
+              description: 'Show the file as it is now. Your selections and edits in the merge tool are discarded.'
+            }
+          ]
+        : []),
+      {
+        value: 'overwrite' as const,
+        label: 'Overwrite',
+        description: `Replace the changes on disk with the output shown here and mark ${name} resolved.`,
+        danger: true
+      }
+    ]
+  })
+}
+
+/** Write + stage a resolution, then advance. Returns false when it failed (already toasted) or was abandoned. */
+export async function resolveAndAdvance(repo: string, path: string, resolution: ConflictResolution, opts: ResolveOptions = {}): Promise<boolean> {
   const order = conflictOrder(repo)
   const key = resolveBusyKey(repo)
-  useApp.getState().setBusy(key, `Resolving ${basename(path)}…`)
-  try {
-    await api.resolveConflict(repo, path, resolution)
-  } catch (err) {
-    toast.error(err)
-    return false
-  } finally {
-    useApp.getState().setBusy(key, null)
+  let attempt = resolution
+  for (;;) {
+    useApp.getState().setBusy(key, `Resolving ${basename(path)}…`)
+    try {
+      await api.resolveConflict(repo, path, attempt)
+      break
+    } catch (err) {
+      if (!isChangedOnDisk(err, attempt)) {
+        toast.error(err)
+        return false
+      }
+    } finally {
+      useApp.getState().setBusy(key, null)
+    }
+    // The file changed on disk since it was loaded: never overwrite it without asking.
+    const choice = await askChangedOnDisk(path, !!opts.onReload)
+    if (choice === 'reload') opts.onReload?.()
+    if (choice !== 'overwrite' || attempt.kind !== 'content') return false
+    attempt = { kind: 'content', content: attempt.content }
   }
   await useApp.getState().refresh(repo)
   advanceAfterResolve(repo, path, order)

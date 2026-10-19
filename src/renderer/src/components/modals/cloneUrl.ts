@@ -77,6 +77,21 @@ export function cloneUrlWarning(raw: string): string | null {
   return null
 }
 
+/**
+ * True for a folder name the file system may resolve to ".git" (case-insensitive volumes, trailing dots /
+ * spaces dropped by Windows, NTFS streams, the 8.3 alias GIT~1, code points HFS+ ignores). Cloning into
+ * such a folder would turn its parent into a repository configured by the cloned files.
+ */
+export function isDotGitName(name: string): boolean {
+  const base = name
+    .replace(/[\u200c-\u200f\u202a-\u202e\u206a-\u206f\ufeff]/g, '')
+    .trim()
+    .split(':')[0]
+    .replace(/[. ]+$/, '')
+    .toLowerCase()
+  return base === '.git' || /^git~\d+$/.test(base)
+}
+
 function safeDecode(s: string): string {
   try {
     return decodeURIComponent(s)
@@ -123,7 +138,7 @@ export function repoNameFromUrl(raw: string): string {
   name = safeDecode(name).replace(/\.git$/i, '').replace(/\.bundle$/i, '')
   // Characters that are invalid in folder names on common file systems.
   name = name.replace(/[<>:"|?*\x00-\x1f]/g, '-').trim()
-  if (name === '.' || name === '..') return ''
+  if (name === '.' || name === '..' || isDotGitName(name)) return ''
   return name
 }
 
@@ -133,6 +148,7 @@ export function validateFolderName(raw: string): string | null {
   if (!name) return 'Folder name is required'
   if (/[\\/]/.test(name)) return 'Use a single folder name (no "/")'
   if (name === '.' || name === '..') return 'Invalid folder name'
+  if (isDotGitName(name)) return 'A folder cannot be named ".git"'
   if (/[<>:"|?*\x00-\x1f]/.test(name)) return 'Contains characters not allowed in folder names'
   return null
 }

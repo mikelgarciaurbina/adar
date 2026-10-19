@@ -1,7 +1,7 @@
 // Shared helpers for the write-side git operations: argument validation,
 // pathspec plumbing, ref lookups and the conflict-aware operation runner.
 
-import { promises as fs } from 'node:fs'
+import { constants as fsConstants, promises as fs } from 'node:fs'
 import path from 'node:path'
 import { AdarError } from '@shared/errors'
 import type { OperationResult, AdarErrorCode, RepoOperationState } from '@shared/types'
@@ -167,6 +167,49 @@ export function createSafeResolver(repo: string): (rel: string) => Promise<strin
       dir = parent
     }
     return abs
+  }
+}
+
+// ── Worktree files without following symbolic links ───────────────────────
+
+/** open() flag refusing a symbolic link as the last path component (ELOOP); 0 where unsupported (Windows). */
+export const O_NOFOLLOW: number = fsConstants.O_NOFOLLOW ?? 0
+/** Never block opening a FIFO swapped in for a file. */
+const O_NONBLOCK: number = fsConstants.O_NONBLOCK ?? 0
+
+export type WorktreeEntry =
+  | { type: 'missing' }
+  | { type: 'file'; data: Buffer }
+  | { type: 'symlink'; target: string }
+  /** Directory, FIFO, socket, device... */
+  | { type: 'other' }
+
+function isMissing(err: unknown): boolean {
+  const code = (err as NodeJS.ErrnoException)?.code
+  return code === 'ENOENT' || code === 'ENOTDIR'
+}
+
+/**
+ * Read a worktree path without ever following a symbolic link in its last component (a link is
+ * reported with its target string, never read through). Other errors are thrown.
+ */
+export async function readWorktreeEntry(abs: string): Promise<WorktreeEntry> {
+  let st
+  try {
+    st = await fs.lstat(abs)
+  } catch (err) {
+    if (isMissing(err)) return { type: 'missing' }
+    throw err
+  }
+  if (st.isSymbolicLink()) return { type: 'symlink', target: await fs.readlink(abs) }
+  if (!st.isFile()) return { type: 'other' }
+  // O_NOFOLLOW closes the window between lstat and open: a link swapped in meanwhile fails with ELOOP.
+  const handle = await fs.open(abs, fsConstants.O_RDONLY | O_NOFOLLOW | O_NONBLOCK)
+  try {
+    if (!(await handle.stat()).isFile()) return { type: 'other' }
+    return { type: 'file', data: await handle.readFile() }
+  } finally {
+    await handle.close()
   }
 }
 

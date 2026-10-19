@@ -9,7 +9,7 @@ import { showContextMenu, type MenuItem } from '@renderer/components/common/Cont
 import { toast } from '@renderer/components/common/toast'
 import type { DraggedRef } from '@renderer/lib/dnd'
 import { currentBranch, defaultRemote, localForRemote, remoteBranchName } from '@renderer/lib/refs'
-import { useApp, type RefreshScope, type RepoTab } from '@renderer/store/appStore'
+import { StaleHistoryError, useApp, type RefreshScope, type RepoTab } from '@renderer/store/appStore'
 import { describeError, AdarError } from '@shared/errors'
 import type { DiffTarget, OperationResult, PullMode, Ref, ResetMode } from '@shared/types'
 
@@ -140,6 +140,7 @@ export async function openRepoAt(dir: string): Promise<boolean> {
     await store().openRepo(dir)
     return true
   } catch (err) {
+    if (err instanceof AdarError && err.code === 'UNTRUSTED_REPO') return trustAndOpen(dir, err)
     if (err instanceof AdarError && err.code === 'NOT_A_REPO') {
       const ok = await confirm({
         title: 'Not a Git repository',
@@ -160,6 +161,35 @@ export async function openRepoAt(dir: string): Promise<boolean> {
           : undefined
       })
     } else toast.error(err)
+    return false
+  }
+}
+
+/** A repository whose local config makes git run commands: show what it runs and let the user decide. */
+async function trustAndOpen(dir: string, err: AdarError): Promise<boolean> {
+  const entries = err.details ?? []
+  const ok = await confirm({
+    title: 'Trust this repository?',
+    message: (
+      <>
+        <p style={{ margin: '0 0 8px' }}>
+          Its configuration tells git to run these commands automatically. Only continue if you trust where this repository came from.
+        </p>
+        <pre className="selectable" style={{ margin: 0, maxHeight: 180, overflow: 'auto', fontSize: 12, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+          {entries.join('\n') || err.message}
+        </pre>
+      </>
+    ),
+    confirmLabel: 'Trust and open',
+    danger: true
+  })
+  if (!ok) return false
+  try {
+    await api.trustRepo(dir)
+    await store().openRepo(dir)
+    return true
+  } catch (e) {
+    toast.error(e)
     return false
   }
 }
@@ -334,12 +364,18 @@ export async function createBranch(repo: string, startPoint?: string, opts: { ch
   const ok = await run(repo, { success: `Created branch ${branch}` }, () =>
     api.createBranch(repo, branch, startPoint, { checkout: checkoutNew }).then(() => true)
   )
+  const createdTip = ok ? tabOf(repo)?.refs?.branches.find((b) => b.name === branch)?.sha : undefined
   if (ok) {
     store().pushHistory(repo, {
       label: `Create branch ${branch}`,
       undo: async () => {
+        // Force-delete only while the branch still points where it was created; otherwise let git refuse
+        // to delete unmerged work.
+        const refs = await api.getRefs(repo)
+        const tip = refs.branches.find((b) => b.name === branch)?.sha
+        const createdAt = createdTip ?? tip
         if (checkoutNew && previous) await api.checkout(repo, previous)
-        await api.deleteBranch(repo, branch, { force: true })
+        await api.deleteBranch(repo, branch, { force: !!tip && tip === createdAt })
         await refresh(repo)
       },
       redo: async () => {
@@ -561,11 +597,14 @@ export async function reset(repo: string, target: string, mode?: ResetMode): Pro
   if (ok && before)
     store().pushHistory(repo, {
       label: `Reset (${m})`,
+      // Undo with the same mode: mixed restores the index too (soft would leave a staged revert behind).
       undo: async () => {
-        await api.reset(repo, before, m === 'hard' ? 'hard' : 'soft')
+        if (m === 'hard') await guardHardReset(repo, 'Undoing this hard reset')
+        await api.reset(repo, before, m)
         await refresh(repo)
       },
       redo: async () => {
+        if (m === 'hard') await guardHardReset(repo, 'Redoing this hard reset')
         await api.reset(repo, target, m)
         await refresh(repo)
       }
@@ -682,15 +721,21 @@ export async function stash(repo: string, opts: { message?: string; askMessage?:
   const ok = await run(repo, { busy: 'stash', busyLabel: 'Stashing…', success: 'Changes stashed' }, () =>
     api.stashSave(repo, { message, includeUntracked: true, paths: opts.paths }).then(() => true)
   )
+  // Remember which stash entry this created, so undo pops that one even if others were added since.
+  let stashSha = ok ? tabOf(repo)?.refs?.stashes[0]?.sha : undefined
   if (ok)
     store().pushHistory(repo, {
       label: 'Stash',
       undo: async () => {
-        await api.stashApply(repo, 0, { pop: true, restoreIndex: true })
+        const stashes = (await api.getRefs(repo)).stashes
+        const entry = stashSha ? stashes.find((s) => s.sha === stashSha) : stashes[0]
+        if (!entry) throw new StaleHistoryError('Stash')
+        await api.stashApply(repo, entry.index, { pop: true, restoreIndex: true })
         await refresh(repo)
       },
       redo: async () => {
         await api.stashSave(repo, { message, includeUntracked: true, paths: opts.paths })
+        stashSha = (await api.getRefs(repo)).stashes[0]?.sha
         await refresh(repo)
       }
     })
@@ -827,6 +872,17 @@ export async function push(
     setUpstream = true
   }
 
+  if (opts.force) {
+    const dest = remote ? `${remote}/${remoteBranch ?? branchName}` : branch?.upstream ?? `the remote ${branchName}`
+    const ok = await confirm({
+      title: `Force push ${branchName}?`,
+      message: `${dest} will be overwritten with your local ${branchName}. Commits on the remote that you don't have locally will be removed for everyone.`,
+      confirmLabel: 'Force push',
+      danger: true
+    })
+    if (!ok) return
+  }
+
   const doPush = (force?: 'with-lease' | 'force') => {
     const opId = newOpId('push')
     return api
@@ -855,7 +911,24 @@ export async function push(
           await doPush('with-lease')
           toast.success(`Force pushed ${branchName}`)
         } catch (err2) {
-          toast.error(err2)
+          // The lease refuses when the remote has commits this branch never contained (someone else
+          // pushed, possibly fetched in the background). Overwriting them needs an explicit decision.
+          if (/force push refused|stale info|remote ref updated since checkout/i.test(`${describeError(err2)} ${(err2 as AdarError).stderr ?? ''}`)) {
+            const overwrite = await confirm({
+              title: 'Someone else pushed to this branch',
+              message: `The remote has commits that your local ${branchName} never contained. Overwriting removes them from the remote for everyone. Pull and review them first unless you are sure.`,
+              confirmLabel: 'Overwrite remote commits',
+              danger: true
+            })
+            if (overwrite) {
+              try {
+                await doPush('force')
+                toast.success(`Force pushed ${branchName}`)
+              } catch (err3) {
+                toast.error(err3)
+              }
+            }
+          } else toast.error(err2)
         }
       }
     } else toast.error(err)
@@ -1048,6 +1121,25 @@ export async function abortOperation(repo: string): Promise<void> {
 }
 
 export async function skipOperation(repo: string): Promise<void> {
+  const tab = tabOf(repo)
+  const state = tab?.info?.state ?? 'none'
+  const st = tab?.status
+  if ((state === 'rebase' || state === 'rebase-interactive') && st) {
+    // git rebase --skip hard-resets the working tree: confirm before throwing away work done during the pause.
+    const conflicts = st.conflicted.length > 0
+    const dirty = conflicts || st.staged.length > 0 || st.unstaged.some((f) => f.status !== 'untracked')
+    if (dirty) {
+      const ok = await confirm({
+        title: conflicts ? 'Skip this commit?' : 'Discard your changes and continue?',
+        message: conflicts
+          ? 'Skipping drops this commit and discards your conflict resolutions and all other uncommitted changes to tracked files. This cannot be undone.'
+          : 'The commit stays, but all staged and unstaged changes to tracked files are discarded. This cannot be undone.',
+        confirmLabel: 'Skip and discard',
+        danger: true
+      })
+      if (!ok) return
+    }
+  }
   const res = await run(repo, { busy: 'skip', busyLabel: 'Skipping…' }, () => api.skipOperation(repo))
   handleOperationResult(repo, res, 'Skipped commit')
 }
@@ -1062,10 +1154,9 @@ export async function undo(repo: string): Promise<void> {
     return
   }
   try {
-    await store().undo(repo)
-    toast.success(`Undid: ${entry.label}`)
+    if (await store().undo(repo)) toast.success(`Undid: ${entry.label}`)
   } catch (err) {
-    toast.error(err)
+    handleHistoryError(repo, err)
   } finally {
     void refresh(repo)
   }
@@ -1079,13 +1170,37 @@ export async function redo(repo: string): Promise<void> {
     return
   }
   try {
-    await store().redo(repo)
-    toast.success(`Redid: ${entry.label}`)
+    if (await store().redo(repo)) toast.success(`Redid: ${entry.label}`)
   } catch (err) {
-    toast.error(err)
+    handleHistoryError(repo, err)
   } finally {
     void refresh(repo)
   }
+}
+
+function handleHistoryError(repo: string, err: unknown): void {
+  if (err instanceof StaleHistoryError) {
+    // Running an old inverse on a changed repository could destroy newer work: drop the history instead.
+    store().clearHistory(repo)
+    toast.warning(`${err.message}, so it can no longer be undone safely. Undo history cleared.`)
+    return
+  }
+  if (err instanceof AdarError && err.code === 'CANCELLED') return
+  toast.error(err)
+}
+
+/** Before an undo/redo that hard-resets: refuse to silently discard uncommitted work. */
+async function guardHardReset(repo: string, what: string): Promise<void> {
+  const st = await api.getStatus(repo)
+  const dirty = st.staged.length > 0 || st.conflicted.length > 0 || st.unstaged.some((f) => f.status !== 'untracked')
+  if (!dirty) return
+  const ok = await confirm({
+    title: `${what} discards uncommitted changes`,
+    message: 'You have uncommitted changes. They will be permanently discarded. Commit or stash them first to keep them.',
+    confirmLabel: `${what} anyway`,
+    danger: true
+  })
+  if (!ok) throw new AdarError({ code: 'CANCELLED', message: 'Cancelled' })
 }
 
 // ── System ────────────────────────────────────────────────────────────────

@@ -300,6 +300,18 @@
   color: var(--text-2);
   font-size: var(--fs-sm);
 }
+.diff-info-warn {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  color: var(--text-1);
+  background: var(--warning-soft);
+}
+.diff-info-warn svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--warning);
+}
 
 .diff-body {
   flex: 1;

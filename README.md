@@ -49,6 +49,8 @@ branding and is not affiliated with GitKraken or Axosoft.
 - **Command palette** (⌘P), built-in **git console** (⌃\`), tabs for several repositories, dark and light themes,
   keyboard shortcuts.
 - **In-app updates** from GitHub Releases (*Adar → Check for Updates…*).
+- **Safe by default**: destructive actions ask first and can be undone, and repositories whose configuration would make
+  git run commands (hooks, `core.fsmonitor`, credential helpers…) are only opened after you trust them.
 
 ## Download
 
@@ -85,7 +87,7 @@ git clone https://github.com/mikelgarciaurbina/adar.git
 cd adar
 npm install
 npm run dev        # desktop app with hot reload
-npm run web        # same UI in a browser: http://127.0.0.1:5898
+npm run web        # same UI in a browser: open the http://127.0.0.1:5898/#t=… URL it prints
 npm run typecheck
 npm test           # unit + integration tests against temporary git repositories
 npm run dist       # build release/Adar-<version>-<arch>.dmg and .zip

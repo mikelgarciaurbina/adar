@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { cleanupTmp, commitFile, exists, expectCode, git, head, initRepo, isolateGitConfig, makeOps, read, status, tmpDir, write } from './helpers'
+import { cleanupTmp, commitFile, configure, exists, expectCode, git, head, initRepo, isolateGitConfig, makeOps, read, status, tmpDir, write } from './helpers'
 
 beforeAll(isolateGitConfig)
 afterAll(cleanupTmp)
@@ -90,6 +90,46 @@ describe('staging', () => {
     await ops.unstageAll(dir)
     expect(await ctx.conflictedPaths(dir)).toEqual(['f.txt'])
     expect(status(dir)).toBe('UU f.txt\n?? clean.txt')
+  })
+
+  it('stageAll never stages unresolved conflicts (their markers would be committed as resolved)', async () => {
+    const { ops, ctx } = makeOps()
+    const dir = initRepo()
+    const weird = '-dash [x]*.txt'
+    commitFile(dir, 'f.txt', 'base\n', 'base')
+    commitFile(dir, weird, 'base\n', 'weird base')
+    commitFile(dir, 'g.txt', 'g\n', 'g')
+    commitFile(dir, 'gone.txt', 'gone\n', 'gone')
+    commitFile(dir, '.gitignore', '*.log\n', 'ignore')
+    git(dir, ['checkout', '-q', '-b', 'other'])
+    commitFile(dir, 'f.txt', 'theirs\n', 'theirs')
+    commitFile(dir, weird, 'theirs\n', 'weird theirs')
+    git(dir, ['checkout', '-q', 'main'])
+    commitFile(dir, 'f.txt', 'ours\n', 'ours')
+    commitFile(dir, weird, 'ours\n', 'weird ours')
+    expect(() => git(dir, ['merge', 'other'])).toThrow()
+    // Unrelated tweaks, including a name the weird conflicted path would match as a glob.
+    write(dir, 'g.txt', 'g changed\n')
+    write(dir, '-dash [x]-glob.txt', 'new\n')
+    write(dir, 'new dir/a.txt', 'a\n')
+    write(dir, 'new dir/sub/b.txt', 'b\n')
+    write(dir, 'new dir/skip.log', 'ignored\n')
+    fs.rmSync(path.join(dir, 'gone.txt'))
+
+    await ops.stageAll(dir)
+    expect((await ctx.conflictedPaths(dir)).sort()).toEqual([weird, 'f.txt'].sort())
+    expect(read(dir, 'f.txt')).toContain('<<<<<<<')
+    expect(status(dir).split('\n').sort()).toEqual(
+      ['A  "-dash [x]-glob.txt"', 'A  "new dir/a.txt"', 'A  "new dir/sub/b.txt"', 'D  gone.txt', 'M  g.txt', 'UU "-dash [x]*.txt"', 'UU f.txt'].sort()
+    )
+    expect(exists(dir, '.git/MERGE_HEAD')).toBe(true)
+
+    // Without conflicts it stages everything, as before.
+    await ops.resolveConflict(dir, 'f.txt', { kind: 'ours' })
+    await ops.resolveConflict(dir, weird, { kind: 'theirs' })
+    write(dir, 'late.txt', 'late\n')
+    await ops.stageAll(dir)
+    expect(status(dir)).toContain('A  late.txt')
   })
 
   it('ignores empty path lists', async () => {
@@ -282,5 +322,39 @@ describe('addToGitignore', () => {
     await ops.addToGitignore(dir, 'dist/')
     expect(read(dir, '.gitignore')).toBe('*.log\nbuild\ndist/\n')
     await expectCode(ops.addToGitignore(dir, 'a\nb'), 'INVALID_ARGUMENT')
+  })
+
+  it('appends without re-encoding existing bytes that are not UTF-8', async () => {
+    const { ops } = makeOps()
+    const dir = initRepo()
+    fs.writeFileSync(path.join(dir, '.gitignore'), Buffer.from('# caf\xe9\r\n*.log', 'latin1'))
+    await ops.addToGitignore(dir, 'dist/')
+    expect(fs.readFileSync(path.join(dir, '.gitignore'))).toEqual(Buffer.from('# caf\xe9\r\n*.log\r\ndist/\r\n', 'latin1'))
+  })
+
+  it.skipIf(process.platform === 'win32')('refuses to write through a symlinked .gitignore (into .git/config or outside the repo)', async () => {
+    const { ops } = makeOps()
+    const dir = initRepo()
+    const config = fs.readFileSync(path.join(dir, '.git/config'))
+    fs.symlinkSync('.git/config', path.join(dir, '.gitignore'))
+    const err = await expectCode(ops.addToGitignore(dir, '*.log'), 'INVALID_ARGUMENT')
+    expect(err.message).toMatch(/symbolic link/)
+    expect(fs.readFileSync(path.join(dir, '.git/config'))).toEqual(config)
+    expect(fs.lstatSync(path.join(dir, '.gitignore')).isSymbolicLink()).toBe(true)
+
+    // A dangling link must not create its target either.
+    const parent = tmpDir()
+    const repo = path.join(parent, 'repo')
+    fs.mkdirSync(repo)
+    git(repo, ['init', '-q', '-b', 'main'])
+    configure(repo)
+    fs.symlinkSync('../victim.txt', path.join(repo, '.gitignore'))
+    await expectCode(ops.addToGitignore(repo, '/build/'), 'INVALID_ARGUMENT')
+    expect(fs.existsSync(path.join(parent, 'victim.txt'))).toBe(false)
+
+    // Nor a directory named .gitignore.
+    const other = initRepo()
+    fs.mkdirSync(path.join(other, '.gitignore'))
+    await expectCode(ops.addToGitignore(other, '*.tmp'), 'INVALID_ARGUMENT')
   })
 })

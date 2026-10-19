@@ -2,7 +2,7 @@
 //
 // Data flow: tab.commits → computeGraph (lanes) → buildDisplayRows (WIP / stash
 // pseudo-rows) → virtualised GraphRow components. Selection, search and refs live
-// in the store; every mutating action goes through actions/git.ts.
+// in the store; every mutating action goes through actions/git.tsx.
 
 import './graph.css'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react'

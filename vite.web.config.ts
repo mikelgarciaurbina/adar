@@ -6,7 +6,6 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
 const apiPort = Number(process.env.ADAR_API_PORT || 5899)
-const token = process.env.ADAR_DEV_TOKEN || ''
 
 export default defineConfig({
   root: resolve(__dirname, 'src/renderer'),
@@ -22,10 +21,11 @@ export default defineConfig({
     strictPort: true,
     host: '127.0.0.1',
     proxy: {
+      // Never add the bridge token here: anything that can reach this port would then be let in.
+      // The page sends its own token, received out of band (see src/server/bridge.ts).
       '/api': {
         target: `http://127.0.0.1:${apiPort}`,
-        changeOrigin: true,
-        headers: { 'x-adar-token': token }
+        changeOrigin: true
       }
     }
   }

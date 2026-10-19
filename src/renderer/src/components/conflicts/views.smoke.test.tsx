@@ -7,8 +7,8 @@ import { describe, expect, it } from 'vitest'
 import type { RepoTab } from '@renderer/store/appStore'
 import type { Commit, ConflictVersions, RepoOperationState, WorkingStatus } from '@shared/types'
 import { ConflictChooser } from './ConflictChooser'
-import { ConflictView, MergeEditor } from './ConflictView'
-import { parseConflicts } from './conflictParser'
+import { ConflictView, MergeEditor, saveResolution } from './ConflictView'
+import { hasConflictMarkers, parseConflicts } from './conflictParser'
 import { OperationBanner } from './OperationBanner'
 
 function makeTab(state: RepoOperationState, conflicted: WorkingStatus['conflicted']): RepoTab {
@@ -183,7 +183,70 @@ describe('MergeEditor', () => {
   })
 })
 
+describe('saveResolution (what "Save and mark resolved" sends)', () => {
+  const crlfMerged = ['top', '<<<<<<< HEAD', 'mine', '=======', 'theirs', '>>>>>>> feature', 'end', ''].join('\r\n')
+  const crlf = { merged: crlfMerged, ours: 'top\r\nmine\r\nend\r\n' }
+
+  it('restores CRLF on hand-edited output of a CRLF file (a textarea value is LF-only)', () => {
+    const typed = 'top\nmine and theirs\nend\n'
+    const r = saveResolution(typed, true, crlf, '\r\n')
+    expect(r.content).toBe('top\r\nmine and theirs\r\nend\r\n')
+    expect(hasConflictMarkers(r.content)).toBe(false)
+  })
+
+  it('sends generated output unchanged (it already uses the file endings)', () => {
+    const generated = 'top\r\nmine\r\nend\r\n'
+    expect(saveResolution(generated, false, crlf, '\r\n').content).toBe(generated)
+  })
+
+  it('carries the working-tree text it was built from as `expected` (null when the file was missing)', () => {
+    expect(saveResolution('x\n', false, crlf, '\r\n').expected).toBe(crlfMerged)
+    expect(saveResolution('x\n', true, { merged: null, ours: 'x\n' }, '\n')).toEqual({ kind: 'content', content: 'x\n', expected: null })
+  })
+})
+
 describe('ConflictChooser', () => {
+  const chooser = (patch: Partial<ConflictVersions>) =>
+    renderToString(
+      <ConflictChooser
+        versions={{
+          path: 'legacy.properties',
+          kind: 'both-modified',
+          base: '',
+          ours: '',
+          theirs: '',
+          merged: '',
+          oursLabel: 'main',
+          theirsLabel: 'feature',
+          binary: true,
+          ...patch
+        }}
+        oursLabel="main"
+        theirsLabel="feature"
+        busy={false}
+        onResolve={() => undefined}
+      />
+    )
+
+  it('explains why a non-UTF-8 text file only offers whole-side choices', () => {
+    const html = chooser({ nonUtf8: true })
+    expect(html).toContain('not UTF-8 text')
+    expect(html).toContain('Mark resolved as-is')
+    expect(html).not.toContain('binary file')
+    expect(html).toContain('Keep A&#x27;s version')
+    expect(html).not.toContain('Restore common ancestor')
+  })
+
+  it('explains symbolic-link conflicts', () => {
+    const html = chooser({ symlink: true })
+    expect(html).toContain('symbolic link')
+    expect(html).not.toContain('binary file')
+  })
+
+  it('still calls a plain binary file binary', () => {
+    expect(chooser({})).toContain('This binary file cannot be merged line by line.')
+  })
+
   it('explains a delete/modify conflict and disables the missing side', () => {
     const html = renderToString(
       <ConflictChooser

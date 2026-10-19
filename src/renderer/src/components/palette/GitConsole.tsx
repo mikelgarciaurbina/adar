@@ -9,7 +9,7 @@ import { getCommand } from '@renderer/commands'
 import { shortcutLabel } from '@renderer/lib/keys'
 import { useApp } from '@renderer/store/appStore'
 import { runConsoleLine, useConsole, type ConsoleLine } from './consoleStore'
-import { HISTORY_LIMIT, loadStringList, navigateHistory, pushHistory, readJson, writeJson, type HistoryCursor } from './history'
+import { loadHistory, navigateHistory, pushHistory, readJson, saveHistory, writeJson, type HistoryCursor } from './history'
 import './palette.css'
 
 const HEIGHT_KEY = 'adar.console.height'
@@ -21,6 +21,8 @@ export function GitConsole() {
   const open = useApp((s) => s.consoleOpen)
   // Hidden (not closed) on the welcome screen: it comes back when a repository opens.
   const hasRepo = useApp((s) => !!s.activePath)
+  // Scrub credentials that older versions stored in the history, even if the console is never opened.
+  useEffect(() => void loadHistory(HISTORY_KEY), [])
   if (!open || !hasRepo) return null
   return <ConsoleDrawer />
 }
@@ -32,7 +34,9 @@ function ConsoleDrawer() {
   const running = useConsole((s) => (repo ? !!s.running[repo] : false))
   const [height, setHeight] = useState(() => clampConsoleHeight(Number(readJson<number>(HEIGHT_KEY, DEFAULT_HEIGHT)) || DEFAULT_HEIGHT, window.innerHeight))
   const [input, setInput] = useState('')
-  const history = useRef<string[]>(loadStringList(HISTORY_KEY).slice(-HISTORY_LIMIT))
+  // Persisted entries are redacted; this session's raw lines stay in memory only (for ↑ / ↓).
+  const [initialHistory] = useState(() => loadHistory(HISTORY_KEY))
+  const history = useRef<string[]>(initialHistory)
   const cursor = useRef<HistoryCursor>({ index: history.current.length, draft: '' })
   const inputRef = useRef<HTMLInputElement>(null)
   const outputRef = useRef<HTMLDivElement>(null)
@@ -92,7 +96,7 @@ function ConsoleDrawer() {
     const line = input
     if (!line.trim()) return
     history.current = pushHistory(history.current, line)
-    writeJson(HISTORY_KEY, history.current)
+    saveHistory(HISTORY_KEY, history.current)
     cursor.current = { index: history.current.length, draft: '' }
     setInput('')
     stickToBottom.current = true

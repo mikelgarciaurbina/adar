@@ -1,14 +1,35 @@
 // Resolution UI for conflicts that cannot be merged line by line: binary
-// files and delete/add conflicts. Explains what each side did and offers
-// Keep A / Keep B / Delete (plus "Restore base" when both sides deleted it).
+// files, text that is not UTF-8, symbolic links and delete/add conflicts.
+// Explains what each side did and offers Keep A / Keep B / Delete (plus
+// "Restore base" when both sides deleted it). Whole-side choices are resolved
+// by git itself, so the file's bytes are kept exactly as they are.
 
 import { useMemo, useState, type ReactNode } from 'react'
-import { Binary, FileCheck2, FileMinus, FilePlus, FileX, History, Trash2 } from 'lucide-react'
+import { Binary, FileCheck2, FileMinus, FilePlus, FileSymlink, FileType, FileX, History, Trash2 } from 'lucide-react'
 import { Spinner } from '@renderer/components/common/Button'
 import type { ConflictResolution, ConflictVersions } from '@shared/types'
 import { describeSide, sideExists, splitLines, stripEol, type Side } from './conflictParser'
 
 const PREVIEW_LINES = 400
+
+/** Why the line-by-line merge tool is not offered, for the chooser's heading. */
+export function chooserIntro(versions: Pick<ConflictVersions, 'binary' | 'nonUtf8' | 'symlink'>): { title: string; sub: string } {
+  const pick = 'Choose which version to keep. The file is staged as resolved.'
+  if (versions.symlink)
+    return {
+      title: 'This is a symbolic link, so it cannot be merged line by line.',
+      sub: 'Choose which link to keep: the link itself is staged as resolved, never the file it points to.'
+    }
+  if (versions.nonUtf8)
+    return {
+      title: 'This file is not UTF-8 text, so it cannot be merged line by line.',
+      sub:
+        'Editing it here would replace every character of its encoding (e.g. Latin-1, Windows-1252, Shift-JIS) with “�”. ' +
+        'Keep one version as-is, or merge it in an editor that knows the encoding and then use “Mark resolved as-is” from the ⋯ menu.'
+    }
+  if (versions.binary) return { title: 'This binary file cannot be merged line by line.', sub: pick }
+  return { title: 'This conflict cannot be merged line by line.', sub: pick }
+}
 
 export interface ConflictChooserProps {
   versions: ConflictVersions
@@ -78,16 +99,15 @@ export function ConflictChooser({ versions, oursLabel, theirsLabel, busy, onReso
   const previewText = preview === 'ours' ? versions.ours : versions.theirs
   const previewLines = useMemo(() => (previewText != null ? splitLines(previewText) : []), [previewText])
   const canPreview = !binary && ((oursExists && versions.ours != null) || (theirsExists && versions.theirs != null))
+  const intro = chooserIntro(versions)
 
   return (
     <div className="cf-chooser">
       <div className="cf-chooser-intro">
-        {binary ? <Binary size={18} /> : <FileX size={18} />}
+        {versions.symlink ? <FileSymlink size={18} /> : versions.nonUtf8 ? <FileType size={18} /> : binary ? <Binary size={18} /> : <FileX size={18} />}
         <div>
-          <div className="cf-chooser-title">
-            {binary ? 'This binary file cannot be merged line by line.' : 'This conflict cannot be merged line by line.'}
-          </div>
-          <div className="cf-chooser-sub">Choose which version to keep. The file is staged as resolved.</div>
+          <div className="cf-chooser-title">{intro.title}</div>
+          <div className="cf-chooser-sub">{intro.sub}</div>
         </div>
       </div>
 

@@ -160,11 +160,43 @@ describe('fetch / pull / push', () => {
     const err = await expectCode(ops.push(repo), 'GIT_FAILED')
     expect(err.stderr).toMatch(/rejected/)
 
-    // The lease is stale until we fetch; after fetching, force-with-lease wins.
+    // The lease is stale until we fetch. Fetching alone does not satisfy it either: the fetched commit was
+    // never part of our main (push.useForceIfIncludes), so it would be overwritten unseen.
+    const theirs = remoteHead(origin, 'refs/heads/main')
     await expectCode(ops.push(repo, { force: 'with-lease' }), 'GIT_FAILED')
     git(repo, ['fetch', '-q'])
+    await expectCode(ops.push(repo, { force: 'with-lease' }), 'GIT_FAILED')
+    expect(remoteHead(origin, 'refs/heads/main')).toBe(theirs)
+    // Once main has contained it (merged, then deliberately dropped again), the lease passes.
+    git(repo, ['merge', '-q', '--no-edit', 'origin/main'])
+    git(repo, ['reset', '-q', '--hard', 'HEAD~1'])
     await ops.push(repo, { force: 'with-lease' })
     expect(remoteHead(origin, 'refs/heads/main')).toBe(head(repo))
+  })
+
+  it('force-with-lease never overwrites commits that only a background fetch brought in', async () => {
+    const { ops } = makeOps()
+    const { origin, repo, clone } = cloneSetup()
+    commitFile(repo, 'mine.txt', 'm\n', 'mine')
+    await ops.push(repo)
+
+    // Rewriting our own pushed commit and force pushing it is the normal case.
+    git(repo, ['commit', '-q', '--amend', '-m', 'mine (amended)'])
+    await ops.push(repo, { force: 'with-lease' })
+    expect(remoteHead(origin, 'refs/heads/main')).toBe(head(repo))
+
+    // A coworker pushes; auto-fetch silently moves origin/main to their commit; we amend again.
+    const other = clone()
+    commitFile(other, 'o.txt', 'o\n', 'coworker')
+    git(other, ['push', '-q', 'origin', 'main'])
+    const coworker = head(other)
+    git(repo, ['commit', '-q', '--amend', '-m', 'mine (amended twice)'])
+    await ops.fetch(repo, { all: true, prune: true })
+    expect(head(repo, 'origin/main')).toBe(coworker)
+
+    const err = await expectCode(ops.push(repo, { force: 'with-lease' }), 'GIT_FAILED')
+    expect(err.message).toMatch(/Force push refused: origin\/main has commits your local main has never contained/)
+    expect(remoteHead(origin, 'refs/heads/main')).toBe(coworker)
   })
 
   it('validates push arguments', async () => {

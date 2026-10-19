@@ -193,6 +193,20 @@ describe('CredentialDialog', () => {
     expect(html).toContain('personal access token')
   })
 
+  it('shows an SSH keyboard-interactive prompt as the server\'s words, without a spoofed GitHub target', () => {
+    seed({
+      credentialQueue: [{ id: 'c4', prompt: "(git@gitlab-mirror.evil.example) Password for 'https://github.com':", kind: 'password', secret: true }]
+    })
+    const html = renderToStaticMarkup(<CredentialDialog />)
+    expect(html).toContain('Prompt from SSH server gitlab-mirror.evil.example')
+    expect(html).toContain('The server says:')
+    expect(html).toContain('never enter a password or token for another service')
+    expect(html).toContain('type="password"')
+    expect(html).not.toContain('Password for github.com')
+    expect(html).not.toContain('personal access token')
+    expect(html).not.toMatch(/md-cred-host">github\.com/)
+  })
+
   it('renders yes/no buttons for host verification', () => {
     seed({
       credentialQueue: [

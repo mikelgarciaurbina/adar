@@ -65,6 +65,7 @@ const NON_REPO_METHODS: ReadonlySet<string> = new Set([
   'removeRecentRepo',
   'answerCredentialRequest',
   'openRepo',
+  'trustRepo',
   'closeRepo',
   'initRepo',
   'cloneRepo'

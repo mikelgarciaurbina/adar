@@ -1,5 +1,6 @@
 // Network operations (fetch / pull / push) and remote configuration.
 
+import { AdarError } from '@shared/errors'
 import type { ForcePushMode, OperationResult, PullMode } from '@shared/types'
 import type { GitContext } from '../context'
 import type { WriteOps } from '../ops'
@@ -15,7 +16,8 @@ import {
   mapInvalid,
   nameArg,
   notFound,
-  refExists
+  refExists,
+  withCode
 } from './util'
 
 type RemoteOps = Pick<
@@ -93,13 +95,28 @@ export function createRemoteOps(ctx: GitContext): RemoteOps {
       } else remoteBranch = branch
       remoteBranch = remoteBranch.replace(/^refs\/heads\//, '')
 
-      const args = ['push', '--progress']
+      // A bare --force-with-lease checks the remote against our remote-tracking ref, which a background
+      // fetch (auto-fetch) silently moves to someone else's new commits — the lease would then pass and
+      // overwrite them. push.useForceIfIncludes (git >= 2.30) additionally requires that the local branch
+      // once contained that tip. (As config, older git ignores it instead of failing on an unknown flag.)
+      const args = force === 'with-lease' ? ['-c', 'push.useForceIfIncludes=true', 'push', '--progress'] : ['push', '--progress']
       if (opts.setUpstream) args.push('--set-upstream')
       if (force === 'with-lease') args.push('--force-with-lease')
       else if (force === 'force') args.push('--force')
       if (opts.tags) args.push('--follow-tags')
       args.push(remote, `refs/heads/${branch}:refs/heads/${remoteBranch}`)
-      await ctx.gitNetwork(repo, args, { opId: opts.opId })
+      try {
+        await ctx.gitNetwork(repo, args, { opId: opts.opId })
+      } catch (err) {
+        if (force === 'with-lease' && err instanceof AdarError && /stale info|remote ref updated since checkout/i.test(err.stderr ?? '')) {
+          throw withCode(
+            err,
+            err.code,
+            `Force push refused: ${remote}/${remoteBranch} has commits your local ${branch} has never contained (someone else pushed). Pull or review them first.`
+          )
+        }
+        throw err
+      }
     },
 
     async deleteRemoteBranch(repo, remote, branch) {

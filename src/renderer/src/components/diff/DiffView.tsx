@@ -15,6 +15,7 @@ import { describeError } from '@shared/errors'
 import { supportsPartialPatch, type HunkSelection, type PatchMode } from '@shared/patch'
 import type { DiffTarget, FileDiff, FileStatusCode, WorkingStatus } from '@shared/types'
 import { DiffBody } from './DiffBody'
+import { EncodingNote } from './EncodingNote'
 import type { DiffRendererHandle, DiffStaging } from './DiffRenderer'
 import { remapKeys, selectionFromKeys, validKeys } from './diffModel'
 import { ChangeStats, DiffMoreButton, FullFileToggle, PathLabel, StatusBadge, ViewModeSwitch } from './parts'
@@ -396,6 +397,7 @@ export function DiffView({ tab, target, siblings }: { tab: RepoTab; target: Diff
           )}
         </div>
         {modeText && diff && diff.hunks.length > 0 && <div className="diff-info">{modeText}</div>}
+        {diff && <EncodingNote diff={diff} staging={!!stagingKind && !conflicted} />}
       </div>
 
       <div className="diff-body">

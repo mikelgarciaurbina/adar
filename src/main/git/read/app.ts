@@ -2,7 +2,7 @@
 // identity and the git console escape hatch.
 
 import { execFile, spawn, type SpawnOptions } from 'node:child_process'
-import { existsSync, promises as fs } from 'node:fs'
+import { existsSync, promises as fs, type Stats } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { AdarError } from '@shared/errors'
@@ -10,6 +10,7 @@ import type { GitCommandResult, Identity } from '@shared/types'
 import type { GitContext } from '../context'
 import type { ReadOps } from '../ops'
 import { summarizeGitOutput } from '../runner'
+import type { PlatformAdapter } from '../../platform'
 import type { SystemServices } from '../../system'
 import { assertRepo, expandHome, invalidArgument, notFound } from './common'
 
@@ -104,6 +105,76 @@ async function existingPath(p: unknown): Promise<{ abs: string; isDir: boolean }
   } catch {
     throw notFound(`Not found: ${abs}`)
   }
+}
+
+// ── Opening repository files without an editor command ────────────────────
+// Repository content is untrusted: handing a checked-out file to the OS "default app" runs it when
+// its type is executable (.command / .terminal / extension-less executables on macOS, .bat / .js /
+// .lnk on Windows, .desktop on Linux), and git leaves no quarantine flag for Gatekeeper to prompt.
+// So the fallback opens FILES in a text editor (macOS `open -t`, Windows Notepad), except a few
+// viewer-only types; bundles (Foo.app, also reached through a symlink or as the repo folder itself)
+// are revealed instead of opened; Linux refuses executables. Decisions use the symlink's target.
+
+/** Optional host method (Electron shell.openPath: ShellExecute, no cmd.exe), used for viewer types on Windows. */
+type HostPlatform = PlatformAdapter & { openPath?(path: string): Promise<string> }
+
+/** Types whose default app only displays them (opened as-is when not executable). */
+const VIEWER_EXTENSIONS: ReadonlySet<string> = new Set([
+  '.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tif', '.tiff', '.webp', '.heic', '.heif', '.ico', '.icns', '.pdf'
+])
+/** macOS bundle / installer directories (LaunchServices launches or installs them). */
+const MAC_BUNDLE = /\.(app|appex|bundle|framework|plugin|workflow|action|pkg|mpkg|prefpane|saver|kext|qlgenerator|mdimporter|xpc|systemextension|dext|component|scptd|wdgt)$/i
+/** Files xdg-open may run or install on Linux (besides anything with an executable bit). */
+const LINUX_LAUNCHERS: ReadonlySet<string> = new Set([
+  '.desktop', '.sh', '.bash', '.zsh', '.csh', '.ksh', '.fish', '.run', '.bin', '.appimage', '.jar',
+  '.exe', '.msi', '.bat', '.cmd', '.com', '.flatpakref', '.flatpakrepo', '.snap', '.deb', '.rpm'
+])
+
+export type DefaultOpenPlan =
+  /** Run and wait (macOS `open`, which returns once LaunchServices accepted the request). */
+  | { kind: 'exec'; command: string; args: string[] }
+  /** Start a detached GUI process. */
+  | { kind: 'spawn'; command: string; args: string[] }
+  | { kind: 'openPath'; path: string }
+  | { kind: 'reveal'; path: string }
+  | { kind: 'refuse'; message: string }
+
+async function isMacBundle(dir: string): Promise<boolean> {
+  if (MAC_BUNDLE.test(dir)) return true
+  const has = (p: string) => fs.stat(path.join(dir, p)).then(() => true, () => false)
+  return (await has('Contents/Info.plist')) || (await has('Contents/MacOS'))
+}
+
+/** How the no-editor fallback of openInEditor opens `abs` (an existing path) on `os`. */
+export async function planDefaultOpen(abs: string, os: NodeJS.Platform, opts: { canOpenPath?: boolean } = {}): Promise<DefaultOpenPlan> {
+  let real: string
+  let st: Stats
+  try {
+    real = await fs.realpath(abs)
+    st = await fs.stat(real)
+  } catch {
+    throw notFound(`Not found: ${abs}`)
+  }
+  const ext = path.extname(real).toLowerCase()
+  const executable = (st.mode & 0o111) !== 0
+  const viewer = VIEWER_EXTENSIONS.has(ext) && st.isFile() && !executable
+  if (os === 'darwin') {
+    if (st.isDirectory()) return (await isMacBundle(real)) ? { kind: 'reveal', path: real } : { kind: 'exec', command: 'open', args: [real] }
+    return viewer ? { kind: 'exec', command: 'open', args: [real] } : { kind: 'exec', command: 'open', args: ['-t', real] }
+  }
+  if (os === 'win32') {
+    // Never through `cmd /c start`: cmd.exe would parse & % ^ in the file name.
+    if (st.isDirectory()) return { kind: 'reveal', path: real }
+    if (VIEWER_EXTENSIONS.has(ext) && st.isFile() && opts.canOpenPath) return { kind: 'openPath', path: real }
+    return { kind: 'spawn', command: 'notepad.exe', args: [real] }
+  }
+  if (st.isFile() && (executable || LINUX_LAUNCHERS.has(ext))) {
+    return {
+      kind: 'refuse',
+      message: `Adar does not hand executable files to the system default app. Set Settings → Editor command to open "${path.basename(real)}".`
+    }
+  }
+  return { kind: 'spawn', command: 'xdg-open', args: [real] }
 }
 
 function launchError(what: string, err: unknown): AdarError {
@@ -252,11 +323,26 @@ export function createAppOps(ctx: GitContext, services: SystemServices): AppOps 
         }
         return
       }
+      const host = platform as HostPlatform
+      const plan = await planDefaultOpen(abs, process.platform, { canOpenPath: typeof host.openPath === 'function' })
       try {
-        if (process.platform === 'darwin') await execFileAsync('open', [abs])
-        else if (process.platform === 'win32') await spawnDetached('cmd.exe', ['/c', 'start', '', abs])
-        else await spawnDetached('xdg-open', [abs])
+        switch (plan.kind) {
+          case 'exec':
+            return await execFileAsync(plan.command, plan.args)
+          case 'spawn':
+            return await spawnDetached(plan.command, plan.args)
+          case 'reveal':
+            return await platform.showInFolder(plan.path)
+          case 'openPath': {
+            const error = await host.openPath!(plan.path)
+            if (error) throw new Error(error)
+            return
+          }
+          case 'refuse':
+            throw invalidArgument(plan.message)
+        }
       } catch (err) {
+        if (err instanceof AdarError) throw err
         throw launchError('Could not open the file', err)
       }
     },
