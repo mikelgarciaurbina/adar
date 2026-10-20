@@ -8,6 +8,7 @@ import { choose, confirm, form, prompt, validateRefName } from '@renderer/compon
 import { showContextMenu, type MenuItem } from '@renderer/components/common/ContextMenu'
 import { toast } from '@renderer/components/common/toast'
 import type { DraggedRef } from '@renderer/lib/dnd'
+import { refDropActions } from '@renderer/lib/refDrop'
 import { currentBranch, defaultRemote, localForRemote, remoteBranchName } from '@renderer/lib/refs'
 import { StaleHistoryError, useApp, type RefreshScope, type RepoTab } from '@renderer/store/appStore'
 import { describeError, AdarError } from '@shared/errors'
@@ -617,28 +618,36 @@ export async function reset(repo: string, target: string, mode?: ResetMode): Pro
 export function handleRefDrop(repo: string, source: DraggedRef, target: DraggedRef, at: { clientX: number; clientY: number }): void {
   if (source.fullName === target.fullName) return
   const refs = tabOf(repo)?.refs ?? null
-  const cur = currentBranch(refs)
+  const cur = currentBranch(refs)?.name ?? null
+  // Use the full ref name when a branch, remote branch and/or tag share the short name.
+  const all = refs ? [...refs.branches, ...refs.remotes, ...refs.tags] : []
+  const rev = (r: { name: string; fullName?: string }) =>
+    r.fullName && all.filter((x) => x.name === r.name).length > 1 ? r.fullName : r.name
+  const remote = target.type === 'remote' ? refs?.remotes.find((r) => r.fullName === target.fullName)?.remote : undefined
+  const actions = refDropActions(source, { ...target, remote }, cur, rev)
+  if (!actions.length) return
   const items: MenuItem[] = [{ type: 'header', label: `${source.name} → ${target.name}` }]
-  if (target.type === 'branch') {
-    items.push(
-      { label: `Merge ${source.name} into ${target.name}`, onClick: () => merge(repo, source.name, target.name) },
-      { label: `Rebase ${target.name} onto ${source.name}`, onClick: () => rebase(repo, source.name, target.name) },
-      { label: `Fast-forward ${target.name} to ${source.name}`, onClick: () => fastForward(repo, target.name, source.name) }
-    )
-    if (cur?.name === target.name) {
-      items.push({ type: 'separator' }, { label: `Reset ${target.name} to ${source.name}…`, onClick: () => reset(repo, source.sha) })
+  for (const a of actions) {
+    switch (a.kind) {
+      case 'separator':
+        items.push({ type: 'separator' })
+        break
+      case 'fast-forward':
+        items.push({ label: a.label, onClick: () => fastForward(repo, a.branch, a.to) })
+        break
+      case 'merge':
+        items.push({ label: a.label, onClick: () => merge(repo, a.source, a.into) })
+        break
+      case 'rebase':
+        items.push({ label: a.label, onClick: () => rebase(repo, a.onto, a.branch) })
+        break
+      case 'reset':
+        items.push({ label: a.label, onClick: () => reset(repo, a.sha) })
+        break
+      case 'push':
+        items.push({ label: a.label, onClick: () => push(repo, { branch: a.branch, remote: a.remote, remoteBranch: a.remoteBranch }) })
+        break
     }
-  }
-  if (source.type === 'branch' && target.type === 'remote') {
-    const remote = target.name.split('/')[0]
-    const remoteBranch = target.name.slice(remote.length + 1)
-    items.push({
-      label: `Push ${source.name} to ${target.name}`,
-      onClick: () => push(repo, { branch: source.name, remote, remoteBranch })
-    })
-  }
-  if (target.type === 'tag' || target.type === 'remote') {
-    if (cur) items.push({ label: `Merge ${target.name} into ${cur.name}`, onClick: () => merge(repo, target.name) })
   }
   showContextMenu(at, items)
 }
