@@ -11,7 +11,9 @@ export default defineConfig({
   test: {
     include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
     environment: 'node',
-    testTimeout: 30000,
-    hookTimeout: 30000
+    // Backend integration tests spawn real git and file watchers; on a loaded machine (or a busy CI
+    // runner) a single test can take 20 s+, so keep a generous bound instead of flaky timeouts.
+    testTimeout: 90000,
+    hookTimeout: 60000
   }
 })

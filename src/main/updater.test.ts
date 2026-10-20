@@ -130,7 +130,17 @@ describe('release configuration', () => {
     // A published release is what /releases/latest (the updater) returns while the other arch still uploads.
     expect(builder).toMatch(/^\s*releaseType:\s*draft\s*$/m)
     expect(workflow).toMatch(/gh release edit "\$TAG" --draft=false --target "\$GITHUB_SHA"/)
-    for (const name of ['arm64.zip', 'x64.zip', 'arm64.dmg', 'x64.dmg']) expect(workflow).toContain(name)
+    // Apple Silicon only: exactly the arm64 .zip (in-place updates) and .dmg (manual installs) are verified.
+    for (const name of ['arm64.zip', 'arm64.dmg']) expect(workflow).toContain(name)
+    expect(workflow).not.toMatch(/x64\.(zip|dmg)/)
+    // Incomplete uploads are retried and leftovers from earlier runs never get published.
+    expect(workflow).toMatch(/gh release upload "\$TAG" "release\/\$f" --clobber/)
+    expect(workflow).toMatch(/Removing stale asset/)
+  })
+
+  it('builds Apple Silicon artifacts only', () => {
+    expect(builder).toMatch(/arch: \[arm64\]/)
+    expect(builder).not.toMatch(/x64/)
   })
 
   it('serialises release runs and keeps the token away from checkout and tests', () => {
