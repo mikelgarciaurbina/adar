@@ -126,16 +126,22 @@ describe('release configuration', () => {
   const builder = readFileSync(path.join(root, 'electron-builder.yml'), 'utf8')
   const workflow = readFileSync(path.join(root, '.github/workflows/release.yml'), 'utf8')
 
-  it('uploads to a draft release that is published only after all assets are verified', () => {
-    // A published release is what /releases/latest (the updater) returns while the other arch still uploads.
-    expect(builder).toMatch(/^\s*releaseType:\s*draft\s*$/m)
-    expect(workflow).toMatch(/gh release edit "\$TAG" --draft=false --target "\$GITHUB_SHA"/)
-    // Apple Silicon only: exactly the arm64 .zip (in-place updates) and .dmg (manual installs) are verified.
+  it('publishes a single fresh draft only after every asset is verified', () => {
+    // A published release is what /releases/latest (the updater) returns, so assets must be complete first.
+    expect(workflow).toMatch(/run: npm run dist/)
+    expect(workflow).not.toMatch(/--publish always|npm run release/)
+    // Drafts left by earlier runs are deleted and exactly one new draft is created and used by id.
+    expect(workflow).toMatch(/select\(\.draft and \.tag_name == \\"\$TAG\\"\)/)
+    expect(workflow).toMatch(/gh api -X DELETE "repos\/\$R\/releases\/\$OLD"/)
+    expect(workflow).toMatch(/-F draft=true/)
+    // Already-published releases are never modified.
+    expect(workflow).toMatch(/already published: refusing to change it/)
+    // Apple Silicon only: exactly the arm64 .zip (in-place updates) and .dmg (manual installs).
     for (const name of ['arm64.zip', 'arm64.dmg']) expect(workflow).toContain(name)
     expect(workflow).not.toMatch(/x64\.(zip|dmg)/)
-    // Incomplete uploads are retried and leftovers from earlier runs never get published.
-    expect(workflow).toMatch(/gh release upload "\$TAG" "release\/\$f" --clobber/)
-    expect(workflow).toMatch(/Removing stale asset/)
+    // Name + size + "uploaded" state are checked before publishing.
+    expect(workflow).toMatch(/grep -qxF "\$f \$SIZE uploaded"/)
+    expect(workflow).toMatch(/-F draft=false -f make_latest=true/)
   })
 
   it('builds Apple Silicon artifacts only', () => {

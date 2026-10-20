@@ -1,10 +1,10 @@
 # Builds Adar for macOS (Apple Silicon) and publishes a GitHub Release when a version
 # tag is pushed. The app's in-app updater reads the latest release, so:
-#   1. bump "version" in package.json, commit
-#   2. git tag v0.2.0 && git push origin main --tags
-# electron-builder uploads into a DRAFT release (electron-builder.yml releaseType: draft), which the
-# updater ignores; the last step checks that every asset is there and matches the local build, then
-# publishes the draft with its tag pointing at the commit that was built.
+#   1. update build/release-notes.md
+#   2. npm version 0.2.0 && git push origin main --tags
+# The app is built without publishing; the last step creates a single fresh DRAFT release (which the
+# updater ignores), uploads the arm64 .dmg and .zip, checks that both are complete and match the local
+# build, and only then publishes it.
 name: Release
 
 on:
@@ -52,47 +52,57 @@ jobs:
             echo "Tag ${GITHUB_REF_NAME} does not match package.json version $PKG"; exit 1
           fi
 
-      - name: Build and upload to a draft release
+      - name: Build (no publishing)
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-        run: npm run release
+        run: npm run dist
 
-      - name: Verify assets and publish the release
+      - name: Create, verify and publish the release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           V="$(node -p "require('./package.json').version")"
           TAG="v$V"
-          if [ "$(gh release view "$TAG" --json isDraft --jq .isDraft)" != "true" ]; then
-            echo "::error::Release $TAG is not a draft (already published?): refusing to change it"; exit 1
+          R="$GITHUB_REPOSITORY"
+          FILES="Adar-$V-arm64.dmg Adar-$V-arm64.zip"
+          for f in $FILES; do [ -f "release/$f" ] || { echo "::error::release/$f was not built"; exit 1; }; done
+
+          # Never touch a release that is already published.
+          if gh api "repos/$R/releases/tags/$TAG" >/dev/null 2>&1; then
+            echo "::error::Release $TAG is already published: refusing to change it"; exit 1
           fi
-          ID="$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" --jq ".[] | select(.tag_name == \"$TAG\") | .id" | head -1)"
-          FILES="Adar-$V-arm64.zip Adar-$V-arm64.dmg"
-          # Every asset must exist, be fully uploaded and have exactly the size of the local build.
-          # Uploads that went missing or are incomplete are re-uploaded (up to 3 attempts).
-          for attempt in 1 2 3; do
-            ASSETS="$(gh api "repos/$GITHUB_REPOSITORY/releases/$ID/assets?per_page=100" --jq '.[] | "\(.name) \(.size) \(.state)"')"
+
+          # Exactly one draft per tag: remove drafts left by earlier (failed) runs, then create a fresh one.
+          gh api "repos/$R/releases?per_page=100" --jq ".[] | select(.draft and .tag_name == \"$TAG\") | .id" |
+            while read -r OLD; do echo "Deleting stale draft $OLD"; gh api -X DELETE "repos/$R/releases/$OLD"; done
+          ID="$(gh api -X POST "repos/$R/releases" -f tag_name="$TAG" -f name="Adar $V" -F draft=true \
+            -f body="$(cat build/release-notes.md)" --jq .id)"
+          echo "Created draft release $ID"
+
+          upload() { # file → uploads it to draft $ID (replacing an asset with the same name)
+            local f="$1" name; name="$(basename "$f")"
+            gh api "repos/$R/releases/$ID/assets?per_page=100" --jq ".[] | select(.name == \"$name\") | .id" |
+              while read -r AID; do gh api -X DELETE "repos/$R/releases/assets/$AID"; done
+            gh api -X POST "https://uploads.github.com/repos/$R/releases/$ID/assets?name=$name" \
+              -H "Content-Type: application/octet-stream" --input "$f" --jq '"uploaded \(.name) \(.size) \(.state)"'
+          }
+          for f in $FILES; do upload "release/$f"; done
+
+          # Every asset must be fully uploaded with exactly the local size. The asset list can lag
+          # behind the uploads for a few seconds, so re-check before re-uploading anything.
+          for attempt in 1 2 3 4 5 6; do
+            ASSETS="$(gh api "repos/$R/releases/$ID/assets?per_page=100" --jq '.[] | "\(.name) \(.size) \(.state)"')"
             BAD=""
             for f in $FILES; do
               SIZE="$(stat -f %z "release/$f")"
               printf '%s\n' "$ASSETS" | grep -qxF "$f $SIZE uploaded" || BAD="$BAD $f"
             done
             [ -z "$BAD" ] && break
-            echo "Attempt $attempt: assets missing or incomplete:$BAD"
-            echo "Draft assets (name size state):"; printf '%s\n' "$ASSETS"
-            for f in $BAD; do gh release upload "$TAG" "release/$f" --clobber; done
+            echo "Check $attempt: not ready:$BAD"; echo "Draft assets (name size state):"; printf '%s\n' "$ASSETS"
+            if [ "$attempt" -ge 3 ]; then for f in $BAD; do upload "release/$f"; done; fi
             sleep 10
           done
-          if [ -n "$BAD" ]; then
-            echo "::error::Assets still missing or different from the local build:$BAD"; exit 1
-          fi
-          # Drop leftovers that this build did not produce (e.g. from an earlier failed run).
-          gh api "repos/$GITHUB_REPOSITORY/releases/$ID/assets?per_page=100" --jq '.[] | "\(.id) \(.name)"' | while read -r AID ANAME; do
-            if [ ! -f "release/$ANAME" ]; then
-              echo "Removing stale asset $ANAME"
-              gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/assets/$AID"
-            fi
-          done
-          gh release edit "$TAG" --draft=false --target "$GITHUB_SHA" --latest
+          if [ -n "$BAD" ]; then echo "::error::Assets still missing or incomplete:$BAD"; exit 1; fi
+
+          gh api -X PATCH "repos/$R/releases/$ID" -F draft=false -f make_latest=true --jq '"published \(.html_url)"'
