@@ -2,8 +2,8 @@
 // auto-fetch, refresh on focus and theme.
 
 import { useEffect } from 'react'
-import { isElectron, onAdarEvent } from '@renderer/api/client'
-import { silentFetch } from '@renderer/actions/git'
+import { cli, isElectron, onAdarEvent } from '@renderer/api/client'
+import { openRepoAt, silentFetch } from '@renderer/actions/git'
 import { runCommand } from '@renderer/commands'
 import { isEditableTarget, isMod } from '@renderer/lib/keys'
 import { getActiveTab, useApp, type RefreshScope } from '@renderer/store/appStore'
@@ -160,4 +160,35 @@ export function useTheme(): void {
     mq.addEventListener('change', apply)
     return () => mq.removeEventListener('change', apply)
   }, [theme])
+}
+
+/**
+ * Folders the app was asked to open from outside (the `adar` CLI, the Dock, launch arguments):
+ * queued ones are fetched once the app is ready, later ones arrive as events. Each goes through
+ * openRepoAt, so the trust prompt and "not a repository" handling apply.
+ */
+export function useOpenRequests(): void {
+  const ready = useApp((s) => s.ready)
+  useEffect(() => {
+    if (!ready || !isElectron) return
+    let cancelled = false
+    let chain = Promise.resolve()
+    const open = (p: string) => {
+      chain = chain.then(() => openRepoAt(p).then(() => undefined, () => undefined))
+    }
+    // Listen first, then take the queue, so nothing falls between the two.
+    const off = onAdarEvent((ev) => {
+      if (ev.type === 'open-repo-request') open(ev.path)
+    })
+    void cli.cliTakeOpenRequests().then(
+      (paths) => {
+        if (!cancelled) for (const p of paths) open(p)
+      },
+      () => undefined
+    )
+    return () => {
+      cancelled = true
+      off()
+    }
+  }, [ready])
 }

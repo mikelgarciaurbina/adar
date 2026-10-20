@@ -19,7 +19,8 @@ Commit graph with lanes, avatars, ref labels, WIP and stash nodes · drag & drop
 branches, remotes, tags, stashes and submodules panel · staging by file, hunk and line · commit/amend · unified and
 split diffs, hunks or full file · file history and blame · merge-conflict tool · visual interactive rebase ·
 fetch/pull/push with upstream handling · undo/redo of git actions · command palette and git console · tabs ·
-dark/light themes · credential prompts for HTTPS tokens and SSH passphrases · in-app updates from GitHub Releases.
+dark/light themes · credential prompts for HTTPS tokens and SSH passphrases · in-app updates from GitHub Releases ·
+`adar` command-line tool (open the current repository from a terminal).
 
 ---
 

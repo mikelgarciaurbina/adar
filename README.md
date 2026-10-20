@@ -64,6 +64,19 @@ After that, Adar keeps itself up to date.
 Requirements: a recent macOS on Apple Silicon and Git 2.26+ (`xcode-select --install` or `brew install git`). Linux and Windows are not
 supported yet (the code is mostly portable — contributions welcome).
 
+## Command line
+
+Open a repository in Adar from your terminal, like `code .` or GitKraken's `gk`:
+
+```bash
+adar              # the repository of the current folder
+adar ~/code/app   # any folder inside a repository
+```
+
+Install the command once from **Adar → Install Command Line Tool…** (or *Settings → Integrations*). It links
+`adar` into `/opt/homebrew/bin` or `/usr/local/bin` (asking for your password only if neither is writable). If Adar is
+already running the repository opens in a new tab. You can also drop a folder on Adar's Dock icon.
+
 ## Keyboard shortcuts
 
 | Action | Shortcut |

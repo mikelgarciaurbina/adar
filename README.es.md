@@ -58,6 +58,19 @@ actualiza sola.
 Requisitos: un macOS reciente con Apple Silicon y Git 2.26+ (`xcode-select --install` o `brew install git`). Linux y Windows todavía no están
 soportados (el código es casi todo portable: se aceptan contribuciones).
 
+## Línea de comandos
+
+Abre un repositorio en Adar desde la terminal, como `code .` o el `gk` de GitKraken:
+
+```bash
+adar              # el repositorio de la carpeta actual
+adar ~/code/app   # cualquier carpeta dentro de un repositorio
+```
+
+Instala el comando una vez desde **Adar → Install Command Line Tool…** (o *Settings → Integrations*). Enlaza `adar`
+en `/opt/homebrew/bin` o `/usr/local/bin` (solo pide tu contraseña si ninguno es escribible). Si Adar ya está abierta,
+el repositorio se abre en una pestaña nueva. También puedes soltar una carpeta sobre el icono de Adar en el Dock.
+
 ## Desarrollo
 
 ```bash

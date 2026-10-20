@@ -19,6 +19,9 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
   - `system/` — settings/recents/trusted repos store, askpass bridge (credential prompts → UI), file watcher with
     polling fallback, login-shell `PATH` fix.
   - `updater.ts` — in-app updates from GitHub Releases (check → download → verify → replace bundle → relaunch).
+  - `cli.ts` / `cliPath.ts` — install/uninstall the `adar` command (symlink to `resources/bin/adar`, shipped in the
+    bundle as `Contents/Resources/bin/adar`); `openRequests.ts` queues folders to open from the CLI/Dock
+    (`open-file`), `--open-repo=<path>` launch args and second instances until the renderer takes them.
 - `src/preload/` — exposes `window.adarBridge` (generic invoke/onEvent/setZoom). Context isolation + sandbox.
 - `src/server/` — HTTP bridge so the renderer runs in a browser: `npm run web` → open the printed
   `http://127.0.0.1:5898/#t=<token>` URL (the token authenticates the bridge).

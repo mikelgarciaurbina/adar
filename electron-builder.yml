@@ -7,6 +7,10 @@ directories:
 files:
   - out/**
   - package.json
+extraResources:
+  # `adar` command-line tool (Adar → Install Command Line Tool… links it into PATH).
+  - from: resources/bin/adar
+    to: bin/adar
 artifactName: ${productName}-${version}-${arch}.${ext}
 mac:
   category: public.app-category.developer-tools
@@ -14,6 +18,15 @@ mac:
   # Unsigned build (no Apple Developer ID). The in-app updater (src/main/updater.ts) installs the
   # .zip asset of a GitHub Release in place, so Squirrel.Mac / code signing are not required.
   identity: null
+  extendInfo:
+    # Lets `open -a Adar <folder>` (the adar CLI) and folders dropped on the Dock icon reach the app.
+    # "Alternate" keeps Finder as the default app for folders.
+    CFBundleDocumentTypes:
+      - CFBundleTypeName: Folder
+        CFBundleTypeRole: Viewer
+        LSHandlerRank: Alternate
+        LSItemContentTypes:
+          - public.folder
   # Apple Silicon only (Intel Macs are not supported).
   target:
     - target: dmg

@@ -4,10 +4,14 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, shell, type MenuItemConstruc
 import { IPC_EVENT_CHANNEL, IPC_INVOKE_CHANNEL } from '@shared/api'
 import type { MenuCommand, AdarEvent } from '@shared/types'
 import { UPDATE_METHODS, type UpdateMethod } from '@shared/update'
+import { CLI_METHODS, parseOpenRepoArgs, type CliMethod } from '@shared/cli'
 import { toErrorPayload } from '@shared/errors'
 import { createBackend, type Backend } from './backend'
 import { dispatch } from './dispatch'
 import type { PlatformAdapter } from './platform'
+import { bundledCliPath } from './cliPath'
+import { cliStatus, installCli, uninstallCli } from './cli'
+import { pauseOpenRequests, requestOpen, takeOpenRequests } from './openRequests'
 import { bypassQuitGuard, isQuitGuardBypassed } from './quitGuard'
 import { Updater } from './updater'
 
@@ -42,6 +46,29 @@ let mainWindow: BrowserWindow | null = null
 let backend: Backend | null = null
 let updater: Updater | null = null
 const UPDATE_METHOD_SET: ReadonlySet<string> = new Set(UPDATE_METHODS)
+const CLI_METHOD_SET: ReadonlySet<string> = new Set(CLI_METHODS)
+
+/** Bring the window to the front (or reopen it on macOS) after an external open request. */
+function focusMainWindow(): void {
+  if (!app.isReady()) return
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    createWindow()
+    return
+  }
+  if (mainWindow.isMinimized()) mainWindow.restore()
+  mainWindow.show()
+  mainWindow.focus()
+  if (process.platform === 'darwin') app.focus({ steal: true })
+}
+
+// Folders to open from outside: Finder/Dock/`adar` CLI (macOS "open documents" event, delivered
+// before or after launch) and `--open-repo=<path>` launch arguments.
+app.on('open-file', (e, file) => {
+  e.preventDefault()
+  requestOpen(file)
+  focusMainWindow()
+})
+for (const p of parseOpenRepoArgs(process.argv)) requestOpen(p)
 
 function emit(event: AdarEvent): void {
   if (mainWindow && !mainWindow.isDestroyed()) {
@@ -115,7 +142,10 @@ function createWindow(): void {
     void mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
 
+  // Open requests arriving while the page (re)loads are queued until the renderer asks for them.
+  mainWindow.webContents.on('did-start-loading', () => pauseOpenRequests())
   mainWindow.on('closed', () => {
+    pauseOpenRequests()
     mainWindow = null
   })
 
@@ -186,6 +216,7 @@ function buildMenu(): void {
             submenu: [
               item('About Adar', 'about'),
               { label: 'Check for Updates…', click: () => void updater?.updateCheck(true) },
+              item('Install Command Line Tool…', 'install-cli'),
               { type: 'separator' },
               item('Settings…', 'settings', 'CmdOrCtrl+,'),
               { type: 'separator' },
@@ -277,12 +308,15 @@ function buildMenu(): void {
 }
 
 // One instance per user-data dir: settings/recents/askpass files are shared.
-const gotLock = process.env['ADAR_USER_DATA'] && !app.isPackaged ? true : app.requestSingleInstanceLock()
+const gotLock =
+  process.env['ADAR_USER_DATA'] && !app.isPackaged ? true : app.requestSingleInstanceLock({ openRepo: parseOpenRepoArgs(process.argv) })
 if (!gotLock) app.quit()
-app.on('second-instance', () => {
-  if (!mainWindow) return
-  if (mainWindow.isMinimized()) mainWindow.restore()
-  mainWindow.focus()
+app.on('second-instance', (_e, argv, _cwd, additionalData) => {
+  // A second launch (e.g. `Adar --open-repo=/path`) forwards its folders here, then exits.
+  const fromData = (additionalData as { openRepo?: unknown } | null)?.openRepo
+  const paths = new Set([...parseOpenRepoArgs(argv), ...(Array.isArray(fromData) ? parseOpenRepoArgs(fromData.map((p) => `--open-repo=${String(p)}`)) : [])])
+  for (const p of paths) requestOpen(p)
+  focusMainWindow()
 })
 
 app.whenReady().then(() => {
@@ -305,6 +339,23 @@ app.whenReady().then(() => {
     // Only accept calls from our own main frame.
     if (!mainWindow || event.sender !== mainWindow.webContents) {
       return { ok: false, error: { message: 'Untrusted sender', code: 'INVALID_ARGUMENT' } }
+    }
+    if (typeof method === 'string' && CLI_METHOD_SET.has(method)) {
+      const a = Array.isArray(args) ? args : []
+      const source = bundledCliPath()
+      const run = async (): Promise<unknown> => {
+        switch (method as CliMethod) {
+          case 'cliTakeOpenRequests':
+            return takeOpenRequests((p) => emit({ type: 'open-repo-request', path: p }))
+          case 'cliStatus':
+            return cliStatus(source)
+          case 'cliInstall':
+            return installCli(source, !!(a[0] as { force?: boolean } | undefined)?.force)
+          case 'cliUninstall':
+            return uninstallCli(source)
+        }
+      }
+      return run().then((value) => ({ ok: true, value: value ?? null }), (err) => ({ ok: false, error: toErrorPayload(err) }))
     }
     if (typeof method === 'string' && UPDATE_METHOD_SET.has(method)) {
       const fn = updater![method as UpdateMethod] as (...a: unknown[]) => Promise<unknown>

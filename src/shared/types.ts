@@ -502,6 +502,11 @@ export type AdarEvent =
       type: 'update-status'
       status: import('./update').UpdateStatus
     }
+  | {
+      /** Open this folder in a tab (from the `adar` CLI, the Dock or a second instance). */
+      type: 'open-repo-request'
+      path: string
+    }
 
 export const MENU_COMMANDS = [
   'open-repo',
@@ -531,6 +536,8 @@ export const MENU_COMMANDS = [
   'open-in-finder',
   'git-console',
   'check-for-updates',
+  'install-cli',
+  'uninstall-cli',
   'focus-branch-filter',
   'open-repo-path',
   'stage-all',

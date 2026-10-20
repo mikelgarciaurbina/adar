@@ -3,7 +3,9 @@
 
 import { useEffect, useId, useRef, useState } from 'react'
 import { Download, FileDiff, GitBranch, GitGraph, Plug, RefreshCw, Settings, SlidersHorizontal } from 'lucide-react'
-import { api, isElectron } from '@renderer/api/client'
+import { api, cli, isElectron } from '@renderer/api/client'
+import { installCliCommand, uninstallCliCommand } from '@renderer/actions/cli'
+import type { CliStatus } from '@shared/cli'
 import { Button, Spinner } from '@renderer/components/common/Button'
 import { Modal } from '@renderer/components/common/Modal'
 import { toast } from '@renderer/components/common/toast'
@@ -378,7 +380,42 @@ function IntegrationsSection() {
           ))}
         </select>
       </SettingRow>
+      {isElectron && <CliSetting />}
     </>
+  )
+}
+
+/** `adar` command-line tool: status + install/uninstall. */
+function CliSetting() {
+  const [status, setStatus] = useState<CliStatus | null>(null)
+  const [busy, setBusy] = useState(false)
+  const reload = () => void cli.cliStatus().then(setStatus, () => setStatus(null))
+  useEffect(reload, [])
+  if (!status?.available) return null
+  const run = async (fn: () => Promise<boolean>) => {
+    setBusy(true)
+    try {
+      await fn()
+    } finally {
+      setBusy(false)
+      reload()
+    }
+  }
+  const description = status.installedAt
+    ? `Run "adar" in a repository folder (or "adar <path>") to open it here. Installed at ${status.installedAt}${status.onPath ? '' : ' (that folder is not on your PATH)'}.`
+    : 'Adds an "adar" command to your terminal: run it in a repository folder to open it in Adar, like "code ." for VS Code.'
+  return (
+    <SettingRow label="Command line tool" description={description}>
+      {status.installedAt ? (
+        <Button size="sm" onClick={() => void run(uninstallCliCommand)} loading={busy}>
+          Uninstall
+        </Button>
+      ) : (
+        <Button size="sm" variant="primary" onClick={() => void run(() => installCliCommand())} loading={busy}>
+          Install “adar” command
+        </Button>
+      )}
+    </SettingRow>
   )
 }
 

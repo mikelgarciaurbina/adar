@@ -1,0 +1,74 @@
+#!/bin/sh
+# adar — open a Git repository in Adar (https://github.com/mikelgarciaurbina/adar)
+#
+#   adar            open the repository of the current directory
+#   adar <path>     open the repository containing <path>
+#
+# Installed by Adar → Install Command Line Tool… as a link to Adar.app/Contents/Resources/bin/adar.
+
+case "${1:-}" in
+  -h|--help)
+    echo "usage: adar [path]   open the Git repository containing path (default: current directory) in Adar"
+    exit 0
+    ;;
+esac
+if [ "$#" -gt 1 ]; then
+  echo "usage: adar [path]" >&2
+  exit 2
+fi
+
+# An exported CDPATH would make `cd name` jump elsewhere (and print the folder): ignore it.
+unset CDPATH
+
+target=${1:-.}
+# Relative paths are explicit (`-` is a folder named "-", not the previous directory).
+case $target in
+  /*) ;;
+  *) target=./$target ;;
+esac
+# `pwd -P && echo .` then stripping keeps trailing newlines in folder names intact.
+if [ -d "$target" ]; then
+  dir=$(cd -P -- "$target" >/dev/null && pwd -P && echo .) || exit 1
+elif [ -e "$target" ]; then
+  # A file: open the repository of its folder.
+  parent=$(dirname -- "$target" && echo .)
+  parent=${parent%?.}
+  dir=$(cd -P -- "$parent" >/dev/null && pwd -P && echo .) || exit 1
+else
+  echo "adar: ${1}: no such file or directory" >&2
+  exit 1
+fi
+dir=${dir%?.}
+
+# Find Adar.app: the bundle this script belongs to (following the PATH symlink), then the usual places.
+self=$0
+while [ -L "$self" ]; do
+  link=$(readlink -- "$self")
+  case $link in
+    /*) self=$link ;;
+    *) self=$(dirname -- "$self")/$link ;;
+  esac
+done
+app=
+case $self in
+  */Contents/Resources/bin/adar) app=${self%/Contents/Resources/bin/adar} ;;
+esac
+[ -n "${ADAR_APP:-}" ] && app=$ADAR_APP
+for candidate in "$app" /Applications/Adar.app "$HOME/Applications/Adar.app"; do
+  if [ -n "$candidate" ] && [ -d "$candidate" ]; then
+    app=$candidate
+    break
+  fi
+done
+if [ -z "$app" ] || [ ! -d "$app" ]; then
+  echo "adar: Adar.app not found. Install Adar in /Applications (https://github.com/mikelgarciaurbina/adar/releases)." >&2
+  exit 1
+fi
+
+if [ -n "${ADAR_CLI_DRY_RUN:-}" ]; then
+  printf '%s\n' "open -a $app $dir --args --open-repo=$dir"
+  exit 0
+fi
+# Hand the folder to Adar (launching it if needed); a running Adar opens it in a new tab. The
+# --open-repo argument covers a fresh launch whose "open documents" event goes astray.
+exec /usr/bin/open -a "$app" "$dir" --args "--open-repo=$dir"

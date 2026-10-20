@@ -23,7 +23,7 @@ import { GitConsole } from '@renderer/components/palette/GitConsole'
 import { RebaseView } from '@renderer/components/rebase/RebaseView'
 import { UpdateNotice } from '@renderer/components/update/UpdateNotice'
 import { LeftPanel } from '@renderer/components/sidebar/LeftPanel'
-import { useAutoFetch, useBackendEvents, useGlobalShortcuts, useRefreshOnFocus, useTheme } from '@renderer/hooks/useAppEffects'
+import { useAutoFetch, useBackendEvents, useGlobalShortcuts, useOpenRequests, useRefreshOnFocus, useTheme } from '@renderer/hooks/useAppEffects'
 import { useActiveTab, useApp, type RepoTab } from '@renderer/store/appStore'
 
 function CenterPanel({ tab }: { tab: RepoTab }) {
@@ -99,6 +99,7 @@ export function App() {
   useGlobalShortcuts()
   useAutoFetch()
   useRefreshOnFocus()
+  useOpenRequests()
   useTheme()
 
   return (

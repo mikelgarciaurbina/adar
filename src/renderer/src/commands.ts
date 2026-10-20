@@ -3,6 +3,8 @@
 // on top of these.
 
 import * as git from '@renderer/actions/git'
+import { installCliCommand, uninstallCliCommand } from '@renderer/actions/cli'
+import { isElectron } from '@renderer/api/client'
 import { FOCUS_FILTER_EVENT } from '@renderer/components/sidebar/LeftPanel'
 import { checkForUpdatesNow } from '@renderer/components/update/UpdateNotice'
 import { getActiveTab, useApp } from '@renderer/store/appStore'
@@ -55,6 +57,8 @@ export const COMMANDS: Command[] = [
   { id: 'settings', label: 'Settings…', group: 'App', shortcut: 'Mod+,', run: () => useApp.getState().openModal({ kind: 'settings' }) },
   { id: 'about', label: 'About Adar', group: 'App', run: () => useApp.getState().openModal({ kind: 'about' }) },
   { id: 'check-for-updates', label: 'Check for Updates…', group: 'App', run: () => checkForUpdatesNow() },
+  { id: 'install-cli', label: "Install 'adar' Command in PATH…", group: 'App', when: () => isElectron, run: () => void installCliCommand() },
+  { id: 'uninstall-cli', label: "Uninstall 'adar' Command", group: 'App', when: () => isElectron, run: () => void uninstallCliCommand() },
   { id: 'command-palette', label: 'Command Palette', group: 'App', shortcut: 'Mod+P', run: () => useApp.getState().setPaletteOpen(true) },
   {
     id: 'search-commits',

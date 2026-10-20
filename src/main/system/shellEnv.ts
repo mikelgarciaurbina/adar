@@ -90,6 +90,13 @@ export function readLoginShellPath(timeoutMs = 3000): Promise<string | null> {
 }
 
 let fixPromise: Promise<void> | null = null
+let loginPath: string | null = null
+
+/** PATH as the user's login shell sets it (null when it could not be read). */
+export async function loginShellPath(): Promise<string | null> {
+  await fixShellPath()
+  return loginPath
+}
 
 /** Fix process.env.PATH once (never takes more than ~timeoutMs). No-op on Windows. */
 export function fixShellPath(timeoutMs = 3000): Promise<void> {
@@ -98,6 +105,7 @@ export function fixShellPath(timeoutMs = 3000): Promise<void> {
     for (const v of GIT_REDIRECT_VARS) delete process.env[v]
     if (process.platform === 'win32') return
     const shellPath = await readLoginShellPath(timeoutMs)
+    loginPath = shellPath
     process.env.PATH = mergePathLists(process.env.PATH ?? '', shellPath ?? '', ALWAYS_INCLUDE, ':')
   })().catch(() => undefined)
   return fixPromise

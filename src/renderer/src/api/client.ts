@@ -6,6 +6,7 @@ import type { InvokeResponse, AdarApi } from '@shared/api'
 import { AdarError } from '@shared/errors'
 import type { AdarEvent } from '@shared/types'
 import type { UpdateApi } from '@shared/update'
+import type { CliApi } from '@shared/cli'
 
 type Transport = (method: string, args: unknown[]) => Promise<InvokeResponse>
 
@@ -145,6 +146,14 @@ export function newOpId(prefix = 'op'): string {
 
 /** In-app updater (Electron only; see src/shared/update.ts). */
 export const updates: UpdateApi = new Proxy({} as UpdateApi, {
+  get(_t, prop) {
+    if (typeof prop !== 'string') return undefined
+    return (...args: unknown[]) => invoke(prop, args)
+  }
+})
+
+/** `adar` command-line tool + external open requests (Electron only; see src/shared/cli.ts). */
+export const cli: CliApi = new Proxy({} as CliApi, {
   get(_t, prop) {
     if (typeof prop !== 'string') return undefined
     return (...args: unknown[]) => invoke(prop, args)
