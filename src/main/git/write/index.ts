@@ -10,6 +10,7 @@ import { createConflictOps } from './conflicts'
 import { createInteractiveOps } from './interactive'
 import { createOperationOps } from './operations'
 import { createRemoteOps } from './remotes'
+import { createRewordOps } from './reword'
 import { createStashOps } from './stash'
 import { createTagOps } from './tags'
 import { createWorktreeOps } from './worktree'
@@ -20,6 +21,7 @@ export function createWriteOps(ctx: GitContext): WriteOps {
     ...createBranchOps(ctx),
     ...createOperationOps(ctx),
     ...createInteractiveOps(ctx),
+    ...createRewordOps(ctx),
     ...createConflictOps(ctx),
     ...createTagOps(ctx),
     ...createStashOps(ctx),

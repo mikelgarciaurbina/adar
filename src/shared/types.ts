@@ -334,6 +334,37 @@ export interface RebaseTodoItem {
   message?: string
 }
 
+/** Whether (and how) a commit's message can be edited in place (see AdarApi.rewordCommit). */
+export interface RewordInfo {
+  editable: boolean
+  /** Why it cannot be edited (when editable is false). */
+  reason: string | null
+  /** The commit is HEAD. */
+  isHead: boolean
+  /** The full current message. */
+  message: string
+  /** Commits that get recreated: the edited one and every commit after it up to HEAD. */
+  rewritten: number
+  /** The checked-out branch (null when HEAD is detached). */
+  branch: string | null
+  /** The checked-out branch's upstream (e.g. origin/main) when it already contains the commit: a force push is needed. */
+  upstream: string | null
+  /** Other local branches containing the commit: they keep the original commits. */
+  localBranches: string[]
+  /** Other remote-tracking branches containing the commit (besides `upstream`): they keep the original commits. */
+  remoteBranches: string[]
+  /** Tags containing the commit: they keep pointing at the original commits. */
+  tags: string[]
+}
+
+/** Result of rewordCommit. */
+export interface RewordResult extends OperationResult {
+  /** New sha of the edited commit (when ok). */
+  newSha: string | null
+  /** HEAD before the change (for undo). */
+  previousHead: string | null
+}
+
 export type PullMode = 'ff-only' | 'merge' | 'rebase'
 export type ResetMode = 'soft' | 'mixed' | 'hard'
 export type ForcePushMode = false | 'with-lease' | 'force'

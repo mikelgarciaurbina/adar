@@ -30,6 +30,8 @@ export const WRITE_METHODS = [
   'continueOperation',
   'abortOperation',
   'skipOperation',
+  'getRewordInfo',
+  'rewordCommit',
   'getRebaseCommits',
   'getRebaseMergeCount',
   'interactiveRebase',

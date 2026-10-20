@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isSummaryTooLong, joinMessage, splitMessage, stashTitle, summaryLength, SUMMARY_SOFT_LIMIT } from './message'
+import { cleanMessage, composeEditedMessage, isSummaryTooLong, joinMessage, splitMessage, stashTitle, summaryLength, SUMMARY_SOFT_LIMIT } from './message'
 
 describe('splitMessage', () => {
   it('splits subject and body separated by a blank line', () => {
@@ -67,5 +67,29 @@ describe('stashTitle', () => {
   it('falls back to the raw message', () => {
     expect(stashTitle('custom message')).toBe('custom message')
     expect(stashTitle('  ')).toBe('Stash')
+  })
+})
+
+describe('cleanMessage', () => {
+  it('normalises whitespace like git stripspace', () => {
+    expect(cleanMessage('\n\nSubject  \n\n\n\nBody line \t\r\nnext\n\n')).toBe('Subject\n\nBody line\nnext')
+    expect(cleanMessage('a\n\nb')).toBe(cleanMessage('a  \n\n\nb\n'))
+    expect(cleanMessage('a\nb')).not.toBe(cleanMessage('a\n\nb'))
+  })
+})
+
+describe('composeEditedMessage', () => {
+  const wrapped = 'Fix the frobnicator crash when\nthe widget is null\n\nDetails with a tpyo.'
+  it('keeps a subject that spans lines when only the body changes', () => {
+    const { summary, description } = splitMessage(wrapped)
+    expect(composeEditedMessage(wrapped, summary, description.replace('tpyo', 'typo'))).toBe(
+      'Fix the frobnicator crash when\nthe widget is null\n\nDetails with a typo.'
+    )
+  })
+  it('uses the normal summary/description layout otherwise', () => {
+    const { description } = splitMessage(wrapped)
+    expect(composeEditedMessage(wrapped, 'New subject', description)).toBe('New subject\n\nthe widget is null\n\nDetails with a tpyo.')
+    expect(composeEditedMessage('Subject\n\nBody', 'Subject', 'Body edited')).toBe('Subject\n\nBody edited')
+    expect(composeEditedMessage('Subject', 'Subject', 'New body')).toBe('Subject\n\nNew body')
   })
 })

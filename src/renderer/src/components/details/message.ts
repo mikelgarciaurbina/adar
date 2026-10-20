@@ -37,6 +37,34 @@ export function joinMessage(summary: string, description: string): string {
   return `${s}\n\n${d}`
 }
 
+/**
+ * What `git stripspace` (commit's default cleanup) leaves of a message, without the final newline: trailing
+ * whitespace removed from every line, runs of blank lines collapsed, blank lines at both ends dropped.
+ * Two messages that clean up the same are the same commit message.
+ */
+export function cleanMessage(message: string): string {
+  return message
+    .replace(/\r\n?/g, '\n')
+    .split('\n')
+    .map((l) => l.replace(/[ \t]+$/, ''))
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/^\n+|\n+$/g, '')
+}
+
+/**
+ * Message for an edited existing commit. git's subject is the whole first paragraph: when it spans several
+ * lines and the summary was not edited, keep that shape instead of inserting a blank line after the first line
+ * (which would move the rest of the subject into the body).
+ */
+export function composeEditedMessage(original: string, summary: string, description: string): string {
+  const first = original.replace(/\r\n?/g, '\n').replace(/^(?:[ \t]*\n)+/, '')
+  const wraps = /^[^\n]*\n[ \t]*\S/.test(first)
+  const body = description.replace(/\r\n?/g, '\n').replace(/\s+$/, '')
+  if (wraps && body && summary.trim() === splitMessage(original).summary) return `${summary.trim()}\n${body}`
+  return joinMessage(summary, description)
+}
+
 /** True when the summary is longer than the soft limit. */
 export function isSummaryTooLong(summary: string): boolean {
   return [...summary].length > SUMMARY_SOFT_LIMIT

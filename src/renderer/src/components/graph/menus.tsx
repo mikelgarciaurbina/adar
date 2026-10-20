@@ -31,6 +31,7 @@ import {
 } from 'lucide-react'
 import * as git from '@renderer/actions/git'
 import type { MenuItem } from '@renderer/components/common/ContextMenu'
+import { useMessageEdit } from '@renderer/lib/messageEdit'
 import { currentBranch } from '@renderer/lib/refs'
 import { useApp, type RepoTab } from '@renderer/store/appStore'
 import type { Commit, Ref, Stash } from '@shared/types'
@@ -184,6 +185,19 @@ export function commitMenu(repo: string, commit: Commit, pills: readonly Pill[] 
       }
     )
     const inHistory = !!tab && isAncestor(tab.commits, commit.sha, headSha)
+    // Messages of commits on the checked-out branch can be edited in place (HEAD or older).
+    if (isHead || inHistory) {
+      items.push({
+        label: 'Edit commit message…',
+        icon: <Pencil size={I} />,
+        onClick: () => {
+          const st = store()
+          st.select(repo, { kind: 'commit', sha: commit.sha })
+          if (st.rightCollapsed) st.toggleRight()
+          useMessageEdit.getState().start(repo, commit.sha)
+        }
+      })
+    }
     // "From here" edits the commits after this one; a root commit has no parent to
     // use as the base, so it gets its own entry that includes it (git rebase -i --root).
     if (!isHead && inHistory) {

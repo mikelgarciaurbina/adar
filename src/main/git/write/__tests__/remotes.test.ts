@@ -1,4 +1,6 @@
+import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { AdarEvent } from '@shared/types'
@@ -197,6 +199,45 @@ describe('fetch / pull / push', () => {
     const err = await expectCode(ops.push(repo, { force: 'with-lease' }), 'GIT_FAILED')
     expect(err.message).toMatch(/Force push refused: origin\/main has commits your local main has never contained/)
     expect(remoteHead(origin, 'refs/heads/main')).toBe(coworker)
+  })
+
+  it('force-with-lease works in a fresh clone, whose remote-tracking refs have no reflog yet', async () => {
+    const { ops } = makeOps()
+    const { origin, repo, clone } = cloneSetup()
+    expect(fs.existsSync(path.join(repo, '.git', 'logs', 'refs', 'remotes', 'origin', 'main'))).toBe(false)
+    git(repo, ['commit', '-q', '--amend', '--only', '-m', 'Initial commit (reworded)'])
+    await ops.push(repo, { force: 'with-lease' })
+    expect(remoteHead(origin, 'refs/heads/main')).toBe(head(repo))
+
+    // Without that reflog the check is done by hand, and still protects commits main never contained.
+    const other = clone()
+    commitFile(other, 'o.txt', 'o\n', 'coworker')
+    git(other, ['push', '-q', 'origin', 'main'])
+    const coworker = head(other)
+    git(repo, ['fetch', '-q'])
+    fs.rmSync(path.join(repo, '.git', 'logs', 'refs', 'remotes', 'origin', 'main'))
+    git(repo, ['commit', '-q', '--amend', '--only', '-m', 'Initial commit (reworded twice)'])
+    const err = await expectCode(ops.push(repo, { force: 'with-lease' }), 'GIT_FAILED')
+    expect(err.message).toMatch(/Force push refused: origin\/main has commits your local main has never contained/)
+    expect(remoteHead(origin, 'refs/heads/main')).toBe(coworker)
+  })
+
+  it('force-with-lease also works once gc has emptied the remote-tracking reflog, with signatures shown in logs', async () => {
+    const { ops } = makeOps()
+    const { origin, repo } = cloneSetup()
+    // Signed commits + log.showSignature: git log prints verification lines between the shas.
+    const key = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'adar-wtest-key-')), 'id')
+    execFileSync('ssh-keygen', ['-q', '-t', 'ed25519', '-N', '', '-f', key])
+    for (const [k, v] of [['gpg.format', 'ssh'], ['user.signingkey', key], ['commit.gpgSign', 'true'], ['log.showSignature', 'true']]) git(repo, ['config', k, v])
+    commitFile(repo, 'a.txt', 'a\n', 'A')
+    await ops.push(repo)
+    commitFile(repo, 'b.txt', 'b\n', 'B')
+    expect(git(repo, ['log', '-g', '--format=%H', 'main'])).toMatch(/signature/i)
+    git(repo, ['reflog', 'expire', '--expire=now', 'refs/remotes/origin/main']) // what gc does after 90 days
+    expect(fs.statSync(path.join(repo, '.git', 'logs', 'refs', 'remotes', 'origin', 'main')).size).toBe(0)
+    git(repo, ['rebase', '-q', '--force-rebase', 'HEAD~2']) // rewrites the pushed A
+    await ops.push(repo, { force: 'with-lease' })
+    expect(remoteHead(origin, 'refs/heads/main')).toBe(head(repo))
   })
 
   it('validates push arguments', async () => {

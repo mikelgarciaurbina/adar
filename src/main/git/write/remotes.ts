@@ -17,6 +17,7 @@ import {
   nameArg,
   notFound,
   refExists,
+  tryResolveCommit,
   withCode
 } from './util'
 
@@ -30,6 +31,22 @@ const FORCE_MODES: readonly ForcePushMode[] = [false, 'with-lease', 'force']
 
 function urlArg(url: unknown): string {
   return arg(typeof url === 'string' ? url.trim() : url, 'remote URL')
+}
+
+function leaseRefused(remote: string, remoteBranch: string, branch: string, err?: AdarError): AdarError {
+  const message = `Force push refused: ${remote}/${remoteBranch} has commits your local ${branch} has never contained (someone else pushed). Pull or review them first.`
+  return err ? withCode(err, err.code, message) : new AdarError({ code: 'GIT_FAILED', message })
+}
+
+/** True when `sha` is reachable from the branch's tip or from any commit its reflog recorded. */
+async function branchHasContained(ctx: GitContext, repo: string, branch: string, sha: string): Promise<boolean> {
+  const ref = `refs/heads/${branch}`
+  const reflog = await ctx.git(repo, ['log', '-g', '--no-show-signature', '--format=%H', ref, '--'], { allowFailure: true })
+  const shas = reflog.code === 0 ? reflog.stdout.split('\n').filter((l) => /^[0-9a-f]{40,64}$/.test(l)) : []
+  const tips = new Set([...shas, ref])
+  // (--not does not apply to --stdin, hence the ^ on every line.)
+  const res = await ctx.git(repo, ['rev-list', '--count', sha, '--stdin'], { input: [...tips].map((t) => `^${t}\n`).join('') })
+  return res.stdout.trim() === '0'
 }
 
 export function createRemoteOps(ctx: GitContext): RemoteOps {
@@ -99,9 +116,24 @@ export function createRemoteOps(ctx: GitContext): RemoteOps {
       // fetch (auto-fetch) silently moves to someone else's new commits — the lease would then pass and
       // overwrite them. push.useForceIfIncludes (git >= 2.30) additionally requires that the local branch
       // once contained that tip. (As config, older git ignores it instead of failing on an unknown flag.)
+      // That check reads the remote-tracking ref's reflog, which a fresh clone does not have and gc empties
+      // after gc.reflogExpire (git then refuses every force push): in that case do the same check here and
+      // lease against the tracking ref explicitly.
+      let lease = '--force-with-lease'
+      if (force === 'with-lease') {
+        const tracking = `refs/remotes/${remote}/${remoteBranch}`
+        const expected = await tryResolveCommit(ctx, repo, tracking)
+        const lastEntry = expected
+          ? await ctx.git(repo, ['log', '-g', '-1', '--no-show-signature', '--format=%H', tracking, '--'], { allowFailure: true })
+          : null
+        if (expected && lastEntry && (lastEntry.code !== 0 || !lastEntry.stdout.trim())) {
+          if (!(await branchHasContained(ctx, repo, branch, expected))) throw leaseRefused(remote, remoteBranch, branch)
+          lease = `--force-with-lease=refs/heads/${remoteBranch}:${expected}`
+        }
+      }
       const args = force === 'with-lease' ? ['-c', 'push.useForceIfIncludes=true', 'push', '--progress'] : ['push', '--progress']
       if (opts.setUpstream) args.push('--set-upstream')
-      if (force === 'with-lease') args.push('--force-with-lease')
+      if (force === 'with-lease') args.push(lease)
       else if (force === 'force') args.push('--force')
       if (opts.tags) args.push('--follow-tags')
       args.push(remote, `refs/heads/${branch}:refs/heads/${remoteBranch}`)
@@ -109,11 +141,7 @@ export function createRemoteOps(ctx: GitContext): RemoteOps {
         await ctx.gitNetwork(repo, args, { opId: opts.opId })
       } catch (err) {
         if (force === 'with-lease' && err instanceof AdarError && /stale info|remote ref updated since checkout/i.test(err.stderr ?? '')) {
-          throw withCode(
-            err,
-            err.code,
-            `Force push refused: ${remote}/${remoteBranch} has commits your local ${branch} has never contained (someone else pushed). Pull or review them first.`
-          )
+          throw leaseRefused(remote, remoteBranch, branch, err)
         }
         throw err
       }

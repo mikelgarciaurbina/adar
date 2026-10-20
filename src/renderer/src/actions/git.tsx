@@ -8,11 +8,13 @@ import { choose, confirm, form, prompt, validateRefName } from '@renderer/compon
 import { showContextMenu, type MenuItem } from '@renderer/components/common/ContextMenu'
 import { toast } from '@renderer/components/common/toast'
 import type { DraggedRef } from '@renderer/lib/dnd'
+import { pluralize, summarizeList } from '@renderer/lib/format'
+import { cleanMessage } from '@renderer/components/details/message'
 import { refDropActions } from '@renderer/lib/refDrop'
 import { currentBranch, defaultRemote, localForRemote, remoteBranchName } from '@renderer/lib/refs'
 import { StaleHistoryError, useApp, type RefreshScope, type RepoTab } from '@renderer/store/appStore'
 import { describeError, AdarError } from '@shared/errors'
-import type { DiffTarget, OperationResult, PullMode, Ref, ResetMode } from '@shared/types'
+import type { DiffTarget, OperationResult, PullMode, Ref, ResetMode, RewordInfo } from '@shared/types'
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -899,13 +901,34 @@ export async function push(
       .finally(() => store().setProgress(opId, null))
   }
 
+  // The lease refuses when the remote has commits this branch never contained (someone else
+  // pushed, possibly fetched in the background). Overwriting them needs an explicit decision.
+  const leaseRefused = (e: unknown) =>
+    /force push refused|stale info|remote ref updated since checkout/i.test(`${describeError(e)} ${(e as AdarError).stderr ?? ''}`)
+  const offerOverwrite = async () => {
+    const overwrite = await confirm({
+      title: 'Someone else pushed to this branch',
+      message: `The remote has commits that your local ${branchName} never contained. Overwriting removes them from the remote for everyone. Pull and review them first unless you are sure.`,
+      confirmLabel: 'Overwrite remote commits',
+      danger: true
+    })
+    if (!overwrite) return
+    try {
+      await doPush('force')
+      toast.success(`Force pushed ${branchName}`)
+    } catch (err3) {
+      toast.error(err3)
+    }
+  }
+
   store().setBusy(`push:${repo}`, 'Pushing…')
   try {
     await doPush()
     toast.success(`Pushed ${branchName}${remote ? ` to ${remote}` : branch?.upstream ? ` to ${branch.upstream}` : ''}`)
   } catch (err) {
     const text = `${(err as AdarError).stderr ?? ''} ${describeError(err)}`
-    if (/rejected|non-fast-forward|fetch first|stale info/i.test(text) && !opts.force) {
+    if (opts.force === 'with-lease' && leaseRefused(err)) await offerOverwrite()
+    else if (/rejected|non-fast-forward|fetch first|stale info/i.test(text) && !opts.force) {
       const choice = await choose<'pull' | 'force'>({
         title: 'Push rejected',
         message: `The remote has commits that ${branchName} does not have.`,
@@ -920,24 +943,8 @@ export async function push(
           await doPush('with-lease')
           toast.success(`Force pushed ${branchName}`)
         } catch (err2) {
-          // The lease refuses when the remote has commits this branch never contained (someone else
-          // pushed, possibly fetched in the background). Overwriting them needs an explicit decision.
-          if (/force push refused|stale info|remote ref updated since checkout/i.test(`${describeError(err2)} ${(err2 as AdarError).stderr ?? ''}`)) {
-            const overwrite = await confirm({
-              title: 'Someone else pushed to this branch',
-              message: `The remote has commits that your local ${branchName} never contained. Overwriting removes them from the remote for everyone. Pull and review them first unless you are sure.`,
-              confirmLabel: 'Overwrite remote commits',
-              danger: true
-            })
-            if (overwrite) {
-              try {
-                await doPush('force')
-                toast.success(`Force pushed ${branchName}`)
-              } catch (err3) {
-                toast.error(err3)
-              }
-            }
-          } else toast.error(err2)
+          if (leaseRefused(err2)) await offerOverwrite()
+          else toast.error(err2)
         }
       }
     } else toast.error(err)
@@ -1098,6 +1105,105 @@ export async function commit(repo: string, message: string, opts: { amend?: bool
     })
   }
   return sha
+}
+
+/**
+ * Edit the message of a commit on the checked-out branch (GitKraken's "Edit commit message").
+ * Asks first when the commit is already on a remote (the branch will need a force push, or other
+ * branches keep the original). Resolves to the commit's new sha, or null when nothing happened.
+ */
+export async function rewordCommit(repo: string, sha: string, message: string): Promise<string | null> {
+  const msg = message.replace(/\s+$/, '')
+  if (!msg.trim()) {
+    toast.error('The commit message cannot be empty')
+    return null
+  }
+  let info: RewordInfo
+  try {
+    info = await api.getRewordInfo(repo, sha)
+  } catch (err) {
+    toast.error(err)
+    return null
+  }
+  if (!info.editable) {
+    toast.warning(info.reason ?? 'This commit cannot be edited')
+    return null
+  }
+  if (cleanMessage(info.message) === cleanMessage(msg)) return sha
+  if (info.upstream || info.remoteBranches.length) {
+    const branch = info.branch ?? 'this branch'
+    const recreated = info.rewritten > 1 ? ` (and the ${pluralize(info.rewritten - 1, 'commit')} after it)` : ''
+    const ok = await confirm({
+      title: 'Change the message of a pushed commit?',
+      message: (
+        <>
+          {info.upstream && (
+            <p>
+              This commit{recreated} is already on {info.upstream}. Changing its message rewrites history: you will need to force push {branch}{' '}
+              (with lease), and anyone who already pulled it will have to reset their copy.
+            </p>
+          )}
+          {info.remoteBranches.length > 0 && (
+            <p>
+              {summarizeList(info.remoteBranches)} {info.remoteBranches.length === 1 ? 'also has' : 'also have'} it and will keep the original
+              commit, so {branch} will diverge from {info.remoteBranches.length === 1 ? 'it' : 'them'}.
+            </p>
+          )}
+        </>
+      ),
+      confirmLabel: 'Change message',
+      danger: true
+    })
+    if (!ok) return null
+  }
+  const res = await run(repo, { busy: 'reword', busyLabel: 'Updating commit message…' }, () => api.rewordCommit(repo, sha, msg))
+  if (!res) return null
+  if (!res.ok || !res.newSha) {
+    handleOperationResult(repo, res, '')
+    return null
+  }
+  const newSha = res.newSha
+  const previousHead = res.previousHead
+  if (newSha === sha) {
+    // Nothing to rewrite (e.g. the commit-msg hook gave the same message back).
+    toast.info(res.message || 'The message did not change')
+    return sha
+  }
+  store().select(repo, { kind: 'commit', sha: newSha })
+  void store().ensureCommitLoaded(repo, newSha)
+
+  const branchName = info.branch
+  let pushToast: number | null = null
+  if (info.upstream && branchName) {
+    pushToast = toast.success(`Message updated. ${branchName} now differs from ${info.upstream}.`, {
+      duration: 0,
+      // The branch that was rewritten, even if another one is checked out by the time this is clicked.
+      actions: [{ label: `Force push ${branchName}`, onClick: () => void push(repo, { branch: branchName, force: 'with-lease' }) }]
+    })
+  } else toast.success('Commit message updated')
+
+  if (previousHead) {
+    store().pushHistory(repo, {
+      label: `Edit message of ${sha.slice(0, 7)}`,
+      // Only messages changed (same trees): a soft reset to the old HEAD restores the old history
+      // without touching the index or the working tree.
+      undo: async () => {
+        await api.reset(repo, previousHead, 'soft')
+        if (pushToast !== null) toast.dismiss(pushToast)
+        store().select(repo, { kind: 'commit', sha })
+        await refresh(repo)
+      },
+      redo: async () => {
+        const again = await api.rewordCommit(repo, sha, msg)
+        if (again.newSha) {
+          store().select(repo, { kind: 'commit', sha: again.newSha })
+          void store().ensureCommitLoaded(repo, again.newSha)
+        }
+        await refresh(repo)
+      }
+    })
+  }
+  return newSha
 }
 
 // ── In-progress operations ────────────────────────────────────────────────

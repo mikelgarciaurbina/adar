@@ -1,16 +1,21 @@
 // Commit details (GitKraken right panel): sha header, subject/body, author and
 // committer, parents, refs, change stats and the changed files.
 
-import { useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { GitCommitHorizontal } from 'lucide-react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { GitCommitHorizontal, Pencil } from 'lucide-react'
 import { api } from '@renderer/api/client'
+import { toast } from '@renderer/components/common/toast'
+import { useMessageEdit } from '@renderer/lib/messageEdit'
 import { Avatar } from '@renderer/components/common/Avatar'
 import { refsBySha } from '@renderer/lib/refs'
 import { shortSha } from '@renderer/lib/format'
+import { isAncestor } from '@renderer/components/graph/model'
 import { useApp, type RepoTab } from '@renderer/store/appStore'
 import type { Commit, CommitDetails } from '@shared/types'
 import { useCached } from './cache'
 import { ChangesFileList } from './ChangesFileList'
+import { CommitMessageEditor } from './CommitMessageEditor'
+import { splitMessage } from './message'
 import { CopyButton, DateText, ErrorBlock, LinkifiedText, LoadingBlock, RefChips } from './parts'
 
 /** Select a commit and page it into the graph if needed. */
@@ -31,6 +36,38 @@ export function CommitPanel({ tab, sha }: { tab: RepoTab; sha: string }) {
   const commit: Commit | null = details.data?.commit ?? listCommit
   const refsMap = useMemo(() => refsBySha(tab.refs), [tab.refs])
   const [bodyExpanded, setBodyExpanded] = useState(false)
+  const editing = useMessageEdit((s) => (s.open[repo]?.sha === sha ? s.open[repo]! : null))
+  const editRequest = useMessageEdit((s) => s.request)
+  // Commits on the checked-out branch (HEAD or its ancestors) can have their message edited.
+  const headSha = (tab.refs?.head ?? tab.info?.head)?.sha ?? null
+  const canEdit = useMemo(() => !!headSha && isAncestor(tab.commits, sha, headSha), [tab.commits, sha, headSha])
+
+  /** Open the inline editor if this commit's message can be edited (else say why). */
+  const startEdit = async () => {
+    try {
+      const info = await api.getRewordInfo(repo, sha)
+      if (!info.editable) {
+        toast.info(info.reason ?? 'This commit cannot be edited')
+        return
+      }
+      useMessageEdit.getState().setOpen(repo, { sha, info, ...splitMessage(info.message) })
+    } catch (err) {
+      toast.error(err)
+    }
+  }
+  // "Edit commit message…" from the graph's context menu.
+  useEffect(() => {
+    if (editRequest && editRequest.repo === repo && editRequest.sha === sha) {
+      useMessageEdit.getState().clear()
+      void startEdit()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editRequest, repo, sha])
+  // A different commit selected: drop the editor (the same commit shown again keeps it).
+  useEffect(() => {
+    const open = useMessageEdit.getState().open[repo]
+    if (open && open.sha !== sha) useMessageEdit.getState().setOpen(repo, null)
+  }, [repo, sha])
 
   if (!commit) {
     return (
@@ -63,8 +100,19 @@ export function CommitPanel({ tab, sha }: { tab: RepoTab; sha: string }) {
 
       <div className={`det-info${bodyExpanded ? ' det-info-expanded' : ''}`}>
         <RefChips repo={repo} refs={refsMap.get(commit.sha)} />
-        <div className="det-subject selectable">{commit.subject || <span className="det-muted">(no commit message)</span>}</div>
-        {commit.body.trim() && <CommitBody text={commit.body.replace(/\s+$/, '')} expanded={bodyExpanded} onToggle={() => setBodyExpanded((v) => !v)} />}
+        {editing ? (
+          <CommitMessageEditor repo={repo} edit={editing} onDone={() => useMessageEdit.getState().setOpen(repo, null)} />
+        ) : (
+          <div className={`det-message${canEdit ? ' det-message-editable' : ''}`}>
+            {canEdit && (
+              <button type="button" className="ui-icon-btn ui-icon-btn-sm det-message-edit" aria-label="Edit commit message" title="Edit commit message" onClick={() => void startEdit()}>
+                <Pencil size={13} />
+              </button>
+            )}
+            <div className="det-subject selectable">{commit.subject || <span className="det-muted">(no commit message)</span>}</div>
+            {commit.body.trim() && <CommitBody text={commit.body.replace(/\s+$/, '')} expanded={bodyExpanded} onToggle={() => setBodyExpanded((v) => !v)} />}
+          </div>
+        )}
 
         <div className="det-person">
           <Avatar name={commit.authorName} email={commit.authorEmail} size={32} />

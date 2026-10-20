@@ -31,7 +31,8 @@ no contiene código, recursos ni marca de GitKraken y no tiene relación con Git
 - **Panel izquierdo**: ramas locales y remotas agrupadas en carpetas, tags, stashes y submódulos, con filtro,
   contadores ahead/behind y ocultar o aislar ramas en el grafo.
 - **Staging** por archivo, por hunk o por líneas sueltas; descartar cambios; ignorar archivos.
-- **Commits**: resumen + descripción, amend, “stage all & commit” y mensaje de merge pre-rellenado.
+- **Commits**: resumen + descripción, amend, “stage all & commit”, mensaje de merge pre-rellenado y **editar el mensaje
+  de cualquier commit de tu rama** desde el propio panel (con aviso y atajo de force push si ya estaba pusheado).
 - **Diffs** unificados o lado a lado, solo los cambios o el archivo completo, con resaltado de sintaxis y cambios dentro
   de la línea; diff de imágenes; historial de un archivo y *blame*.
 - **Herramienta de conflictos** (A / B / resultado editable) y banner para continuar, saltar o abortar merges, rebases,

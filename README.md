@@ -37,7 +37,8 @@ branding and is not affiliated with GitKraken or Axosoft.
 - **Left panel**: local and remote branches grouped in folders, tags, stashes and submodules, with filtering,
   ahead/behind counters and hide/solo branches in the graph.
 - **Staging** by file, hunk or individual lines; discard changes; ignore files.
-- **Commits**: summary + description, amend, "stage all & commit", pre-filled merge messages.
+- **Commits**: summary + description, amend, "stage all & commit", pre-filled merge messages, and **edit the message of
+  any commit on your branch** in place (with a warning and a force-push shortcut when it was already pushed).
 - **Diffs** unified or side by side, changed hunks or the full file, syntax highlighting and intra-line changes;
   image diffs; file history and blame.
 - **Merge conflict tool** (A / B / editable output) and a banner to continue, skip or abort merges, rebases,

@@ -117,7 +117,8 @@ export function createInteractiveOps(ctx: GitContext): InteractiveOps {
 
         const fullMessages = new Map<string, string>()
         for (const sha of messagesNeeded(items)) {
-          const res = await ctx.git(repo, ['log', '-1', '--no-show-signature', '--format=%B', sha, '--'])
+          // Read and write messages as UTF-8, whatever i18n.commitEncoding says (the text is decoded as UTF-8 here).
+          const res = await ctx.git(repo, ['log', '-1', '--no-show-signature', '--encoding=UTF-8', '--format=%B', sha, '--'])
           fullMessages.set(sha, res.stdout)
         }
         const steps = buildTodo(items, fullMessages)
@@ -136,13 +137,15 @@ export function createInteractiveOps(ctx: GitContext): InteractiveOps {
           const file = path.join(dir, `message-${++n}.txt`)
           await fs.writeFile(file, step.message, 'utf8')
           lines.push(
-            `exec ${git} commit --amend --only --allow-empty --no-verify --cleanup=whitespace -F ${shellQuote(shellPath(file))}`
+            `exec ${git} -c i18n.commitEncoding=UTF-8 commit --amend --only --allow-empty --no-verify --cleanup=whitespace -F ${shellQuote(shellPath(file))}`
           )
         }
         await fs.writeFile(todoFile, `${lines.join('\n')}\n`, 'utf8')
 
         const args = ['rebase', '-i', '--autostash', '--no-autosquash', '--no-rebase-merges']
         if (await gitAtLeast(ctx, 2, 38)) args.push('--no-update-refs')
+        // A failed message amend (signing, identity) must run again on Continue instead of being dropped.
+        if (await gitAtLeast(ctx, 2, 22)) args.push('--reschedule-failed-exec')
         args.push(isRoot ? '--root' : base)
 
         let result: OperationResult

@@ -57,6 +57,13 @@ export function pluralize(n: number, word: string, plural = word + 's'): string 
   return `${n} ${n === 1 ? word : plural}`
 }
 
+/** "a, b and c" / "a, b, c and 4 more" — a readable list that stays short. */
+export function summarizeList(items: readonly string[], max = 3): string {
+  if (items.length <= 1) return items.join('')
+  if (items.length <= max) return `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`
+  return `${items.slice(0, max).join(', ')} and ${items.length - max} more`
+}
+
 export const STATUS_LETTER: Record<FileStatusCode, string> = {
   added: 'A',
   modified: 'M',

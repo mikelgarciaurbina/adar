@@ -1061,3 +1061,79 @@
     padding: 0 6px;
   }
 }
+
+/* ── Edit commit message (inline) ──────────────────────────────────────── */
+
+.det-message {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px; /* like .det-info's gap, which no longer reaches the subject and body */
+  min-width: 0;
+}
+.det-message-editable {
+  padding-right: 26px;
+}
+.det-message-edit {
+  position: absolute;
+  top: -2px;
+  right: 0;
+  opacity: 0;
+  transition: opacity 0.12s var(--ease);
+}
+.det-message:hover .det-message-edit,
+.det-message-edit:focus-visible {
+  opacity: 1;
+}
+.det-msg-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 2px 0 6px;
+}
+.det-msg-editor-row {
+  position: relative;
+}
+/* Two classes: beat .ui-input / textarea.ui-input (common.css loads after this file). */
+.det-msg-editor .det-msg-editor-summary {
+  font-weight: 600;
+  padding-right: 34px;
+}
+.det-msg-editor-count {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+  pointer-events: none;
+}
+.det-msg-editor-count-over {
+  color: var(--warning);
+}
+.det-msg-editor .det-msg-editor-desc {
+  resize: none;
+  min-height: 56px;
+  font-size: var(--fs-md);
+}
+.det-msg-editor-warn {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--warning-soft);
+  color: var(--text-1);
+  font-size: var(--fs-sm);
+  line-height: 1.4;
+}
+.det-msg-editor-warn svg {
+  color: var(--warning);
+  flex: none;
+  margin-top: 1px;
+}
+.det-msg-editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}

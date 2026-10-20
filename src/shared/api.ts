@@ -35,6 +35,8 @@ import type {
   RefsResult,
   RepoInfo,
   ResetMode,
+  RewordInfo,
+  RewordResult,
   WorkingStatus
 } from './types'
 
@@ -142,6 +144,14 @@ export interface AdarApi {
   skipOperation(repo: string): Promise<OperationResult>
 
   // ── Interactive rebase ──────────────────────────────────────────────────
+  /** Can this commit's message be edited in place? Also lists the branches and tags that already contain it. */
+  getRewordInfo(repo: string, sha: string): Promise<RewordInfo>
+  /**
+   * Change the message of a commit on the checked-out branch (HEAD or older). The commit and those after it
+   * are recreated with the same trees, authors and merges, and HEAD moves once: the index, the working tree
+   * and untracked or ignored files are never touched. Runs the commit-msg hook (git >= 2.36).
+   */
+  rewordCommit(repo: string, sha: string, message: string): Promise<RewordResult>
   /** Commits in base..HEAD, OLDEST first (the order of a rebase todo list). */
   getRebaseCommits(repo: string, base: string): Promise<Commit[]>
   /** Number of merge commits in base..HEAD: an interactive rebase would flatten them (and drop merge-only changes). */
@@ -272,6 +282,8 @@ export const API_METHODS = [
   'continueOperation',
   'abortOperation',
   'skipOperation',
+  'getRewordInfo',
+  'rewordCommit',
   'getRebaseCommits',
   'getRebaseMergeCount',
   'interactiveRebase',
