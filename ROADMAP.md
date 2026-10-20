@@ -99,6 +99,8 @@ tab groups (a project's repositories together, reopened in one click).
 - [ ] Custom themes (theme files), font and density options, high-contrast theme.
 - [ ] Workspaces: a dashboard for a tab group (branch, changes and ahead/behind of each repository) with batch
   fetch/pull, and favourites. (Tab groups themselves are done.)
+- [ ] Tab groups: any colour for a group (colour picker or hex value) besides the preset palette, with the chip's
+  text switching between light and dark so it stays readable in both themes. *(good first issue)*
 - [ ] Optional system notifications when a fetch brings new commits to branches you track.
 - [ ] Accessibility pass: screen-reader labels, full keyboard navigation, reduced motion.
 - [ ] First-run tour.
