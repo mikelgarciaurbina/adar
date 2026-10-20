@@ -20,7 +20,8 @@ branches, remotes, tags, stashes and submodules panel · staging by file, hunk a
 split diffs, hunks or full file · file history and blame · merge-conflict tool · visual interactive rebase ·
 fetch/pull/push with upstream handling · undo/redo of git actions · command palette and git console · tabs ·
 dark/light themes · credential prompts for HTTPS tokens and SSH passphrases · in-app updates from GitHub Releases ·
-`adar` command-line tool (open the current repository from a terminal) · edit the message of existing commits in place.
+`adar` command-line tool (open the current repository from a terminal) · edit the message of existing commits in place ·
+tab groups (a project's repositories together, reopened in one click).
 
 ---
 
@@ -96,7 +97,8 @@ dark/light themes · credential prompts for HTTPS tokens and SSH passphrases · 
 ### Experience
 - [ ] Customizable keyboard shortcuts.
 - [ ] Custom themes (theme files), font and density options, high-contrast theme.
-- [ ] Workspaces: repository groups, favourites and a multi-repository dashboard with batch fetch/pull.
+- [ ] Workspaces: a dashboard for a tab group (branch, changes and ahead/behind of each repository) with batch
+  fetch/pull, and favourites. (Tab groups themselves are done.)
 - [ ] Optional system notifications when a fetch brings new commits to branches you track.
 - [ ] Accessibility pass: screen-reader labels, full keyboard navigation, reduced motion.
 - [ ] First-run tour.

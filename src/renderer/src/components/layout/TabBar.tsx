@@ -1,16 +1,20 @@
 // Top tab strip: one tab per open repository (GitKraken style). The bar doubles as
 // the window drag region; tabs and buttons opt out with no-drag.
 
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { CircleArrowUp, Copy, Download, FolderGit2, FolderInput, FolderOpen, FolderPlus, Plus, SquareTerminal, X } from 'lucide-react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
+import { CircleArrowUp, Copy, Download, FolderGit2, FolderInput, FolderOpen, FolderPlus, Layers, Plus, SquareTerminal, X } from 'lucide-react'
 import { isElectron, isMac } from '@renderer/api/client'
 import * as git from '@renderer/actions/git'
+import { closeGroup, GROUP_COLOR_LABELS, newGroup, openGroup, renameGroup } from '@renderer/actions/groups'
 import { showContextMenu, showMenuBelow, type MenuItem } from '@renderer/components/common/ContextMenu'
 import { getCommand } from '@renderer/commands'
 import { useUpdates } from '@renderer/components/update/updateStore'
 import { isMod, shortcutLabel } from '@renderer/lib/keys'
+import { dropPlacement, groupOf, tabSegments } from '@renderer/lib/tabGroups'
 import { useApp } from '@renderer/store/appStore'
-import { distinctParents, pendingUpdateVersion, reorderIndex } from './chrome'
+import { TAB_GROUP_COLORS, type TabGroup } from '@shared/types'
+import { distinctParents, pendingUpdateVersion } from './chrome'
 import { useWindowFullscreen } from './hooks'
 import './layout.css'
 
@@ -21,6 +25,32 @@ function shortcutOf(id: string): string | undefined {
   return spec ? shortcutLabel(spec) : undefined
 }
 
+/** Coloured dot for menus and lists. */
+export function GroupDot({ group }: { group: Pick<TabGroup, 'color'> }) {
+  return <span className="tb-group-dot" style={{ background: `var(--group-${group.color})` }} />
+}
+
+/** "Open Group" entries (one per saved group), or nothing when there are no groups. */
+export function openGroupItems(): MenuItem[] {
+  const s = useApp.getState()
+  const groups = s.settings.tabGroups
+  if (!groups.length) return []
+  const open = new Set(s.tabs.map((t) => t.path))
+  return [
+    { type: 'separator' },
+    {
+      label: 'Open Group',
+      icon: <Layers size={14} />,
+      submenu: groups.map((g) => ({
+        label: `${g.name || 'Unnamed group'} (${g.repos.length})`,
+        icon: <GroupDot group={g} />,
+        checked: g.repos.every((p) => open.has(p)),
+        onClick: () => void openGroup(g.id)
+      }))
+    }
+  ]
+}
+
 /** Items of the "+" menu, also reused by the toolbar's repository dropdown. */
 export function repoLifecycleItems(): MenuItem[] {
   const s = useApp.getState()
@@ -28,7 +58,8 @@ export function repoLifecycleItems(): MenuItem[] {
     { label: 'Open Repository…', icon: <FolderOpen size={14} />, shortcut: shortcutOf('open-repo'), onClick: () => git.openRepoDialog() },
     { label: 'Open by Path…', icon: <FolderInput size={14} />, shortcut: shortcutOf('open-repo-path'), onClick: () => s.openModal({ kind: 'open' }) },
     { label: 'Clone Repository…', icon: <Download size={14} />, shortcut: shortcutOf('clone-repo'), onClick: () => s.openModal({ kind: 'clone' }) },
-    { label: 'Init Repository…', icon: <FolderPlus size={14} />, shortcut: shortcutOf('init-repo'), onClick: () => s.openModal({ kind: 'init' }) }
+    { label: 'Init Repository…', icon: <FolderPlus size={14} />, shortcut: shortcutOf('init-repo'), onClick: () => s.openModal({ kind: 'init' }) },
+    ...openGroupItems()
   ]
 }
 
@@ -54,6 +85,8 @@ export function TabBar() {
     [tabsKey]
   )
   const hints = useMemo(() => distinctParents(tabs), [tabs])
+  const groups = useApp((s) => s.settings.tabGroups)
+  const segments = useMemo(() => tabSegments(tabs, groups), [tabs, groups])
   const busyRepos = useMemo(() => {
     const set = new Set<string>()
     for (const key of busyKey ? busyKey.split('\u0001') : []) {
@@ -65,7 +98,10 @@ export function TabBar() {
 
   const stripRef = useRef<HTMLDivElement>(null)
   const tabEls = useRef(new Map<string, HTMLDivElement>())
-  const [drop, setDrop] = useState<{ index: number; after: boolean } | null>(null)
+  /** Drop indicator: before/after tab `index`, or before the chip of group `chip` (a drop that lands outside it). */
+  const [drop, setDrop] = useState<{ index: number; after: boolean; chip?: string } | null>(null)
+  /** Group chip under a dragged tab (dropping there joins the group). */
+  const [chipDrop, setChipDrop] = useState<string | null>(null)
   const dragFrom = useRef<number | null>(null)
 
   // Keep the active tab visible.
@@ -105,12 +141,32 @@ export function TabBar() {
     for (const t of list.slice(idx + 1)) void useApp.getState().closeTab(t.path)
   }
 
+  const groupItems = (tab: TabLite): MenuItem[] => {
+    const own = groupOf(groups, tab.path)
+    const others = groups.filter((g) => g.id !== own?.id)
+    const items: MenuItem[] = [{ label: 'Add to New Group…', icon: <Layers size={14} />, onClick: () => void newGroup([tab.path]) }]
+    if (others.length) {
+      items.push({
+        label: own ? 'Move to Group' : 'Add to Group',
+        submenu: others.map((g) => ({
+          label: g.name || 'Unnamed group',
+          icon: <GroupDot group={g} />,
+          onClick: () => useApp.getState().setTabGroup(tab.path, g.id)
+        }))
+      })
+    }
+    if (own) items.push({ label: `Remove from “${own.name || 'group'}”`, onClick: () => useApp.getState().setTabGroup(tab.path, null) })
+    return items
+  }
+
   const onContextMenu = (e: React.MouseEvent, tab: TabLite, index: number) => {
     showContextMenu(e, [
       { type: 'header', label: tab.name },
       { label: 'Close', icon: <X size={14} />, shortcut: shortcutOf('close-tab'), onClick: () => close(tab.path) },
       { label: 'Close Others', disabled: tabs.length < 2, onClick: () => closeOthers(tab.path) },
       { label: 'Close Tabs to the Right', disabled: index >= tabs.length - 1, onClick: () => closeToRight(tab.path) },
+      { type: 'separator' },
+      ...groupItems(tab),
       { type: 'separator' },
       { label: isMac ? 'Reveal in Finder' : 'Show in Folder', icon: <FolderOpen size={14} />, onClick: () => git.showInFolder(tab.path) },
       { label: 'Open in Terminal', icon: <SquareTerminal size={14} />, onClick: () => git.openInTerminal(tab.path) },
@@ -130,7 +186,12 @@ export function TabBar() {
     e.dataTransfer.dropEffect = 'move'
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
     const after = e.clientX > r.left + r.width / 2
-    setDrop((d) => (d && d.index === index && d.after === after ? d : { index, after }))
+    // The left edge of a group's first tab puts an outsider before the group: show the line before its chip.
+    let chip: string | undefined
+    const from = dragFrom.current
+    const g = groupOf(groups, tabs[index]?.path ?? '')
+    if (!after && g && from !== null && dropPlacement(tabs, groups, from, index, false, useApp.getState().activePath).groupId === null) chip = g.id
+    setDrop((d) => (d && d.index === index && d.after === after && d.chip === chip ? d : { index, after, chip }))
   }
 
   const onDrop = (e: React.DragEvent, index: number) => {
@@ -143,8 +204,46 @@ export function TabBar() {
     setDrop(null)
     dragFrom.current = null
     if (from === null || !Number.isInteger(from) || from < 0) return
-    const to = reorderIndex(from, index, after)
-    if (to !== from) useApp.getState().moveTab(from, to)
+    const { to, groupId } = dropPlacement(tabs, groups, from, index, after, useApp.getState().activePath)
+    if (to !== from || (groupOf(groups, tabs[from]?.path ?? '')?.id ?? null) !== groupId) useApp.getState().moveTabTo(from, to, groupId)
+  }
+
+  /** A tab dropped on a group's chip joins the group (at its end). */
+  const onChipDrop = (e: React.DragEvent, group: TabGroup) => {
+    if (!Array.from(e.dataTransfer.types).includes(TAB_MIME)) return
+    e.preventDefault()
+    const raw = e.dataTransfer.getData(TAB_MIME)
+    const from = raw !== '' ? Number(raw) : dragFrom.current
+    setDrop(null)
+    setChipDrop(null)
+    dragFrom.current = null
+    if (from === null || !Number.isInteger(from) || from < 0 || !tabs[from]) return
+    const members = tabs.map((t, i) => (group.repos.includes(t.path) ? i : -1)).filter((i) => i >= 0)
+    const last = members[members.length - 1] ?? tabs.length - 1
+    useApp.getState().moveTabTo(from, from <= last ? last : last + 1, group.id)
+  }
+
+  const onChipContextMenu = (e: React.MouseEvent, group: TabGroup) => {
+    const st = useApp.getState()
+    const openCount = tabs.filter((t) => group.repos.includes(t.path)).length
+    showContextMenu(e, [
+      { type: 'header', label: group.name || 'Unnamed group' },
+      { label: 'Rename Group…', onClick: () => void renameGroup(group.id) },
+      {
+        label: 'Colour',
+        submenu: TAB_GROUP_COLORS.map((c) => ({
+          label: GROUP_COLOR_LABELS[c],
+          icon: <GroupDot group={{ color: c }} />,
+          checked: c === group.color,
+          onClick: () => st.updateGroup(group.id, { color: c })
+        }))
+      },
+      { label: group.collapsed ? 'Expand' : 'Collapse', onClick: () => st.updateGroup(group.id, { collapsed: !group.collapsed }) },
+      ...(openCount < group.repos.length ? [{ label: 'Open All Repositories', onClick: () => void openGroup(group.id) }] : []),
+      { type: 'separator' },
+      { label: 'Ungroup', onClick: () => st.deleteGroup(group.id) },
+      { label: 'Close Group', icon: <X size={14} />, onClick: () => void closeGroup(group.id) }
+    ])
   }
 
   // macOS traffic lights sit over the bar's left end, except in full screen (hidden there).
@@ -156,6 +255,78 @@ export function TabBar() {
   const updateVersion = useUpdates((s) => pendingUpdateVersion(s.status))
   const updateReady = useUpdates((s) => s.status?.state === 'downloaded')
 
+  const renderTab = (tab: TabLite, i: number, group: TabGroup | null) => {
+    const active = tab.path === activePath
+    const isBusy = busyRepos.has(tab.path)
+    const indicator = drop && drop.index === i && !drop.chip ? (drop.after ? ' tb-drop-after' : ' tb-drop-before') : ''
+    return (
+      <div
+        key={tab.path}
+        ref={(el) => {
+          if (el) tabEls.current.set(tab.path, el)
+          else tabEls.current.delete(tab.path)
+        }}
+        className={`tb-tab${active ? ' tb-tab-active' : ''}${group ? ' tb-tab-grouped' : ''}${indicator}`}
+        style={group ? ({ '--tb-group': `var(--group-${group.color})` } as React.CSSProperties) : undefined}
+        role="tab"
+        aria-selected={active}
+        tabIndex={active ? 0 : -1}
+        title={group ? `${tab.path}\nGroup: ${group.name || 'Unnamed group'}` : tab.path}
+        draggable
+        onDragStart={(e) => onDragStart(e, i)}
+        onDragOver={(e) => onDragOver(e, i)}
+        onDragLeave={(e) => {
+          if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) setDrop((d) => (d?.index === i ? null : d))
+        }}
+        onDrop={(e) => onDrop(e, i)}
+        onDragEnd={() => {
+          setDrop(null)
+          setChipDrop(null)
+          dragFrom.current = null
+        }}
+        onMouseDown={(e) => {
+          if (e.button === 1) e.preventDefault()
+        }}
+        onClick={() => useApp.getState().setActive(tab.path)}
+        onAuxClick={(e) => {
+          if (e.button === 1) {
+            e.preventDefault()
+            close(tab.path)
+          }
+        }}
+        onContextMenu={(e) => onContextMenu(e, tab, i)}
+        onKeyDown={(e) => {
+          if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+            e.preventDefault()
+            const next = tabs[(i + (e.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length]
+            // Render first: a hidden tab of a collapsed group only exists once it is active.
+            flushSync(() => useApp.getState().setActive(next.path))
+            tabEls.current.get(next.path)?.focus()
+          }
+        }}
+      >
+        <span className="tb-tab-icon">{isBusy ? <span className="ui-spinner ui-spinner-sm" /> : <FolderGit2 size={13} />}</span>
+        <span className="tb-tab-name">
+          {tab.name}
+          {hints.has(tab.path) && <span className="tb-tab-hint">{hints.get(tab.path)}</span>}
+        </span>
+        <button
+          className="tb-tab-close"
+          tabIndex={-1}
+          aria-label={`Close ${tab.name}`}
+          title={`Close${shortcutOf('close-tab') ? ` (${shortcutOf('close-tab')})` : ''}`}
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation()
+            close(tab.path)
+          }}
+        >
+          <X size={12} />
+        </button>
+      </div>
+    )
+  }
+
   return (
     <div className={`tb-tabbar${reserveTrafficLights ? ' tb-tabbar-mac' : ''}`} role="tablist" aria-label="Open repositories">
       <div
@@ -166,72 +337,37 @@ export function TabBar() {
           if (el && Math.abs(e.deltaY) > Math.abs(e.deltaX)) el.scrollLeft += e.deltaY
         }}
       >
-        {tabs.map((tab, i) => {
-          const active = tab.path === activePath
-          const isBusy = busyRepos.has(tab.path)
-          const indicator = drop && drop.index === i ? (drop.after ? ' tb-drop-after' : ' tb-drop-before') : ''
+        {segments.map((seg) => {
+          if (seg.kind === 'tab') return renderTab(seg.tab, seg.index, null)
+          const { group } = seg
+          const color = `var(--group-${group.color})`
+          // A collapsed group still shows the active tab, so the open repository is never hidden.
+          const shown = group.collapsed ? seg.tabs.filter((x) => x.tab.path === activePath) : seg.tabs
+          const label = group.name || 'Unnamed group'
           return (
-            <div
-              key={tab.path}
-              ref={(el) => {
-                if (el) tabEls.current.set(tab.path, el)
-                else tabEls.current.delete(tab.path)
-              }}
-              className={`tb-tab${active ? ' tb-tab-active' : ''}${indicator}`}
-              role="tab"
-              aria-selected={active}
-              tabIndex={active ? 0 : -1}
-              title={tab.path}
-              draggable
-              onDragStart={(e) => onDragStart(e, i)}
-              onDragOver={(e) => onDragOver(e, i)}
-              onDragLeave={(e) => {
-                if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) setDrop((d) => (d?.index === i ? null : d))
-              }}
-              onDrop={(e) => onDrop(e, i)}
-              onDragEnd={() => {
-                setDrop(null)
-                dragFrom.current = null
-              }}
-              onMouseDown={(e) => {
-                if (e.button === 1) e.preventDefault()
-              }}
-              onClick={() => useApp.getState().setActive(tab.path)}
-              onAuxClick={(e) => {
-                if (e.button === 1) {
-                  e.preventDefault()
-                  close(tab.path)
-                }
-              }}
-              onContextMenu={(e) => onContextMenu(e, tab, i)}
-              onKeyDown={(e) => {
-                if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
-                  e.preventDefault()
-                  const next = tabs[(i + (e.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length]
-                  useApp.getState().setActive(next.path)
-                  tabEls.current.get(next.path)?.focus()
-                }
-              }}
-            >
-              <span className="tb-tab-icon">{isBusy ? <span className="ui-spinner ui-spinner-sm" /> : <FolderGit2 size={13} />}</span>
-              <span className="tb-tab-name">
-                {tab.name}
-                {hints.has(tab.path) && <span className="tb-tab-hint">{hints.get(tab.path)}</span>}
-              </span>
+            <Fragment key={`group:${group.id}`}>
               <button
-                className="tb-tab-close"
-                tabIndex={-1}
-                aria-label={`Close ${tab.name}`}
-                title={`Close${shortcutOf('close-tab') ? ` (${shortcutOf('close-tab')})` : ''}`}
-                onMouseDown={(e) => e.stopPropagation()}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  close(tab.path)
+                className={`tb-group-chip${group.collapsed ? ' tb-group-chip-collapsed' : ''}${chipDrop === group.id ? ' tb-group-chip-drop' : ''}${drop?.chip === group.id ? ' tb-drop-before' : ''}`}
+                style={{ '--tb-group': color } as React.CSSProperties}
+                title={`${label}: ${seg.tabs.map((x) => x.tab.name).join(', ')}\nClick to ${group.collapsed ? 'expand' : 'collapse'}, right-click for options`}
+                aria-expanded={!group.collapsed}
+                aria-label={`Group ${label}, ${seg.tabs.length} ${seg.tabs.length === 1 ? 'tab' : 'tabs'}`}
+                onClick={() => useApp.getState().updateGroup(group.id, { collapsed: !group.collapsed })}
+                onContextMenu={(e) => onChipContextMenu(e, group)}
+                onDragOver={(e) => {
+                  if (!Array.from(e.dataTransfer.types).includes(TAB_MIME)) return
+                  e.preventDefault()
+                  e.dataTransfer.dropEffect = 'move'
+                  setChipDrop(group.id)
                 }}
+                onDragLeave={() => setChipDrop((d) => (d === group.id ? null : d))}
+                onDrop={(e) => onChipDrop(e, group)}
               >
-                <X size={12} />
+                <span className="tb-group-name">{label}</span>
+                {group.collapsed && <span className="tb-group-count">{seg.tabs.length}</span>}
               </button>
-            </div>
+              {shown.map((x) => renderTab(x.tab, x.index, group))}
+            </Fragment>
           )
         })}
         <button

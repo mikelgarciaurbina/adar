@@ -1,9 +1,10 @@
 // Start screen shown when no repository tab is open.
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { CornerDownLeft, Download, FolderGit2, FolderOpen, FolderPlus, Search, TriangleAlert, UserRound, X } from 'lucide-react'
+import { CornerDownLeft, Download, FolderGit2, FolderOpen, FolderPlus, Layers, Search, TriangleAlert, UserRound, X } from 'lucide-react'
 import { api, isElectron } from '@renderer/api/client'
 import * as git from '@renderer/actions/git'
+import { openGroup, renameGroup } from '@renderer/actions/groups'
 import { Button, Kbd } from '@renderer/components/common/Button'
 import { showContextMenu } from '@renderer/components/common/ContextMenu'
 import { toast } from '@renderer/components/common/toast'
@@ -11,7 +12,9 @@ import { getCommand } from '@renderer/commands'
 import { relativeTime } from '@renderer/lib/format'
 import { shortcutLabel } from '@renderer/lib/keys'
 import { useApp } from '@renderer/store/appStore'
-import type { Identity, RecentRepo } from '@shared/types'
+import { summarizeList } from '@renderer/lib/format'
+import { folderName } from '@renderer/lib/tabGroups'
+import type { Identity, RecentRepo, TabGroup } from '@shared/types'
 import { distinctParents, formatGitVersion, tildify, toUnixSeconds } from './chrome'
 import { useNow } from './hooks'
 import { AdarLogo } from './Logo'
@@ -26,6 +29,7 @@ const FILTER_THRESHOLD = 6
 
 export function Welcome() {
   const recent = useApp((s) => s.recent)
+  const groups = useApp((s) => s.settings.tabGroups)
   const appInfo = useApp((s) => s.appInfo)
   const openModal = useApp((s) => s.openModal)
   const modal = useApp((s) => s.modal)
@@ -168,6 +172,8 @@ export function Welcome() {
           </form>
         )}
 
+        {groups.length > 0 && <GroupList groups={groups} homeDir={appInfo?.homeDir ?? null} />}
+
         <section className="wl-card wl-recent">
           <div className="wl-recent-head">
             <h2 className="wl-section-title">Recent repositories</h2>
@@ -283,5 +289,76 @@ export function Welcome() {
         </footer>
       </div>
     </div>
+  )
+}
+
+/** Saved tab groups: one click reopens all of a project's repositories. */
+function GroupList({ groups, homeDir }: { groups: TabGroup[]; homeDir: string | null }) {
+  const [opening, setOpening] = useState<string | null>(null)
+  const open = async (id: string) => {
+    if (opening) return
+    setOpening(id)
+    try {
+      await openGroup(id)
+    } finally {
+      setOpening(null)
+    }
+  }
+  const forget = (g: TabGroup) => useApp.getState().deleteGroup(g.id)
+  return (
+    <section className="wl-card wl-recent">
+      <div className="wl-recent-head">
+        <h2 className="wl-section-title">Groups</h2>
+      </div>
+      <div className="wl-recent-list">
+        {groups.map((g) => {
+          const names = g.repos.map(folderName)
+          return (
+            <div
+              key={g.id}
+              className={`wl-recent-item${opening === g.id ? ' wl-opening' : ''}`}
+              role="button"
+              tabIndex={0}
+              title={g.repos.map((p) => tildify(p, homeDir)).join('\n')}
+              onClick={() => void open(g.id)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  void open(g.id)
+                }
+              }}
+              onContextMenu={(e) =>
+                showContextMenu(e, [
+                  { label: 'Open All', onClick: () => open(g.id) },
+                  { label: 'Rename…', onClick: () => renameGroup(g.id) },
+                  { label: 'Forget Group', danger: true, onClick: () => forget(g) }
+                ])
+              }
+            >
+              <span className="wl-recent-icon" style={{ color: `var(--group-${g.color})` }}>
+                {opening === g.id ? <span className="ui-spinner ui-spinner-sm" /> : <Layers size={16} />}
+              </span>
+              <span className="wl-recent-text">
+                <span className="wl-recent-name">{g.name || 'Unnamed group'}</span>
+                <span className="wl-recent-path">{summarizeList(names, 5)}</span>
+              </span>
+              <span className="wl-recent-time">{g.repos.length === 1 ? '1 repository' : `${g.repos.length} repositories`}</span>
+              <button
+                className="wl-recent-remove"
+                title="Forget this group (its repositories stay in the recent list)"
+                aria-label={`Forget group ${g.name}`}
+                tabIndex={-1}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  forget(g)
+                }}
+              >
+                <X size={13} />
+              </button>
+            </div>
+          )
+        })}
+      </div>
+    </section>
   )
 }

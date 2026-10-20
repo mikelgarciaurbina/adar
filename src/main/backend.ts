@@ -63,6 +63,7 @@ const NON_REPO_METHODS: ReadonlySet<string> = new Set([
   'updateSettings',
   'getRecentRepos',
   'removeRecentRepo',
+  'findRepositories',
   'answerCredentialRequest',
   'openRepo',
   'trustRepo',

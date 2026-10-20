@@ -74,6 +74,23 @@ describe('openRepo / getRepoInfo', () => {
     await backend.closeRepo(repo)
   })
 
+  it('finds the repositories directly inside a folder', async () => {
+    const project = tempDir()
+    for (const name of ['landing', 'api', 'App']) git(project, ['init', '-q', name])
+    mkdirSync(path.join(project, 'docs'))
+    mkdirSync(path.join(project, '.hidden'))
+    git(project, ['init', '-q', '.hidden/repo'])
+    writeFileSync(path.join(project, 'notes.txt'), 'x')
+    mkdirSync(path.join(project, 'worktree'))
+    writeFileSync(path.join(project, 'worktree', '.git'), 'gitdir: /elsewhere\n')
+    expect(await backend.findRepositories(project)).toEqual(
+      ['api', 'App', 'landing', 'worktree'].map((name) => ({ path: path.join(project, name), name }))
+    )
+    expect(await backend.findRepositories(path.join(project, 'docs'))).toEqual([])
+    await expect(backend.findRepositories(path.join(project, 'missing'))).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    await expect(backend.findRepositories('relative/path')).rejects.toMatchObject({ code: 'INVALID_ARGUMENT' })
+  })
+
   it('reports detached HEAD', async () => {
     const repo = initTestRepo()
     const first = commitAll(repo, 'one')

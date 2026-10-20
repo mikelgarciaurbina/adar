@@ -242,6 +242,26 @@ describe('settings', () => {
     expect(sanitizeSettings(DEFAULT_SETTINGS, { theme: 'purple', diffViewMode: 'split' })).toMatchObject({ theme: 'dark', diffViewMode: 'split' })
   })
 
+  it('keeps only well-formed tab groups', () => {
+    const s = sanitizeSettings(DEFAULT_SETTINGS, {
+      tabGroups: [
+        { id: 'p', name: '  OverlayOn\n', color: 'blue', repos: ['/w/p/api', '/w/p/app', '/w/p/api', 'relative'], collapsed: true },
+        { id: 'p', name: 'duplicate id', color: 'red', repos: ['/x'] },
+        { id: 'q', name: 'Other', color: 'rainbow', repos: ['/w/p/app', '/w/q'], collapsed: 'yes' },
+        { id: 'empty', name: 'No repos', color: 'green', repos: ['/w/p/api'] },
+        'garbage',
+        { id: 'r', name: 4, color: 'pink', repos: 'nope' }
+      ],
+      groupSuggestionsDismissed: ['/w', 5]
+    })
+    expect(s.tabGroups).toEqual([
+      { id: 'p', name: 'OverlayOn', color: 'blue', repos: ['/w/p/api', '/w/p/app'], collapsed: true },
+      { id: 'q', name: 'Other', color: 'grey', repos: ['/w/q'], collapsed: false }
+    ])
+    expect(s.groupSuggestionsDismissed).toEqual([]) // not all strings: ignored
+    expect(sanitizeSettings(DEFAULT_SETTINGS, { tabGroups: 'x' }).tabGroups).toEqual([])
+  })
+
   it('maps the legacy hunk / inline diff modes onto layout + diffFullFile', () => {
     const full = { ...DEFAULT_SETTINGS, diffFullFile: true }
     expect(sanitizeSettings(full, { diffViewMode: 'hunk' })).toMatchObject({ diffViewMode: 'unified', diffFullFile: false })

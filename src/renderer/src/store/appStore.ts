@@ -20,8 +20,11 @@ import {
   type RecentRepo,
   type RefsResult,
   type RepoInfo,
+  type TabGroup,
+  type TabGroupColor,
   type WorkingStatus
 } from '@shared/types'
+import { arrangeTabs, newGroupId, nextGroupColor, syncGroupOrder, withMembership } from '@renderer/lib/tabGroups'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -149,10 +152,22 @@ export interface AppState {
 
   // lifecycle
   init(): Promise<void>
-  openRepo(path: string): Promise<boolean>
+  /** Open (or switch to) a repository; resolves to its tab's path (git's real path of the worktree root). */
+  openRepo(path: string): Promise<string>
   closeTab(path: string): Promise<void>
   setActive(path: string | null): void
   moveTab(from: number, to: number): void
+
+  // tab groups (settings.tabGroups; groups outlive their tabs)
+  /** Group these repositories (taken out of any other group); returns the new group's id. */
+  createGroup(paths: string[], opts?: { name?: string; color?: TabGroupColor }): string
+  /** Move a repository into a group, or out of its group (null). */
+  setTabGroup(path: string, groupId: string | null): void
+  updateGroup(id: string, patch: Partial<Pick<TabGroup, 'name' | 'color' | 'collapsed'>>): void
+  /** Forget a group; its open tabs stay, ungrouped. */
+  deleteGroup(id: string): void
+  /** Tab bar drag & drop: move tab `from` to index `to` (splice semantics) and into group `groupId`. */
+  moveTabTo(from: number, to: number, groupId: string | null): void
 
   // data loading
   refresh(path: string, what?: RefreshScope[]): Promise<void>
@@ -288,6 +303,15 @@ export const useApp = create<AppState>()((set, get) => {
     void get().updateSettings({ openTabs: tabs.map((t) => t.path), activeTab: activePath })
   }
 
+  /** Save new groups, keeping each group's tabs together and its repository order in step with the tabs. */
+  const applyGroups = (groups: TabGroup[], tabs: RepoTab[] = get().tabs) => {
+    const arranged = arrangeTabs(tabs, groups)
+    set({ tabs: arranged })
+    void get().updateSettings({ tabGroups: syncGroupOrder(groups, arranged) })
+    persistTabs()
+  }
+  const cleanName = (name: string) => name.replace(/[\r\n\t]+/g, ' ').trim().slice(0, 80)
+
   /** Fetch the next page of the log for `path` (callers go through loadMore, which dedupes). */
   const loadMorePage = async (path: string): Promise<void> => {
     const tab = getTab(path)
@@ -351,6 +375,7 @@ export const useApp = create<AppState>()((set, get) => {
             // Repo moved or deleted — skip silently.
           }
         }
+        set((s) => ({ tabs: arrangeTabs(s.tabs, s.settings.tabGroups ?? []) }))
         const tabs = get().tabs
         const active = tabs.find((t) => t.path === settings.activeTab)?.path ?? tabs[0]?.path ?? null
         set({ activePath: active })
@@ -366,19 +391,20 @@ export const useApp = create<AppState>()((set, get) => {
       const existing = get().tabs.find((t) => t.path === path)
       if (existing) {
         get().setActive(existing.path)
-        return true
+        return existing.path
       }
       const info = await api.openRepo(path)
       const already = get().tabs.find((t) => t.path === info.path)
       if (already) {
         get().setActive(already.path)
-        return true
+        return already.path
       }
-      set((s) => ({ tabs: [...s.tabs, { ...newTab(info.path, info.name), info }], activePath: info.path }))
+      // A repository of a group joins its group's tabs.
+      set((s) => ({ tabs: arrangeTabs([...s.tabs, { ...newTab(info.path, info.name), info }], s.settings.tabGroups), activePath: info.path }))
       persistTabs()
       void get().refreshRecent()
       await get().refresh(info.path)
-      return true
+      return info.path
     },
 
     async closeTab(path) {
@@ -406,14 +432,41 @@ export const useApp = create<AppState>()((set, get) => {
     },
 
     moveTab(from, to) {
-      set((s) => {
-        const tabs = [...s.tabs]
-        const [moved] = tabs.splice(from, 1)
-        if (!moved) return {}
-        tabs.splice(Math.max(0, Math.min(to, tabs.length)), 0, moved)
-        return { tabs }
-      })
-      persistTabs()
+      const tabs = [...get().tabs]
+      const [moved] = tabs.splice(from, 1)
+      if (!moved) return
+      tabs.splice(Math.max(0, Math.min(to, tabs.length)), 0, moved)
+      applyGroups(get().settings.tabGroups, tabs)
+    },
+
+    createGroup(paths, opts) {
+      const unique = [...new Set(paths)]
+      let groups = get().settings.tabGroups
+      for (const p of unique) groups = withMembership(groups, p, null)
+      const id = newGroupId()
+      applyGroups([...groups, { id, name: cleanName(opts?.name ?? ''), color: opts?.color ?? nextGroupColor(groups), repos: unique, collapsed: false }])
+      return id
+    },
+
+    setTabGroup(path, groupId) {
+      applyGroups(withMembership(get().settings.tabGroups, path, groupId))
+    },
+
+    updateGroup(id, patch) {
+      const clean = patch.name === undefined ? patch : { ...patch, name: cleanName(patch.name) }
+      applyGroups(get().settings.tabGroups.map((g) => (g.id === id ? { ...g, ...clean } : g)))
+    },
+
+    deleteGroup(id) {
+      applyGroups(get().settings.tabGroups.filter((g) => g.id !== id))
+    },
+
+    moveTabTo(from, to, groupId) {
+      const tabs = [...get().tabs]
+      const [moved] = tabs.splice(from, 1)
+      if (!moved) return
+      tabs.splice(Math.max(0, Math.min(to, tabs.length)), 0, moved)
+      applyGroups(withMembership(get().settings.tabGroups, moved.path, groupId), tabs)
     },
 
     async refresh(path, what = ['info', 'refs', 'log', 'status']) {

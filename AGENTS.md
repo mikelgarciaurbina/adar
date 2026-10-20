@@ -30,6 +30,8 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
   - `store/appStore.ts` — zustand `useApp`: tabs (`RepoTab`), selection, centre view, settings, undo/redo stacks.
   - `actions/git.tsx` — user-level git actions (confirmations, toasts, busy state, refresh, undo entries). UI code calls
     these instead of `api` for anything that mutates a repository.
+  - `actions/groups.tsx` — tab groups (open/close a group, group a folder's repositories, the grouping suggestion);
+    groups are saved in `settings.tabGroups`, pure helpers in `lib/tabGroups.ts`.
   - `commands.ts` — command registry shared by the native menu, shortcuts and the command palette.
   - `components/` — `common` (Modal, Button, dialogs, ContextMenu, toast, Avatar, Resizer, ErrorBoundary), `layout`
     (tabs, toolbar, status bar, welcome, logo), `graph`, `sidebar`, `details` (commit details, staging, composer),

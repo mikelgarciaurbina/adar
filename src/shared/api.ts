@@ -32,6 +32,7 @@ import type {
   PullMode,
   RebaseTodoItem,
   RecentRepo,
+  FoundRepo,
   RefsResult,
   RepoInfo,
   ResetMode,
@@ -55,6 +56,8 @@ export interface AdarApi {
   updateSettings(patch: Partial<AppSettings>): Promise<AppSettings>
   getRecentRepos(): Promise<RecentRepo[]>
   removeRecentRepo(path: string): Promise<void>
+  /** Git repositories directly inside a folder (sorted by name, at most 100), e.g. a project's api/app/landing. */
+  findRepositories(path: string): Promise<FoundRepo[]>
   /** Reply to a 'credential-request' event. null cancels the git command. */
   answerCredentialRequest(id: string, value: string | null): Promise<void>
 
@@ -241,6 +244,7 @@ export const API_METHODS = [
   'updateSettings',
   'getRecentRepos',
   'removeRecentRepo',
+  'findRepositories',
   'answerCredentialRequest',
   'openRepo',
   'trustRepo',

@@ -10,6 +10,7 @@ import { toast } from '@renderer/components/common/toast'
 import type { DraggedRef } from '@renderer/lib/dnd'
 import { pluralize, summarizeList } from '@renderer/lib/format'
 import { cleanMessage } from '@renderer/components/details/message'
+import { openFolderOfRepos, suggestGroup } from './groups'
 import { refDropActions } from '@renderer/lib/refDrop'
 import { currentBranch, defaultRemote, localForRemote, remoteBranchName } from '@renderer/lib/refs'
 import { StaleHistoryError, useApp, type RefreshScope, type RepoTab } from '@renderer/store/appStore'
@@ -140,11 +141,14 @@ export async function openRepoDialog(): Promise<void> {
 
 export async function openRepoAt(dir: string): Promise<boolean> {
   try {
-    await store().openRepo(dir)
+    void suggestGroup(await store().openRepo(dir))
     return true
   } catch (err) {
-    if (err instanceof AdarError && err.code === 'UNTRUSTED_REPO') return trustAndOpen(dir, err)
+    if (err instanceof AdarError && err.code === 'UNTRUSTED_REPO') return (await trustAndOpen(dir, err)) !== null
     if (err instanceof AdarError && err.code === 'NOT_A_REPO') {
+      // A project folder holding repositories (api, app, landing…): open them as a group.
+      const inside = await api.findRepositories(dir).catch(() => [])
+      if (inside.length) return openFolderOfRepos(dir, inside)
       const ok = await confirm({
         title: 'Not a Git repository',
         message: `${dir} is not a Git repository. Initialize one here?`,
@@ -168,8 +172,11 @@ export async function openRepoAt(dir: string): Promise<boolean> {
   }
 }
 
-/** A repository whose local config makes git run commands: show what it runs and let the user decide. */
-async function trustAndOpen(dir: string, err: AdarError): Promise<boolean> {
+/**
+ * A repository whose local config makes git run commands: show what it runs and let the user decide.
+ * Resolves to the opened tab's path, or null.
+ */
+export async function trustAndOpen(dir: string, err: AdarError): Promise<string | null> {
   const entries = err.details ?? []
   const ok = await confirm({
     title: 'Trust this repository?',
@@ -186,14 +193,13 @@ async function trustAndOpen(dir: string, err: AdarError): Promise<boolean> {
     confirmLabel: 'Trust and open',
     danger: true
   })
-  if (!ok) return false
+  if (!ok) return null
   try {
     await api.trustRepo(dir)
-    await store().openRepo(dir)
-    return true
+    return await store().openRepo(dir)
   } catch (e) {
     toast.error(e)
-    return false
+    return null
   }
 }
 

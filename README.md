@@ -47,6 +47,8 @@ branding and is not affiliated with GitKraken or Axosoft.
 - **Remotes**: fetch (also in the background), pull (ff-only / merge / rebase), push with upstream, force-push with lease,
   remote management, clone with progress.
 - **Undo / redo** for git actions (checkout, commits, branches, tags, resets, stashes…).
+- **Tab groups**: keep a project's repositories (say api, app and landing) together under a named, coloured chip;
+  collapse them, and reopen the whole group in one click from the welcome screen, the **+** menu or the palette.
 - **Command palette** (⌘P), built-in **git console** (⌃\`), tabs for several repositories, dark and light themes,
   keyboard shortcuts.
 - **In-app updates** from GitHub Releases (*Adar → Check for Updates…*).
@@ -78,6 +80,7 @@ Open a repository in Adar from your terminal, like `code .` or GitKraken's `gk`:
 ```bash
 adar              # the repository of the current folder
 adar ~/code/app   # any folder inside a repository
+adar ~/code/shop  # a folder holding several repositories: opens them as a tab group
 ```
 
 Install the command once from **Adar → Install Command Line Tool…** (or *Settings → Integrations*). It links

@@ -120,7 +120,8 @@ export function updateSubmodules(repo: string): Promise<boolean> {
 
 export async function openSubmodule(repo: string, path: string): Promise<boolean> {
   try {
-    return await store().openRepo(git.absPath(repo, path))
+    await store().openRepo(git.absPath(repo, path))
+    return true
   } catch (err) {
     toast.error(err)
     return false

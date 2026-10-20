@@ -5,9 +5,11 @@
 import { randomBytes } from 'node:crypto'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
-import { DEFAULT_SETTINGS, type AppSettings, type RecentRepo } from '@shared/types'
+import { DEFAULT_SETTINGS, TAB_GROUP_COLORS, type AppSettings, type RecentRepo, type TabGroup } from '@shared/types'
 
 export const MAX_RECENTS = 30
+export const MAX_TAB_GROUPS = 100
+const MAX_GROUP_NAME = 80
 /** Trusted repositories kept (most recently trusted first). */
 export const MAX_TRUSTED = 1000
 
@@ -21,6 +23,31 @@ const ENUMS: Partial<Record<keyof AppSettings, readonly string[]>> = {
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v)
+}
+
+/** Well-formed groups only: known colours, absolute paths, each repository in one group, unique ids. */
+export function sanitizeTabGroups(raw: unknown): TabGroup[] | null {
+  if (!Array.isArray(raw)) return null
+  const out: TabGroup[] = []
+  const ids = new Set<string>()
+  const taken = new Set<string>()
+  for (const g of raw) {
+    if (!isPlainObject(g) || typeof g.id !== 'string' || !g.id || g.id.length > 64 || ids.has(g.id) || !Array.isArray(g.repos)) continue
+    const repos = g.repos.filter((p): p is string => typeof p === 'string' && path.isAbsolute(p) && !taken.has(p))
+    const unique = [...new Set(repos)]
+    if (!unique.length) continue
+    ids.add(g.id)
+    for (const p of unique) taken.add(p)
+    out.push({
+      id: g.id,
+      name: typeof g.name === 'string' ? g.name.replace(/[\r\n\t]+/g, ' ').trim().slice(0, MAX_GROUP_NAME) : '',
+      color: (TAB_GROUP_COLORS as readonly string[]).includes(g.color as string) ? (g.color as TabGroup['color']) : 'grey',
+      repos: unique,
+      collapsed: g.collapsed === true
+    })
+    if (out.length >= MAX_TAB_GROUPS) break
+  }
+  return out
 }
 
 /**
@@ -45,6 +72,11 @@ export function sanitizeSettings(base: AppSettings, rawPatch: unknown): AppSetti
     const def = defaults[key]
     if (key === 'activeTab') {
       if (value === null || typeof value === 'string') target[key] = value
+      continue
+    }
+    if (key === 'tabGroups') {
+      const groups = sanitizeTabGroups(value)
+      if (groups) target[key] = groups
       continue
     }
     if (Array.isArray(def)) {

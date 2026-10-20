@@ -2,11 +2,11 @@
 // identity and the git console escape hatch.
 
 import { execFile, spawn, type SpawnOptions } from 'node:child_process'
-import { existsSync, promises as fs, type Stats } from 'node:fs'
+import { existsSync, promises as fs, type Dirent, type Stats } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { AdarError } from '@shared/errors'
-import type { GitCommandResult, Identity } from '@shared/types'
+import type { FoundRepo, GitCommandResult, Identity } from '@shared/types'
 import type { GitContext } from '../context'
 import type { ReadOps } from '../ops'
 import { summarizeGitOutput } from '../runner'
@@ -26,10 +26,14 @@ type AppOps = Pick<
   | 'updateSettings'
   | 'getRecentRepos'
   | 'removeRecentRepo'
+  | 'findRepositories'
   | 'answerCredentialRequest'
   | 'getIdentity'
   | 'runGit'
 >
+
+/** Repositories reported by findRepositories (opening more as tabs would not be useful). */
+const MAX_FOUND_REPOS = 100
 
 /** Max stdout kept for git console commands (the UI cannot render more anyway). */
 const CONSOLE_MAX_OUTPUT = 10 * 1024 * 1024
@@ -362,6 +366,32 @@ export function createAppOps(ctx: GitContext, services: SystemServices): AppOps 
     async removeRecentRepo(p) {
       if (typeof p !== 'string') throw invalidArgument('Path is required')
       return services.settings.removeRecentRepo(p)
+    },
+
+    async findRepositories(dir) {
+      if (typeof dir !== 'string' || !path.isAbsolute(dir)) throw invalidArgument('An absolute folder path is required')
+      let entries: Dirent[]
+      try {
+        entries = await fs.readdir(dir, { withFileTypes: true })
+      } catch (err) {
+        const code = (err as NodeJS.ErrnoException).code
+        if (code === 'ENOENT') throw notFound(`Folder not found: ${dir}`)
+        if (code === 'ENOTDIR') throw invalidArgument(`${dir} is not a folder`)
+        throw err
+      }
+      // Paths from the folder's real path (symlinks and letter case resolved), like git's worktree roots.
+      const root = await fs.realpath(dir).catch(() => dir)
+      // Only real sub-folders (no symlinks, no hidden ones) holding a .git folder or file (worktree/submodule).
+      const names = entries.filter((e) => e.isDirectory() && !e.name.startsWith('.')).map((e) => e.name)
+      names.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true }))
+      const found: FoundRepo[] = []
+      for (const name of names) {
+        const child = path.join(root, name)
+        const marker = await fs.lstat(path.join(child, '.git')).catch(() => null)
+        if (marker && (marker.isDirectory() || marker.isFile())) found.push({ path: child, name })
+        if (found.length >= MAX_FOUND_REPOS) break
+      }
+      return found
     },
 
     async answerCredentialRequest(id, value) {

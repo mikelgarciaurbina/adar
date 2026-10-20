@@ -383,6 +383,28 @@ export interface RecentRepo {
   lastOpened: number
 }
 
+/** Colours a tab group can take (theme tokens --group-<colour>). */
+export const TAB_GROUP_COLORS = ['grey', 'blue', 'red', 'yellow', 'green', 'pink', 'purple', 'cyan', 'orange'] as const
+export type TabGroupColor = (typeof TAB_GROUP_COLORS)[number]
+
+/** A named set of repositories shown together in the tab bar (e.g. a project's api, app and landing). */
+export interface TabGroup {
+  id: string
+  name: string
+  color: TabGroupColor
+  /** Repository paths (as opened), in tab order. A repository belongs to one group at most; the group is
+   *  kept when its tabs are closed, so the whole set can be reopened at once. */
+  repos: string[]
+  /** Only the group's chip (and its active tab) is shown. */
+  collapsed: boolean
+}
+
+/** A Git repository found directly inside a folder (see AdarApi.findRepositories). */
+export interface FoundRepo {
+  path: string
+  name: string
+}
+
 export type ThemeSetting = 'dark' | 'light' | 'system'
 /** unified = one column with +/- lines; split = old and new side by side. */
 export type DiffViewMode = 'unified' | 'split'
@@ -411,6 +433,10 @@ export interface AppSettings {
   /** Repos open as tabs, restored on launch. */
   openTabs: string[]
   activeTab: string | null
+  /** Tab groups, also when none of their tabs is open. */
+  tabGroups: TabGroup[]
+  /** Folders whose "group these repositories?" suggestion the user turned off. */
+  groupSuggestionsDismissed: string[]
   leftPanelWidth: number
   rightPanelWidth: number
   /** Show remote branches in the graph. */
@@ -443,6 +469,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   terminalApp: 'Terminal',
   openTabs: [],
   activeTab: null,
+  tabGroups: [],
+  groupSuggestionsDismissed: [],
   leftPanelWidth: 260,
   rightPanelWidth: 380,
   graphShowRemotes: true,

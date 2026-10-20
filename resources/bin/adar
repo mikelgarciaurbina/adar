@@ -3,12 +3,14 @@
 #
 #   adar            open the repository of the current directory
 #   adar <path>     open the repository containing <path>
+#                   (a folder holding several repositories opens them as a tab group)
 #
 # Installed by Adar → Install Command Line Tool… as a link to Adar.app/Contents/Resources/bin/adar.
 
 case "${1:-}" in
   -h|--help)
     echo "usage: adar [path]   open the Git repository containing path (default: current directory) in Adar"
+    echo "                     a folder holding several repositories opens them as a tab group"
     exit 0
     ;;
 esac

@@ -41,6 +41,9 @@ no contiene código, recursos ni marca de GitKraken y no tiene relación con Git
 - **Remotos**: fetch (también en segundo plano), pull (ff-only / merge / rebase), push con upstream, force-push con lease,
   gestión de remotos y clonado con progreso.
 - **Deshacer / rehacer** acciones git (checkout, commits, ramas, tags, resets, stashes…).
+- **Grupos de pestañas**: mantén juntos los repositorios de un proyecto (por ejemplo api, app y landing) bajo una
+  etiqueta con nombre y color; pliégalos y vuelve a abrir el grupo entero con un clic desde la pantalla de inicio, el
+  menú **+** o la paleta.
 - **Paleta de comandos** (⌘P), **consola git** integrada (⌃\`), pestañas para varios repos, temas oscuro y claro, atajos.
 - **Actualizaciones** desde GitHub Releases (*Adar → Check for Updates…*).
 - **Seguro por defecto**: las acciones destructivas piden confirmación y se pueden deshacer, y los repositorios cuya
@@ -72,6 +75,7 @@ Abre un repositorio en Adar desde la terminal, como `code .` o el `gk` de GitKra
 ```bash
 adar              # el repositorio de la carpeta actual
 adar ~/code/app   # cualquier carpeta dentro de un repositorio
+adar ~/code/shop  # una carpeta con varios repositorios: los abre como grupo de pestañas
 ```
 
 Instala el comando una vez desde **Adar → Install Command Line Tool…** (o *Settings → Integrations*). Enlaza `adar`

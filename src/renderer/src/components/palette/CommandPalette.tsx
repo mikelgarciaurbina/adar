@@ -14,10 +14,12 @@ import {
   GitBranch,
   GitCommitHorizontal,
   Globe,
+  Layers,
   Search,
   SquareStack
 } from 'lucide-react'
 import * as git from '@renderer/actions/git'
+import { openGroup } from '@renderer/actions/groups'
 import { COMMANDS, runCommand, type Command } from '@renderer/commands'
 import { tildify } from '@renderer/components/layout/chrome'
 import { shortcutLabel } from '@renderer/lib/keys'
@@ -135,6 +137,17 @@ function buildEntries(): Entry[] {
   }
 
   const openPaths = new Set(s.tabs.map((t) => t.path))
+  for (const g of s.settings.tabGroups) {
+    if (g.repos.every((p) => openPaths.has(p))) continue
+    out.push({
+      id: `group:${g.id}`,
+      label: `Open group ${g.name || 'Unnamed group'}`,
+      group: 'Groups',
+      detail: g.repos.map((p) => p.split(/[\\/]/).pop()).join(', '),
+      icon: <Layers size={14} />,
+      run: () => void openGroup(g.id)
+    })
+  }
   for (const r of s.recent) {
     if (openPaths.has(r.path)) continue
     out.push({

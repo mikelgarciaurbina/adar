@@ -136,6 +136,32 @@ describe('chrome render smoke tests', () => {
     expect(html).toContain('tb-tab-hint">oss<')
   })
 
+  it('renders tab groups: a coloured chip before their tabs, collapsed groups keep only the active tab', () => {
+    const api = makeTab('/w/Proj/api', 'api')
+    const app = makeTab('/w/Proj/app', 'app')
+    const other = makeTab('/w/other', 'other')
+    const group = { id: 'g1', name: 'Proj', color: 'purple' as const, repos: [api.path, app.path, '/w/Proj/landing'], collapsed: false }
+    seed({ tabs: [other, api, app], activePath: app.path, settings: { ...DEFAULT_SETTINGS, tabGroups: [group] } })
+    let html = renderToStaticMarkup(<TabBar />)
+    expect(html).toContain('tb-group-chip')
+    expect(html).toContain('--tb-group:var(--group-purple)')
+    expect(html.indexOf('>Proj<')).toBeLessThan(html.indexOf('>api<'))
+    expect(html.match(/tb-tab-grouped/g)).toHaveLength(2)
+    expect(html).toContain('aria-label="Group Proj, 2 tabs"')
+
+    seed({ settings: { ...DEFAULT_SETTINGS, tabGroups: [{ ...group, collapsed: true }] } })
+    html = renderToStaticMarkup(<TabBar />)
+    expect(html).toContain('tb-group-count">2<')
+    expect(html).not.toContain('>api<')
+    expect(html).toContain('>app<') // active
+    expect(html).toContain('>other<')
+
+    const openGroup = repoLifecycleItems().find((i) => 'label' in i && i.label === 'Open Group')
+    expect(openGroup && 'submenu' in openGroup && openGroup.submenu?.map((x) => ('label' in x ? x.label : ''))).toEqual(['Proj (3)'])
+    seed({ tabs: [], activePath: null })
+    expect(renderToStaticMarkup(<Welcome />)).toContain('api, app and landing')
+  })
+
   it('renders the toolbar with badges, busy state and labels', () => {
     const tab = useApp.getState().tabs[0]
     const html = renderToStaticMarkup(<Toolbar tab={tab} />)

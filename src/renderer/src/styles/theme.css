@@ -58,6 +58,18 @@
   --shadow-1: 0 2px 8px rgba(0, 0, 0, 0.35);
   --shadow-2: 0 12px 40px rgba(0, 0, 0, 0.55);
   --scrollbar: #3a3f49;
+
+  /* Tab groups: chip background (text in --group-text) and tab accent. */
+  --group-grey: #b5bac4;
+  --group-blue: #7fb0ff;
+  --group-red: #ff8a80;
+  --group-yellow: #f7d26a;
+  --group-green: #7ed69c;
+  --group-pink: #ff8fcf;
+  --group-purple: #c39bff;
+  --group-cyan: #6fd8e8;
+  --group-orange: #ffb072;
+  --group-text: #14161a;
 }
 
 [data-theme='light'] {
@@ -113,6 +125,17 @@
   --shadow-1: 0 2px 8px rgba(0, 0, 0, 0.1);
   --shadow-2: 0 12px 40px rgba(0, 0, 0, 0.18);
   --scrollbar: #c3c9d2;
+
+  --group-grey: #5d636e;
+  --group-blue: #2f6fe0;
+  --group-red: #d23b32;
+  --group-yellow: #946200;
+  --group-green: #187a3d;
+  --group-pink: #c4237f;
+  --group-purple: #8a3fd6;
+  --group-cyan: #0f7f8c;
+  --group-orange: #b4510f;
+  --group-text: #ffffff;
 }
 
 :root {
