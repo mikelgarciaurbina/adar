@@ -51,9 +51,15 @@ no contiene código, recursos ni marca de GitKraken y no tiene relación con Git
 Descarga el último `.dmg` desde la [página de Releases](https://github.com/mikelgarciaurbina/adar/releases/latest).
 Adar está hecha para **Macs con Apple Silicon** (M1 o posterior); los Mac con Intel no están soportados.
 
-La app todavía no está firmada con un Developer ID de Apple, así que macOS avisará la primera vez: clic derecho en
-**Adar.app → Abrir**, o ejecuta `xattr -dr com.apple.quarantine /Applications/Adar.app`. A partir de ahí, Adar se
-actualiza sola.
+Abre el `.dmg` y arrastra **Adar** a **Aplicaciones**. La app todavía no está firmada con un Developer ID de Apple,
+así que la primera vez macOS puede decir que "está dañada" (en macOS 15 y posteriores ya no sirve clic derecho →
+Abrir). Ejecuta esto una vez en Terminal y ábrela con normalidad:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/Adar.app
+```
+
+A partir de ahí, Adar se actualiza sola (*Adar → Check for Updates…*).
 
 Requisitos: un macOS reciente con Apple Silicon y Git 2.26+ (`xcode-select --install` o `brew install git`). Linux y Windows todavía no están
 soportados (el código es casi todo portable: se aceptan contribuciones).
