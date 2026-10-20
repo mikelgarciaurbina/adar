@@ -146,3 +146,9 @@ body.ui-resizing * {
   margin: 8px;
   border-radius: var(--radius);
 }
+
+/* Icons are decorative: let the pointer reach their container, whose title/handlers apply.
+   (Chromium does not show an HTML ancestor's title while hovering an inline SVG.) */
+.lucide {
+  pointer-events: none;
+}

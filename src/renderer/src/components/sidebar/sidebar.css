@@ -331,7 +331,11 @@ mark.sb-match {
 .sb-warn {
   flex: none;
   display: inline-flex;
+  padding: 2px;
+  margin: -2px 0;
+  border-radius: var(--radius-sm);
   color: var(--warning);
+  cursor: help;
 }
 
 .sb-dot {
