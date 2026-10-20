@@ -117,7 +117,7 @@ Bring-your-own-key or local models only, disabled by default, and never sending 
 
 ## Known limitations in 0.1
 
-- macOS only, unsigned builds (see *Distribution*).
+- macOS on Apple Silicon only (no Intel builds), unsigned (see *Distribution*).
 - The interface is English-only (see *Localization*).
 - Conflict resolution works per conflict chunk, not per line; there is no base pane.
 - Line staging is mouse-only; untracked, added, deleted and binary files can only be staged whole.

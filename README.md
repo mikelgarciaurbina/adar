@@ -54,14 +54,14 @@ branding and is not affiliated with GitKraken or Axosoft.
 
 ## Download
 
-Grab the latest `.dmg` (Apple Silicon or Intel) from the
-[Releases page](https://github.com/mikelgarciaurbina/adar/releases/latest).
+Grab the latest `.dmg` from the [Releases page](https://github.com/mikelgarciaurbina/adar/releases/latest).
+Adar is built for **Apple Silicon Macs** (M1 and newer); Intel Macs are not supported.
 
 The app is not signed with an Apple Developer ID yet, so macOS will warn the first time you open it:
 right-click **Adar.app → Open**, or run `xattr -dr com.apple.quarantine /Applications/Adar.app`.
 After that, Adar keeps itself up to date.
 
-Requirements: a recent macOS (Apple Silicon or Intel) and Git 2.26+ (`xcode-select --install` or `brew install git`). Linux and Windows are not
+Requirements: a recent macOS on Apple Silicon and Git 2.26+ (`xcode-select --install` or `brew install git`). Linux and Windows are not
 supported yet (the code is mostly portable — contributions welcome).
 
 ## Keyboard shortcuts
@@ -90,7 +90,7 @@ npm run dev        # desktop app with hot reload
 npm run web        # same UI in a browser: open the http://127.0.0.1:5898/#t=… URL it prints
 npm run typecheck
 npm test           # unit + integration tests against temporary git repositories
-npm run dist       # build release/Adar-<version>-<arch>.dmg and .zip
+npm run dist       # build release/Adar-<version>-arm64.dmg and .zip
 ```
 
 Stack: Electron, React 19, TypeScript, zustand and Vite (electron-vite). The architecture, conventions and testing tools

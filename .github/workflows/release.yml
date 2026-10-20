@@ -1,4 +1,4 @@
-# Builds Adar for macOS (Apple Silicon + Intel) and publishes a GitHub Release when a version
+# Builds Adar for macOS (Apple Silicon) and publishes a GitHub Release when a version
 # tag is pushed. The app's in-app updater reads the latest release, so:
 #   1. bump "version" in package.json, commit
 #   2. git tag v0.2.0 && git push origin main --tags
@@ -68,11 +68,31 @@ jobs:
           if [ "$(gh release view "$TAG" --json isDraft --jq .isDraft)" != "true" ]; then
             echo "::error::Release $TAG is not a draft (already published?): refusing to change it"; exit 1
           fi
-          ASSETS="$(gh release view "$TAG" --json assets --jq '.assets[] | "\(.name) \(.size)"')"
-          for f in "Adar-$V-arm64.zip" "Adar-$V-x64.zip" "Adar-$V-arm64.dmg" "Adar-$V-x64.dmg"; do
-            SIZE="$(stat -f %z "release/$f")"
-            if ! printf '%s\n' "$ASSETS" | grep -qxF "$f $SIZE"; then
-              echo "::error::$f is missing from draft $TAG or differs from the local build ($SIZE bytes)"; exit 1
+          ID="$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" --jq ".[] | select(.tag_name == \"$TAG\") | .id" | head -1)"
+          FILES="Adar-$V-arm64.zip Adar-$V-arm64.dmg"
+          # Every asset must exist, be fully uploaded and have exactly the size of the local build.
+          # Uploads that went missing or are incomplete are re-uploaded (up to 3 attempts).
+          for attempt in 1 2 3; do
+            ASSETS="$(gh api "repos/$GITHUB_REPOSITORY/releases/$ID/assets?per_page=100" --jq '.[] | "\(.name) \(.size) \(.state)"')"
+            BAD=""
+            for f in $FILES; do
+              SIZE="$(stat -f %z "release/$f")"
+              printf '%s\n' "$ASSETS" | grep -qxF "$f $SIZE uploaded" || BAD="$BAD $f"
+            done
+            [ -z "$BAD" ] && break
+            echo "Attempt $attempt: assets missing or incomplete:$BAD"
+            echo "Draft assets (name size state):"; printf '%s\n' "$ASSETS"
+            for f in $BAD; do gh release upload "$TAG" "release/$f" --clobber; done
+            sleep 10
+          done
+          if [ -n "$BAD" ]; then
+            echo "::error::Assets still missing or different from the local build:$BAD"; exit 1
+          fi
+          # Drop leftovers that this build did not produce (e.g. from an earlier failed run).
+          gh api "repos/$GITHUB_REPOSITORY/releases/$ID/assets?per_page=100" --jq '.[] | "\(.id) \(.name)"' | while read -r AID ANAME; do
+            if [ ! -f "release/$ANAME" ]; then
+              echo "Removing stale asset $ANAME"
+              gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/assets/$AID"
             fi
           done
           gh release edit "$TAG" --draft=false --target "$GITHUB_SHA" --latest

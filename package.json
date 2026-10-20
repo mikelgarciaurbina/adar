@@ -20,8 +20,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "test": "vitest run",
     "web": "node scripts/web-dev.mjs",
-    "dist": "electron-vite build && electron-builder --mac --publish never",
-    "release": "electron-vite build && electron-builder --mac --publish always"
+    "dist": "electron-vite build && electron-builder --mac --arm64 --publish never",
+    "release": "electron-vite build && electron-builder --mac --arm64 --publish always"
   },
   "dependencies": {
     "@tanstack/react-virtual": "^3.14.21",

@@ -14,11 +14,12 @@ mac:
   # Unsigned build (no Apple Developer ID). The in-app updater (src/main/updater.ts) installs the
   # .zip asset of a GitHub Release in place, so Squirrel.Mac / code signing are not required.
   identity: null
+  # Apple Silicon only (Intel Macs are not supported).
   target:
     - target: dmg
-      arch: [arm64, x64]
+      arch: [arm64]
     - target: zip
-      arch: [arm64, x64]
+      arch: [arm64]
 dmg:
   title: ${productName} ${version}
 releaseInfo:

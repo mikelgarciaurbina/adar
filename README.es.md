@@ -48,14 +48,14 @@ no contiene código, recursos ni marca de GitKraken y no tiene relación con Git
 
 ## Descarga
 
-Descarga el último `.dmg` (Apple Silicon o Intel) desde la
-[página de Releases](https://github.com/mikelgarciaurbina/adar/releases/latest).
+Descarga el último `.dmg` desde la [página de Releases](https://github.com/mikelgarciaurbina/adar/releases/latest).
+Adar está hecha para **Macs con Apple Silicon** (M1 o posterior); los Mac con Intel no están soportados.
 
 La app todavía no está firmada con un Developer ID de Apple, así que macOS avisará la primera vez: clic derecho en
 **Adar.app → Abrir**, o ejecuta `xattr -dr com.apple.quarantine /Applications/Adar.app`. A partir de ahí, Adar se
 actualiza sola.
 
-Requisitos: un macOS reciente (Apple Silicon o Intel) y Git 2.26+ (`xcode-select --install` o `brew install git`). Linux y Windows todavía no están
+Requisitos: un macOS reciente con Apple Silicon y Git 2.26+ (`xcode-select --install` o `brew install git`). Linux y Windows todavía no están
 soportados (el código es casi todo portable: se aceptan contribuciones).
 
 ## Desarrollo
@@ -68,7 +68,7 @@ npm run dev        # app de escritorio con recarga en caliente
 npm run web        # la misma interfaz en el navegador: abre la URL http://127.0.0.1:5898/#t=… que imprime
 npm run typecheck
 npm test           # tests unitarios y de integración sobre repos git temporales
-npm run dist       # genera release/Adar-<versión>-<arch>.dmg y .zip
+npm run dist       # genera release/Adar-<versión>-arm64.dmg y .zip
 ```
 
 La arquitectura, las convenciones y las herramientas de test (incluidas las pruebas guionizadas de la app real) están

@@ -12,4 +12,4 @@ First public release of **Adar** — a fast, visual Git client for every reposit
 - In-app updates (Adar → Check for Updates…)
 
 ### Install
-Download the `.dmg` for your Mac (Apple Silicon: `arm64`, Intel: `x64`). The app is not signed with an Apple Developer ID yet: the first time, right-click **Adar.app → Open** (or run `xattr -dr com.apple.quarantine /Applications/Adar.app`). Requires Git 2.26 or newer.
+Download `Adar-0.1.0-arm64.dmg` (Apple Silicon Macs; Intel Macs are not supported). The app is not signed with an Apple Developer ID yet: the first time, right-click **Adar.app → Open** (or run `xattr -dr com.apple.quarantine /Applications/Adar.app`). Requires Git 2.26 or newer.
