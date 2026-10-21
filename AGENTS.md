@@ -38,6 +38,13 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
     `diff` (diff, blame, history), `conflicts`, `rebase`, `modals`, `palette` (palette + git console), `update`.
   - `lib/` — lane colours, formatting, ref helpers, drag & drop, keyboard helpers.
   - `styles/theme.css` — design tokens. ALWAYS use CSS variables; dark and light themes must both work.
+- `site/` — the project website: a separate npm project (Astro, static output) published to GitHub Pages under `/adar/`
+  by `.github/workflows/pages.yml` (the `SITE_URL` env var sets another address, e.g. Cloudflare Pages). `src/pages/` has the landing (`index.astro`; the 3D scene is hand-written WebGL2 in
+  `src/scripts/branches.js`), `roadmap.astro` (renders the repository's `ROADMAP.md` and the GitHub Releases at build
+  time — `src/lib/roadmap.ts`, `src/lib/releases.ts`), `design.astro` (the Basoa design system) and `404.astro`.
+  Shared layout/nav/footer/icon in `src/layouts` and `src/components`; tokens in `src/styles/tokens.css` (also
+  published as `/tokens.css`); fonts self-hosted; build telemetry off; the browser only calls the GitHub API for the
+  star count. Separate from the app's own `theme.css`. Always link with `url()` from `src/lib/url.ts` (respects the base).
 
 ## Conventions
 - CSS class prefixes per module: `app-` shell, `ui-` common, `tb-`/`wl-` toolbar, tabs, status bar, welcome, `sb-` left
@@ -67,6 +74,8 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
   Seed `<workdir>/ud/settings.json` with `{"openTabs":["/abs/repo"],"activeTab":"/abs/repo","autoFetchMinutes":0}`.
 - Fixtures: `scripts/make-fixture-repo.sh <dir> [--conflict]` (demo repo + bare origin),
   `node scripts/make-big-repo.mjs <dir> [commits] [branches]` (performance).
+- Website: `cd site && npm install && npm run dev` (http://localhost:4321/adar/), or `npm run build && npm run preview`
+  to check the static output. Add `?capture` to a URL to keep WebGL frames readable by screenshot tools.
 - Updater end to end with packaged builds: `scripts/test-updater.sh <workdir>` (must print `UPDATER TEST PASSED`).
 
 ## Commands

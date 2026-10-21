@@ -1,0 +1,164 @@
+/*
+ * Basoa — the Adar design system tokens.
+ * "Basoa" is Basque for forest; every colour is named after something you find in one.
+ * The website is built on these variables only. Documented at design.html and published as /tokens.css.
+ */
+
+:root {
+  color-scheme: dark;
+
+  /* ── Palette ─────────────────────────────────────────────── */
+  /* Gaua · night */
+  --gau-950: #050706;
+  --gau-900: #0a0d0c;
+  --gau-850: #0e1211;
+  --gau-800: #131817;
+  --gau-700: #1b2220;
+  --gau-600: #27302d;
+  /* Lainoa · fog */
+  --laino-50: #f3f6f1;
+  --laino-200: #cad3cb;
+  --laino-400: #95a198;
+  --laino-600: #5f6b65;
+  /* Eguna · day (light surfaces) */
+  --egun-50: #fbfaf6;
+  --egun-100: #f3f1ea;
+  --egun-200: #e6e3d8;
+  /* Nature accents */
+  --iratze: #c5f56a;      /* fern — the brand colour */
+  --iratze-deep: #3f6a06; /* fern on light backgrounds */
+  --goroldio: #46e2b4;    /* moss */
+  --itsaso: #6cb4ff;      /* sea */
+  --txilar: #b595ff;      /* heather */
+  --txingar: #ff8c5f;     /* ember */
+  --eguzki: #ffd36e;      /* sun */
+  --hezur: #eee6d4;       /* bone — antlers */
+
+  /* ── Semantic (night theme) ──────────────────────────────── */
+  --bg: var(--gau-900);
+  --bg-sunken: var(--gau-950);
+  --surface: var(--gau-850);
+  --surface-2: var(--gau-800);
+  --surface-3: var(--gau-700);
+  --line: rgb(214 240 222 / 0.08);
+  --line-strong: rgb(214 240 222 / 0.16);
+  --text: var(--laino-50);
+  --text-2: var(--laino-200);
+  --text-3: var(--laino-400);
+  --text-4: var(--laino-600);
+  --accent: var(--iratze);
+  --accent-text: var(--iratze);
+  --accent-ink: #0b1104;  /* text on top of --accent */
+  --accent-wash: rgb(197 245 106 / 0.1);
+  --success: var(--goroldio);
+  --info: var(--itsaso);
+  --warning: var(--eguzki);
+  --danger: var(--txingar);
+
+  /* Graph lanes, in the order Adar assigns them */
+  --lane-1: var(--iratze);
+  --lane-2: var(--goroldio);
+  --lane-3: var(--itsaso);
+  --lane-4: var(--txilar);
+  --lane-5: var(--txingar);
+  --lane-6: var(--eguzki);
+
+  /* ── Type ────────────────────────────────────────────────── */
+  --font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --font-serif: "Instrument Serif", ui-serif, Georgia, "Times New Roman", serif;
+
+  --text-2xs: 0.6875rem;
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-md: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: clamp(1.25rem, 1.1rem + 0.5vw, 1.5rem);
+  --text-2xl: clamp(1.625rem, 1.2rem + 1.6vw, 2.25rem);
+  --text-3xl: clamp(2.25rem, 1.3rem + 3.6vw, 4.25rem);
+  --text-display: clamp(3.25rem, 1.4rem + 7vw, 8rem);
+
+  --leading-tight: 0.98;
+  --leading-snug: 1.18;
+  --leading: 1.6;
+  --tracking-tight: -0.04em;
+  --tracking-snug: -0.02em;
+  --tracking-wide: 0.12em;
+
+  /* ── Space (4 px grid) ───────────────────────────────────── */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+  --space-9: 96px;
+  --space-10: 144px;
+
+  /* ── Shape ───────────────────────────────────────────────── */
+  --radius-xs: 6px;
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 28px;
+  --radius-full: 999px;
+  --stroke: 1px;
+
+  /* ── Depth & light ───────────────────────────────────────── */
+  --shadow-1: inset 0 1px 0 rgb(255 255 255 / 0.04), 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-2: inset 0 1px 0 rgb(255 255 255 / 0.05), 0 18px 40px -18px rgb(0 0 0 / 0.7);
+  --shadow-3: 0 60px 140px -50px rgb(0 0 0 / 0.9), 0 0 0 1px var(--line);
+  --glow-accent: 0 0 0 1px rgb(197 245 106 / 0.45), 0 8px 40px -6px rgb(197 245 106 / 0.5);
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .55 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+
+  /* ── Motion ──────────────────────────────────────────────── */
+  --ease-grow: cubic-bezier(0.16, 1, 0.3, 1);   /* hazi — things growing into place */
+  --ease-swap: cubic-bezier(0.65, 0, 0.35, 1);  /* aldatu — one state to another */
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --dur-1: 120ms;
+  --dur-2: 240ms;
+  --dur-3: 520ms;
+  --dur-4: 1100ms;
+
+  /* ── Layout ──────────────────────────────────────────────── */
+  --page-max: 1220px;
+  --gutter: clamp(16px, 4.5vw, 48px);
+  --nav-h: 64px;
+}
+
+/* Eguna — the day theme. The site itself is night-first; this set is shown on design.html
+ * and is what light-background surfaces (docs, print, the README) should use. */
+[data-theme="light"] {
+  color-scheme: light;
+  --bg: var(--egun-100);
+  --bg-sunken: var(--egun-200);
+  --surface: var(--egun-50);
+  --surface-2: #ffffff;
+  --surface-3: var(--egun-200);
+  --line: rgb(20 30 22 / 0.1);
+  --line-strong: rgb(20 30 22 / 0.2);
+  --text: #0c110e;
+  --text-2: #2d3631;
+  --text-3: #5b665f;
+  --text-4: #87918a;
+  --accent: var(--iratze);
+  --accent-text: var(--iratze-deep);
+  --accent-ink: #0b1104;
+  --accent-wash: rgb(63 106 6 / 0.08);
+  --success: #12825f;
+  --info: #1f6fd1;
+  --warning: #9a6a00;
+  --danger: #c4471b;
+  --lane-1: #5f9a12;
+  --lane-2: #12a07a;
+  --lane-3: #2b7fe0;
+  --lane-4: #7b55e0;
+  --lane-5: #e0612e;
+  --lane-6: #c79200;
+  --shadow-1: 0 1px 2px rgb(20 30 22 / 0.08);
+  --shadow-2: 0 18px 40px -18px rgb(20 30 22 / 0.25);
+  --shadow-3: 0 50px 120px -50px rgb(20 30 22 / 0.35), 0 0 0 1px var(--line);
+  --glow-accent: 0 0 0 1px rgb(63 106 6 / 0.35), 0 8px 30px -8px rgb(63 106 6 / 0.35);
+}

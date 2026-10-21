@@ -1,0 +1,28 @@
+---
+import { url, REPO_URL } from '../lib/url';
+
+interface Props { current: 'home' | 'roadmap' | 'design' }
+const here = (page: string, hash: string) => (Astro.props.current === page ? hash : url(`${page === 'home' ? '' : `${page}.html`}${hash}`));
+const columns: [string, [string, string][]][] = [
+  ['Product', [['Features', here('home', '#features')], ['Download', here('home', '#download')], ['Changelog', here('roadmap', '#changelog')], ['Roadmap', url('roadmap.html')]]],
+  ['Project', [['GitHub', REPO_URL], ['Issues', `${REPO_URL}/issues`], ['Contributing', `${REPO_URL}/blob/main/CONTRIBUTING.md`], ['Security', `${REPO_URL}/blob/main/SECURITY.md`]]],
+  ['Brand', [['Design system', url('design.html')], ['Logo', here('design', '#logo')], ['Colour', here('design', '#color')], ['MIT license', `${REPO_URL}/blob/main/LICENSE`]]],
+];
+---
+<footer class="footer">
+  <div class="wrap">
+    <div class="footer__grid">
+      <div class="footer__brand">
+        <img src={url('assets/adar-lockup.svg')} width="118" height="40" alt="Adar">
+        <p>A fast, visual Git client for every repository. Free and open source, made in Euskal Herria.</p>
+      </div>
+      {columns.map(([title, items]) => (
+        <div><h4>{title}</h4><ul>{items.map(([label, href]) => <li><a href={href}>{label}</a></li>)}</ul></div>
+      ))}
+    </div>
+    <div class="footer__base">
+      <span>© {new Date().getFullYear()} Mikel García · MIT. Inspired by GitKraken’s UX; an independent project, not affiliated with GitKraken or Axosoft.</span>
+      <span><span class="serif" lang="eu">Ez dizugu adarrik jotzen</span> — no, we’re not pulling your leg: it’s free.</span>
+    </div>
+  </div>
+</footer>

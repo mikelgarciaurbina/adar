@@ -1,0 +1,8 @@
+---
+// One icon from the Basoa sprite (public/assets/icons.svg).
+import { url } from '../lib/url';
+
+interface Props { name: string; class?: string; size?: number }
+const { name, class: className, size } = Astro.props;
+---
+<svg class={className} width={size} height={size} aria-hidden="true"><use href={url(`assets/icons.svg#${name}`)} /></svg>

@@ -1,0 +1,27 @@
+---
+import Icon from './Icon.astro';
+import { url, REPO_URL } from '../lib/url';
+
+interface Props { current: 'home' | 'roadmap' | 'design' }
+const { current } = Astro.props;
+// On the landing page the first links are anchors into the page itself.
+const links = current === 'home'
+  ? [['The name', '#name'], ['Features', '#features'], ['Download', '#download'], ['Roadmap', url('roadmap.html')], ['Design', url('design.html')]]
+  : [['Features', url('#features')], ['Download', url('#download')], ['Roadmap', url('roadmap.html')], ['Changelog', url('roadmap.html#changelog')], ['Design', url('design.html')]];
+const active = { home: '', roadmap: url('roadmap.html'), design: url('design.html') }[current];
+---
+<header class="nav">
+  <div class="wrap nav__inner">
+    <a class="brand" href={url()} aria-label="Adar home"><img src={url('assets/adar-lockup.svg')} width="94" height="32" alt="Adar"></a>
+    <nav class="nav__links" aria-label="Main">
+      {links.map(([label, href]) => <a href={href} aria-current={href === active ? 'page' : undefined}>{label}</a>)}
+    </nav>
+    <div class="nav__cta">
+      <a class="btn btn--ghost gh-stars" href={REPO_URL} aria-label="Adar on GitHub">
+        <Icon name="star" /><span>GitHub</span><span class="btn__meta" data-gh="stars"></span>
+      </a>
+      <a class="btn btn--primary" href={current === 'home' ? '#download' : url('#download')}><Icon name="download" />Download</a>
+    </div>
+    <button class="nav__toggle" type="button" aria-label="Menu" aria-expanded="false"><span></span><span></span></button>
+  </div>
+</header>

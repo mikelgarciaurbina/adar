@@ -1,0 +1,443 @@
+---
+// The landing page. The 3D scene (scripts/branches.js) sits behind the hero and the name section; the
+// download section is filled from the latest GitHub release at build time.
+import Base from '../layouts/Base.astro';
+import Icon from '../components/Icon.astro';
+import '../styles/home.css';
+import { url, REPO_URL } from '../lib/url';
+import { getReleases, getLatest, formatDate, formatSize } from '../lib/releases';
+
+const releases = await getReleases();
+const latest = await getLatest();
+const dmg = latest?.assets.find((a) => /arm64\.dmg$/.test(a.name));
+const zip = latest?.assets.find((a) => /arm64\.zip$/.test(a.name));
+const sums = [dmg, zip].filter((a) => a?.sha256) as NonNullable<typeof dmg>[];
+---
+<Base
+  title="Adar — a visual Git client that grows with you"
+  description="Adar is a fast, free and open-source visual Git client for macOS. It drives your own git and credentials, so it works with every repository: GitHub, GitLab, Bitbucket, Azure DevOps or your own server."
+  ogTitle="Adar — See your Git grow"
+  ogDescription="A fast, visual Git client for every repository. Free and open source for macOS."
+  path=""
+  current="home"
+>
+  <canvas class="scene" id="scene" aria-hidden="true"></canvas>
+  <div class="scene-fallback" aria-hidden="true"><img src={url('assets/adar-mark.svg')} width="64" height="64" alt=""></div>
+
+  <main id="main">
+    <div id="zone">
+      <!-- Hero -->
+      <section class="hero" aria-labelledby="hero-title">
+        <div class="wrap hero__inner">
+          <a class="chip chip--accent hero__news reveal" href={url('roadmap.html#changelog')}>
+            <span class="dot"></span>{latest ? <>New in {latest.version}</> : 'Latest release'}<span class="hero__news-sep"></span><span class="hero__news-cta">What’s new</span>
+            <Icon name="arrow-right" size={14} />
+          </a>
+          <h1 class="hero__title reveal" id="hero-title" style="--delay:80ms">See your Git <span class="serif">grow.</span></h1>
+          <p class="hero__lede reveal" style="--delay:160ms">
+            Adar is a fast, visual Git client for every repository — GitHub, GitLab, Bitbucket, Azure DevOps or your own
+            server. It drives the git you already have, with the keys you already use.
+          </p>
+          <div class="hero__ctas reveal" style="--delay:240ms">
+            <a class="btn btn--primary btn--lg" href="#download">
+              <Icon name="download" />Download for macOS<span class="btn__meta">Apple Silicon</span>
+            </a>
+            <a class="btn btn--ghost btn--lg" href="https://github.com/mikelgarciaurbina/adar">
+              <Icon name="star" />Star on GitHub<span class="btn__meta" data-gh="stars"></span>
+            </a>
+          </div>
+          <p class="hero__fine reveal" style="--delay:320ms">Free &amp; open source · MIT · No account · No telemetry</p>
+        </div>
+        <p class="fig hero__fig mono" aria-hidden="true"><span>fig. 1</span> orein adarrak — <i>a deer’s antlers</i> · <span data-points>38,000</span> points</p>
+        <a class="hero__scroll" href="#name"><span>Scroll — watch it change shape</span><Icon name="arrow-down" size={16} /></a>
+      </section>
+
+      <!-- The name: antler → branch → git -->
+      <section class="name" id="name" aria-labelledby="name-title">
+        <div class="name__sticky">
+          <div class="wrap name__inner">
+            <div class="name__copy">
+              <p class="eyebrow">Why “Adar”</p>
+              <article class="dict" aria-labelledby="name-title">
+                <header class="dict__head">
+                  <h2 class="dict__word" id="name-title" lang="eu">adar</h2>
+                  <p class="dict__meta"><span>a·dar</span><span><abbr title="izena">iz.</abbr> · noun · euskara</span></p>
+                </header>
+                <ol class="dict__senses">
+                  <li class="is-active" data-sense="0"><span class="dict__n">1</span><p><b>Antler</b>, horn. <i lang="eu">Oreinaren adarrak</i> — the antlers of a deer.</p></li>
+                  <li data-sense="1"><span class="dict__n">2</span><p><b>Branch</b> of a tree. <i lang="eu">Zuhaitzaren adarrak</i> — the branches of a tree.</p></li>
+                  <li data-sense="2"><span class="dict__n">3</span><p><b>Branch</b>, in git. A line of work that splits from the trunk — and often comes back.</p></li>
+                </ol>
+              </article>
+              <p class="name__lede">
+                In Basque, one word names the branches of a tree and the antlers of a deer: shapes that split, grow and
+                carry their whole history in their form. A Git repository grows the same way. <span class="accent">We just drew it.</span>
+              </p>
+            </div>
+          </div>
+          <p class="fig name__fig mono" aria-hidden="true" data-fig>fig. 1 — orein adarrak</p>
+          <div class="name__steps" aria-hidden="true"><span class="is-active"></span><span></span><span></span></div>
+        </div>
+      </section>
+    </div>
+
+    <!-- App showcase -->
+    <section class="section showcase" id="showcase" aria-labelledby="showcase-title">
+      <div class="wrap">
+        <div class="section-head section-head--center reveal">
+          <p class="eyebrow">The app</p>
+          <h2 id="showcase-title">A commit graph you can <span class="serif">hold in your hands.</span></h2>
+          <p>Lanes, labels, avatars and a live <code>// WIP</code> node. Drag a branch onto another to merge or rebase. Tens of thousands of commits, still smooth.</p>
+        </div>
+        <figure class="shot" data-shot>
+          <div class="shot__glow" aria-hidden="true"></div>
+          <div class="shot__frame">
+            <div class="shot__bar" aria-hidden="true"><i></i><i></i><i></i><span>demo — main</span></div>
+            <img src={url('assets/screenshot.png')} width="1440" height="880" loading="lazy" decoding="async"
+              alt="Adar with a demo repository: the commit graph with coloured lanes and branch labels, the branch tree on the left and the staging panel on the right.">
+          </div>
+          <figcaption class="shot__notes">
+            <span class="shot__note" style="--x:9%;--y:30%"><b>Branches, remotes, tags</b> in one tree</span>
+            <span class="shot__note" style="--x:31%;--y:15%"><b>// WIP</b> — your changes, right in the graph</span>
+            <span class="shot__note" style="--x:22%;--y:52%"><b>Drag a label</b> onto another to merge</span>
+            <span class="shot__note shot__note--r" style="--x:86%;--y:22%"><b>Stage</b> files, hunks or single lines</span>
+          </figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <!-- Features -->
+    <section class="section features" id="features" aria-labelledby="features-title">
+      <div class="wrap">
+        <div class="section-head reveal">
+          <p class="eyebrow">Features</p>
+          <h2 id="features-title">Everything you do in git. <span class="serif">Now you can see it.</span></h2>
+          <p>Adar is the whole of your daily git — commits, branches, rebases, conflicts, remotes — laid out where you can touch it, with an undo button for when you touch the wrong thing.</p>
+        </div>
+
+        <div class="bento">
+          <article class="feat feat--graph card tilt spotlight reveal" data-animate>
+            <div class="feat__art" aria-hidden="true">
+              <svg class="mini-graph" viewBox="0 0 520 300">
+                <g class="mg-lanes" fill="none" stroke-width="2.5" stroke-linecap="round">
+                  <path class="mg-l" style="--c:var(--lane-1);--d:0s" d="M40 60 V284"/>
+                  <path class="mg-l mg-wip" style="--c:var(--lane-1)" d="M40 28 V60"/>
+                  <path class="mg-l" style="--c:var(--lane-2);--d:.35s" d="M40 188 C40 170 72 176 72 156 V92"/>
+                  <path class="mg-l" style="--c:var(--lane-4);--d:.55s" d="M40 220 C40 202 104 208 104 188 V156"/>
+                  <path class="mg-l" style="--c:var(--lane-3);--d:.2s" d="M40 284 C40 266 72 272 72 252 C72 234 40 240 40 220"/>
+                </g>
+                <g class="mg-nodes">
+                  <circle class="mg-n mg-n--wip" cx="40" cy="28" r="8"/>
+                  <circle class="mg-n" style="--c:var(--lane-1);--i:1" cx="40" cy="60" r="8"/>
+                  <circle class="mg-n" style="--c:var(--lane-2);--i:2" cx="72" cy="92" r="8"/>
+                  <circle class="mg-n" style="--c:var(--lane-2);--i:3" cx="72" cy="124" r="8"/>
+                  <circle class="mg-n" style="--c:var(--lane-4);--i:4" cx="104" cy="156" r="8"/>
+                  <circle class="mg-n" style="--c:var(--lane-1);--i:5" cx="40" cy="188" r="8"/>
+                  <circle class="mg-n" style="--c:var(--lane-1);--i:6" cx="40" cy="220" r="5"/>
+                  <circle class="mg-n" style="--c:var(--lane-3);--i:7" cx="72" cy="252" r="8"/>
+                  <circle class="mg-n" style="--c:var(--lane-1);--i:8" cx="40" cy="284" r="8"/>
+                </g>
+                <g class="mg-text">
+                  <text x="136" y="33" class="mg-wip-t">// WIP  ✎ 2  + 1</text>
+                  <text x="136" y="65">Add value v8</text>
+                  <text x="136" y="97">Graph work part 3</text>
+                  <text x="136" y="129">Graph work part 2</text>
+                  <text x="136" y="161">Try an experimental idea</text>
+                  <text x="136" y="193">Add value v7</text>
+                  <text x="136" y="225" class="mg-dim">Merge branch ’feature/login’</text>
+                  <text x="136" y="257">Add login function</text>
+                  <text x="136" y="289">Initial commit</text>
+                </g>
+                <g class="mg-refs">
+                  <g style="--c:var(--lane-1)" transform="translate(392 50)"><rect width="56" height="20" rx="5"/><text x="28" y="14">main</text></g>
+                  <g style="--c:var(--lane-2)" transform="translate(392 82)"><rect width="110" height="20" rx="5"/><text x="55" y="14">feature/graph</text></g>
+                  <g style="--c:var(--lane-4)" transform="translate(392 146)"><rect width="110" height="20" rx="5"/><text x="55" y="14">origin/experiment</text></g>
+                  <g style="--c:var(--lane-1)" transform="translate(392 178)"><rect width="92" height="20" rx="5"/><text x="46" y="14">origin/main</text></g>
+                  <g style="--c:var(--lane-6)" transform="translate(392 274)"><rect width="56" height="20" rx="5"/><text x="28" y="14">v0.1.0</text></g>
+                </g>
+              </svg>
+            </div>
+            <div class="feat__body">
+              <h3><Icon name="branch" />Commit graph</h3>
+              <p>Coloured lanes, avatars, branch, tag and remote labels, stashes and a <code>// WIP</code> node. Search by message, author, SHA, content or path — smooth through tens of thousands of commits.</p>
+            </div>
+          </article>
+
+          <article class="feat feat--drag card tilt spotlight reveal" data-animate style="--delay:60ms">
+            <div class="feat__art" aria-hidden="true">
+              <div class="dd">
+                <span class="ref dd__target" style="--ref:var(--lane-1)"><Icon name="laptop" />main</span>
+                <span class="ref dd__drag" style="--ref:var(--lane-3)"><Icon name="laptop" />feature/login</span>
+                <div class="dd__menu">
+                  <span class="is-hot"><Icon name="merge" /><em>Merge <b>feature/login</b> into <b>main</b></em></span>
+                  <span><Icon name="layers" /><em>Rebase <b>feature/login</b> onto <b>main</b></em></span>
+                  <span><Icon name="arrow-up-right" /><em>Fast-forward <b>main</b></em></span>
+                </div>
+              </div>
+            </div>
+            <div class="feat__body">
+              <h3><Icon name="merge" />Drag &amp; drop</h3>
+              <p>Drop a branch onto another to merge, rebase, fast-forward or push.</p>
+            </div>
+          </article>
+
+          <article class="feat feat--stage card tilt spotlight reveal" data-animate style="--delay:120ms">
+            <div class="feat__art" aria-hidden="true">
+              <div class="diffbox">
+                <div class="dl-row"><i></i><span class="ln">12</span><code>export function grow(tree) {'{'}</code></div>
+                <div class="dl-row dl-del"><i></i><span class="ln">13</span><code>-  return tree.branches</code></div>
+                <div class="dl-row dl-add pick" style="--i:0"><i></i><span class="ln">13</span><code>+  const tips = tree.branches</code></div>
+                <div class="dl-row dl-add pick" style="--i:1"><i></i><span class="ln">14</span><code>+    .filter(isAlive)</code></div>
+                <div class="dl-row dl-add"><i></i><span class="ln">15</span><code>+  console.log(tips)</code></div>
+                <div class="dl-row"><i></i><span class="ln">16</span><code>{'}'}</code></div>
+                <div class="diffbox__bar"><span>2 lines selected</span><b>Stage lines</b></div>
+              </div>
+            </div>
+            <div class="feat__body">
+              <h3><Icon name="check" />Stage by line</h3>
+              <p>Stage or discard whole files, single hunks or just the lines you mean.</p>
+            </div>
+          </article>
+
+          <article class="feat feat--rebase card tilt spotlight reveal" data-animate>
+            <div class="feat__art" aria-hidden="true">
+              <ol class="rb">
+                <li class="rb__row"><Icon name="grip" /><span class="rb__act">pick</span>Add login form</li>
+                <li class="rb__row rb__row--move"><Icon name="grip" /><span class="rb__act rb__act--sq">squash</span>Fix typo in form</li>
+                <li class="rb__row rb__row--swap"><Icon name="grip" /><span class="rb__act rb__act--rw">reword</span>wip</li>
+                <li class="rb__row rb__row--drop"><Icon name="grip" /><span class="rb__act rb__act--dr">drop</span>Debug logs</li>
+              </ol>
+            </div>
+            <div class="feat__body">
+              <h3><Icon name="list" />Visual interactive rebase</h3>
+              <p>Pick, reword, edit, squash, fixup or drop — and drag to reorder.</p>
+            </div>
+          </article>
+
+          <article class="feat feat--undo card tilt spotlight reveal" data-animate style="--delay:60ms">
+            <div class="feat__art" aria-hidden="true">
+              <div class="undo">
+                <div class="undo__keys"><span class="kbd kbd--xl">⌘</span><span class="kbd kbd--xl undo__z">Z</span></div>
+                <div class="undo__toast"><Icon name="undo" /><em>Undid “Delete branch <b>experiment</b>”</em></div>
+              </div>
+            </div>
+            <div class="feat__body">
+              <h3><Icon name="undo" />Undo &amp; redo</h3>
+              <p>Checkouts, commits, branches, tags, resets, stashes: take them back with ⌘Z.</p>
+            </div>
+          </article>
+
+          <article class="feat feat--conflict card tilt spotlight reveal" data-animate style="--delay:120ms">
+            <div class="feat__art" aria-hidden="true">
+              <div class="cfx">
+                <div class="cfx__col"><b>A · main</b><i style="--w:70%"></i><i class="a" style="--w:84%"></i><i style="--w:52%"></i></div>
+                <div class="cfx__col"><b>B · feature</b><i style="--w:70%"></i><i class="b" style="--w:62%"></i><i style="--w:52%"></i></div>
+                <div class="cfx__col cfx__out"><b>Output</b><i style="--w:70%"></i><i class="a pick" style="--w:84%"></i><i class="b pick2" style="--w:62%"></i><i style="--w:52%"></i></div>
+              </div>
+            </div>
+            <div class="feat__body">
+              <h3><Icon name="conflict" />Merge conflicts</h3>
+              <p>Pick A, B or both, edit the output, then continue, skip or abort.</p>
+            </div>
+          </article>
+
+          <article class="feat feat--palette card tilt spotlight reveal" data-animate>
+            <div class="feat__art" aria-hidden="true">
+              <div class="pal">
+                <div class="pal__input"><Icon name="search" /><span class="pal__typed" data-type="rebase onto"></span><span class="pal__caret"></span><span class="kbd">⌘P</span></div>
+                <ul>
+                  <li class="is-hot"><Icon name="layers" /><em>Rebase <b>feature/graph</b> onto…</em><span class="kbd">↩</span></li>
+                  <li><Icon name="merge" />Merge into current branch…</li>
+                  <li><Icon name="terminal" />Open git console<span class="kbd">⌃`</span></li>
+                </ul>
+              </div>
+            </div>
+            <div class="feat__body">
+              <h3><Icon name="command" />Command palette &amp; console</h3>
+              <p>Every action a few keystrokes away (⌘P), and a built-in git console when you want to type.</p>
+            </div>
+          </article>
+
+          <article class="feat feat--groups card tilt spotlight reveal" data-animate style="--delay:60ms">
+            <div class="feat__art" aria-hidden="true">
+              <div class="tabs">
+                <span class="tabs__group"><i></i>shop</span>
+                <span class="tabs__tab is-active"><Icon name="folder" />api</span>
+                <span class="tabs__tab"><Icon name="folder" />app</span>
+                <span class="tabs__tab"><Icon name="folder" />landing</span>
+                <span class="tabs__tab tabs__tab--solo"><Icon name="folder" />dotfiles</span>
+              </div>
+            </div>
+            <div class="feat__body">
+              <h3><Icon name="layers" />Tabs &amp; tab groups</h3>
+              <p>Keep a project’s repositories together under a named, coloured group and reopen them in one click.</p>
+            </div>
+          </article>
+        </div>
+
+        <ul class="more-feats reveal" aria-label="More features">
+          <li>Unified &amp; split diffs</li><li>Intra-line highlights</li><li>Image diffs</li><li>File history &amp; blame</li>
+          <li>Edit any commit message</li><li>Amend</li><li>Stashes</li><li>Submodules</li><li>Tags</li><li>Background fetch</li>
+          <li>Pull: ff-only, merge or rebase</li><li>Force-push with lease</li><li>Clone with progress</li>
+          <li>Dark &amp; light themes</li><li>In-app updates</li><li>Keyboard first</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- Your git -->
+    <section class="section yours" id="yours" aria-labelledby="yours-title">
+      <div class="wrap yours__grid">
+        <div class="yours__copy reveal">
+          <p class="eyebrow">Works with every repository</p>
+          <h2 id="yours-title">Your git. Your keys. <span class="serif">Your machine.</span></h2>
+          <p>Adar drives the <code>git</code> already installed on your Mac, so it works with exactly the credentials you use in the terminal. When git needs a username, a token or an SSH passphrase, Adar asks in a dialog and git stores it with your usual credential helper.</p>
+          <ul class="ticks">
+            <li><Icon name="key" />SSH keys and the agent</li>
+            <li><Icon name="shield" />macOS Keychain</li>
+            <li><Icon name="terminal" /><code>gh auth</code> &amp; credential helpers</li>
+            <li><Icon name="layers" />Git LFS and hooks</li>
+          </ul>
+        </div>
+        <div class="orbit reveal" aria-hidden="true">
+          <div class="orbit__core"><img src={url('assets/adar-mark.svg')} width="64" height="64" alt=""></div>
+          <div class="orbit__plane">
+            <div class="orbit__ring orbit__ring--1"><span style="--a:0deg">GitHub</span><span style="--a:120deg">GitLab</span><span style="--a:240deg">Bitbucket</span></div>
+            <div class="orbit__ring orbit__ring--2"><span style="--a:30deg">Azure DevOps</span><span style="--a:120deg">Gitea</span><span style="--a:210deg">Forgejo</span><span style="--a:300deg">your own server</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="wrap pillars">
+        <article class="pillar card reveal"><Icon name="user-off" /><h3>No account</h3><p>Nothing to sign up for, no proxy servers, no limits on which repositories you open.</p></article>
+        <article class="pillar card reveal" style="--delay:80ms"><Icon name="eye-off" /><h3>No telemetry</h3><p>Adar doesn’t phone home. Anything that would talk to a third-party service is opt-in.</p></article>
+        <article class="pillar card reveal" style="--delay:160ms"><Icon name="shield" /><h3>Safe by default</h3><p>Destructive actions ask first and can be undone. Repositories whose config would run commands open only once you trust them.</p></article>
+      </div>
+    </section>
+
+    <!-- CLI -->
+    <section class="section cli" id="cli" aria-labelledby="cli-title">
+      <div class="wrap cli__grid">
+        <div class="term card reveal" data-term aria-label="Terminal example">
+          <div class="term__bar" aria-hidden="true"><i></i><i></i><i></i><span>~/code — zsh</span></div>
+          <pre class="term__body"><code data-term-body></code><span class="term__caret" aria-hidden="true"></span></pre>
+          <noscript><pre class="term__body"><code>$ adar
+$ adar ~/code/shop</code></pre></noscript>
+        </div>
+        <div class="cli__copy reveal" style="--delay:80ms">
+          <p class="eyebrow">Command line</p>
+          <h2 id="cli-title">From terminal to graph <span class="serif">in four letters.</span></h2>
+          <p>Type <code>adar</code> in any repository — like <code>code .</code> — and it opens in a new tab. Point it at a folder that holds several repositories and they open together as a tab group. Install it once from <i>Adar → Install Command Line Tool…</i></p>
+          <dl class="keys">
+            <div><dt>Command palette</dt><dd><span class="kbd">⌘</span><span class="kbd">P</span></dd></div>
+            <div><dt>Fetch · pull · push</dt><dd><span class="kbd">⇧⌘F</span><span class="kbd">⇧⌘↓</span><span class="kbd">⇧⌘↑</span></dd></div>
+            <div><dt>Undo a git action</dt><dd><span class="kbd">⌘</span><span class="kbd">Z</span></dd></div>
+            <div><dt>Next change in a diff</dt><dd><span class="kbd">N</span><span class="kbd">P</span></dd></div>
+            <div><dt>Git console</dt><dd><span class="kbd">⌃</span><span class="kbd">`</span></dd></div>
+          </dl>
+        </div>
+      </div>
+    </section>
+
+    <!-- Download -->
+    <section class="section download" id="download" aria-labelledby="download-title">
+      <div class="wrap">
+        <div class="dl reveal">
+          <div class="dl__main">
+            <div class="dl__icon" aria-hidden="true"><img src={url('assets/favicon.svg')} width="96" height="96" alt=""></div>
+            <p class="eyebrow">Download</p>
+            <h2 id="download-title">Adar for <span class="serif">macOS</span></h2>
+            <p class="dl__meta">{latest ? <><span>Adar {latest.version}</span><span>{formatDate(latest.date)}</span></> : <span>Latest release</span>}</p>
+            <p class="dl__arch"><Icon name="laptop" />Apple Silicon · M1 and newer</p>
+            <div class="dl__ctas">
+              <a class="btn btn--primary btn--lg" href={dmg?.url ?? `${REPO_URL}/releases/latest`}>
+                <Icon name="download" />Download .dmg{dmg && <span class="btn__meta">{formatSize(dmg.size)}</span>}
+              </a>
+              <a class="btn btn--ghost btn--lg" href={zip?.url ?? `${REPO_URL}/releases/latest`}>.zip{zip && <span class="btn__meta">{formatSize(zip.size)}</span>}</a>
+            </div>
+            <p class="dl__req">Needs a recent macOS on Apple Silicon and Git 2.26 or newer (<code>xcode-select --install</code> or <code>brew install git</code>).</p>
+            <p class="dl__platform" data-dl="platform" hidden>You seem to be on another system. Adar runs on macOS for now; Linux and Windows are <a href={url('roadmap.html#later')}>on the roadmap</a> — the code is mostly portable and help is welcome.</p>
+            {sums.length > 0 && (
+              <details class="dl__sums">
+                <summary>SHA-256 checksums</summary>
+                <div class="dl__sums-list">{sums.map((a) => <div class="sum"><b>{a.name}</b>{a.sha256}</div>)}</div>
+              </details>
+            )}
+          </div>
+          <ol class="dl__steps">
+            <li>
+              <span class="dl__n">1</span>
+              <div><h3>Install</h3><p>Open the <code>.dmg</code> and drag <b>Adar</b> to <b>Applications</b>.</p></div>
+            </li>
+            <li>
+              <span class="dl__n">2</span>
+              <div>
+                <h3>First launch</h3>
+                <p>Adar isn’t signed with an Apple Developer ID yet, so macOS may say it “is damaged”. Run this once in Terminal, then open Adar normally:</p>
+                <div class="code"><code>xattr -dr com.apple.quarantine /Applications/Adar.app</code><button class="copy" type="button" data-copy aria-label="Copy command"><Icon name="copy" /><span data-label="Copy">Copy</span></button></div>
+              </div>
+            </li>
+            <li>
+              <span class="dl__n">3</span>
+              <div><h3>Stay current</h3><p>Adar updates itself from GitHub Releases — <i>Adar → Check for Updates…</i></p></div>
+            </li>
+          </ol>
+        </div>
+
+        <div class="dl-more">
+          <article class="card dl-more__card reveal">
+            <h3><Icon name="code" />Build from source</h3>
+            <div class="code code--block"><code><span class="prompt">$</span>git clone https://github.com/mikelgarciaurbina/adar.git
+<span class="prompt">$</span>cd adar &amp;&amp; npm install
+<span class="prompt">$</span>npm run dev</code></div>
+            <p class="muted">Node.js 22+, Git 2.26+, macOS. Read <a class="link" href="https://github.com/mikelgarciaurbina/adar/blob/main/AGENTS.md">AGENTS.md</a> before sending a pull request.</p>
+          </article>
+          <article class="card dl-more__card reveal" style="--delay:80ms">
+            <h3><Icon name="tag" />Every release</h3>
+            <p class="muted">Release notes, older versions and checksums live on GitHub. The changelog on the roadmap page is read from the same place.</p>
+            <div class="dl-more__links">
+              <a class="btn btn--ghost" href="https://github.com/mikelgarciaurbina/adar/releases">All releases<Icon name="arrow-up-right" /></a>
+              <a class="btn btn--ghost" href={url('roadmap.html#changelog')}>Changelog<Icon name="arrow-right" /></a>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- Open source -->
+    <section class="section oss" id="open-source" aria-labelledby="oss-title">
+      <div class="wrap">
+        <div class="oss__inner reveal">
+          <p class="eyebrow">Open source</p>
+          <h2 id="oss-title">Grown <span class="serif">in the open.</span></h2>
+          <p>Adar is MIT-licensed and built in public. Read the code, suggest an idea, or pick up a good first issue — every branch starts somewhere.</p>
+          <dl class="oss__stats">
+            <div><dt>Latest</dt><dd>{latest?.version ?? '—'}</dd></div>
+            <div><dt>Releases</dt><dd>{releases.length || '—'}</dd></div>
+            <div><dt>License</dt><dd>MIT</dd></div>
+            <div><dt>Telemetry</dt><dd>None</dd></div>
+          </dl>
+        </div>
+        <div class="oss__links">
+          <a class="oss__card card tilt spotlight reveal" href={url('roadmap.html')}>
+            <Icon name="map" />
+            <h3>Roadmap</h3><p>Where Adar is heading, what shipped, and the issues waiting for someone like you.</p>
+            <span class="oss__go">Open the roadmap<Icon name="arrow-right" /></span>
+          </a>
+          <a class="oss__card card tilt spotlight reveal" href={url('design.html')} style="--delay:80ms">
+            <Icon name="palette" />
+            <h3>Basoa design system</h3><p>The logo, colours, type and components behind Adar — documented and free to reuse.</p>
+            <span class="oss__go">Explore the system<Icon name="arrow-right" /></span>
+          </a>
+          <a class="oss__card card tilt spotlight reveal" href="https://github.com/mikelgarciaurbina/adar/blob/main/CONTRIBUTING.md" style="--delay:160ms">
+            <Icon name="heart" />
+            <h3>Contribute</h3><p>Bug reports, translations, docs and code are all welcome. Start with the contributing guide.</p>
+            <span class="oss__go">Read the guide<Icon name="arrow-up-right" /></span>
+          </a>
+        </div>
+      </div>
+    </section>
+  </main>
+</Base>
+
+<script>
+  import '../scripts/home.js';
+</script>
