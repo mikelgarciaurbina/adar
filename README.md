@@ -17,7 +17,7 @@
 
 <p align="center"><a href="https://mikelgarciaurbina.github.io/adar/">Website</a> · <a href="https://mikelgarciaurbina.github.io/adar/roadmap.html">Roadmap</a> · <a href="README.es.md">Leer en castellano</a></p>
 
-> *Adar* means **branch** in Basque (euskara).
+> *Adar* means **branch** — and **antler** — in Basque (euskara). The logo is both: antlers drawn with git lanes.
 
 ![Adar screenshot](docs/screenshot.png)
 

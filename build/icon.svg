@@ -1,24 +1,27 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- Adar: antlers drawn with git lanes, a commit at every tip ("adar" is Basque for both a branch and an antler).
+       The website favicon's composition (mark at .73 on a rx 15/64 tile) scaled ×14 onto the 896 px macOS tile. -->
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#202838"/><stop offset="1" stop-color="#0c0f15"/></linearGradient>
-    <radialGradient id="glow" cx="0.5" cy="0.32" r="0.55"><stop offset="0" stop-color="#2ee6c5" stop-opacity="0.18"/><stop offset="1" stop-color="#2ee6c5" stop-opacity="0"/></radialGradient>
-    <linearGradient id="l" gradientUnits="userSpaceOnUse" x1="0" y1="800" x2="0" y2="280"><stop offset="0" stop-color="#0fb39c"/><stop offset="1" stop-color="#3cebcb"/></linearGradient>
-    <linearGradient id="r" gradientUnits="userSpaceOnUse" x1="0" y1="800" x2="0" y2="280"><stop offset="0" stop-color="#7437e8"/><stop offset="1" stop-color="#c08bfd"/></linearGradient>
-    <linearGradient id="bar" gradientUnits="userSpaceOnUse" x1="340" y1="0" x2="684" y2="0"><stop offset="0" stop-color="#2fd9bb"/><stop offset="1" stop-color="#a26cf9"/></linearGradient>
-    <linearGradient id="leaf" gradientUnits="userSpaceOnUse" x1="530" y1="250" x2="720" y2="120"><stop offset="0" stop-color="#34d070"/><stop offset="1" stop-color="#b6ec3a"/></linearGradient>
-    <filter id="sh" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#000" flood-opacity="0.45"/></filter>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#121714"/><stop offset="1" stop-color="#0A0D0C"/></linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.4" r="0.55"><stop offset="0" stop-color="#C5F56A" stop-opacity="0.11"/><stop offset="1" stop-color="#C5F56A" stop-opacity="0"/></radialGradient>
   </defs>
   <rect x="64" y="64" width="896" height="896" rx="210" fill="url(#bg)"/>
   <rect x="64" y="64" width="896" height="896" rx="210" fill="url(#glow)"/>
   <rect x="66" y="66" width="892" height="892" rx="208" fill="none" stroke="#ffffff" stroke-opacity="0.08" stroke-width="4"/>
-  <g filter="url(#sh)">
-    <path d="M344 772 V610 C344 500 470 420 512 330" stroke="url(#l)" stroke-width="66" stroke-linecap="round" fill="none"/>
-    <path d="M680 772 V610 C680 500 554 420 512 330" stroke="url(#r)" stroke-width="66" stroke-linecap="round" fill="none"/>
-    <path d="M344 618 H680" stroke="url(#bar)" stroke-width="46" stroke-linecap="round" fill="none"/>
-    <path d="M528 244 C556 160 640 116 724 126 C708 208 632 262 528 244 Z" fill="url(#leaf)"/>
-    <path d="M540 236 C592 196 646 164 694 146" stroke="#0c2a17" stroke-opacity="0.35" stroke-width="9" stroke-linecap="round" fill="none"/>
-    <circle cx="512" cy="300" r="72" fill="#0e1218" stroke="#effffb" stroke-width="42"/>
-    <circle cx="344" cy="772" r="62" fill="#0e1218" stroke="#1fcfb2" stroke-width="40"/>
-    <circle cx="680" cy="772" r="62" fill="#0e1218" stroke="#8a52f5" stroke-width="40"/>
+  <g transform="translate(184.4 167.6) scale(10.22)" color="#C5F56A">
+    <g fill="none" stroke="currentColor" stroke-width="4.6" stroke-linecap="round">
+      <path d="M32 55V45"/>
+      <path d="M32 45C25 42 12 38 11 24C10.5 17 12 12 15.5 7.5"/>
+      <path d="M32 45C39 42 52 38 53 24C53.5 17 52 12 48.5 7.5"/>
+      <path d="M11.6 31C18 29.5 23 26 24.5 19.5"/>
+      <path d="M52.4 31C46 29.5 41 26 39.5 19.5"/>
+    </g>
+    <g fill="currentColor">
+      <circle cx="15.5" cy="7.5" r="4.4"/>
+      <circle cx="48.5" cy="7.5" r="4.4"/>
+      <circle cx="24.6" cy="19" r="4.4"/>
+      <circle cx="39.4" cy="19" r="4.4"/>
+      <circle cx="32" cy="55.5" r="5.4"/>
+    </g>
   </g>
 </svg>

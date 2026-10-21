@@ -63,7 +63,7 @@ export function AboutModal() {
         <AdarLogo size={72} />
         <div className="md-about-name">Adar</div>
         <div className="md-about-meaning">
-          <em>adar</em> · “branch” in Basque
+          <em>adar</em> · “branch” and “antler” in Basque
         </div>
         <div className="md-about-tagline">A visual Git client for every repository.</div>
         <dl className="md-about-grid">

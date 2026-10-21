@@ -28,6 +28,7 @@
   --accent-soft: rgba(23, 195, 165, 0.14);
   --link: #4fa3ff;
   --focus: rgba(23, 195, 165, 0.55);
+  --logo-mark: #c5f56a; /* bare Adar mark (fern) */
 
   --danger: #f0506e;
   --danger-soft: rgba(240, 80, 110, 0.14);
@@ -95,6 +96,7 @@
   --accent-soft: rgba(14, 165, 139, 0.12);
   --link: #1f6feb;
   --focus: rgba(14, 165, 139, 0.45);
+  --logo-mark: #3f6a06;
 
   --danger: #d6334f;
   --danger-soft: rgba(214, 51, 79, 0.1);
@@ -154,4 +156,7 @@
   --statusbar-h: 24px;
   --panel-header-h: 34px;
   --ease: cubic-bezier(0.2, 0, 0, 1);
+  /* App-icon tile of the Adar logo: the same in every theme, like the Dock icon. */
+  --logo-tile: #0a0d0c;
+  --logo-tile-mark: #c5f56a;
 }

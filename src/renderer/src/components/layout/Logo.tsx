@@ -1,64 +1,44 @@
-import { useId } from 'react'
-
 /**
- * Adar logo ("adar" = branch in Basque): an "A" drawn with two git lanes that meet at a
- * commit, a merge edge as the crossbar, and a leaf sprouting from the top commit.
- * Same artwork as build/icon.svg. `bare` drops the rounded-square background; its commit
- * "holes" use --logo-hole (default --bg-1) so they match whatever surface it sits on.
+ * Adar logo: a pair of antlers drawn with git lanes, with a commit at every tip ("adar" is Basque
+ * for both a tree branch and an antler). Same artwork as build/icon.svg and the website's mark.
+ * By default it is the app icon (the mark on a dark rounded tile, identical in both themes); `bare`
+ * draws only the mark in --logo-mark, which each theme sets so it reads on its surfaces.
  */
 export function AdarLogo({ size = 48, className, bare = false }: { size?: number; className?: string; bare?: boolean }) {
-  const id = useId().replace(/:/g, '')
-  const g = (name: string) => `${name}-${id}`
   return (
-    <svg
-      className={className}
-      width={size}
-      height={size}
-      viewBox={bare ? '232 96 560 760' : '64 64 896 896'}
-      aria-hidden="true"
-      focusable="false"
-    >
-      <defs>
-        <linearGradient id={g('bg')} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#202838" />
-          <stop offset="1" stopColor="#0c0f15" />
-        </linearGradient>
-        <radialGradient id={g('glow')} cx="0.5" cy="0.32" r="0.55">
-          <stop offset="0" stopColor="#2ee6c5" stopOpacity="0.18" />
-          <stop offset="1" stopColor="#2ee6c5" stopOpacity="0" />
-        </radialGradient>
-        <linearGradient id={g('l')} gradientUnits="userSpaceOnUse" x1="0" y1="800" x2="0" y2="280">
-          <stop offset="0" stopColor="#0fb39c" />
-          <stop offset="1" stopColor="#3cebcb" />
-        </linearGradient>
-        <linearGradient id={g('r')} gradientUnits="userSpaceOnUse" x1="0" y1="800" x2="0" y2="280">
-          <stop offset="0" stopColor="#7437e8" />
-          <stop offset="1" stopColor="#c08bfd" />
-        </linearGradient>
-        <linearGradient id={g('bar')} gradientUnits="userSpaceOnUse" x1="340" y1="0" x2="684" y2="0">
-          <stop offset="0" stopColor="#2fd9bb" />
-          <stop offset="1" stopColor="#a26cf9" />
-        </linearGradient>
-        <linearGradient id={g('leaf')} gradientUnits="userSpaceOnUse" x1="530" y1="250" x2="720" y2="120">
-          <stop offset="0" stopColor="#34d070" />
-          <stop offset="1" stopColor="#b6ec3a" />
-        </linearGradient>
-      </defs>
-      {!bare && (
+    <svg className={className} width={size} height={size} viewBox={bare ? '2 2 60 60' : '0 0 64 64'} aria-hidden="true" focusable="false">
+      {bare ? (
+        <Mark color="var(--logo-mark)" />
+      ) : (
         <>
-          <rect x="64" y="64" width="896" height="896" rx="210" fill={`url(#${g('bg')})`} />
-          <rect x="64" y="64" width="896" height="896" rx="210" fill={`url(#${g('glow')})`} />
-          <rect x="66" y="66" width="892" height="892" rx="208" fill="none" stroke="#ffffff" strokeOpacity="0.08" strokeWidth="4" />
+          <rect width="64" height="64" rx="15" fill="var(--logo-tile)" />
+          <g transform="translate(8.6 7.4) scale(.73)">
+            <Mark color="var(--logo-tile-mark)" />
+          </g>
         </>
       )}
-      <path d="M344 772 V610 C344 500 470 420 512 330" stroke={`url(#${g('l')})`} strokeWidth="66" strokeLinecap="round" fill="none" />
-      <path d="M680 772 V610 C680 500 554 420 512 330" stroke={`url(#${g('r')})`} strokeWidth="66" strokeLinecap="round" fill="none" />
-      <path d="M344 618 H680" stroke={`url(#${g('bar')})`} strokeWidth="46" strokeLinecap="round" fill="none" />
-      <path d="M528 244 C556 160 640 116 724 126 C708 208 632 262 528 244 Z" fill={`url(#${g('leaf')})`} />
-      <path d="M540 236 C592 196 646 164 694 146" stroke="#0c2a17" strokeOpacity="0.35" strokeWidth="9" strokeLinecap="round" fill="none" />
-      <circle cx="512" cy="300" r="72" fill={bare ? 'var(--logo-hole, var(--bg-1))' : '#0e1218'} stroke={bare ? 'var(--text-0)' : '#effffb'} strokeWidth="42" />
-      <circle cx="344" cy="772" r="62" fill={bare ? 'var(--logo-hole, var(--bg-1))' : '#0e1218'} stroke="#1fcfb2" strokeWidth="40" />
-      <circle cx="680" cy="772" r="62" fill={bare ? 'var(--logo-hole, var(--bg-1))' : '#0e1218'} stroke="#8a52f5" strokeWidth="40" />
     </svg>
+  )
+}
+
+/** The antlers in a 64×64 box: four lanes forking off a trunk, commits at the tips and the root. */
+function Mark({ color }: { color: string }) {
+  return (
+    <>
+      <g fill="none" stroke={color} strokeWidth="4.6" strokeLinecap="round">
+        <path d="M32 55V45" />
+        <path d="M32 45C25 42 12 38 11 24C10.5 17 12 12 15.5 7.5" />
+        <path d="M32 45C39 42 52 38 53 24C53.5 17 52 12 48.5 7.5" />
+        <path d="M11.6 31C18 29.5 23 26 24.5 19.5" />
+        <path d="M52.4 31C46 29.5 41 26 39.5 19.5" />
+      </g>
+      <g fill={color}>
+        <circle cx="15.5" cy="7.5" r="4.4" />
+        <circle cx="48.5" cy="7.5" r="4.4" />
+        <circle cx="24.6" cy="19" r="4.4" />
+        <circle cx="39.4" cy="19" r="4.4" />
+        <circle cx="32" cy="55.5" r="5.4" />
+      </g>
+    </>
   )
 }

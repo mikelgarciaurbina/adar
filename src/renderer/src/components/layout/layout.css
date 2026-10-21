@@ -715,7 +715,6 @@
 .tb-status-logo {
   flex: none;
   margin-right: 1px;
-  --logo-hole: var(--bg-2); /* bare logo: commit holes match the bar */
 }
 .tb-status-state {
   flex: none;

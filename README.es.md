@@ -11,7 +11,7 @@
 
 <p align="center"><a href="https://mikelgarciaurbina.github.io/adar/">Web</a> · <a href="https://mikelgarciaurbina.github.io/adar/roadmap.html">Roadmap</a> · <a href="README.md">Read in English</a></p>
 
-> *Adar* significa **rama** en euskera.
+> *Adar* significa **rama** —y también **cuerna**— en euskera. El logo es las dos cosas: una cornamenta dibujada con carriles de git.
 
 ![Captura de Adar](docs/screenshot.png)
 

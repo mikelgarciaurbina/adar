@@ -99,7 +99,7 @@ export function Welcome() {
     <div className="wl-root">
       <div className="wl-content">
         <header className="wl-hero">
-          <AdarLogo size={64} className="wl-logo" />
+          <AdarLogo bare size={64} className="wl-logo" />
           <div>
             <h1 className="wl-title">Adar</h1>
             <p className="wl-tagline">
