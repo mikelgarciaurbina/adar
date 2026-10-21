@@ -38,14 +38,15 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
     `diff` (diff, blame, history), `conflicts`, `rebase`, `modals`, `palette` (palette + git console), `update`.
   - `lib/` — lane colours, formatting, ref helpers, drag & drop, keyboard helpers.
   - `styles/theme.css` — design tokens. ALWAYS use CSS variables; dark and light themes must both work.
-- `site/` — the project website: a separate npm project (Astro, static output) deployed by Cloudflare Pages from this
-  repository (root directory `site`, `npm run build`, output `dist`; the `SITE_URL` env var is its public address), and
-  rebuilt after each release through the deploy hook in `release.yml` (secret `CLOUDFLARE_DEPLOY_HOOK`). `src/pages/` has the landing (`index.astro`; the 3D scene is hand-written WebGL2 in
-  `src/scripts/branches.js`), `roadmap.astro` (renders the repository's `ROADMAP.md` and the GitHub Releases at build
-  time — `src/lib/roadmap.ts`, `src/lib/releases.ts`), `design.astro` (the Basoa design system) and `404.astro`.
-  Shared layout/nav/footer/icon in `src/layouts` and `src/components`; tokens in `src/styles/tokens.css` (also
-  published as `/tokens.css`); fonts self-hosted; build telemetry off; the browser only calls the GitHub API for the
-  star count. Separate from the app's own `theme.css`. Always link with `url()` from `src/lib/url.ts` (respects the base).
+- `site/` — the project website (https://adargit.com): a separate npm project (Astro, static output) deployed by
+  Cloudflare Pages from this repository (root directory `site`, `npm run build`, output `dist`), and rebuilt after each
+  release through the deploy hook in `release.yml` (secret `CLOUDFLARE_DEPLOY_HOOK`). `src/pages/` has the landing
+  (`index.astro`; the 3D scene is hand-written WebGL2 in `src/scripts/branches.js`), `roadmap.astro` (renders the
+  repository's `ROADMAP.md` and the GitHub Releases at build time — `src/lib/roadmap.ts`, `src/lib/releases.ts`),
+  `design.astro` (the Basoa design system) and `404.astro`. Shared layout/nav/footer/icon in `src/layouts` and
+  `src/components`; tokens in `src/styles/tokens.css` (also published as `/tokens.css`); fonts self-hosted; build
+  telemetry off; the browser only calls the GitHub API for the star count. Separate from the app's own `theme.css`.
+  Always link with `url()` from `src/lib/url.ts` (respects the base).
 
 ## Conventions
 - CSS class prefixes per module: `app-` shell, `ui-` common, `tb-`/`wl-` toolbar, tabs, status bar, welcome, `sb-` left

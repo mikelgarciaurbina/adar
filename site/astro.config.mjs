@@ -1,9 +1,8 @@
-// The Adar website: static pages, deployed by Cloudflare Pages from this repository (root directory `site`).
-// SITE_URL is the public address (path included) used for canonical and social-card URLs; until it is set,
-// Cloudflare builds fall back to the deployment's own URL (CF_PAGES_URL) and local builds to localhost.
+// The Adar website: static pages at https://adargit.com, deployed by Cloudflare Pages from this repository
+// (root directory `site`). The address is used for canonical and social-card URLs; SITE_URL overrides it.
 import { defineConfig } from 'astro/config';
 
-const siteUrl = new URL(process.env.SITE_URL || process.env.CF_PAGES_URL || 'http://localhost:4321/');
+const siteUrl = new URL(process.env.SITE_URL || 'https://adargit.com/');
 
 export default defineConfig({
   site: siteUrl.origin,
