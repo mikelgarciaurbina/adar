@@ -104,7 +104,7 @@ Al subir un tag `v*`, GitHub Actions compila la app y publica una release; las c
 actualizador integrado:
 
 ```bash
-npm version 0.3.0   # actualiza package.json y crea el tag v0.3.0
+npm version 0.3.1   # actualiza package.json y crea el tag v0.3.1
 git push origin main --tags
 ```
 

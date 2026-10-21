@@ -1,7 +1,7 @@
 # Builds Adar for macOS (Apple Silicon) and publishes a GitHub Release when a version
 # tag is pushed. The app's in-app updater reads the latest release, so:
 #   1. update build/release-notes.md
-#   2. npm version 0.3.0 && git push origin main --tags
+#   2. npm version 0.3.1 && git push origin main --tags
 # The app is built without publishing; the last step creates a single fresh DRAFT release (which the
 # updater ignores), uploads the arm64 .dmg and .zip, checks that both are complete and match the local
 # build, and only then publishes it.

@@ -128,7 +128,7 @@ Pushing a `v*` tag builds the macOS app on GitHub Actions and publishes a releas
 the in-app updater:
 
 ```bash
-npm version 0.3.0   # bumps package.json and creates the v0.3.0 tag
+npm version 0.3.1   # bumps package.json and creates the v0.3.1 tag
 git push origin main --tags
 ```
 
