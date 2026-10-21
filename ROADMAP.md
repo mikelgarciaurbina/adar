@@ -21,7 +21,8 @@ split diffs, hunks or full file · file history and blame · merge-conflict tool
 fetch/pull/push with upstream handling · undo/redo of git actions · command palette and git console · tabs ·
 dark/light themes · credential prompts for HTTPS tokens and SSH passphrases · in-app updates from GitHub Releases ·
 `adar` command-line tool (open the current repository from a terminal) · edit the message of existing commits in place ·
-tab groups (a project's repositories together, reopened in one click).
+tab groups (a project's repositories together, reopened in one click) · the Basoa look of adargit.com in the app (night
+and day themes, six lane colours, tab groups as trays) · Fetch All for a tab group.
 
 ---
 
@@ -99,10 +100,13 @@ tab groups (a project's repositories together, reopened in one click).
 ### Experience
 - [ ] Customizable keyboard shortcuts.
 - [ ] Custom themes (theme files), font and density options, high-contrast theme.
-- [ ] Workspaces: a dashboard for a tab group (branch, changes and ahead/behind of each repository) with batch
-  fetch/pull, and favourites. (Tab groups themselves are done.)
-- [ ] Tab groups: any colour for a group (colour picker or hex value) besides the preset palette, with the chip's
-  text switching between light and dark so it stays readable in both themes. *(good first issue)*
+- [ ] Workspaces: a dashboard for a tab group (branch, changes and ahead/behind of each repository) with batch pull,
+  and favourites. (Tab groups and Fetch All for a group are done.)
+- [ ] Tab groups: any colour for a group (colour picker or hex value) besides the eight Basoa colours, with the
+  label's colour adjusted so it stays readable in both themes. *(good first issue)*
+- [ ] Left panel: give each branch the dot of its lane colour in the graph (as its ref label already has), so a branch
+  keeps one colour everywhere. The panel needs the graph's lane colour of every branch tip; branches outside the
+  loaded history keep a neutral dot.
 - [ ] App menu: once the `adar` command is installed, show **Uninstall Command Line Tool…** instead of *Install…*
   (rebuild the menu after installing or uninstalling, and check at startup). Today uninstalling is only in
   Settings → Integrations and the command palette. *(good first issue)*
