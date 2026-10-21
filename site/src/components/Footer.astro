@@ -17,7 +17,7 @@ const columns: [string, [string, string][]][] = [
         <p>A fast, visual Git client for every repository. Free and open source, made in Euskal Herria.</p>
       </div>
       {columns.map(([title, items]) => (
-        <div><h4>{title}</h4><ul>{items.map(([label, href]) => <li><a href={href}>{label}</a></li>)}</ul></div>
+        <div><h2 class="footer__title">{title}</h2><ul>{items.map(([label, href]) => <li><a href={href}>{label}</a></li>)}</ul></div>
       ))}
     </div>
     <div class="footer__base">

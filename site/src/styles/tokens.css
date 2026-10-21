@@ -19,7 +19,7 @@
   --laino-50: #f3f6f1;
   --laino-200: #cad3cb;
   --laino-400: #95a198;
-  --laino-600: #5f6b65;
+  --laino-600: #808d86; /* the dimmest text: still 4.5:1 on every night surface */
   /* Eguna · day (light surfaces) */
   --egun-50: #fbfaf6;
   --egun-100: #f3f1ea;
@@ -141,8 +141,8 @@
   --line-strong: rgb(20 30 22 / 0.2);
   --text: #0c110e;
   --text-2: #2d3631;
-  --text-3: #5b665f;
-  --text-4: #87918a;
+  --text-3: #4a554e;
+  --text-4: #5d6862;
   --accent: var(--iratze);
   --accent-text: var(--iratze-deep);
   --accent-ink: #0b1104;

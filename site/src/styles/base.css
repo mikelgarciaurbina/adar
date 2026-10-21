@@ -113,6 +113,7 @@ code, kbd, pre, samp { font-family: var(--font-mono); font-size: 0.92em; }
   font: 500 var(--text-xs) / 1 var(--font-mono); white-space: nowrap;
 }
 .ref svg { width: 12px; height: 12px; }
+[data-theme="light"] .ref { color: color-mix(in srgb, var(--ref) 50%, var(--text)); }
 
 .kbd {
   display: inline-flex; align-items: center; justify-content: center;
@@ -199,7 +200,7 @@ code, kbd, pre, samp { font-family: var(--font-mono); font-size: 0.92em; }
 .footer { position: relative; z-index: 1; padding: var(--space-9) 0 var(--space-7); border-top: 1px solid var(--line); background: var(--bg-sunken); }
 .footer__grid { display: grid; grid-template-columns: 1.4fr repeat(3, 1fr); gap: var(--space-7); }
 .footer__brand p { margin-top: var(--space-4); max-width: 320px; color: var(--text-3); font-size: var(--text-sm); }
-.footer h4 { font: 500 var(--text-xs) / 1 var(--font-mono); letter-spacing: var(--tracking-wide); text-transform: uppercase; color: var(--text-4); margin-bottom: var(--space-4); }
+.footer .footer__title { font: 500 var(--text-xs) / 1 var(--font-mono); letter-spacing: var(--tracking-wide); text-transform: uppercase; color: var(--text-4); margin-bottom: var(--space-4); }
 .footer ul { list-style: none; padding: 0; display: grid; gap: 10px; font-size: var(--text-sm); }
 .footer ul a { color: var(--text-3); transition: color var(--dur-2); }
 .footer ul a:hover { color: var(--text); }
@@ -213,6 +214,30 @@ code, kbd, pre, samp { font-family: var(--font-mono); font-size: 0.92em; }
   .footer__grid { grid-template-columns: 1fr 1fr; }
   .footer__brand { grid-column: 1 / -1; }
 }
+
+/* ── Pausing motion (WCAG 2.2.2): the toggle stops every loop and the 3D scenes ── */
+.motion-toggle {
+  position: fixed; right: 16px; bottom: 16px; z-index: 60;
+  display: inline-flex; align-items: center; gap: 0; height: 40px; min-width: 40px; padding: 0 11px;
+  border: 1px solid var(--line-strong); border-radius: var(--radius-full);
+  background: rgb(10 13 12 / 0.78); color: var(--text-2); cursor: pointer;
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  font: 500 var(--text-xs) / 1 var(--font-sans);
+  transition: color var(--dur-2), border-color var(--dur-2), gap var(--dur-2);
+}
+.motion-toggle svg { width: 16px; height: 16px; flex: none; }
+.motion-toggle__play, .motion-paused .motion-toggle__pause { display: none; }
+.motion-paused .motion-toggle__play { display: block; }
+.motion-toggle__label { max-width: 0; overflow: hidden; white-space: nowrap; transition: max-width var(--dur-3) var(--ease-grow); }
+.motion-toggle:hover, .motion-toggle:focus-visible { color: var(--text); border-color: var(--text-4); gap: 8px; }
+.motion-toggle:hover .motion-toggle__label, .motion-toggle:focus-visible .motion-toggle__label { max-width: 160px; }
+.motion-paused *, .motion-paused *::before, .motion-paused *::after { animation-play-state: paused !important; }
+@media (prefers-reduced-motion: reduce) { .motion-toggle { display: none; } }
+
+/* ── First paint: hero content animates in with CSS alone (no JavaScript between the HTML and the LCP) ── */
+.rise { animation: rise var(--dur-4) var(--ease-grow) both; animation-delay: var(--delay, 0ms); }
+@keyframes rise { from { opacity: 0.01; transform: translateY(24px); } }
+.motion-paused .rise { animation: none; }
 
 /* ── Scroll reveal ───────────────────────────────────────── */
 .reveal { opacity: 0; transform: translateY(28px); transition: opacity var(--dur-4) var(--ease-grow), transform var(--dur-4) var(--ease-grow); transition-delay: var(--delay, 0ms); }

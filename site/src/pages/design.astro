@@ -22,15 +22,15 @@ const icons = [...sprite.matchAll(/<symbol[^>]*\bid="([\w-]+)"/g)].map((m) => m[
     <section class="ds-hero" aria-labelledby="ds-title">
       <div class="wrap ds-hero__grid">
         <div class="ds-hero__copy">
-          <p class="eyebrow reveal">Design system · v1</p>
-          <h1 id="ds-title" class="reveal" style="--delay:80ms"><span class="serif" lang="eu">Basoa</span></h1>
-          <p class="ds-hero__lede reveal" style="--delay:160ms"><i lang="eu">Basoa</i> is Basque for <b>forest</b> — where branches, antlers and moss live. It is the visual language of Adar: one mark, a palette named after the woods at night, three typefaces and a graph that everything else grows from.</p>
-          <div class="ds-hero__ctas reveal" style="--delay:240ms">
+          <p class="eyebrow rise">Design system · v1</p>
+          <h1 id="ds-title" class="rise" style="--delay:80ms"><span class="serif" lang="eu">Basoa</span></h1>
+          <p class="ds-hero__lede rise" style="--delay:160ms"><i lang="eu">Basoa</i> is Basque for <b>forest</b> — where branches, antlers and moss live. It is the visual language of Adar: one mark, a palette named after the woods at night, three typefaces and a graph that everything else grows from.</p>
+          <div class="ds-hero__ctas rise" style="--delay:240ms">
             <a class="btn btn--primary btn--lg" href="#downloads"><Icon name="download" />Get the assets</a>
             <a class="btn btn--ghost btn--lg" href={url('tokens.css')}><Icon name="code" />tokens.css</a>
           </div>
         </div>
-        <figure class="mark3d reveal" data-mark3d aria-label="The Adar mark, extruded in 3D">
+        <figure class="mark3d rise" data-mark3d aria-label="The Adar mark, extruded in 3D">
           <div class="mark3d__stage" data-stage></div>
           <div class="mark3d__floor" aria-hidden="true"></div>
           <figcaption class="fig mono"><span>fig. 5</span> the mark, extruded — drag to turn it</figcaption>
@@ -170,7 +170,7 @@ const icons = [...sprite.matchAll(/<symbol[^>]*\bid="([\w-]+)"/g)].map((m) => m[
         <!-- Motion -->
         <section class="ds-sec" id="motion" aria-labelledby="h-motion">
           <header class="ds-sec__head"><p class="eyebrow">06</p><h2 id="h-motion">Motion</h2>
-            <p>Things <i lang="eu">hazi</i> (grow) into place: quick to start, slow to settle. Motion follows the direction of history and is switched off for people who ask for reduced motion.</p></header>
+            <p>Things <i lang="eu">hazi</i> (grow) into place: quick to start, slow to settle. Motion follows the direction of history, stops for people who ask for reduced motion, and every loop can be paused from the floating button in the corner.</p></header>
           <div class="curves" data-curves></div>
           <dl class="durations card">
             <div><dt class="mono">--dur-1 · 120ms</dt><dd>Hover, press, colour changes.</dd></div>
@@ -229,9 +229,9 @@ const icons = [...sprite.matchAll(/<symbol[^>]*\bid="([\w-]+)"/g)].map((m) => m[
             <p>The building blocks of the website, each built only from tokens. Flip the preview to see them by day.</p></header>
           <div class="preview card" data-preview>
             <div class="preview__bar">
-              <div class="seg" role="radiogroup" aria-label="Theme">
-                <button type="button" role="radio" aria-checked="true" data-theme-set="dark">Gaua · night</button>
-                <button type="button" role="radio" aria-checked="false" data-theme-set="light">Eguna · day</button>
+              <div class="seg" role="group" aria-label="Theme">
+                <button type="button" aria-pressed="true" data-theme-set="dark">Gaua · night</button>
+                <button type="button" aria-pressed="false" data-theme-set="light">Eguna · day</button>
               </div>
             </div>
             <div class="preview__body">

@@ -4,6 +4,38 @@ import { repo, formatCount } from './github.js';
 document.documentElement.classList.remove('no-js');
 export const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+// Motion can be paused from the floating toggle (remembered per browser); scenes subscribe to it.
+const MOTION_KEY = 'adar:motion';
+const motionListeners = new Set();
+let motionPaused = false;
+try { motionPaused = localStorage.getItem(MOTION_KEY) === 'paused'; } catch { /* storage unavailable */ }
+export const motion = {
+  get paused() { return motionPaused || reducedMotion; },
+  subscribe(fn) { motionListeners.add(fn); fn(this.paused); },
+};
+const motionToggle = document.querySelector('[data-motion-toggle]');
+function setMotionPaused(paused, remember) {
+  motionPaused = paused;
+  document.documentElement.classList.toggle('motion-paused', paused);
+  if (motionToggle) {
+    motionToggle.setAttribute('aria-pressed', String(paused));
+    motionToggle.querySelector('[data-motion-label]').textContent = paused ? 'Play animations' : 'Pause animations';
+  }
+  if (remember) {
+    try { if (paused) localStorage.setItem(MOTION_KEY, 'paused'); else localStorage.removeItem(MOTION_KEY); } catch { /* ignore */ }
+  }
+  motionListeners.forEach((fn) => fn(motion.paused));
+}
+setMotionPaused(motionPaused, false);
+motionToggle?.addEventListener('click', () => setMotionPaused(!motionPaused, true));
+
+const announcer = document.querySelector('[data-announce]');
+export function announce(text) {
+  if (!announcer) return;
+  announcer.textContent = '';
+  setTimeout(() => { announcer.textContent = text; }, 50);
+}
+
 export function fill(key, value) {
   document.querySelectorAll(`[data-gh="${key}"]`).forEach((el) => { el.textContent = value; });
 }
@@ -49,6 +81,7 @@ document.addEventListener('click', async (e) => {
   }
   const label = btn.querySelector('[data-label]');
   btn.classList.add('is-done');
+  announce('Copied to clipboard');
   if (label) label.textContent = 'Copied';
   clearTimeout(btn._t);
   btn._t = setTimeout(() => {

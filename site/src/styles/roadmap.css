@@ -4,7 +4,7 @@ code { color: var(--text); background: rgb(255 255 255 / 0.05); padding: 0.1em 0
 .code code { background: none; padding: 0; }
 .link { color: var(--accent-text); text-decoration: underline; text-decoration-color: rgb(197 245 106 / 0.35); text-underline-offset: 3px; }
 .link:hover { text-decoration-color: currentColor; }
-.link-btn { padding: 0; border: 0; background: none; cursor: pointer; color: var(--accent-text); text-decoration: underline; text-decoration-color: rgb(197 245 106 / 0.35); text-underline-offset: 3px; font: inherit; }
+.link-btn { padding: 1px 0; border: 0; background: none; cursor: pointer; color: var(--accent-text); text-decoration: underline; text-decoration-color: rgb(197 245 106 / 0.35); text-underline-offset: 3px; font: inherit; }
 .gfi {
   display: inline-flex; align-items: center; gap: 5px; height: 20px; padding: 0 8px; border-radius: var(--radius-full);
   background: rgb(255 211 110 / 0.12); border: 1px solid rgb(255 211 110 / 0.35); color: var(--eguzki);
@@ -57,7 +57,7 @@ code { color: var(--text); background: rgb(255 255 255 / 0.05); padding: 0.1em 0
 .seg { display: inline-flex; padding: 3px; border: 1px solid var(--line-strong); border-radius: var(--radius-full); background: var(--bg-sunken); }
 .seg button { height: 32px; padding: 0 14px; border: 0; border-radius: var(--radius-full); background: none; color: var(--text-3); font-size: var(--text-sm); cursor: pointer; transition: background var(--dur-2), color var(--dur-2); }
 .seg button:hover { color: var(--text); }
-.seg button[aria-checked="true"] { background: var(--surface-3); color: var(--text); box-shadow: var(--shadow-1); }
+.seg button[aria-pressed="true"] { background: var(--surface-3); color: var(--text); box-shadow: var(--shadow-1); }
 .toggle { display: inline-flex; align-items: center; gap: 10px; font-size: var(--text-sm); color: var(--text-2); cursor: pointer; user-select: none; }
 .toggle input { position: absolute; opacity: 0; width: 1px; height: 1px; }
 .toggle__track { position: relative; width: 36px; height: 22px; border-radius: 999px; background: var(--surface-3); border: 1px solid var(--line-strong); transition: background var(--dur-2), border-color var(--dur-2); }
@@ -169,7 +169,9 @@ code { color: var(--text); background: rgb(255 255 255 / 0.05); padding: 0.1em 0
 .step { padding: 24px; display: grid; gap: 10px; align-content: start; }
 .step__n { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 50%; border: 1px solid rgb(197 245 106 / 0.4); background: var(--accent-wash); color: var(--accent-text); font-size: var(--text-sm); margin-bottom: 8px; }
 .step h3 { font-size: var(--text-lg); }
-.step p { font-size: var(--text-sm); color: var(--text-3); }
+.step p { font-size: var(--text-sm); color: var(--text-3); line-height: 1.9; }
+/* A link that wraps over two lines spans both of them and crowds the button next to it. */
+.step .link, .step .link-btn { white-space: nowrap; }
 .step .code { flex-wrap: wrap; padding: 10px 10px 10px 14px; font-size: 12.5px; }
 .step .code code { white-space: pre-wrap; }
 @media (max-width: 1000px) { .steps { grid-template-columns: 1fr 1fr; } }

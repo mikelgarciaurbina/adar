@@ -425,7 +425,7 @@ export function createScene(canvas, opts = {}) {
     shift: [0, 0], shiftTarget: [0, 0], scale: 1, scaleTarget: 1,
     px: 0, py: 0, pxTarget: 0, pyTarget: 0, time: 0,
   };
-  let raf = 0, last = 0, running = false, w = 0, h = 0, dpr = 1;
+  let raf = 0, last = 0, running = false, w = 0, h = 0, dpr = 1, paused = false, drawn = false;
 
   function resize() {
     dpr = Math.min(devicePixelRatio || 1, small ? 1.5 : 1.75);
@@ -438,7 +438,10 @@ export function createScene(canvas, opts = {}) {
     raf = requestAnimationFrame(frame);
     const dt = Math.min(0.05, (now - (last || now)) / 1000);
     last = now;
-    state.time += dt;
+    const settled = Math.abs(state.morphTarget - state.morph) < 1e-4 && Math.abs(state.shiftTarget[0] - state.shift[0]) < 1e-4 &&
+      Math.abs(state.shiftTarget[1] - state.shift[1]) < 1e-4 && Math.abs(state.scaleTarget - state.scale) < 1e-4;
+    if (paused && settled && drawn && canvas.width === Math.round(canvas.clientWidth * dpr)) return;
+    if (!paused) state.time += dt;
     const k = (rate) => 1 - Math.exp(-dt * rate);
     state.morph += (state.morphTarget - state.morph) * k(reduced ? 20 : 3.2);
     state.shift[0] += (state.shiftTarget[0] - state.shift[0]) * k(4);
@@ -446,8 +449,9 @@ export function createScene(canvas, opts = {}) {
     state.scale += (state.scaleTarget - state.scale) * k(4);
     state.px += (state.pxTarget - state.px) * k(2.5);
     state.py += (state.pyTarget - state.py) * k(2.5);
-    if (state.grow < 1.2) state.grow += dt / 3.6;
+    if (state.grow < 1.2) state.grow = paused ? 1.2 : state.grow + dt / 3.6;
     draw();
+    drawn = true;
   }
 
   function draw() {
@@ -467,7 +471,7 @@ export function createScene(canvas, opts = {}) {
 
     const t = state.time;
     const turning = Math.sin(Math.PI * (m % 1)) * (m > 0.001 && m < 1.999 ? 1 : 0);
-    const yaw = (reduced ? 0 : Math.sin(t * 0.13) * 0.42) + state.px * 0.45 + turning * 0.9;
+    const yaw = (reduced ? 0 : Math.sin(t * 0.13) * 0.42) + state.px * 0.45 + turning * (paused ? 0 : 0.9);
     const pitch = 0.06 + state.py * 0.16;
     gl.useProgram(pts.p);
     gl.uniformMatrix4fv(pts.u.uView, false, view(yaw, pitch, DIST));
@@ -494,7 +498,7 @@ export function createScene(canvas, opts = {}) {
   }
 
   function onPointer(e) {
-    if (reduced) return;
+    if (reduced || paused) return;
     state.pxTarget = (e.clientX / innerWidth) * 2 - 1;
     state.pyTarget = (e.clientY / innerHeight) * 2 - 1;
   }
@@ -514,6 +518,8 @@ export function createScene(canvas, opts = {}) {
       if (instant) { state.shift = [x, y]; state.scale = scale; }
     },
     get morph() { return state.morph; },
+    /** Paused: no growth, drift or turning; the scene still follows the scroll. */
+    setPaused(v) { paused = v; drawn = false; if (v) { state.pxTarget = 0; state.pyTarget = 0; } },
   };
   return api;
 }

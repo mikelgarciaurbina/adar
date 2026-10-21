@@ -4,6 +4,7 @@ import '../styles/tokens.css';
 import '../styles/base.css';
 import Nav from '../components/Nav.astro';
 import Footer from '../components/Footer.astro';
+import Icon from '../components/Icon.astro';
 import geist from '../fonts/geist.woff2?url';
 import serifItalic from '../fonts/instrument-serif-italic.woff2?url';
 import { url, SITE_URL } from '../lib/url';
@@ -51,11 +52,20 @@ const canonical = SITE_URL + path;
   <link rel="apple-touch-icon" href={url('assets/apple-touch-icon.png')}>
   <link rel="preload" href={geist} as="font" type="font/woff2" crossorigin>
   <link rel="preload" href={serifItalic} as="font" type="font/woff2" crossorigin>
+  <link rel="sitemap" href={url('sitemap.xml')}>
+  <slot name="head" />
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
   {!bare && <Nav current={current} />}
   <slot />
   {!bare && <Footer current={current} />}
+  {!bare && (
+    <button class="motion-toggle" type="button" aria-pressed="false" data-motion-toggle>
+      <Icon name="pause" class="motion-toggle__pause" /><Icon name="play" class="motion-toggle__play" />
+      <span class="motion-toggle__label" data-motion-label>Pause animations</span>
+    </button>
+  )}
+  <p class="visually-hidden" aria-live="polite" data-announce></p>
 </body>
 </html>

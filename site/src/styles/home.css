@@ -143,7 +143,7 @@ em { font-style: normal; }
   transform: rotateX(calc(var(--tilt) * 26deg)) scale(calc(1 - var(--tilt) * 0.1)) translateY(calc(var(--tilt) * -20px));
   will-change: transform;
 }
-.shot__frame img { width: 100%; height: auto; }
+.shot__frame img, .shot__frame picture { display: block; width: 100%; height: auto; }
 .shot__bar { display: flex; align-items: center; gap: 7px; height: 30px; padding: 0 12px; background: var(--gau-950); border-bottom: 1px solid var(--line); }
 .shot__bar i { width: 10px; height: 10px; border-radius: 50%; background: var(--gau-600); }
 .shot__bar span { margin: 0 auto; transform: translateX(-24px); font: 400 var(--text-2xs) / 1 var(--font-mono); color: var(--text-4); }
@@ -365,7 +365,7 @@ em { font-style: normal; }
 .cli__copy h2 { font-size: var(--text-3xl); line-height: 1.02; letter-spacing: var(--tracking-tight); margin: var(--space-4) 0 var(--space-5); }
 .cli__copy h2 .serif { color: var(--accent-text); }
 .cli__copy > p:not(.eyebrow) { color: var(--text-3); font-size: var(--text-lg); margin-bottom: var(--space-6); }
-.term { overflow: hidden; background: var(--bg-sunken); box-shadow: var(--shadow-3); }
+.term { margin: 0; overflow: hidden; background: var(--bg-sunken); box-shadow: var(--shadow-3); }
 .term__bar { display: flex; align-items: center; gap: 7px; height: 38px; padding: 0 14px; border-bottom: 1px solid var(--line); }
 .term__bar i { width: 11px; height: 11px; border-radius: 50%; background: var(--gau-600); }
 .term__bar span { margin: 0 auto; transform: translateX(-26px); font: 400 var(--text-xs) / 1 var(--font-mono); color: var(--text-4); }
@@ -434,7 +434,7 @@ em { font-style: normal; }
 .dl-more__card h3 { display: flex; align-items: center; gap: 10px; font-size: var(--text-lg); }
 .dl-more__card h3 svg { width: 18px; height: 18px; color: var(--accent-text); }
 .dl-more__card p { font-size: var(--text-sm); }
-.code--block { align-items: flex-start; }
+.code--block { align-items: flex-start; margin: 0; }
 .code--block code { line-height: 1.8; }
 .dl-more__links { display: flex; flex-wrap: wrap; gap: 10px; }
 @media (max-width: 960px) {

@@ -118,8 +118,6 @@ code { color: var(--text); background: rgb(255 255 255 / 0.05); padding: 0.1em 0
 .ramp__name { font-size: var(--text-sm); color: var(--text-3); margin-bottom: 8px; }
 .ramp__row { display: flex; border-radius: var(--radius-md); overflow: hidden; border: 1px solid var(--line); }
 .ramp__step { flex: 1; display: grid; gap: 4px; align-content: end; min-height: 84px; padding: 10px; border: 0; background: var(--sw); cursor: pointer; text-align: left; font-size: var(--text-2xs); color: rgb(255 255 255 / 0.7); }
-.ramp__step:nth-child(n) span:first-child { opacity: 0.8; }
-.ramps .ramp:nth-child(2) .ramp__step:nth-last-child(-n + 2), .ramps .ramp:nth-child(3) .ramp__step { color: rgb(10 13 12 / 0.75); }
 .ramp__step.is-done { outline: 2px solid var(--accent); outline-offset: -2px; }
 .ramp__step { min-width: 0; overflow: hidden; }
 .ramp__step span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -230,7 +228,7 @@ code { color: var(--text); background: rgb(255 255 255 / 0.05); padding: 0.1em 0
 .cmp__card p { font-size: var(--text-sm); color: var(--text-3); }
 .seg { display: inline-flex; padding: 3px; border: 1px solid var(--line-strong); border-radius: var(--radius-full); background: var(--bg-sunken); }
 .seg button { height: 30px; padding: 0 14px; border: 0; border-radius: var(--radius-full); background: none; color: var(--text-3); font-size: var(--text-sm); cursor: pointer; }
-.seg button[aria-checked="true"] { background: var(--surface-3); color: var(--text); }
+.seg button[aria-pressed="true"] { background: var(--surface-3); color: var(--text); }
 [data-theme="light"] .btn--primary:hover { box-shadow: var(--glow-accent); }
 [data-theme="light"] .chip { background: rgb(0 0 0 / 0.02); }
 @media (max-width: 640px) { .cmp { grid-template-columns: 1fr; gap: 10px; } }

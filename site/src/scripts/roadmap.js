@@ -1,7 +1,7 @@
 // Roadmap page: the 3D git graph in the hero and the filters over the roadmap graph (which is rendered
 // at build time from ROADMAP.md).
 import { createScene } from './branches.js';
-import { reducedMotion } from './site.js';
+import { reducedMotion, motion } from './site.js';
 
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
@@ -15,6 +15,7 @@ if (scene) {
     scene.setLayout(narrow ? { x: 0.25, y: 0.1, scale: 0.62 } : { x: 0.5, y: 0, scale: 0.78 }, true);
   };
   place();
+  motion.subscribe((p) => scene.setPaused(p));
   addEventListener('resize', place);
   requestAnimationFrame(() => canvas.classList.add('is-ready'));
   let visible = true;
@@ -52,7 +53,7 @@ function apply() {
 
 $$('[data-filter]').forEach((b) => b.addEventListener('click', () => {
   state.kind = b.dataset.filter;
-  $$('[data-filter]').forEach((x) => x.setAttribute('aria-checked', String(x === b)));
+  $$('[data-filter]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
   apply();
 }));
 const gfiToggle = $('[data-gfi-toggle]');

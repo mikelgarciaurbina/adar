@@ -1,7 +1,7 @@
 // Design system page: the extruded 3D mark, and the token documentation, which is generated from the
 // live CSS variables in tokens.css so it can never drift from what the site actually uses. (The icon
 // grid is rendered at build time from the sprite.)
-import { reducedMotion, reveal } from './site.js';
+import { motion, reveal } from './site.js';
 
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
@@ -31,7 +31,7 @@ if (stage) {
     if (!s.drag) {
       s.ry += s.vy * dt;
       s.vy *= Math.exp(-dt * 2.2);
-      if (!reducedMotion && Math.abs(s.vy) < 6) s.ry += Math.cos(s.t * 0.6) * 9 * dt;
+      if (!motion.paused && Math.abs(s.vy) < 6) s.ry += Math.cos(s.t * 0.6) * 9 * dt;
     }
     const rx = s.rx + s.py * -10;
     stage.style.transform = `rotateX(${rx.toFixed(2)}deg) rotateY(${(s.ry + s.px * 14).toFixed(2)}deg)`;
@@ -63,6 +63,15 @@ if (stage) {
 }
 
 // ── Colour ──────────────────────────────────────────────────
+// Text on a swatch: ink or fog, whichever reads better on that colour.
+const inkOn = (hex) => {
+  const m = hex.match(/^#([0-9a-f]{6})$/i);
+  if (!m) return '';
+  const [r, g, b] = [0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16) / 255).map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+  const l = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  // Contrast against ink (#0a0d0c, L≈0.004) vs fog (#f3f6f1, L≈0.91).
+  return (l + 0.05) / 0.054 > 0.96 / (l + 0.05) ? '#0a0d0c' : '#f3f6f1';
+};
 const toHex = (v) => {
   const m = v.match(/^#([0-9a-f]{6})$/i);
   return m ? `#${m[1].toUpperCase()}` : v;
@@ -100,7 +109,7 @@ const ramps = $('[data-ramps]');
 if (ramps) {
   ramps.innerHTML = RAMPS.map(([name, vars]) => `<div class="ramp"><p class="ramp__name">${name}</p><div class="ramp__row">${vars.map((v) => {
     const hex = toHex(token(v));
-    return `<button type="button" class="ramp__step" style="--sw:var(${v})" data-copy="${hex}"><span class="mono">${v.replace('--', '')}</span><span class="mono">${hex}</span></button>`;
+    return `<button type="button" class="ramp__step" style="--sw:var(${v});color:${inkOn(hex)}" data-copy="${hex}"><span class="mono">${v.replace('--', '')}</span><span class="mono">${hex}</span></button>`;
   }).join('')}</div></div>`).join('');
 }
 
@@ -177,7 +186,7 @@ const preview = $('[data-preview]');
 $$('[data-theme-set]').forEach((b) => b.addEventListener('click', () => {
   const light = b.dataset.themeSet === 'light';
   if (light) preview.dataset.theme = 'light'; else delete preview.dataset.theme;
-  $$('[data-theme-set]').forEach((x) => x.setAttribute('aria-checked', String(x === b)));
+  $$('[data-theme-set]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
 }));
 
 // ── Table of contents ───────────────────────────────────────

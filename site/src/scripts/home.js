@@ -1,7 +1,7 @@
 // Landing page: drives the 3D scene from the scroll position, the app screenshot tilt, the terminal
 // demo and the platform note in the download section.
 import { createScene } from './branches.js';
-import { reducedMotion } from './site.js';
+import { reducedMotion, motion } from './site.js';
 
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 const $ = (s, el = document) => el.querySelector(s);
@@ -29,6 +29,7 @@ if (!scene) {
 } else {
   $('[data-points]').textContent = scene.count.toLocaleString('en');
   layout(true);
+  motion.subscribe((p) => scene.setPaused(p));
   requestAnimationFrame(() => canvas.classList.add('is-ready'));
   // After the fade-in, the scene's opacity follows the scroll position directly.
   setTimeout(() => canvas.classList.add('is-live'), 1300);
@@ -151,7 +152,7 @@ if (term) {
   const prompt = (text) => `<span class="p">❯</span> ${text}`;
   const play = async () => {
     const lines = [];
-    const wait = (ms) => new Promise((r) => setTimeout(r, reducedMotion ? 0 : ms));
+    const wait = (ms) => new Promise((r) => setTimeout(r, motion.paused ? 0 : ms));
     for (const step of SCRIPT) {
       if (step.out) { lines.push(step.out); render(lines); await wait(260); continue; }
       lines.push(prompt(''));

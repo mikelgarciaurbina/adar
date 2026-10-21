@@ -3,6 +3,8 @@
 // download section is filled from the latest GitHub release at build time.
 import Base from '../layouts/Base.astro';
 import Icon from '../components/Icon.astro';
+import { Picture, getImage } from 'astro:assets';
+import screenshot from '../assets/screenshot.png';
 import Chapter from '../components/Chapter.astro';
 import Fireflies from '../components/Fireflies.astro';
 import Rail from '../components/Rail.astro';
@@ -14,12 +16,33 @@ import '../styles/story.css';
 import { url, REPO_URL } from '../lib/url';
 import { getReleases, getLatest, formatDate, formatSize } from '../lib/releases';
 import { chapters } from '../lib/story';
+import { SITE_URL } from '../lib/url';
 
 const releases = await getReleases();
 const latest = await getLatest();
 const dmg = latest?.assets.find((a) => /arm64\.dmg$/.test(a.name));
 const zip = latest?.assets.find((a) => /arm64\.zip$/.test(a.name));
 const sums = [dmg, zip].filter((a) => a?.sha256) as NonNullable<typeof dmg>[];
+// The app screenshot is served as AVIF/WebP in a few widths; structured data points at the WebP.
+const screenshotWebp = await getImage({ src: screenshot, format: 'webp', width: 1440 });
+// Structured data for search engines: Adar as a free macOS developer application.
+const jsonLd = JSON.stringify({
+  '@context': 'https://schema.org',
+  '@type': 'SoftwareApplication',
+  name: 'Adar',
+  description: 'A fast, visual Git client for every repository — GitHub, GitLab, Bitbucket, Azure DevOps or your own server.',
+  url: SITE_URL,
+  image: `${SITE_URL}assets/og.jpg`,
+  screenshot: new URL(screenshotWebp.src, SITE_URL).href,
+  applicationCategory: 'DeveloperApplication',
+  operatingSystem: 'macOS (Apple Silicon)',
+  isAccessibleForFree: true,
+  offers: { '@type': 'Offer', price: '0', priceCurrency: 'EUR' },
+  license: `${REPO_URL}/blob/main/LICENSE`,
+  author: { '@type': 'Person', name: 'Mikel García' },
+  sameAs: [REPO_URL],
+  ...(latest && { softwareVersion: latest.version, datePublished: latest.date.slice(0, 10), downloadUrl: dmg?.url ?? latest.url }),
+}).replace(/</g, '\\u003c');
 ---
 <Base
   title="Adar — a visual Git client that grows with you"
@@ -29,6 +52,7 @@ const sums = [dmg, zip].filter((a) => a?.sha256) as NonNullable<typeof dmg>[];
   path=""
   current="home"
 >
+  <script slot="head" type="application/ld+json" is:inline set:html={jsonLd} />
   <Sky />
   <Rail chapters={chapters} />
   <canvas class="scene" id="scene" aria-hidden="true"></canvas>
@@ -39,16 +63,16 @@ const sums = [dmg, zip].filter((a) => a?.sha256) as NonNullable<typeof dmg>[];
       <!-- Hero -->
       <section class="hero" id="night" aria-labelledby="hero-title">
         <div class="wrap hero__inner">
-          <a class="chip chip--accent hero__news reveal" href={url('roadmap.html#changelog')}>
+          <a class="chip chip--accent hero__news rise" href={url('roadmap.html#changelog')}>
             <span class="dot"></span>{latest ? <>New in {latest.version}</> : 'Latest release'}<span class="hero__news-sep"></span><span class="hero__news-cta">What’s new</span>
             <Icon name="arrow-right" size={14} />
           </a>
-          <h1 class="hero__title reveal" id="hero-title" style="--delay:80ms">See your Git <span class="serif">grow.</span></h1>
-          <p class="hero__lede reveal" style="--delay:160ms">
+          <h1 class="hero__title rise" id="hero-title" style="--delay:80ms">See your Git <span class="serif">grow.</span></h1>
+          <p class="hero__lede rise" style="--delay:160ms">
             Adar is a fast, visual Git client for every repository — GitHub, GitLab, Bitbucket, Azure DevOps or your own
             server. It drives the git you already have, with the keys you already use.
           </p>
-          <div class="hero__ctas reveal" style="--delay:240ms">
+          <div class="hero__ctas rise" style="--delay:240ms">
             <a class="btn btn--primary btn--lg" href="#download">
               <Icon name="download" />Download for macOS<span class="btn__meta">Apple Silicon</span>
             </a>
@@ -56,7 +80,7 @@ const sums = [dmg, zip].filter((a) => a?.sha256) as NonNullable<typeof dmg>[];
               <Icon name="star" />Star on GitHub<span class="btn__meta" data-gh="stars"></span>
             </a>
           </div>
-          <p class="hero__fine reveal" style="--delay:320ms">Free &amp; open source · MIT · No account · No telemetry</p>
+          <p class="hero__fine rise" style="--delay:320ms">Free &amp; open source · MIT · No account · No telemetry</p>
         </div>
         <p class="fig hero__fig mono" aria-hidden="true"><span>fig. 1</span> orein adarrak — <i>a deer’s antlers</i> · <span data-points>38,000</span> points</p>
         <a class="hero__scroll" href="#name"><span>Scroll — walk into the forest</span><Icon name="arrow-down" size={16} /></a>
@@ -104,8 +128,9 @@ const sums = [dmg, zip].filter((a) => a?.sha256) as NonNullable<typeof dmg>[];
           <div class="shot__glow" aria-hidden="true"></div>
           <div class="shot__frame">
             <div class="shot__bar" aria-hidden="true"><i></i><i></i><i></i><span>demo — main</span></div>
-            <img src={url('assets/screenshot.png')} width="1440" height="880" loading="lazy" decoding="async"
-              alt="Adar with a demo repository: the commit graph with coloured lanes and branch labels, the branch tree on the left and the staging panel on the right.">
+            <Picture src={screenshot} formats={['avif', 'webp']} widths={[720, 1080, 1440, 2160]} sizes="(max-width: 1240px) calc(100vw - 32px), 1180px"
+              loading="lazy" decoding="async"
+              alt="Adar with a demo repository: the commit graph with coloured lanes and branch labels, the branch tree on the left and the staging panel on the right." />
           </div>
           <figcaption class="shot__notes">
             <span class="shot__note" style="--x:9%;--y:30%"><b>Branches, remotes, tags</b> in one tree</span>
@@ -348,12 +373,12 @@ const sums = [dmg, zip].filter((a) => a?.sha256) as NonNullable<typeof dmg>[];
     <!-- CLI -->
     <section class="section cli" id="cli" aria-labelledby="cli-title">
       <div class="wrap cli__grid">
-        <div class="term card reveal" data-term aria-label="Terminal example">
+        <figure class="term card reveal" data-term aria-label="Terminal example: opening repositories with the adar command">
           <div class="term__bar" aria-hidden="true"><i></i><i></i><i></i><span>~/code — zsh</span></div>
           <pre class="term__body"><code data-term-body></code><span class="term__caret" aria-hidden="true"></span></pre>
           <noscript><pre class="term__body"><code>$ adar
 $ adar ~/code/shop</code></pre></noscript>
-        </div>
+        </figure>
         <div class="cli__copy reveal" style="--delay:80ms">
           <p class="eyebrow">Command line</p>
           <h2 id="cli-title">From terminal to graph <span class="serif">in four letters.</span></h2>
@@ -423,9 +448,9 @@ $ adar ~/code/shop</code></pre></noscript>
         <div class="dl-more">
           <article class="card dl-more__card reveal">
             <h3><Icon name="code" />Build from source</h3>
-            <div class="code code--block"><code><span class="prompt">$</span>git clone https://github.com/mikelgarciaurbina/adar.git
+            <pre class="code code--block" tabindex="0" role="region" aria-label="Commands to build Adar from source"><code><span class="prompt">$</span>git clone https://github.com/mikelgarciaurbina/adar.git
 <span class="prompt">$</span>cd adar &amp;&amp; npm install
-<span class="prompt">$</span>npm run dev</code></div>
+<span class="prompt">$</span>npm run dev</code></pre>
             <p class="muted">Node.js 22+, Git 2.26+, macOS. Read <a class="link" href="https://github.com/mikelgarciaurbina/adar/blob/main/AGENTS.md">AGENTS.md</a> before sending a pull request.</p>
           </article>
           <article class="card dl-more__card reveal" style="--delay:80ms">

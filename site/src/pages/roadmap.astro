@@ -26,17 +26,17 @@ let lane = 1;
     <section class="rm-hero" aria-labelledby="rm-title">
       <canvas class="rm-hero__scene" id="scene" aria-hidden="true"></canvas>
       <div class="wrap rm-hero__inner">
-        <p class="eyebrow reveal">Open-source roadmap</p>
-        <h1 id="rm-title" class="reveal" style="--delay:80ms">Where Adar <span class="serif">grows next.</span></h1>
-        <p class="rm-hero__lede reveal" style="--delay:160ms" data-intro>
+        <p class="eyebrow rise">Open-source roadmap</p>
+        <h1 id="rm-title" class="rise" style="--delay:80ms">Where Adar <span class="serif">grows next.</span></h1>
+        <p class="rm-hero__lede rise" style="--delay:160ms" data-intro>
           Priorities change with feedback: open an issue to discuss an item, vote with 👍 on existing issues, or pick
           something up. Items marked <span class="gfi">good first issue</span> are small and self-contained.
         </p>
-        <div class="rm-hero__ctas reveal" style="--delay:240ms">
+        <div class="rm-hero__ctas rise" style="--delay:240ms">
           <button class="btn btn--primary btn--lg" type="button" data-show-gfi><Icon name="sparkle" />Show good first issues</button>
           <a class="btn btn--ghost btn--lg" href="https://github.com/mikelgarciaurbina/adar/issues/new/choose"><Icon name="issue" />Suggest an idea</a>
         </div>
-        <dl class="rm-stats reveal" style="--delay:320ms">
+        <dl class="rm-stats rise" style="--delay:320ms">
           <div><dt>Planned</dt><dd>{stats.planned}</dd></div>
           <div><dt>Good first issues</dt><dd>{stats.gfi}</dd></div>
           <div><dt>Areas</dt><dd>{stats.areas}</dd></div>
@@ -62,11 +62,11 @@ let lane = 1;
 
     <div class="rm-bar" data-bar>
       <div class="wrap rm-bar__inner">
-        <div class="seg" role="radiogroup" aria-label="Show">
-          <button type="button" role="radio" aria-checked="true" data-filter="all">All</button>
-          <button type="button" role="radio" aria-checked="false" data-filter="next">Next</button>
-          <button type="button" role="radio" aria-checked="false" data-filter="later">Later</button>
-          <button type="button" role="radio" aria-checked="false" data-filter="shipped">Shipped</button>
+        <div class="seg" role="group" aria-label="Show">
+          <button type="button" aria-pressed="true" data-filter="all">All</button>
+          <button type="button" aria-pressed="false" data-filter="next">Next</button>
+          <button type="button" aria-pressed="false" data-filter="later">Later</button>
+          <button type="button" aria-pressed="false" data-filter="shipped">Shipped</button>
         </div>
         <label class="toggle"><input type="checkbox" data-gfi-toggle><span class="toggle__track"></span>Good first issues</label>
         <label class="rm-search"><Icon name="search" /><input type="search" placeholder="Filter the roadmap…" data-search aria-label="Filter the roadmap"></label>
