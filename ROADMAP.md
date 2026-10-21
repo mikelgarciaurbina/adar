@@ -68,6 +68,8 @@ tab groups (a project's repositories together, reopened in one click).
 - [ ] Merge tool: line-level selection, optional base (ancestor) pane, syntax highlighting in the output editor.
 - [ ] External diff / merge tools (VS Code, Kaleidoscope, FileMerge, Beyond Compare).
 - [ ] Word-wrap toggle and keyboard line cursor for line staging. *(good first issue)*
+- [ ] Change markers on the diff's scrollbar: green where lines were added, red where they were removed (both on
+  modified lines), so the changes of a long file show at a glance; clicking a marker jumps to that change.
 - [ ] Image diff modes: swipe and onion skin.
 - [ ] Compare any two refs or files ("Compare with…"), and browse the repository tree at any commit.
 - [ ] Blame: honour `.git-blame-ignore-revs`, "blame previous revision", paging for very long file histories.
