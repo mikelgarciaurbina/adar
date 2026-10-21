@@ -101,6 +101,8 @@ already running the repository opens in a new tab. You can also drop a folder on
 | Commit (from the message box) | ⌘↩ |
 | Undo / redo git action | ⌘Z / ⇧⌘Z |
 | Toggle left / right panel | ⌘J / ⌘K |
+| Next / previous change in a diff | N / P or ⌥↓ / ⌥↑ |
+| Next / previous file in a diff | ] / [ |
 | Git console | ⌃\` |
 
 ## Development

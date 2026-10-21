@@ -1,11 +1,11 @@
 // File diff that replaces the graph in the centre panel (GitKraken style):
-// header with path / status / target, prev-next file, layout (unified / split),
+// header with path / status / target, previous / next change, layout (unified / split),
 // full-file toggle, history / blame, an options menu (whitespace, context,
 // editor, copy path), whole-file, hunk, change-block and line staging.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, ChevronDown, ChevronUp, History, Minus, Plus, ScanText, Trash2, X } from 'lucide-react'
-import { api } from '@renderer/api/client'
+import { api, isMac } from '@renderer/api/client'
 import * as git from '@renderer/actions/git'
 import { Button, EmptyState, IconButton, Spinner } from '@renderer/components/common/Button'
 import { isEditableTarget } from '@renderer/lib/keys'
@@ -16,7 +16,7 @@ import { supportsPartialPatch, type HunkSelection, type PatchMode } from '@share
 import type { DiffTarget, FileDiff, FileStatusCode, WorkingStatus } from '@shared/types'
 import { DiffBody } from './DiffBody'
 import { EncodingNote } from './EncodingNote'
-import type { DiffRendererHandle, DiffStaging } from './DiffRenderer'
+import type { ChangeNav, DiffRendererHandle, DiffStaging } from './DiffRenderer'
 import { remapKeys, selectionFromKeys, validKeys } from './diffModel'
 import { ChangeStats, DiffMoreButton, FullFileToggle, PathLabel, StatusBadge, ViewModeSwitch } from './parts'
 import { applyPartial, type PartialUnit } from './staging'
@@ -25,6 +25,7 @@ import { blameRev, describeTarget, modeChangeText, nextChangedSibling, sameTarge
 import './diff.css'
 
 const tabOf = (repo: string) => useApp.getState().tabs.find((t) => t.path === repo)
+const altKey = isMac ? '⌥' : 'Alt+'
 
 function statusFileOf(status: WorkingStatus | null, target: DiffTarget): FileStatusCode | null {
   if (!status) return null
@@ -48,6 +49,8 @@ export function DiffView({ tab, target, siblings }: { tab: RepoTab; target: Diff
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<Set<string>>(() => new Set())
   const [busy, setBusy] = useState(false)
+  /** Position among the change blocks, reported by the text renderer. */
+  const [changeNav, setChangeNav] = useState<ChangeNav | null>(null)
 
   const gen = useRef(0)
   const diffRef = useRef<FileDiff | null>(null)
@@ -80,8 +83,10 @@ export function DiffView({ tab, target, siblings }: { tab: RepoTab; target: Diff
   )
 
   // ── Navigation ────────────────────────────────────────────────────────────
+  // The arrows walk the changes of this file (like GitKraken); other files are picked in the right
+  // panel's file list, or with [ and ].
   const siblingIndex = useMemo(() => (siblings ? siblings.findIndex((s) => sameTarget(s, target)) : -1), [siblings, target])
-  const hasSiblings = !!siblings && siblings.length > 1 && siblingIndex >= 0
+  const jumpChange = useCallback((dir: 1 | -1) => handle.current?.jumpChange(dir), [])
 
   const goSibling = useCallback(
     (dir: 1 | -1) => {
@@ -245,8 +250,8 @@ export function DiffView({ tab, target, siblings }: { tab: RepoTab; target: Diff
     const a = document.activeElement
     return !a || a === document.body || !!rootRef.current?.contains(a)
   }
-  const keyState = useRef({ selected, close, goSibling })
-  keyState.current = { selected, close, goSibling }
+  const keyState = useRef({ selected, close, goSibling, jumpChange })
+  keyState.current = { selected, close, goSibling, jumpChange }
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.defaultPrevented || isEditableTarget(e.target)) return
@@ -259,16 +264,16 @@ export function DiffView({ tab, target, siblings }: { tab: RepoTab; target: Diff
         return
       }
       if (e.metaKey || e.ctrlKey) return
-      if ((e.altKey && e.key === 'ArrowUp') || (!e.altKey && e.key === '[')) {
+      if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
         e.preventDefault()
-        k.goSibling(-1)
-      } else if ((e.altKey && e.key === 'ArrowDown') || (!e.altKey && e.key === ']')) {
+        k.jumpChange(e.key === 'ArrowDown' ? 1 : -1)
+      } else if (!e.altKey && (e.key === '[' || e.key === ']')) {
         e.preventDefault()
-        k.goSibling(1)
+        k.goSibling(e.key === ']' ? 1 : -1)
       } else if (!e.altKey && !e.shiftKey && (e.key === 'n' || e.key === 'p' || e.key === 'f') && focusInView()) {
         e.preventDefault()
         if (e.key === 'f') toggleFullFile()
-        else handle.current?.jumpChange(e.key === 'n' ? 1 : -1)
+        else k.jumpChange(e.key === 'n' ? 1 : -1)
       }
     }
     window.addEventListener('keydown', onKey)
@@ -313,19 +318,19 @@ export function DiffView({ tab, target, siblings }: { tab: RepoTab; target: Diff
           </IconButton>
         </div>
         <div className="diff-toolbar">
-          {hasSiblings && (
-            <div className="diff-nav">
-              <IconButton size="sm" label="Previous file (Alt+↑ or [)" disabled={siblingIndex <= 0} onClick={() => goSibling(-1)}>
+          {changeNav && changeNav.count > 0 && (
+            <div className="diff-nav" role="group" aria-label="Changes in this file">
+              <IconButton size="sm" label={`Previous change (P or ${altKey}↑)`} disabled={changeNav.index <= 0} onClick={() => jumpChange(-1)}>
                 <ChevronUp size={15} />
               </IconButton>
-              <span className="diff-nav-count">
-                {siblingIndex + 1} / {siblings!.length}
+              <span className="diff-nav-count" title={`${changeNav.count} ${changeNav.count === 1 ? 'change' : 'changes'} in this file`}>
+                {changeNav.index >= 0 ? changeNav.index + 1 : '–'} / {changeNav.count}
               </span>
               <IconButton
                 size="sm"
-                label="Next file (Alt+↓ or ])"
-                disabled={siblingIndex >= siblings!.length - 1}
-                onClick={() => goSibling(1)}
+                label={`Next change (N or ${altKey}↓)`}
+                disabled={changeNav.index >= changeNav.count - 1}
+                onClick={() => jumpChange(1)}
               >
                 <ChevronDown size={15} />
               </IconButton>
@@ -430,6 +435,7 @@ export function DiffView({ tab, target, siblings }: { tab: RepoTab; target: Diff
             ignoreWhitespace={ignoreWhitespace}
             onOpenInEditor={exists ? () => void git.openInEditor(git.absPath(repo, path)) : undefined}
             onShowChangesOnly={() => setFullFile(false)}
+            onChangeNav={setChangeNav}
           />
         )}
         {error && diff && <div className="diff-error-strip">{error}</div>}

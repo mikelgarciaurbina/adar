@@ -64,9 +64,15 @@ export interface DiffStaging {
 }
 
 export interface DiffRendererHandle {
-  /** Scroll to the next / previous block of changes. */
+  /** Scroll to the next / previous block of changes (and highlight it for a moment). */
   jumpChange(dir: 1 | -1): void
   focus(): void
+}
+
+/** Where the view is among the file's change blocks: `index` -1 = above the first one. */
+export interface ChangeNav {
+  index: number
+  count: number
 }
 
 export interface DiffRendererProps {
@@ -83,6 +89,8 @@ export interface DiffRendererProps {
   resetKey?: string | number
   /** Take the keyboard focus when mounted, unless another list or field has it (see focus.ts). */
   autoFocus?: boolean
+  /** Told which change block the view is at whenever it changes (null when unmounted). */
+  onChangeNav?: (nav: ChangeNav | null) => void
 }
 
 type Row = UnifiedRow | SplitRow
@@ -91,8 +99,10 @@ const WHOLE_FILE_STATUS = new Set<FileDiff['status']>(['added', 'untracked', 'de
 
 /** Rows of context kept above a change when scrolling to it. */
 const LEAD_ROWS = 3
+/** How long a change reached with next / previous stays highlighted. */
+const FLASH_MS = 900
 
-export function DiffRenderer({ diff, mode, fullFile = false, path, staging, handle, resetKey, autoFocus }: DiffRendererProps) {
+export function DiffRenderer({ diff, mode, fullFile = false, path, staging, handle, resetKey, autoFocus, onChangeNav }: DiffRendererProps) {
   const split = mode === 'split'
   // A lone hunk that is the whole file (full-file mode, added / deleted files) needs no header.
   const wholeFile = fullFile || (diff.hunks.length === 1 && WHOLE_FILE_STATUS.has(diff.status))
@@ -169,6 +179,61 @@ export function DiffRenderer({ diff, mode, fullFile = false, path, staging, hand
   // Starts of change blocks, for next/previous change navigation and "scroll to the first change".
   const changeStarts = useMemo(() => model.blocks.map((b) => (split ? b.splitRow : b.unifiedRow)), [model, split])
 
+  // ── Change navigation ─────────────────────────────────────────────────────
+  // The current change is the last block starting at or above the reading line (a few rows below the
+  // top; at either end of the file, the first / last block on screen), or the one next / previous moved
+  // to, even when the end of the file stops the scroll short.
+  const cursor = useRef(-1)
+  /** Scroll offset a jump went to: scroll events landing there are ours, any other is the user's. */
+  const jumpedTo = useRef<number | null>(null)
+  const [flashBlock, setFlashBlock] = useState(-1)
+  const navRef = useRef({ onChangeNav, count: changeStarts.length })
+  navRef.current = { onChangeNav, count: changeStarts.length }
+  const setCursor = useCallback((index: number, force = false) => {
+    if (index === cursor.current && !force) return
+    cursor.current = index
+    navRef.current.onChangeNav?.({ index, count: navRef.current.count })
+  }, [])
+  const offsetOfRow = useCallback((idx: number) => virtualizer.measurementsCache[idx]?.start ?? idx * ROW_H, [virtualizer])
+  const blockAtScroll = useCallback(() => {
+    const el = scrollRef.current
+    if (!el) return -1
+    const line = el.scrollTop + ROW_H * LEAD_ROWS + 1
+    let found = -1
+    changeStarts.forEach((row, i) => {
+      if (offsetOfRow(row) <= line) found = i
+    })
+    // The ends of the file stop the scroll short of the reading line: there, on screen counts as reached.
+    const atTop = el.scrollTop <= 1
+    const bottom = el.scrollTop + el.clientHeight
+    if (!atTop && bottom >= el.scrollHeight - 1) {
+      changeStarts.forEach((row, i) => {
+        if (offsetOfRow(row) < bottom) found = i
+      })
+    } else if (found < 0 && atTop && changeStarts.length && offsetOfRow(changeStarts[0]) < el.clientHeight) found = 0
+    return found
+  }, [changeStarts, offsetOfRow])
+  const syncCursor = useCallback(() => {
+    const el = scrollRef.current
+    if (!el) return
+    if (jumpedTo.current !== null && Math.abs(el.scrollTop - jumpedTo.current) <= 2) return
+    jumpedTo.current = null
+    setCursor(blockAtScroll())
+  }, [blockAtScroll, setCursor])
+  // New blocks (another file, layout, context): recount once the scroll position is settled.
+  useEffect(() => {
+    jumpedTo.current = null
+    setFlashBlock(-1)
+    const raf = requestAnimationFrame(() => setCursor(blockAtScroll(), true))
+    return () => cancelAnimationFrame(raf)
+  }, [changeStarts, blockAtScroll, setCursor])
+  useEffect(() => () => navRef.current.onChangeNav?.(null), [])
+  useEffect(() => {
+    if (flashBlock < 0) return
+    const t = setTimeout(() => setFlashBlock(-1), FLASH_MS)
+    return () => clearTimeout(t)
+  }, [flashBlock])
+
   // ── Scroll position across layout / full-file switches ────────────────────
   // The first line on screen is tracked while scrolling; when the layout or the
   // amount of context changes the view scrolls back to that line. New content
@@ -223,14 +288,14 @@ export function DiffRenderer({ diff, mode, fullFile = false, path, staging, hand
     if (!el) return
     let raf = 0
     const onScroll = () => {
-      if (!raf) raf = requestAnimationFrame(() => ((raf = 0), recordAnchor()))
+      if (!raf) raf = requestAnimationFrame(() => ((raf = 0), recordAnchor(), syncCursor()))
     }
     el.addEventListener('scroll', onScroll, { passive: true })
     return () => {
       el.removeEventListener('scroll', onScroll)
       cancelAnimationFrame(raf)
     }
-  }, [recordAnchor])
+  }, [recordAnchor, syncCursor])
 
   useEffect(() => {
     virtualizer.measure()
@@ -257,14 +322,14 @@ export function DiffRenderer({ diff, mode, fullFile = false, path, staging, hand
       jumpChange(dir) {
         const el = scrollRef.current
         if (!el || !changeStarts.length) return
-        const top = el.scrollTop
-        const offsetOf = (idx: number) => virtualizer.measurementsCache[idx]?.start ?? 0
-        let target: number | undefined
-        const lead = ROW_H * LEAD_ROWS
-        if (dir > 0) target = changeStarts.find((idx) => offsetOf(idx) - lead > top + 1)
-        else target = [...changeStarts].reverse().find((idx) => offsetOf(idx) - lead < top - 1)
-        if (target === undefined) return
-        virtualizer.scrollToOffset(Math.max(0, offsetOf(target) - lead))
+        const from = cursor.current
+        const next = from < 0 && dir < 0 ? -1 : Math.max(0, Math.min(changeStarts.length - 1, from + dir))
+        if (next < 0 || next === from) return
+        const offset = Math.max(0, offsetOfRow(changeStarts[next]) - ROW_H * LEAD_ROWS)
+        jumpedTo.current = Math.min(offset, Math.max(0, el.scrollHeight - el.clientHeight))
+        virtualizer.scrollToOffset(offset)
+        setCursor(next)
+        setFlashBlock(next)
       },
       focus() {
         scrollRef.current?.focus({ preventScroll: true })
@@ -273,7 +338,7 @@ export function DiffRenderer({ diff, mode, fullFile = false, path, staging, hand
     return () => {
       if (handle.current) handle.current = null
     }
-  }, [handle, changeStarts, virtualizer])
+  }, [handle, changeStarts, virtualizer, offsetOfRow, setCursor])
 
   // ── Line selection ────────────────────────────────────────────────────────
   const stagingRef = useRef(staging)
@@ -437,7 +502,7 @@ export function DiffRenderer({ diff, mode, fullFile = false, path, staging, hand
             )
           }
           const blockIndex = rowBlock[v.index] ?? -1
-          const isHot = blockIndex >= 0 && blockIndex === hot
+          const isHot = blockIndex >= 0 && (blockIndex === hot || blockIndex === flashBlock)
           const block = blockActions && blockIndex >= 0 ? model.blocks[blockIndex] : undefined
           const actions =
             block && (split ? block.splitRow : block.unifiedRow) === v.index ? (

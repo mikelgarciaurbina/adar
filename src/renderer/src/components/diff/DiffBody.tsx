@@ -5,7 +5,7 @@ import type { MutableRefObject } from 'react'
 import { Binary, FileText, FileWarning } from 'lucide-react'
 import { Button, EmptyState } from '@renderer/components/common/Button'
 import type { DiffTarget, DiffViewMode, FileDiff } from '@shared/types'
-import { DiffRenderer, type DiffRendererHandle, type DiffStaging } from './DiffRenderer'
+import { DiffRenderer, type ChangeNav, type DiffRendererHandle, type DiffStaging } from './DiffRenderer'
 import { ImageDiff } from './ImageDiff'
 import { modeChangeText } from './targets'
 
@@ -24,10 +24,12 @@ export interface DiffBodyProps {
   onOpenInEditor?: () => void
   /** Leave full-file mode (offered when the whole file is too large to show). */
   onShowChangesOnly?: () => void
+  /** Position among the change blocks (text diffs only). */
+  onChangeNav?: (nav: ChangeNav | null) => void
 }
 
 export function DiffBody(props: DiffBodyProps) {
-  const { repo, diff, target, mode, fullFile, staging, handle, resetKey, autoFocus, ignoreWhitespace, onOpenInEditor, onShowChangesOnly } =
+  const { repo, diff, target, mode, fullFile, staging, handle, resetKey, autoFocus, ignoreWhitespace, onOpenInEditor, onShowChangesOnly, onChangeNav } =
     props
 
   if (diff.tooLarge) {
@@ -88,6 +90,7 @@ export function DiffBody(props: DiffBodyProps) {
       handle={handle}
       resetKey={resetKey}
       autoFocus={autoFocus}
+      onChangeNav={onChangeNav}
     />
   )
 }
