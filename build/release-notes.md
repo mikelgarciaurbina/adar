@@ -1,10 +1,10 @@
-### Changed
-- **The arrows in the diff view now walk the changes of the file**, like GitKraken: previous / next change, with a
-  "3 / 12" counter, and the change they land on is highlighted for a moment. Handy in long files. **N / P** and
-  **⌥↑ / ⌥↓** do the same. To switch files, pick them in the right panel's file list (or press **[** / **]**).
+### New
+- **A new icon and logo.** *Adar* is Basque for both a tree branch and an antler, so the new mark is both: a pair
+  of antlers drawn with git lanes, with a commit at every tip. It replaces the old icon in the Dock and Finder, on
+  the welcome screen, in the About window and in the status bar, and reads in both the dark and the light theme.
 
 ### Install
-Download `Adar-0.3.1-arm64.dmg` (Apple Silicon Macs) and drag Adar to Applications. The app is not signed with an
+Download `Adar-0.4.0-arm64.dmg` (Apple Silicon Macs) and drag Adar to Applications. The app is not signed with an
 Apple Developer ID yet, so macOS may say it "is damaged" the first time; run this once in Terminal and open it again:
 
 ```
