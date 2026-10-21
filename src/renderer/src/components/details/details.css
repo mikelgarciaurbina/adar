@@ -456,7 +456,7 @@
 }
 .det-row-active,
 .det-row-active:hover {
-  --det-row-bg: color-mix(in srgb, var(--accent) 16%, var(--bg-1));
+  --det-row-bg: color-mix(in srgb, var(--accent) 11%, var(--bg-1));
   background: var(--det-row-bg);
   border-left-color: var(--accent);
 }
@@ -755,25 +755,30 @@
 .det-section-btn {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  height: 20px;
+  gap: 4px;
+  height: 22px;
   padding: 0 8px;
   border-radius: var(--radius-sm);
-  border: 1px solid transparent;
+  border: 1px solid var(--det-btn-line);
+  background: var(--det-btn-wash);
+  color: var(--det-btn-ink);
   font-size: var(--fs-xs);
-  font-weight: 700;
+  font-weight: 600;
   white-space: nowrap;
+  transition: background 0.1s var(--ease);
 }
 .det-section-btn-stage {
-  background: var(--c-added);
-  color: var(--bg-0);
+  --det-btn-ink: var(--c-added);
+  --det-btn-wash: color-mix(in srgb, var(--c-added) 12%, transparent);
+  --det-btn-line: color-mix(in srgb, var(--c-added) 40%, transparent);
 }
 .det-section-btn-unstage {
-  background: var(--c-deleted);
-  color: var(--bg-0);
+  --det-btn-ink: var(--text-1);
+  --det-btn-wash: transparent;
+  --det-btn-line: var(--border-strong);
 }
 .det-section-btn:hover {
-  filter: brightness(1.1);
+  background: color-mix(in srgb, var(--det-btn-ink) 18%, transparent);
 }
 
 .det-clean {

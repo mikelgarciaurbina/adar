@@ -16,7 +16,7 @@
   height: var(--tabbar-h);
   display: flex;
   align-items: stretch;
-  background: var(--bg-0);
+  background: var(--chrome);
   -webkit-app-region: drag;
   position: relative;
   z-index: 2;
@@ -30,7 +30,7 @@
   min-width: 0;
   display: flex;
   align-items: flex-end;
-  gap: 1px;
+  gap: 2px;
   padding: 0 6px;
   overflow-x: auto;
   overflow-y: hidden;
@@ -51,8 +51,8 @@
   flex: 0 1 200px;
   min-width: 110px;
   max-width: 220px;
-  /* 4px top gap: tab labels line up with the macOS traffic lights (centre ≈ 19-21px). */
-  height: calc(var(--tabbar-h) - 4px);
+  /* Tab labels line up with the macOS traffic lights (see trafficLightPosition). */
+  height: calc(var(--tabbar-h) - 5px);
   display: flex;
   align-items: center;
   gap: 7px;
@@ -66,28 +66,32 @@
 .tb-tab::after {
   content: '';
   position: absolute;
-  right: -1px;
+  right: -2px;
   top: 50%;
   height: 14px;
   margin-top: -7px;
   width: 1px;
-  background: var(--border);
+  background: var(--border-strong);
 }
 .tb-tab:hover {
-  background: var(--bg-1);
+  background: color-mix(in srgb, var(--text-0) 5%, transparent);
   color: var(--text-1);
 }
 .tb-tab:hover::after,
 .tb-tab-active::after,
 .tb-tab:has(+ .tb-tab-active)::after,
-.tb-tab:has(+ .tb-tab:hover)::after {
+.tb-tab:has(+ .tb-tab:hover)::after,
+.tb-tab:has(+ .tb-tab-add)::after,
+.tb-tab:last-child::after {
   opacity: 0;
 }
+/* The active tab is the toolbar's colour and runs into it. */
 .tb-tab-active,
 .tb-tab-active:hover {
+  z-index: 1;
   background: var(--bg-2);
   color: var(--text-0);
-  box-shadow: inset 0 2px 0 var(--accent);
+  box-shadow: inset 0 1px 0 var(--border), inset 1px 0 0 var(--border), inset -1px 0 0 var(--border);
 }
 .tb-tab:focus-visible {
   box-shadow: inset 0 0 0 2px var(--focus);
@@ -125,8 +129,12 @@
   transition: opacity 0.1s var(--ease);
 }
 .tb-tab:hover .tb-tab-close,
-.tb-tab:focus-visible .tb-tab-close {
+.tb-tab:focus-visible .tb-tab-close,
+.tb-tab-active .tb-tab-close {
   opacity: 1;
+}
+.tb-tab-active .tb-tab-close {
+  color: var(--text-3);
 }
 .tb-tab-close:hover {
   background: var(--bg-4);
@@ -136,12 +144,12 @@
 .tb-drop-after::before {
   content: '';
   position: absolute;
-  top: 4px;
-  bottom: 0;
+  top: 6px;
+  bottom: 4px;
   width: 2px;
   border-radius: 1px;
   background: var(--accent);
-  z-index: 1;
+  z-index: 2;
 }
 .tb-drop-before::before {
   left: -2px;
@@ -150,34 +158,64 @@
   right: -2px;
 }
 
-/* Tab groups: a coloured chip before the group's tabs, which carry an underline in the same colour. */
+/* Tab groups: a tray (tint + a line in the group's colour along its top) holding the group's
+   label and its tabs, so the group reads as one piece. The label is a coloured name, not a sticker. */
+.tb-group {
+  position: relative;
+  flex: none;
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: calc(var(--tabbar-h) - 2px);
+  padding: 0 3px 0 2px;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  background: color-mix(in srgb, var(--tb-group) 9%, transparent);
+  box-shadow: inset 0 2px 0 var(--tb-group);
+  transition: background 0.12s var(--ease), box-shadow 0.12s var(--ease);
+}
+.tb-group-drop {
+  background: color-mix(in srgb, var(--tb-group) 18%, transparent);
+  box-shadow: inset 0 2px 0 var(--tb-group), inset 0 0 0 1px color-mix(in srgb, var(--tb-group) 50%, transparent);
+}
+.tb-group .tb-tab {
+  flex: none;
+  width: 180px;
+}
 .tb-group-chip {
   -webkit-app-region: no-drag;
   position: relative;
   flex: none;
   align-self: center;
-  max-width: 150px;
-  height: 20px;
-  margin: 3px 3px 0 5px;
-  padding: 0 8px;
+  max-width: 160px;
+  height: 24px;
+  margin-top: 3px;
+  padding: 0 8px 0 7px;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 7px;
   border: none;
-  border-radius: 10px;
-  background: var(--tb-group);
-  color: var(--group-text);
-  font-size: var(--fs-xs);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--tb-group-ink);
+  font-size: var(--fs-sm);
   font-weight: 600;
   cursor: pointer;
-  transition: box-shadow 0.1s var(--ease), opacity 0.1s var(--ease);
+  transition: background 0.1s var(--ease);
 }
 .tb-group-chip:hover {
-  opacity: 0.88;
+  background: color-mix(in srgb, var(--tb-group) 16%, transparent);
 }
-.tb-group-chip:focus-visible,
-.tb-group-chip-drop {
-  box-shadow: 0 0 0 2px var(--bg-0), 0 0 0 4px var(--tb-group);
+.tb-group-chip:focus-visible {
+  outline: 2px solid var(--tb-group);
+  outline-offset: -2px;
+}
+.tb-group-mark {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--tb-group);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--tb-group) 24%, transparent);
 }
 .tb-group-name {
   min-width: 0;
@@ -187,25 +225,15 @@
 }
 .tb-group-count {
   flex: none;
-  min-width: 15px;
-  height: 15px;
-  padding: 0 4px;
+  min-width: 18px;
+  height: 16px;
+  padding: 0 5px;
   border-radius: 8px;
-  background: color-mix(in srgb, var(--group-text) 18%, transparent);
-  font-size: 10px;
-  line-height: 15px;
+  background: color-mix(in srgb, var(--tb-group) 20%, transparent);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  line-height: 16px;
   text-align: center;
-}
-.tb-tab-grouped {
-  box-shadow: inset 0 -2px 0 var(--tb-group);
-}
-.tb-tab-grouped.tb-tab-active,
-.tb-tab-grouped.tb-tab-active:hover {
-  box-shadow: inset 0 2px 0 var(--accent), inset 0 -2px 0 var(--tb-group);
-}
-.tb-tab-grouped:focus-visible,
-.tb-tab-grouped.tb-tab-active:focus-visible {
-  box-shadow: inset 0 0 0 2px var(--focus), inset 0 -2px 0 var(--tb-group);
 }
 .tb-group-dot {
   display: inline-block;
@@ -311,8 +339,9 @@
 .tb-dropdown-caption {
   font-size: 10px;
   line-height: 12px;
-  color: var(--text-2);
-  letter-spacing: 0.02em;
+  color: var(--text-3);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 .tb-dropdown-value {
   display: flex;
@@ -396,14 +425,15 @@
   height: 14px;
   padding: 0 4px;
   border-radius: 7px;
-  background: var(--accent);
+  background: var(--accent-fill);
   color: var(--accent-text);
+  font-family: var(--font-mono);
   font-size: 9.5px;
   font-weight: 700;
   line-height: 14px;
   text-align: center;
   font-variant-numeric: tabular-nums;
-  box-shadow: 0 0 0 2px var(--bg-2);
+  box-shadow: 0 0 0 2px var(--bg-2), inset 0 0 0 1px var(--accent-edge);
 }
 .tb-tool-sep {
   width: 1px;
@@ -615,11 +645,12 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 0 10px;
-  background: var(--bg-2);
+  padding: 0 12px;
+  background: var(--chrome);
   border-top: 1px solid var(--border);
+  font-family: var(--font-mono);
   font-size: var(--fs-xs);
-  color: var(--text-2);
+  color: var(--text-3);
   position: relative;
   z-index: 60;
 }
@@ -736,84 +767,163 @@
 .wl-root {
   flex: 1;
   min-height: 0;
-  overflow: auto;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   border-top: 1px solid var(--border);
-  background: radial-gradient(1100px 380px at 50% -12%, var(--accent-soft), transparent 70%), var(--bg-0);
+  background: var(--bg-0);
+}
+.wl-backdrop {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.wl-antler {
+  position: absolute;
+  right: -140px;
+  bottom: -170px;
+  width: 780px;
+  height: 780px;
+  color: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+.wl-scroll {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
 }
 .wl-content {
-  max-width: 800px;
+  max-width: 1080px;
+  min-height: 100%;
   margin: 0 auto;
-  padding: 56px 28px 32px;
+  padding: 56px 32px 24px;
+  display: flex;
+  flex-wrap: wrap;
+  align-content: center;
+  justify-content: center;
+  gap: 32px 64px;
+}
+.wl-intro,
+.wl-lists {
+  flex: 1 1 380px;
+  min-width: 0;
+  max-width: 480px;
   display: flex;
   flex-direction: column;
   gap: 18px;
 }
 .wl-hero {
   display: flex;
-  align-items: center;
-  gap: 18px;
-  margin-bottom: 8px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 6px;
 }
 .wl-logo {
   flex: none;
+  margin-bottom: 6px;
 }
 .wl-title {
   margin: 0;
-  font-size: 34px;
-  font-weight: 750;
-  letter-spacing: -0.02em;
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: 64px;
+  font-weight: 400;
+  line-height: 0.95;
+  letter-spacing: -0.01em;
   color: var(--text-0);
+}
+.wl-definition {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 14px;
+  color: var(--text-2);
+}
+.wl-definition b {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  color: var(--accent);
+}
+.wl-definition-kind {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-3);
 }
 .wl-tagline {
   margin: 4px 0 0;
-  max-width: 580px;
-  font-size: 14px;
-  line-height: 1.5;
+  max-width: 400px;
+  font-size: 15px;
+  line-height: 1.55;
   color: var(--text-1);
 }
 
 .wl-actions {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-}
-.wl-action {
-  position: relative;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 5px;
-  padding: 16px;
-  border: 1px solid var(--border);
+  gap: 8px;
+}
+.wl-action {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-lg);
   background: var(--bg-1);
   color: var(--text-0);
   text-align: left;
-  transition: border-color 0.14s var(--ease), background 0.14s var(--ease), transform 0.14s var(--ease);
+  transition: border-color 0.14s var(--ease), background 0.14s var(--ease);
 }
 .wl-action:hover {
-  border-color: var(--accent);
+  border-color: var(--accent-line);
   background: var(--bg-2);
-  transform: translateY(-1px);
 }
-.wl-action:active {
-  transform: none;
+.wl-action-primary {
+  border-color: var(--accent-fill);
+  background: var(--accent-fill);
+  box-shadow: inset 0 0 0 1px var(--accent-edge), 0 10px 30px -16px var(--accent-fill);
+  color: var(--accent-text);
+}
+.wl-action-primary:hover {
+  border-color: var(--accent-hover);
+  background: var(--accent-hover);
 }
 .wl-action .ui-kbd {
-  position: absolute;
-  top: 14px;
-  right: 14px;
+  flex: none;
+}
+.wl-action-primary .ui-kbd {
+  border-color: transparent;
+  background: color-mix(in srgb, var(--accent-text) 10%, transparent);
+  color: inherit;
 }
 .wl-action-icon {
-  width: 40px;
-  height: 40px;
-  margin-bottom: 6px;
+  flex: none;
+  width: 36px;
+  height: 36px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border-radius: 10px;
-  background: var(--accent-soft);
-  color: var(--accent);
+  background: var(--bg-3);
+  color: var(--text-1);
+}
+.wl-action-primary .wl-action-icon {
+  background: color-mix(in srgb, var(--accent-text) 10%, transparent);
+  color: inherit;
+}
+.wl-action-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 .wl-action-title {
   font-size: 14px;
@@ -822,6 +932,10 @@
 .wl-action-desc {
   font-size: var(--fs-sm);
   color: var(--text-2);
+}
+.wl-action-primary .wl-action-desc {
+  color: inherit;
+  opacity: 0.75;
 }
 
 .wl-card {
@@ -910,7 +1024,13 @@
 }
 .wl-recent-icon {
   flex: none;
+  width: 30px;
+  height: 30px;
   display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius);
+  background: color-mix(in srgb, currentColor 14%, transparent);
   color: var(--accent);
 }
 .wl-recent-text {
@@ -1007,11 +1127,13 @@
 }
 
 .wl-footer {
+  flex: 1 0 100%;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 16px;
   padding-top: 4px;
+  font-family: var(--font-mono);
   font-size: var(--fs-xs);
   color: var(--text-3);
 }

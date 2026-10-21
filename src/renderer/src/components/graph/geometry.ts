@@ -1,21 +1,25 @@
 // Pixel geometry of the graph column and SVG path builders (pure).
 
-import { laneColor } from '@renderer/lib/colors'
+import { laneColor, laneInk } from '@renderer/lib/colors'
 import type { Edge } from './layout'
 
 /** Horizontal distance between lane centres. */
 export const LANE_W = 18
 /** Left padding before lane 0. */
 export const GRAPH_PAD = 6
-/** Outer radius of a commit node (avatar ring, ~20px). */
-export const NODE_R = 10
+/** Outer extent of a commit node (the ring plus its stroke); pinning and lane fitting use it. */
+export const NODE_R = 7
+/** Radius of the ring drawn for a commit (a ring in its lane colour). */
+export const RING_R = 5.5
+/** Radius of the soft halo around HEAD and around the selected commit. */
+export const HALO_R = 11
 /** Radius of the filled dot drawn for merge commits. */
-export const MERGE_R = 4.5
+export const MERGE_R = 3.5
 /** Radius of the dashed WIP circle. */
-export const WIP_R = 9
-/** Dash pattern for virtual connectors; 7px period divides the 28px row so dashes line up across rows. */
-export const DASH = '4 3'
-export const DEFAULT_ROW_H = 28
+export const WIP_R = 6
+/** Dash pattern for virtual connectors; the 8px period divides the 32px row so dashes line up across rows. */
+export const DASH = '4 4'
+export const DEFAULT_ROW_H = 32
 
 /** X of a lane centre (integer, so 2px strokes stay crisp). */
 export function laneX(lane: number): number {
@@ -114,6 +118,11 @@ export function autoGraphWidth(lanes: number, opts: AutoWidthOptions = {}): numb
 /** CSS colour for a colour index; negative indexes are neutral (stash connectors). */
 export function colorOf(index: number): string {
   return index < 0 ? 'var(--text-3)' : laneColor(index)
+}
+
+/** CSS colour for text on the wash of a colour index (ref pills). */
+export function inkOf(index: number): string {
+  return index < 0 ? 'var(--text-2)' : laneInk(index)
 }
 
 /** SVG path for one edge inside a row of height h. Lane changes use rounded corners meeting the node horizontally. */

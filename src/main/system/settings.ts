@@ -5,7 +5,7 @@
 import { randomBytes } from 'node:crypto'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
-import { DEFAULT_SETTINGS, TAB_GROUP_COLORS, type AppSettings, type RecentRepo, type TabGroup } from '@shared/types'
+import { DEFAULT_SETTINGS, LEGACY_GROUP_COLORS, TAB_GROUP_COLORS, type AppSettings, type RecentRepo, type TabGroup, type TabGroupColor } from '@shared/types'
 
 export const MAX_RECENTS = 30
 export const MAX_TAB_GROUPS = 100
@@ -26,6 +26,13 @@ function isPlainObject(v: unknown): v is Record<string, unknown> {
 }
 
 /** Well-formed groups only: known colours, absolute paths, each repository in one group, unique ids. */
+/** A saved group colour: a current one, an older name mapped to its Basoa colour, or mist. */
+function groupColor(raw: unknown): TabGroupColor {
+  if (typeof raw !== 'string') return 'mist'
+  if ((TAB_GROUP_COLORS as readonly string[]).includes(raw)) return raw as TabGroupColor
+  return Object.hasOwn(LEGACY_GROUP_COLORS, raw) ? LEGACY_GROUP_COLORS[raw] : 'mist'
+}
+
 export function sanitizeTabGroups(raw: unknown): TabGroup[] | null {
   if (!Array.isArray(raw)) return null
   const out: TabGroup[] = []
@@ -41,7 +48,7 @@ export function sanitizeTabGroups(raw: unknown): TabGroup[] | null {
     out.push({
       id: g.id,
       name: typeof g.name === 'string' ? g.name.replace(/[\r\n\t]+/g, ' ').trim().slice(0, MAX_GROUP_NAME) : '',
-      color: (TAB_GROUP_COLORS as readonly string[]).includes(g.color as string) ? (g.color as TabGroup['color']) : 'grey',
+      color: groupColor(g.color),
       repos: unique,
       collapsed: g.collapsed === true
     })

@@ -136,15 +136,15 @@ describe('chrome render smoke tests', () => {
     expect(html).toContain('tb-tab-hint">oss<')
   })
 
-  it('renders tab groups: a coloured chip before their tabs, collapsed groups keep only the active tab', () => {
+  it('renders tab groups: a tray with the label and tabs of each group, collapsed groups keep only the active tab', () => {
     const api = makeTab('/w/Proj/api', 'api')
     const app = makeTab('/w/Proj/app', 'app')
     const other = makeTab('/w/other', 'other')
-    const group = { id: 'g1', name: 'Proj', color: 'purple' as const, repos: [api.path, app.path, '/w/Proj/landing'], collapsed: false }
+    const group = { id: 'g1', name: 'Proj', color: 'heather' as const, repos: [api.path, app.path, '/w/Proj/landing'], collapsed: false }
     seed({ tabs: [other, api, app], activePath: app.path, settings: { ...DEFAULT_SETTINGS, tabGroups: [group] } })
     let html = renderToStaticMarkup(<TabBar />)
     expect(html).toContain('tb-group-chip')
-    expect(html).toContain('--tb-group:var(--group-purple)')
+    expect(html).toContain('class="tb-group" style="--tb-group:var(--group-heather)')
     expect(html.indexOf('>Proj<')).toBeLessThan(html.indexOf('>api<'))
     expect(html.match(/tb-tab-grouped/g)).toHaveLength(2)
     expect(html).toContain('aria-label="Group Proj, 2 tabs"')

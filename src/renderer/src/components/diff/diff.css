@@ -135,6 +135,68 @@
   container-name: diffhd;
 }
 
+/* The diff view's single bar: file, stats, navigation, view options and actions on one line.
+   The path and the target chip shrink first, then labels give way to icons (least important
+   first); only a very narrow window wraps it. */
+.diff-bar {
+  min-height: 44px;
+  gap: 4px;
+  padding: 4px 6px 4px 12px;
+  border-top: none;
+  background: var(--bg-2);
+  container: diffbar / inline-size;
+}
+.diff-bar .diff-path {
+  flex: 0 1 auto;
+  min-width: 60px;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}
+.diff-bar .diff-target {
+  flex: 0 3 auto;
+  max-width: 260px;
+}
+.diff-bar .diff-stats {
+  margin-left: 2px;
+}
+
+@container diffbar (max-width: 1180px) {
+  .diff-tb-btn > span {
+    display: none;
+  }
+}
+
+@container diffbar (max-width: 1060px) {
+  .diff-target {
+    display: none;
+  }
+}
+
+@container diffbar (max-width: 980px) {
+  .diff-toggle > span {
+    display: none;
+  }
+}
+
+@container diffbar (max-width: 880px) {
+  .diff-seg-btn > span {
+    display: none;
+  }
+}
+
+@container diffbar (max-width: 700px) {
+  .diff-btn-danger > span,
+  .diff-tb-sep {
+    display: none;
+  }
+}
+
+@container diffbar (max-width: 660px) {
+  .diff-bar .diff-nav-count {
+    display: none;
+  }
+}
+
 /* Narrow toolbars (small windows, the file history pane): labels give way to icons
    (least important first) instead of wrapping. */
 @container difftb (max-width: 740px) {
@@ -692,7 +754,8 @@
 }
 
 .diff-hunk-btn-primary:hover:not(:disabled) {
-  background: var(--accent);
+  background: var(--accent-fill);
+  border-color: var(--accent-edge);
   color: var(--accent-text);
 }
 
@@ -776,7 +839,7 @@
 }
 
 .diff-block-btn-primary:hover:not(:disabled) {
-  background: var(--accent);
+  background: var(--accent-fill);
   color: var(--accent-text);
 }
 

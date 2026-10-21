@@ -99,7 +99,7 @@ export function withMembership(groups: readonly TabGroup[], path: string, groupI
 /** Colour for a new group: the first one not in use (then cycling). */
 export function nextGroupColor(groups: readonly TabGroup[]): TabGroupColor {
   const used = new Set(groups.map((g) => g.color))
-  return TAB_GROUP_COLORS.find((c) => c !== 'grey' && !used.has(c)) ?? TAB_GROUP_COLORS[(groups.length + 1) % TAB_GROUP_COLORS.length]
+  return TAB_GROUP_COLORS.find((c) => c !== 'mist' && !used.has(c)) ?? TAB_GROUP_COLORS[groups.length % (TAB_GROUP_COLORS.length - 1)]
 }
 
 export function newGroupId(): string {

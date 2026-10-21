@@ -64,13 +64,13 @@
 .gr-header {
   flex: none;
   display: flex;
-  height: 26px;
-  background: var(--bg-1);
+  height: 30px;
+  background: var(--bg-0);
   border-bottom: 1px solid var(--border);
-  color: var(--text-2);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.07em;
+  color: var(--text-3);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   position: relative;
   z-index: 3;
@@ -244,14 +244,17 @@
   background: color-mix(in srgb, var(--accent) 18%, transparent);
 }
 .gr-row.gr-selected {
-  background: color-mix(in srgb, var(--gr-lane) 20%, transparent);
-  box-shadow: inset 3px 0 0 var(--gr-lane);
+  background: color-mix(in srgb, var(--gr-lane) 12%, transparent);
+  box-shadow:
+    inset 2px 0 0 var(--gr-lane),
+    inset 0 1px 0 color-mix(in srgb, var(--gr-lane) 30%, transparent),
+    inset 0 -1px 0 color-mix(in srgb, var(--gr-lane) 30%, transparent);
 }
 .gr-row.gr-selected:hover {
-  background: color-mix(in srgb, var(--gr-lane) 25%, transparent);
+  background: color-mix(in srgb, var(--gr-lane) 15%, transparent);
 }
 .gr-scroll:focus .gr-row.gr-selected {
-  background: color-mix(in srgb, var(--gr-lane) 26%, transparent);
+  background: color-mix(in srgb, var(--gr-lane) 17%, transparent);
 }
 .gr-row.gr-multi.gr-selected,
 .gr-scroll:focus .gr-row.gr-multi.gr-selected {
@@ -270,14 +273,16 @@
   opacity: 0.7;
 }
 /* Nodes stay opaque (no line showing through) and fade by colour instead. */
-.gr-row.gr-dim .gr-node {
-  border-color: color-mix(in srgb, var(--gr-lane) 40%, var(--bg-0));
-}
-.gr-row.gr-dim .gr-merge-dot {
-  fill: color-mix(in srgb, var(--gr-lane) 40%, var(--bg-0));
-}
+.gr-row.gr-dim .gr-commit-node,
 .gr-row.gr-dim .gr-wip-node {
-  stroke: color-mix(in srgb, var(--gr-lane) 40%, var(--bg-0));
+  stroke: color-mix(in srgb, var(--gr-lane) 40%, var(--bg-0)) !important;
+}
+.gr-row.gr-dim .gr-merge-dot,
+.gr-row.gr-dim .gr-head-node {
+  fill: color-mix(in srgb, var(--gr-lane) 40%, var(--bg-0)) !important;
+}
+.gr-row.gr-dim .gr-head-halo {
+  opacity: 0;
 }
 .gr-searching .gr-edge {
   opacity: 0.55;
@@ -307,13 +312,32 @@
   padding: 0 8px;
   line-height: var(--gr-row-h);
   text-overflow: ellipsis;
-  color: var(--text-1);
+  color: var(--text-2);
   font-size: var(--fs-sm);
+}
+.gr-row .gr-c-author {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.gr-author-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.gr-row .gr-c-date {
+  color: var(--text-3);
 }
 .gr-row .gr-c-sha {
   font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--text-2);
+  font-size: 11.5px;
+  color: var(--text-3);
+}
+.gr-row.gr-selected .gr-c-sha {
+  color: var(--text-1);
+}
+.gr-row-head .gr-subject {
+  font-weight: 500;
 }
 
 .gr-subject {
@@ -361,7 +385,28 @@
 .gr-connector {
   fill: none;
   stroke-width: 1;
-  opacity: 0.8;
+  opacity: 0.6;
+}
+/* Basoa graph vocabulary: commit = ring in its lane colour, HEAD = filled with a halo,
+   merge = small dot on the target lane, WIP = dashed ring. */
+.gr-commit-node {
+  fill: var(--bg-0);
+  stroke-width: 2;
+}
+.gr-head-node {
+  stroke: var(--bg-0);
+  stroke-width: 1.5;
+}
+.gr-head-halo {
+  opacity: 0.18;
+}
+.gr-node-halo {
+  fill: none;
+  stroke-width: 1.5;
+  opacity: 0;
+}
+.gr-row.gr-selected .gr-node-halo {
+  opacity: 0.4;
 }
 .gr-merge-dot {
   stroke: var(--bg-0);
@@ -370,12 +415,12 @@
 .gr-wip-node {
   fill: var(--bg-0);
   stroke-width: 2;
-  stroke-dasharray: 3 2.3;
+  stroke-dasharray: 2.4 2.4;
 }
 .gr-node {
   position: absolute;
-  width: 20px;
-  height: 20px;
+  width: 14px;
+  height: 14px;
   border: 2px solid var(--gr-lane);
   border-radius: 50%;
   display: flex;
@@ -385,11 +430,9 @@
   overflow: hidden;
   pointer-events: none;
 }
-.gr-node .ui-avatar {
-  pointer-events: auto;
-}
 .gr-node-stash {
   border: 1.5px dashed var(--text-3);
+  border-radius: 4px;
   color: var(--text-2);
 }
 /* Selected node whose lane is clipped: pinned to the column edge, double ring. */
@@ -399,19 +442,23 @@
     0 0 0 1.5px var(--bg-0),
     0 0 0 3px color-mix(in srgb, var(--gr-lane) 55%, transparent);
 }
-.gr-node-pinned .ui-avatar {
-  pointer-events: none;
+.gr-node-pinned-head {
+  background: var(--gr-lane);
 }
 .gr-node-pinned-wip {
   border-style: dashed;
 }
+.gr-node-pinned-merge {
+  border-color: transparent;
+}
 .gr-node-pinned-stash {
   border: 1.5px dashed var(--text-3);
+  border-radius: 4px;
   color: var(--text-2);
 }
 .gr-node-dot {
-  width: 9px;
-  height: 9px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   background: var(--gr-lane);
 }
@@ -422,11 +469,15 @@
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-style: italic;
-  color: var(--text-1);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  color: var(--gr-lane-ink);
 }
 .gr-wip-draft {
-  font-style: normal;
+  font-family: var(--font-ui);
+  font-size: var(--fs-md);
+  font-weight: 400;
   color: var(--text-0);
 }
 .gr-wip-counts {
@@ -492,47 +543,60 @@
 .gr-pill {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
   flex: 0 1 auto;
   min-width: 0;
   max-width: calc(100% - 8px);
   height: 20px;
-  padding: 0 6px 0 5px;
-  border: 1px solid color-mix(in srgb, var(--gr-lane) 65%, transparent);
+  padding: 0 7px 0 6px;
+  border: 1px solid color-mix(in srgb, var(--gr-lane) 40%, transparent);
   border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--gr-lane) 20%, var(--bg-1));
-  color: var(--text-0);
-  font-size: var(--fs-sm);
+  background: color-mix(in srgb, var(--gr-lane) 14%, var(--bg-0));
+  color: var(--gr-lane-ink);
+  font-size: 11.5px;
   font-weight: 500;
   line-height: 1;
   transition: background 0.1s var(--ease);
 }
 .gr-pill:hover {
-  background: color-mix(in srgb, var(--gr-lane) 32%, var(--bg-1));
+  background: color-mix(in srgb, var(--gr-lane) 24%, var(--bg-0));
 }
-.gr-pill-head {
+/* The checked-out branch: solid in its lane colour. */
+.gr-pill-head,
+.gr-pill-head:hover {
   border-color: var(--gr-lane);
-  background: color-mix(in srgb, var(--gr-lane) 36%, var(--bg-1));
-  font-weight: 700;
+  background: var(--gr-lane);
+  color: var(--on-lane);
+  font-weight: 600;
+}
+[data-theme='light'] .gr-pill-head,
+[data-theme='light'] .gr-pill-head:hover {
+  border-color: var(--gr-lane-ink);
+  background: var(--gr-lane-ink);
 }
 .gr-pill-remote {
-  background: color-mix(in srgb, var(--gr-lane) 11%, var(--bg-1));
-  color: var(--text-1);
+  background: color-mix(in srgb, var(--gr-lane) 8%, var(--bg-0));
 }
+/* Tags are hezur (bone), the antler's colour, so they read apart from every lane. */
 .gr-pill-tag {
-  border-radius: 10px;
-  padding-left: 6px;
+  border-color: color-mix(in srgb, var(--ref-tag) 32%, transparent);
+  background: color-mix(in srgb, var(--ref-tag) 9%, var(--bg-0));
+  color: var(--ref-tag);
+}
+.gr-pill-tag:hover {
+  background: color-mix(in srgb, var(--ref-tag) 16%, var(--bg-0));
 }
 .gr-pill-detached {
   border-style: dashed;
 }
 .gr-pill-icon {
   flex: none;
-  color: var(--text-1);
+  color: currentColor;
+  opacity: 0.85;
 }
 .gr-pill-check {
   flex: none;
-  color: var(--accent);
+  color: currentColor;
 }
 .gr-pill-label {
   min-width: 0;

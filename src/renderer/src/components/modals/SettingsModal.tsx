@@ -111,14 +111,14 @@ function GeneralSection() {
   return (
     <>
       <SectionTitle>General</SectionTitle>
-      <SettingRow label="Theme" description="Follow the system appearance or force dark / light.">
+      <SettingRow label="Theme" description="Gaua is the night theme, Eguna the day one (Basque for night and day). System follows macOS.">
         <Segmented<ThemeSetting>
           ariaLabel="Theme"
           value={s.theme}
           onChange={(theme) => update({ theme })}
           options={[
-            { value: 'dark', label: 'Dark' },
-            { value: 'light', label: 'Light' },
+            { value: 'dark', label: 'Gaua · night' },
+            { value: 'light', label: 'Eguna · day' },
             { value: 'system', label: 'System' }
           ]}
         />

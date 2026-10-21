@@ -28,18 +28,20 @@
   font-size: var(--fs-sm);
 }
 .ui-btn-primary {
-  background: var(--accent);
-  border-color: var(--accent);
+  background: var(--accent-fill);
+  border-color: var(--accent-fill);
+  box-shadow: inset 0 0 0 1px var(--accent-edge);
   color: var(--accent-text);
   font-weight: 600;
 }
 .ui-btn-primary:hover:not(:disabled) {
   background: var(--accent-hover);
+  border-color: var(--accent-hover);
 }
 .ui-btn-danger {
   background: var(--danger);
   border-color: var(--danger);
-  color: #fff;
+  color: var(--danger-text);
   font-weight: 600;
 }
 .ui-btn-danger:hover:not(:disabled) {
@@ -188,6 +190,45 @@ select.ui-input {
 .ui-hint {
   font-size: var(--fs-xs);
   color: var(--text-2);
+}
+.ui-swatch-field {
+  margin: 0;
+  padding: 0;
+  border: none;
+  min-width: 0;
+}
+.ui-swatch-field > .ui-label {
+  padding: 0;
+  margin-bottom: 5px;
+}
+.ui-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 4px 3px;
+}
+.ui-swatch {
+  appearance: none;
+  width: 24px;
+  height: 24px;
+  margin: 0;
+  border-radius: 50%;
+  background: var(--swatch);
+  cursor: pointer;
+  transition: box-shadow 0.12s var(--ease), opacity 0.12s var(--ease);
+}
+.ui-swatch-used:not(:checked) {
+  opacity: 0.45;
+}
+.ui-swatch:hover {
+  box-shadow: 0 0 0 2px var(--bg-1), 0 0 0 3px color-mix(in srgb, var(--swatch) 60%, transparent);
+}
+.ui-swatch:checked {
+  box-shadow: 0 0 0 2px var(--bg-1), 0 0 0 4px var(--swatch);
+}
+.ui-swatch:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 5px;
 }
 .ui-error {
   font-size: var(--fs-xs);
@@ -345,15 +386,17 @@ select.ui-input {
   color: var(--text-0);
 }
 .ui-menu-item.ui-active {
-  background: var(--accent);
-  color: var(--accent-text);
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px var(--accent-line);
+  color: var(--text-0);
 }
 .ui-menu-item.ui-danger {
   color: var(--danger);
 }
 .ui-menu-item.ui-danger.ui-active {
-  background: var(--danger);
-  color: #fff;
+  background: var(--danger-soft);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--danger) 45%, transparent);
+  color: var(--danger);
 }
 .ui-menu-item.ui-disabled {
   opacity: 0.4;
@@ -482,7 +525,7 @@ select.ui-input {
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  color: #fff;
+  color: var(--text-0);
   font-weight: 600;
   flex: none;
   overflow: hidden;

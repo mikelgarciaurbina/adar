@@ -345,8 +345,9 @@
   color: var(--text-0);
 }
 .cf-seg-btn.cf-active {
-  background: var(--accent);
-  color: var(--accent-text);
+  background: var(--bg-4);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+  color: var(--text-0);
 }
 .cf-seg-btn:disabled {
   opacity: 0.5;

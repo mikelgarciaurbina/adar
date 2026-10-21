@@ -57,22 +57,22 @@ describe('openGroup', () => {
     useApp.setState({
       tabs: [tab('/p/api'), tab('/x')],
       activePath: '/p/api',
-      settings: { ...useApp.getState().settings, tabGroups: [{ id: 'g', name: 'Proj', color: 'blue', repos: ['/p/api', '/p/app', '/p/landing'], collapsed: false }] }
+      settings: { ...useApp.getState().settings, tabGroups: [{ id: 'g', name: 'Proj', color: 'sea', repos: ['/p/api', '/p/app', '/p/landing'], collapsed: false }] }
     })
     slowStatus = { path: '/p/app', whileLoading: () => useApp.getState().setActive('/x') }
     await openGroup('g')
-    expect(groups()).toEqual([{ name: 'Proj', color: 'blue', repos: ['/p/api', '/p/app', '/p/landing'] }])
+    expect(groups()).toEqual([{ name: 'Proj', color: 'sea', repos: ['/p/api', '/p/app', '/p/landing'] }])
     expect(paths()).toEqual(['/p/api', '/p/app', '/p/landing', '/x'])
   })
 
   it('reports members that are gone, or that git now resolves to an enclosing repository', async () => {
     repos = { '/mono/pkg': '/mono', '/gone': 'NOT_FOUND', '/ok': '/ok' }
     useApp.setState({
-      settings: { ...useApp.getState().settings, tabGroups: [{ id: 'g', name: 'Libs', color: 'red', repos: ['/mono/pkg', '/gone', '/ok'], collapsed: true }] }
+      settings: { ...useApp.getState().settings, tabGroups: [{ id: 'g', name: 'Libs', color: 'ember', repos: ['/mono/pkg', '/gone', '/ok'], collapsed: true }] }
     })
     await openGroup('g')
     expect(paths()).toEqual(['/ok']) // the enclosing /mono tab it opened is closed again
-    expect(groups()).toEqual([{ name: 'Libs', color: 'red', repos: ['/ok', '/mono/pkg', '/gone'] }])
+    expect(groups()).toEqual([{ name: 'Libs', color: 'ember', repos: ['/ok', '/mono/pkg', '/gone'] }])
     expect(useApp.getState().settings.tabGroups[0].collapsed).toBe(false)
   })
 })
@@ -85,12 +85,12 @@ describe('opening a folder of repositories', () => {
     useApp.setState({
       settings: {
         ...useApp.getState().settings,
-        tabGroups: [{ id: 'saved', name: 'Proj (work)', color: 'purple', repos: ['/private/tmp/proj/api', '/private/tmp/proj/app'], collapsed: false }]
+        tabGroups: [{ id: 'saved', name: 'Proj (work)', color: 'heather', repos: ['/private/tmp/proj/api', '/private/tmp/proj/app'], collapsed: false }]
       }
     })
     // A dialog would never resolve here: reaching the end proves none was shown.
     await expect(openRepoAt('/tmp/proj')).resolves.toBe(true)
-    expect(groups()).toEqual([{ name: 'Proj (work)', color: 'purple', repos: ['/private/tmp/proj/api', '/private/tmp/proj/app'] }])
+    expect(groups()).toEqual([{ name: 'Proj (work)', color: 'heather', repos: ['/private/tmp/proj/api', '/private/tmp/proj/app'] }])
     expect(paths()).toEqual(['/private/tmp/proj/api', '/private/tmp/proj/app'])
   })
 })

@@ -37,7 +37,13 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
     (tabs, toolbar, status bar, welcome, logo), `graph`, `sidebar`, `details` (commit details, staging, composer),
     `diff` (diff, blame, history), `conflicts`, `rebase`, `modals`, `palette` (palette + git console), `update`.
   - `lib/` — lane colours, formatting, ref helpers, drag & drop, keyboard helpers.
-  - `styles/theme.css` — design tokens. ALWAYS use CSS variables; dark and light themes must both work.
+  - `styles/theme.css` — design tokens: the Basoa palette of the website mapped onto the app's names (dark = Gaua,
+    light = Eguna). `--accent` is fern for lines, icons and text (deep fern on light surfaces); fills such as primary
+    buttons use `--accent-fill` with `--accent-text` on top. Graph lanes are `--lane-1…6` (fern, moss, sea, heather,
+    ember, sun) with `-ink` variants for text on their wash; tab groups use the same palette plus bone and mist.
+    ALWAYS use CSS variables; dark and light themes must both work.
+  - `assets/fonts/` — Geist, Geist Mono and Instrument Serif italic (OFL, same files as `site/src/fonts`), bundled so
+    the app makes no font requests. Instrument Serif is only for the word "adar" on the welcome screen.
 - `site/` — the project website (https://adargit.com): a separate npm project (Astro, static output) deployed by
   Cloudflare Pages from this repository (root directory `site`, `npm run build`, output `dist`), and rebuilt after each
   release through the deploy hook in `release.yml` (secret `CLOUDFLARE_DEPLOY_HOOK`). `src/views/` has the landing

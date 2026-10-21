@@ -4,8 +4,9 @@
 
 import { memo, type CSSProperties, type ReactNode } from 'react'
 import { AlertTriangle, Minus, Pencil, Plus } from 'lucide-react'
+import { Avatar } from '@renderer/components/common/Avatar'
 import { absoluteTime, relativeTime } from '@renderer/lib/format'
-import { colorOf } from './geometry'
+import { colorOf, inkOf } from './geometry'
 import { GraphCell } from './GraphCell'
 import { highlightRanges, type DisplayRow, type Pill } from './model'
 import { RefPills } from './RefPills'
@@ -95,6 +96,7 @@ function dateText(ts: number, mode: 'relative' | 'absolute', now: number): strin
 export const GraphRow = memo(function GraphRow(props: GraphRowProps) {
   const { row, index, start, h, graphWidth, pinWidth, pills, selected, multi, match, dim, hl, hlField, dateMode, now, wip, ctx } = props
   const color = colorOf(row.color)
+  const head = row.kind === 'commit' && !!pills?.some((p) => p.isHead || p.kind === 'detached')
   const cls =
     'gr-row' +
     ` gr-row-${row.kind}` +
@@ -102,7 +104,8 @@ export const GraphRow = memo(function GraphRow(props: GraphRowProps) {
     (multi ? ' gr-multi' : '') +
     (match === 2 ? ' gr-match gr-match-current' : match === 1 ? ' gr-match' : '') +
     (dim ? ' gr-dim' : '') +
-    (row.kind === 'commit' && row.isMerge ? ' gr-row-merge' : '')
+    (row.kind === 'commit' && row.isMerge ? ' gr-row-merge' : '') +
+    (head ? ' gr-row-head' : '')
 
   let message: ReactNode = null
   let author: ReactNode = null
@@ -117,7 +120,14 @@ export const GraphRow = memo(function GraphRow(props: GraphRowProps) {
         <Highlighted text={c.subject} query={hlField === 'message' ? hl : ''} />
       </span>
     )
-    author = <Highlighted text={c.authorName} query={hlField === 'author' ? hl : ''} />
+    author = (
+      <>
+        <Avatar name={c.authorName} email={c.authorEmail} size={18} />
+        <span className="gr-author-name">
+          <Highlighted text={c.authorName} query={hlField === 'author' ? hl : ''} />
+        </span>
+      </>
+    )
     date = <span title={absoluteTime(c.authorDate)}>{dateText(c.authorDate, dateMode, now)}</span>
     sha = c.shortSha || c.sha.slice(0, 7)
     title = c.body.trim() ? `${c.subject}\n\n${c.body.trim()}` : undefined
@@ -146,14 +156,14 @@ export const GraphRow = memo(function GraphRow(props: GraphRowProps) {
       aria-selected={selected || multi}
       aria-rowindex={index + 1}
       className={cls}
-      style={{ transform: `translateY(${start}px)`, height: h, ['--gr-lane' as string]: color } as CSSProperties}
+      style={{ transform: `translateY(${start}px)`, height: h, ['--gr-lane' as string]: color, ['--gr-lane-ink' as string]: inkOf(row.color) } as CSSProperties}
       onClick={(e) => ctx.onRowClick(e, row)}
       onDoubleClick={(e) => ctx.onRowDoubleClick(e, row)}
       onContextMenu={(e) => ctx.onRowContextMenu(e, row)}
     >
       <div className="gr-cell gr-c-refs">{row.kind === 'commit' && <RefPills pills={pills} ctx={ctx} color={color} />}</div>
       <div className="gr-cell gr-c-graph">
-        <GraphCell row={row} h={h} width={graphWidth} connector={row.kind === 'commit' && !!pills?.length} pinWidth={pinWidth} />
+        <GraphCell row={row} h={h} width={graphWidth} connector={row.kind === 'commit' && !!pills?.length} head={head} pinWidth={pinWidth} />
       </div>
       <div className="gr-cell gr-c-msg" title={title}>
         {message}

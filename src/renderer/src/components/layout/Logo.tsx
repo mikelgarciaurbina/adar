@@ -42,3 +42,25 @@ function Mark({ color }: { color: string }) {
     </>
   )
 }
+
+/** The mark as thin lanes with open commits and a trunk running off the bottom, for large decorative use. */
+export function AdarAntlerLines({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 64 64" aria-hidden="true" focusable="false">
+      <g fill="none" stroke="currentColor" strokeWidth="0.4" strokeLinecap="round">
+        <path d="M32 72V45" />
+        <path d="M32 45C25 42 12 38 11 24C10.5 17 12 12 15.5 7.5" />
+        <path d="M32 45C39 42 52 38 53 24C53.5 17 52 12 48.5 7.5" />
+        <path d="M11.6 31C18 29.5 23 26 24.5 19.5" />
+        <path d="M52.4 31C46 29.5 41 26 39.5 19.5" />
+      </g>
+      <g fill="var(--bg-0)" stroke="currentColor" strokeWidth="0.4">
+        <circle cx="15.5" cy="7.5" r="1.6" />
+        <circle cx="48.5" cy="7.5" r="1.6" />
+        <circle cx="24.6" cy="19" r="1.6" />
+        <circle cx="39.4" cy="19" r="1.6" />
+        <circle cx="32" cy="55.5" r="2" />
+      </g>
+    </svg>
+  )
+}

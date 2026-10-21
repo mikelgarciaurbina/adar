@@ -113,9 +113,11 @@ describe('geometry', () => {
     expect(new Set(groups.map((g) => g.key)).size).toBe(groups.length)
   })
 
-  it('renders neutral colours with a theme variable', () => {
+  it('renders lanes and neutral colours with theme variables', () => {
     expect(colorOf(-1)).toMatch(/^var\(--/)
-    expect(colorOf(0)).toMatch(/^#/)
+    expect(colorOf(0)).toBe('var(--lane-1)')
+    expect(colorOf(5)).toBe('var(--lane-6)')
+    expect(colorOf(6)).toBe('var(--lane-1)')
   })
 })
 

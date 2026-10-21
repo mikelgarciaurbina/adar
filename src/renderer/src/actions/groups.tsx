@@ -6,11 +6,11 @@ import { api } from '@renderer/api/client'
 import { choose, form, prompt } from '@renderer/components/common/dialogs'
 import { toast } from '@renderer/components/common/toast'
 import { summarizeList } from '@renderer/lib/format'
-import { folderName, groupForFolder, groupOf, groupSuggestion, parentFolder } from '@renderer/lib/tabGroups'
+import { folderName, groupForFolder, groupOf, groupSuggestion, nextGroupColor, parentFolder } from '@renderer/lib/tabGroups'
 import { useApp } from '@renderer/store/appStore'
 import { AdarError } from '@shared/errors'
 import { TAB_GROUP_COLORS, type FoundRepo, type TabGroupColor } from '@shared/types'
-import { initRepoAt, trustAndOpen } from './git'
+import { fetchAll, initRepoAt, trustAndOpen } from './git'
 
 const store = () => useApp.getState()
 
@@ -18,15 +18,14 @@ const store = () => useApp.getState()
 const MAX_PROJECT_REPOS = 8
 
 export const GROUP_COLOR_LABELS: Record<TabGroupColor, string> = {
-  grey: 'Grey',
-  blue: 'Blue',
-  red: 'Red',
-  yellow: 'Yellow',
-  green: 'Green',
-  pink: 'Pink',
-  purple: 'Purple',
-  cyan: 'Cyan',
-  orange: 'Orange'
+  fern: 'Fern',
+  moss: 'Moss',
+  sea: 'Sea',
+  heather: 'Heather',
+  ember: 'Ember',
+  sun: 'Sun',
+  bone: 'Bone',
+  mist: 'Mist'
 }
 
 /**
@@ -102,23 +101,41 @@ function defaultGroupName(path: string): string {
 export async function newGroup(paths: string[]): Promise<string | null> {
   if (!paths.length) return null
   const groups = store().settings.tabGroups
-  const used = new Set(groups.map((g) => g.color))
+  const usedBy = new Map(groups.map((g) => [g.color, g.name || 'Unnamed group']))
+  const names = paths.map((p) => store().tabs.find((t) => t.path === p)?.name ?? folderName(p))
   const res = await form({
     title: 'New tab group',
+    message: `${summarizeList(names)} ${names.length === 1 ? 'stays' : 'stay'} together in the tab bar, and ${names.length === 1 ? 'opens' : 'open'} together next time.`,
     fields: [
       { type: 'text', name: 'name', label: 'Name', defaultValue: defaultGroupName(paths[0]), required: true },
       {
-        type: 'select',
+        type: 'swatches',
         name: 'color',
         label: 'Colour',
-        options: TAB_GROUP_COLORS.map((c) => ({ value: c, label: GROUP_COLOR_LABELS[c] })),
-        defaultValue: TAB_GROUP_COLORS.find((c) => c !== 'grey' && !used.has(c)) ?? 'blue'
+        options: TAB_GROUP_COLORS.map((c) => ({
+          value: c,
+          label: GROUP_COLOR_LABELS[c],
+          color: `var(--group-${c})`,
+          note: usedBy.has(c) ? `used by ${usedBy.get(c)}` : undefined
+        })),
+        defaultValue: nextGroupColor(groups)
       }
     ],
     confirmLabel: 'Create group'
   })
   if (!res) return null
   return store().createGroup(paths, { name: String(res.name), color: String(res.color) as TabGroupColor })
+}
+
+/** Fetch every open repository of a group (all remotes) side by side, with one toast for the lot. */
+export async function fetchGroup(id: string): Promise<void> {
+  const group = store().settings.tabGroups.find((g) => g.id === id)
+  if (!group) return
+  const before = new Map(store().tabs.filter((t) => group.repos.includes(t.path)).map((t) => [t.path, t.lastFetch]))
+  if (!before.size) return
+  await Promise.all([...before.keys()].map((p) => fetchAll(p, { quiet: true })))
+  const fetched = store().tabs.filter((t) => before.has(t.path) && t.lastFetch !== before.get(t.path)).length
+  if (fetched) toast.success(`Fetched ${fetched === 1 ? '1 repository' : `${fetched} repositories`} in “${group.name || 'Unnamed group'}”`)
 }
 
 export async function renameGroup(id: string): Promise<void> {

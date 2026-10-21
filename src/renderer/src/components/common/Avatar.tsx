@@ -1,6 +1,6 @@
 import { memo, useEffect, useState } from 'react'
 import { useSettings } from '@renderer/store/appStore'
-import { colorForString, initials } from '@renderer/lib/colors'
+import { badgeColorsFor, initials } from '@renderer/lib/colors'
 
 const gravatarCache = new Map<string, Promise<string>>()
 
@@ -44,11 +44,11 @@ export const Avatar = memo(function Avatar({ name, email, size = 24, className }
     }
   }, [gravatar, email, size])
 
-  const bg = colorForString(email || name)
+  const colors = badgeColorsFor(email || name)
   return (
     <span
       className={`ui-avatar${className ? ' ' + className : ''}`}
-      style={{ width: size, height: size, fontSize: Math.max(9, Math.round(size * 0.42)), background: bg }}
+      style={{ width: size, height: size, fontSize: Math.max(8, Math.round(size * 0.4)), ...colors }}
       title={`${name} <${email}>`}
     >
       {src ? (

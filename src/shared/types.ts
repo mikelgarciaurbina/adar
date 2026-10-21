@@ -383,9 +383,22 @@ export interface RecentRepo {
   lastOpened: number
 }
 
-/** Colours a tab group can take (theme tokens --group-<colour>). */
-export const TAB_GROUP_COLORS = ['grey', 'blue', 'red', 'yellow', 'green', 'pink', 'purple', 'cyan', 'orange'] as const
+/** Colours a tab group can take: the Basoa lanes plus bone and mist (theme tokens --group-<colour>). */
+export const TAB_GROUP_COLORS = ['fern', 'moss', 'sea', 'heather', 'ember', 'sun', 'bone', 'mist'] as const
 export type TabGroupColor = (typeof TAB_GROUP_COLORS)[number]
+
+/** Group colours saved by Adar 0.4 and earlier, mapped to the closest Basoa colour. */
+export const LEGACY_GROUP_COLORS: Readonly<Record<string, TabGroupColor>> = {
+  grey: 'mist',
+  blue: 'sea',
+  red: 'ember',
+  yellow: 'sun',
+  green: 'fern',
+  pink: 'heather',
+  purple: 'heather',
+  cyan: 'moss',
+  orange: 'ember'
+}
 
 /** A named set of repositories shown together in the tab bar (e.g. a project's api, app and landing). */
 export interface TabGroup {

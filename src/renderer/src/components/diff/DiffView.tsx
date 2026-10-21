@@ -298,7 +298,8 @@ export function DiffView({ tab, target, siblings }: { tab: RepoTab; target: Diff
   return (
     <div className="diff-view" ref={rootRef}>
       <div className="diff-header">
-        <div className="diff-titlebar">
+        {/* One line: the file and its stats, then navigation, view options and the file's actions. */}
+        <div className="diff-toolbar diff-bar">
           <StatusBadge status={fileStatus} />
           <PathLabel path={path} />
           {oldPath && oldPath !== path && (
@@ -311,13 +312,8 @@ export function DiffView({ tab, target, siblings }: { tab: RepoTab; target: Diff
             {commitSubject && <span className="diff-target-sub"> · {firstLine(commitSubject)}</span>}
           </span>
           {loading && diff && <Spinner size="sm" />}
-          <span className="diff-spacer" />
           {diff && !diff.binary && <ChangeStats additions={diff.additions} deletions={diff.deletions} />}
-          <IconButton label="Close (Esc)" onClick={close}>
-            <X size={16} />
-          </IconButton>
-        </div>
-        <div className="diff-toolbar">
+          <span className="diff-tb-sep" />
           {changeNav && changeNav.count > 0 && (
             <div className="diff-nav" role="group" aria-label="Changes in this file">
               <IconButton size="sm" label={`Previous change (P or ${altKey}↑)`} disabled={changeNav.index <= 0} onClick={() => jumpChange(-1)}>
@@ -400,6 +396,9 @@ export function DiffView({ tab, target, siblings }: { tab: RepoTab; target: Diff
               Unstage File
             </Button>
           )}
+          <IconButton label="Close (Esc)" onClick={close}>
+            <X size={16} />
+          </IconButton>
         </div>
         {modeText && diff && diff.hunks.length > 0 && <div className="diff-info">{modeText}</div>}
         {diff && <EncodingNote diff={diff} staging={!!stagingKind && !conflicted} />}

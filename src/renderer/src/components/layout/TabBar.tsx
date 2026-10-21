@@ -1,12 +1,12 @@
 // Top tab strip: one tab per open repository (GitKraken style). The bar doubles as
 // the window drag region; tabs and buttons opt out with no-drag.
 
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
-import { CircleArrowUp, Copy, Download, FolderGit2, FolderInput, FolderOpen, FolderPlus, Layers, Plus, SquareTerminal, X } from 'lucide-react'
+import { CircleArrowUp, Copy, Download, FolderGit2, FolderInput, FolderOpen, FolderPlus, Layers, Plus, RefreshCw, SquareTerminal, X } from 'lucide-react'
 import { isElectron, isMac } from '@renderer/api/client'
 import * as git from '@renderer/actions/git'
-import { closeGroup, GROUP_COLOR_LABELS, newGroup, openGroup, renameGroup } from '@renderer/actions/groups'
+import { closeGroup, fetchGroup, GROUP_COLOR_LABELS, newGroup, openGroup, renameGroup } from '@renderer/actions/groups'
 import { showContextMenu, showMenuBelow, type MenuItem } from '@renderer/components/common/ContextMenu'
 import { getCommand } from '@renderer/commands'
 import { useUpdates } from '@renderer/components/update/updateStore'
@@ -28,6 +28,11 @@ function shortcutOf(id: string): string | undefined {
 /** Coloured dot for menus and lists. */
 export function GroupDot({ group }: { group: Pick<TabGroup, 'color'> }) {
   return <span className="tb-group-dot" style={{ background: `var(--group-${group.color})` }} />
+}
+
+/** CSS variables that colour a group's tray, label and dot. */
+function groupStyle(group: Pick<TabGroup, 'color'>): React.CSSProperties {
+  return { '--tb-group': `var(--group-${group.color})`, '--tb-group-ink': `var(--group-${group.color}-ink)` } as React.CSSProperties
 }
 
 /** "Open Group" entries (one per saved group), or nothing when there are no groups. */
@@ -240,6 +245,12 @@ export function TabBar() {
       },
       { label: group.collapsed ? 'Expand' : 'Collapse', onClick: () => st.updateGroup(group.id, { collapsed: !group.collapsed }) },
       ...(openCount < group.repos.length ? [{ label: 'Open All Repositories', onClick: () => void openGroup(group.id) }] : []),
+      {
+        label: openCount > 1 ? `Fetch All (${openCount} repositories)` : 'Fetch All',
+        icon: <RefreshCw size={14} />,
+        disabled: openCount === 0,
+        onClick: () => void fetchGroup(group.id)
+      },
       { type: 'separator' },
       { label: 'Ungroup', onClick: () => st.deleteGroup(group.id) },
       { label: 'Close Group', icon: <X size={14} />, onClick: () => void closeGroup(group.id) }
@@ -267,7 +278,6 @@ export function TabBar() {
           else tabEls.current.delete(tab.path)
         }}
         className={`tb-tab${active ? ' tb-tab-active' : ''}${group ? ' tb-tab-grouped' : ''}${indicator}`}
-        style={group ? ({ '--tb-group': `var(--group-${group.color})` } as React.CSSProperties) : undefined}
         role="tab"
         aria-selected={active}
         tabIndex={active ? 0 : -1}
@@ -340,15 +350,18 @@ export function TabBar() {
         {segments.map((seg) => {
           if (seg.kind === 'tab') return renderTab(seg.tab, seg.index, null)
           const { group } = seg
-          const color = `var(--group-${group.color})`
           // A collapsed group still shows the active tab, so the open repository is never hidden.
           const shown = group.collapsed ? seg.tabs.filter((x) => x.tab.path === activePath) : seg.tabs
           const label = group.name || 'Unnamed group'
+          // The group is a tray: its label and tabs share a tint and a line in the group's colour.
           return (
-            <Fragment key={`group:${group.id}`}>
+            <div
+              key={`group:${group.id}`}
+              className={`tb-group${group.collapsed ? ' tb-group-collapsed' : ''}${chipDrop === group.id ? ' tb-group-drop' : ''}${drop?.chip === group.id ? ' tb-drop-before' : ''}`}
+              style={groupStyle(group)}
+            >
               <button
-                className={`tb-group-chip${group.collapsed ? ' tb-group-chip-collapsed' : ''}${chipDrop === group.id ? ' tb-group-chip-drop' : ''}${drop?.chip === group.id ? ' tb-drop-before' : ''}`}
-                style={{ '--tb-group': color } as React.CSSProperties}
+                className="tb-group-chip"
                 title={`${label}: ${seg.tabs.map((x) => x.tab.name).join(', ')}\nClick to ${group.collapsed ? 'expand' : 'collapse'}, right-click for options`}
                 aria-expanded={!group.collapsed}
                 aria-label={`Group ${label}, ${seg.tabs.length} ${seg.tabs.length === 1 ? 'tab' : 'tabs'}`}
@@ -363,11 +376,12 @@ export function TabBar() {
                 onDragLeave={() => setChipDrop((d) => (d === group.id ? null : d))}
                 onDrop={(e) => onChipDrop(e, group)}
               >
+                <span className="tb-group-mark" aria-hidden="true" />
                 <span className="tb-group-name">{label}</span>
                 {group.collapsed && <span className="tb-group-count">{seg.tabs.length}</span>}
               </button>
               {shown.map((x) => renderTab(x.tab, x.index, group))}
-            </Fragment>
+            </div>
           )
         })}
         <button

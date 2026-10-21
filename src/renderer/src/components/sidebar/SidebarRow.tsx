@@ -3,7 +3,7 @@
 
 import { memo, type ReactNode } from 'react'
 import { Archive, Box, Check, ChevronRight, Cloud, Crosshair, Eye, EyeOff, Folder, FolderOpen, Laptop, Plus, RefreshCw, Tag, TriangleAlert } from 'lucide-react'
-import { colorForString } from '@renderer/lib/colors'
+import { badgeColorsFor } from '@renderer/lib/colors'
 import { relativeTime, shortSha } from '@renderer/lib/format'
 import { localForRemote } from '@renderer/lib/refs'
 import type { Ref, RefsResult } from '@shared/types'
@@ -215,7 +215,7 @@ export const RowView = memo(function RowView(props: RowViewProps) {
       return (
         <div {...common} className={classes.join(' ')} aria-expanded={row.expanded} title={node.url ? `${node.name}\n${node.url}` : node.name}>
           <Chevron expanded={row.expanded} />
-          <span className="sb-remote-avatar" style={{ background: colorForString(web ?? node.name) }} aria-hidden>
+          <span className="sb-remote-avatar" style={badgeColorsFor(web ?? node.name)} aria-hidden>
             {node.name.charAt(0).toUpperCase()}
           </span>
           <span className="sb-name">

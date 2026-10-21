@@ -33,6 +33,14 @@ export type FormField =
       defaultValue?: string
       hint?: string
     }
+  | {
+      /** A row of colour swatches (radio buttons); `note` is shown under them for the picked one. */
+      type: 'swatches'
+      name: string
+      label: string
+      options: Array<{ value: string; label: string; color: string; note?: string }>
+      defaultValue?: string
+    }
 
 export interface FormOptions {
   title: string
@@ -187,7 +195,7 @@ function FormDialog({ req }: { req: Extract<DialogRequest, { kind: 'form' }> }) 
     const v: Record<string, string | boolean> = {}
     for (const f of opts.fields) {
       if (f.type === 'checkbox') v[f.name] = f.defaultValue ?? false
-      else if (f.type === 'select') v[f.name] = f.defaultValue ?? f.options[0]?.value ?? ''
+      else if (f.type === 'select' || f.type === 'swatches') v[f.name] = f.defaultValue ?? f.options[0]?.value ?? ''
       else v[f.name] = f.defaultValue ?? ''
     }
     return v
@@ -287,6 +295,36 @@ function FormDialog({ req }: { req: Extract<DialogRequest, { kind: 'form' }> }) 
                   {f.hint && <small className="ui-hint">{f.hint}</small>}
                 </label>
               )
+            case 'swatches': {
+              const picked = f.options.find((o) => o.value === values[f.name])
+              return (
+                <fieldset key={f.name} className="ui-field ui-swatch-field">
+                  <legend className="ui-label">{f.label}</legend>
+                  <div className="ui-swatches">
+                    {f.options.map((o) => (
+                      <input
+                        key={o.value}
+                        type="radio"
+                        className={`ui-swatch${o.note ? ' ui-swatch-used' : ''}`}
+                        name={`dialog-${req.id}-${f.name}`}
+                        value={o.value}
+                        aria-label={o.note ? `${o.label}, ${o.note}` : o.label}
+                        title={o.note ? `${o.label} (${o.note})` : o.label}
+                        checked={values[f.name] === o.value}
+                        style={{ '--swatch': o.color } as React.CSSProperties}
+                        onChange={() => setValues((v) => ({ ...v, [f.name]: o.value }))}
+                      />
+                    ))}
+                  </div>
+                  {picked && (
+                    <small className="ui-hint">
+                      {picked.label}
+                      {picked.note ? ` · ${picked.note}` : ''}
+                    </small>
+                  )}
+                </fieldset>
+              )
+            }
             case 'textarea':
               return (
                 <label key={f.name} className="ui-field">

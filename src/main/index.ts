@@ -110,9 +110,9 @@ function createWindow(): void {
     minHeight: 600,
     show: false,
     title: 'Adar',
-    backgroundColor: '#1c1e24',
+    backgroundColor: '#0a0d0c',
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
-    trafficLightPosition: { x: 14, y: 12 },
+    trafficLightPosition: { x: 14, y: 15 },
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,

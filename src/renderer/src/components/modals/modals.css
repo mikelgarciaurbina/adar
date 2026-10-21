@@ -89,8 +89,9 @@
 }
 .md-seg-active,
 .md-seg-active:hover:not(:disabled) {
-  background: var(--accent);
-  color: var(--accent-text);
+  background: var(--bg-4);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+  color: var(--text-0);
   font-weight: 600;
 }
 
@@ -116,8 +117,8 @@
   transition: transform 0.15s var(--ease), background 0.15s var(--ease);
 }
 .md-switch-on {
-  background: var(--accent);
-  border-color: var(--accent);
+  background: var(--accent-fill);
+  border-color: var(--accent-edge);
 }
 .md-switch-on .md-switch-knob {
   transform: translateX(14px);

@@ -254,10 +254,19 @@ describe('settings', () => {
       ],
       groupSuggestionsDismissed: ['/w', 5]
     })
+    // Colours saved before the Basoa palette map to their closest colour; unknown ones become mist.
     expect(s.tabGroups).toEqual([
-      { id: 'p', name: 'OverlayOn', color: 'blue', repos: ['/w/p/api', '/w/p/app'], collapsed: true },
-      { id: 'q', name: 'Other', color: 'grey', repos: ['/w/q'], collapsed: false }
+      { id: 'p', name: 'OverlayOn', color: 'sea', repos: ['/w/p/api', '/w/p/app'], collapsed: true },
+      { id: 'q', name: 'Other', color: 'mist', repos: ['/w/q'], collapsed: false }
     ])
+    const kept = sanitizeSettings(DEFAULT_SETTINGS, {
+      tabGroups: [
+        { id: 'a', name: 'A', color: 'ember', repos: ['/w/a'] },
+        { id: 'b', name: 'B', color: 'purple', repos: ['/w/b'] },
+        { id: 'c', name: 'C', color: 'constructor', repos: ['/w/c'] }
+      ]
+    })
+    expect(kept.tabGroups.map((g) => g.color)).toEqual(['ember', 'heather', 'mist'])
     expect(s.groupSuggestionsDismissed).toEqual([]) // not all strings: ignored
     expect(sanitizeSettings(DEFAULT_SETTINGS, { tabGroups: 'x' }).tabGroups).toEqual([])
   })

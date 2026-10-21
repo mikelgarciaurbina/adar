@@ -15,7 +15,7 @@ import {
 
 const t = (...paths: string[]) => paths.map((path) => ({ path }))
 const paths = (tabs: { path: string }[]) => tabs.map((x) => x.path)
-const group = (id: string, repos: string[], extra: Partial<TabGroup> = {}): TabGroup => ({ id, name: id, color: 'blue', repos, collapsed: false, ...extra })
+const group = (id: string, repos: string[], extra: Partial<TabGroup> = {}): TabGroup => ({ id, name: id, color: 'sea', repos, collapsed: false, ...extra })
 
 describe('arrangeTabs', () => {
   it('pulls each group together at its first tab, keeping everything else in place', () => {
@@ -106,7 +106,7 @@ describe('suggestions and folders', () => {
     expect(parentFolder('/w/p/api/')).toBe('/w/p')
     expect(parentFolder('/api')).toBe('')
     expect(folderName('/w/OverlayOn/')).toBe('OverlayOn')
-    expect(nextGroupColor([])).toBe('blue')
-    expect(nextGroupColor([group('a', [], { color: 'blue' })])).toBe('red')
+    expect(nextGroupColor([])).toBe('fern')
+    expect(nextGroupColor([group('a', [], { color: 'fern' })])).toBe('moss')
   })
 })
