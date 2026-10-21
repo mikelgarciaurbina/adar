@@ -40,13 +40,18 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
   - `styles/theme.css` — design tokens. ALWAYS use CSS variables; dark and light themes must both work.
 - `site/` — the project website (https://adargit.com): a separate npm project (Astro, static output) deployed by
   Cloudflare Pages from this repository (root directory `site`, `npm run build`, output `dist`), and rebuilt after each
-  release through the deploy hook in `release.yml` (secret `CLOUDFLARE_DEPLOY_HOOK`). `src/pages/` has the landing
-  (`index.astro`; the 3D scene is hand-written WebGL2 in `src/scripts/branches.js`), `roadmap.astro` (renders the
-  repository's `ROADMAP.md` and the GitHub Releases at build time — `src/lib/roadmap.ts`, `src/lib/releases.ts`),
-  `design.astro` (the Basoa design system) and `404.astro`. Shared layout/nav/footer/icon in `src/layouts` and
+  release through the deploy hook in `release.yml` (secret `CLOUDFLARE_DEPLOY_HOOK`). `src/views/` has the landing
+  (`Home.astro`; the 3D scene is hand-written WebGL2 in `src/scripts/branches.js`), `Roadmap.astro` (renders the
+  repository's `ROADMAP.md` and the GitHub Releases at build time — `src/lib/roadmap.ts`, `src/lib/releases.ts`) and
+  `Design.astro` (the Basoa design system); `src/pages/404.astro` is the trilingual not-found page. Shared layout/nav/footer/icon in `src/layouts` and
   `src/components`; tokens in `src/styles/tokens.css` (also published as `/tokens.css`); fonts self-hosted; build
   telemetry off; the browser only calls the GitHub API for the star count. Separate from the app's own `theme.css`.
   Always link with `url()` from `src/lib/url.ts` (respects the base).
+  The site is in English (root), Spanish (`/es`) and Basque (`/eu`) with localized slugs and anchors (`src/i18n/config.ts`:
+  routes, anchors, `pageUrl()`). Pages in `src/pages/` are thin wrappers around the templates in `src/views/`; all copy lives
+  in `src/i18n/` (`ui.ts` shared, `home.ts`, `roadmap.ts`, `design.ts`), and strings for scripts reach them through the
+  layout's `#i18n` JSON (`t()` in `site.js`). Add every new string in all three languages. Illustrations of the app stay in
+  English (its interface is English); ROADMAP.md items and release notes are shown as written.
 
 ## Conventions
 - CSS class prefixes per module: `app-` shell, `ui-` common, `tb-`/`wl-` toolbar, tabs, status bar, welcome, `sb-` left

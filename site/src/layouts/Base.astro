@@ -8,28 +8,32 @@ import Icon from '../components/Icon.astro';
 import geist from '../fonts/geist.woff2?url';
 import serifItalic from '../fonts/instrument-serif-italic.woff2?url';
 import { url, SITE_URL } from '../lib/url';
+import { LOCALES, LOCALE_INFO, DEFAULT_LOCALE, absoluteUrl, type Locale, type PageKey } from '../i18n/config';
+import { ui } from '../i18n/ui';
 
 interface Props {
+  lang: Locale;
+  /** The page, for canonical/alternate URLs and the navigation. Omitted on the 404 page. */
+  page?: PageKey;
   title: string;
   description: string;
-  /** Page path below the base, for the canonical URL ('' is the landing page). */
-  path: string;
-  current?: 'home' | 'roadmap' | 'design';
   ogTitle?: string;
   ogDescription?: string;
-  /** The 404 page: no navigation and not indexed. */
-  bare?: boolean;
+  /** Strings for this page's scripts (merged with the shared ones into #i18n). */
+  client?: Record<string, unknown>;
 }
-const { title, description, path, current = 'home', ogTitle = title, ogDescription = description, bare = false } = Astro.props;
+const { lang, page, title, description, ogTitle = title, ogDescription = description, client = {} } = Astro.props;
+const t = ui[lang];
+const bare = !page;
 // Scripts are bundled files (no inline scripts); styles may use inline style attributes for per-element variables.
 const csp = [
   "default-src 'self'", "script-src 'self'", "style-src 'self' 'unsafe-inline'", "img-src 'self' data:", "font-src 'self'",
   "connect-src 'self' https://api.github.com", "object-src 'none'", "base-uri 'none'", "form-action 'none'",
 ].join('; ');
-const canonical = SITE_URL + path;
+const strings = JSON.stringify({ ...t.client, ...client }).replace(/</g, '\\u003c');
 ---
 <!doctype html>
-<html lang="en" class="no-js">
+<html lang={lang} class="no-js">
 <head>
   <meta charset="utf-8">
   <meta http-equiv="Content-Security-Policy" content={csp}>
@@ -38,10 +42,14 @@ const canonical = SITE_URL + path;
   <meta name="description" content={description}>
   <meta name="theme-color" content="#0a0d0c">
   {bare ? <meta name="robots" content="noindex"> : <>
-    <link rel="canonical" href={canonical}>
+    <link rel="canonical" href={absoluteUrl(page, lang)}>
+    {LOCALES.map((l) => <link rel="alternate" hreflang={l} href={absoluteUrl(page, l)}>)}
+    <link rel="alternate" hreflang="x-default" href={absoluteUrl(page, DEFAULT_LOCALE)}>
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="Adar">
-    <meta property="og:url" content={canonical}>
+    <meta property="og:url" content={absoluteUrl(page, lang)}>
+    <meta property="og:locale" content={LOCALE_INFO[lang].og}>
+    {LOCALES.filter((l) => l !== lang).map((l) => <meta property="og:locale:alternate" content={LOCALE_INFO[l].og}>)}
     <meta property="og:title" content={ogTitle}>
     <meta property="og:description" content={ogDescription}>
     <meta property="og:image" content={`${SITE_URL}assets/og.jpg`}>
@@ -56,16 +64,17 @@ const canonical = SITE_URL + path;
   <slot name="head" />
 </head>
 <body>
-  <a class="skip-link" href="#main">Skip to content</a>
-  {!bare && <Nav current={current} />}
+  <a class="skip-link" href="#main">{t.skip}</a>
+  {page && <Nav lang={lang} page={page} />}
   <slot />
-  {!bare && <Footer current={current} />}
-  {!bare && (
+  {page && <Footer lang={lang} page={page} />}
+  {page && (
     <button class="motion-toggle" type="button" aria-pressed="false" data-motion-toggle>
       <Icon name="pause" class="motion-toggle__pause" /><Icon name="play" class="motion-toggle__play" />
-      <span class="motion-toggle__label" data-motion-label>Pause animations</span>
+      <span class="motion-toggle__label" data-motion-label>{t.client.pause}</span>
     </button>
   )}
   <p class="visually-hidden" aria-live="polite" data-announce></p>
+  <script type="application/json" id="i18n" is:inline set:html={strings} />
 </body>
 </html>

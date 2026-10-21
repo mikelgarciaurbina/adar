@@ -1,0 +1,491 @@
+---
+// The landing page, in any of the site's languages. The 3D scene (scripts/branches.js) sits behind the hero
+// and the name chapter; the download section is filled from the latest GitHub release at build time.
+import Base from '../layouts/Base.astro';
+import Icon from '../components/Icon.astro';
+import { Picture, getImage } from 'astro:assets';
+import screenshot from '../assets/screenshot.png';
+import Chapter from '../components/Chapter.astro';
+import Fireflies from '../components/Fireflies.astro';
+import Rail from '../components/Rail.astro';
+import Sky from '../components/Sky.astro';
+import Rings from '../components/Rings.astro';
+import Antlers from '../components/Antlers.astro';
+import '../styles/home.css';
+import '../styles/story.css';
+import { url, REPO_URL } from '../lib/url';
+import { getReleases, getLatest, formatSize } from '../lib/releases';
+import { chaptersFor } from '../lib/story';
+import { absoluteUrl, formatDateIn, pageUrl, type Locale } from '../i18n/config';
+import { home } from '../i18n/home';
+import { ui } from '../i18n/ui';
+
+interface Props { lang: Locale }
+const { lang } = Astro.props;
+const t = home[lang];
+const C = chaptersFor(lang);
+const at = (i: number) => `#${C[i].id}`;
+
+const releases = await getReleases();
+const latest = await getLatest();
+const dmg = latest?.assets.find((a) => /arm64\.dmg$/.test(a.name));
+const zip = latest?.assets.find((a) => /arm64\.zip$/.test(a.name));
+const sums = [dmg, zip].filter((a) => a?.sha256) as NonNullable<typeof dmg>[];
+// The app screenshot is served as AVIF/WebP in a few widths; structured data points at the WebP.
+const screenshotWebp = await getImage({ src: screenshot, format: 'webp', width: 1440 });
+const self = absoluteUrl('home', lang);
+// Structured data for search engines: Adar as a free macOS developer application.
+const jsonLd = JSON.stringify({
+  '@context': 'https://schema.org',
+  '@type': 'SoftwareApplication',
+  name: 'Adar',
+  description: t.meta.jsonLd,
+  inLanguage: lang,
+  url: self,
+  image: new URL('assets/og.jpg', self).href,
+  screenshot: new URL(screenshotWebp.src, self).href,
+  applicationCategory: 'DeveloperApplication',
+  operatingSystem: 'macOS (Apple Silicon)',
+  isAccessibleForFree: true,
+  offers: { '@type': 'Offer', price: '0', priceCurrency: 'EUR' },
+  license: `${REPO_URL}/blob/main/LICENSE`,
+  author: { '@type': 'Person', name: 'Mikel García' },
+  sameAs: [REPO_URL],
+  ...(latest && { softwareVersion: latest.version, datePublished: latest.date.slice(0, 10), downloadUrl: dmg?.url ?? latest.url }),
+}).replace(/</g, '\\u003c');
+---
+<Base lang={lang} page="home" title={t.meta.title} description={t.meta.description} ogTitle={t.meta.ogTitle} ogDescription={t.meta.ogDescription}
+  client={{ figs: t.name.figs }}>
+  <script slot="head" type="application/ld+json" is:inline set:html={jsonLd} />
+  <Sky />
+  <Rail chapters={C} label={ui[lang].chapters} />
+  <canvas class="scene" id="scene" aria-hidden="true"></canvas>
+  <div class="scene-fallback" aria-hidden="true"><img src={url('assets/adar-mark.svg')} width="64" height="64" alt=""></div>
+
+  <main id="main" class="story">
+    <div id="zone">
+      <!-- 0 · Gaua -->
+      <section class="hero" id={C[0].id} aria-labelledby="hero-title">
+        <div class="wrap hero__inner">
+          <a class="chip chip--accent hero__news rise" href={pageUrl('roadmap', lang, 'changelog')}>
+            <span class="dot"></span>{latest ? <>{t.hero.newIn} {latest.version}</> : t.hero.latest}<span class="hero__news-sep"></span><span class="hero__news-cta">{t.hero.whatsNew}</span>
+            <Icon name="arrow-right" size={14} />
+          </a>
+          <h1 class="hero__title rise" id="hero-title" style="--delay:80ms" set:html={t.hero.title} />
+          <p class="hero__lede rise" style="--delay:160ms">{t.hero.lede}</p>
+          <div class="hero__ctas rise" style="--delay:240ms">
+            <a class="btn btn--primary btn--lg" href={at(6)}>
+              <Icon name="download" />{t.hero.download}<span class="btn__meta">Apple Silicon</span>
+            </a>
+            <a class="btn btn--ghost btn--lg" href={REPO_URL}>
+              <Icon name="star" />{t.hero.star}<span class="btn__meta" data-gh="stars"></span>
+            </a>
+          </div>
+          <p class="hero__fine rise" style="--delay:320ms" set:html={t.hero.fine} />
+        </div>
+        <p class="fig hero__fig mono" aria-hidden="true" set:html={t.hero.fig} />
+        <a class="hero__scroll" href={at(1)}><span>{t.hero.scroll}</span><Icon name="arrow-down" size={16} /></a>
+      </section>
+
+      <!-- I · Adar -->
+      <section class="name" id={C[1].id} aria-labelledby="name-title" data-name-section>
+        <div class="name__sticky">
+          <div class="wrap name__inner">
+            <div class="name__copy">
+              <p class="chapter__mark name__mark"><span class="chapter__n">I</span><span class="chapter__en">{t.name.mark}</span></p>
+              <article class="dict" aria-labelledby="name-title">
+                <header class="dict__head">
+                  <h2 class="dict__word" id="name-title" lang="eu">adar</h2>
+                  <p class="dict__meta"><span>a·dar</span><span set:html={t.name.meta} /></p>
+                </header>
+                <ol class="dict__senses">
+                  {t.name.senses.map((s, i) => (
+                    <li class={i === 0 ? 'is-active' : undefined} data-sense={i}><span class="dict__n">{i + 1}</span><p set:html={s} /></li>
+                  ))}
+                </ol>
+              </article>
+              <p class="name__lede" set:html={t.name.lede} />
+            </div>
+          </div>
+          <p class="fig name__fig mono" aria-hidden="true" data-fig>{t.name.figs[0]}</p>
+          <div class="name__steps" aria-hidden="true"><span class="is-active"></span><span></span><span></span></div>
+        </div>
+      </section>
+    </div>
+
+    <!-- II · Enborra -->
+    <section class="section showcase" id={C[2].id} aria-labelledby="showcase-title">
+      <div class="fog fog--top" aria-hidden="true"></div>
+      <div class="wrap">
+        <Chapter n={C[2].n} eu={C[2].eu} en={C[2].en} story={t.trunk.story} center>
+          <h2 id="showcase-title" set:html={t.trunk.title} />
+          <p set:html={t.trunk.text} />
+        </Chapter>
+        <figure class="shot" data-shot>
+          <div class="shot__glow" aria-hidden="true"></div>
+          <div class="shot__frame">
+            <div class="shot__bar" aria-hidden="true"><i></i><i></i><i></i><span>demo — main</span></div>
+            <Picture src={screenshot} formats={['avif', 'webp']} widths={[720, 1080, 1440, 2160]} sizes="(max-width: 1240px) calc(100vw - 32px), 1180px"
+              loading="lazy" decoding="async" alt={t.trunk.alt} />
+          </div>
+          <figcaption class="shot__notes">
+            <span class="shot__note" style="--x:9%;--y:30%" set:html={t.trunk.notes[0]} />
+            <span class="shot__note" style="--x:31%;--y:15%" set:html={t.trunk.notes[1]} />
+            <span class="shot__note" style="--x:22%;--y:52%" set:html={t.trunk.notes[2]} />
+            <span class="shot__note shot__note--r" style="--x:86%;--y:22%" set:html={t.trunk.notes[3]} />
+          </figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <!-- III · Adarrak (the illustrations show the app, whose interface is English) -->
+    <section class="section features" id={C[3].id} aria-labelledby="features-title">
+      <div class="wrap">
+        <Chapter n={C[3].n} eu={C[3].eu} en={C[3].en} story={t.branches.story}>
+          <h2 id="features-title" set:html={t.branches.title} />
+          <p>{t.branches.text}</p>
+        </Chapter>
+
+        <div class="bento">
+          <article class="feat feat--graph card tilt spotlight reveal" data-animate>
+            <div class="feat__art" aria-hidden="true">
+              <svg class="mini-graph" viewBox="0 0 520 300">
+                <g class="mg-lanes" fill="none" stroke-width="2.5" stroke-linecap="round">
+                  <path class="mg-l" style="--c:var(--lane-1);--d:0s" d="M40 60 V284"/>
+                  <path class="mg-l mg-wip" style="--c:var(--lane-1)" d="M40 28 V60"/>
+                  <path class="mg-l" style="--c:var(--lane-2);--d:.35s" d="M40 188 C40 170 72 176 72 156 V92"/>
+                  <path class="mg-l" style="--c:var(--lane-4);--d:.55s" d="M40 220 C40 202 104 208 104 188 V156"/>
+                  <path class="mg-l" style="--c:var(--lane-3);--d:.2s" d="M40 284 C40 266 72 272 72 252 C72 234 40 240 40 220"/>
+                </g>
+                <g class="mg-nodes">
+                  <circle class="mg-n mg-n--wip" cx="40" cy="28" r="8"/>
+                  <circle class="mg-n" style="--c:var(--lane-1);--i:1" cx="40" cy="60" r="8"/>
+                  <circle class="mg-n" style="--c:var(--lane-2);--i:2" cx="72" cy="92" r="8"/>
+                  <circle class="mg-n" style="--c:var(--lane-2);--i:3" cx="72" cy="124" r="8"/>
+                  <circle class="mg-n" style="--c:var(--lane-4);--i:4" cx="104" cy="156" r="8"/>
+                  <circle class="mg-n" style="--c:var(--lane-1);--i:5" cx="40" cy="188" r="8"/>
+                  <circle class="mg-n" style="--c:var(--lane-1);--i:6" cx="40" cy="220" r="5"/>
+                  <circle class="mg-n" style="--c:var(--lane-3);--i:7" cx="72" cy="252" r="8"/>
+                  <circle class="mg-n" style="--c:var(--lane-1);--i:8" cx="40" cy="284" r="8"/>
+                </g>
+                <g class="mg-text">
+                  <text x="136" y="33" class="mg-wip-t">// WIP  ✎ 2  + 1</text>
+                  <text x="136" y="65">Add value v8</text>
+                  <text x="136" y="97">Graph work part 3</text>
+                  <text x="136" y="129">Graph work part 2</text>
+                  <text x="136" y="161">Try an experimental idea</text>
+                  <text x="136" y="193">Add value v7</text>
+                  <text x="136" y="225" class="mg-dim">Merge branch ’feature/login’</text>
+                  <text x="136" y="257">Add login function</text>
+                  <text x="136" y="289">Initial commit</text>
+                </g>
+                <g class="mg-refs">
+                  <g style="--c:var(--lane-1)" transform="translate(392 50)"><rect width="56" height="20" rx="5"/><text x="28" y="14">main</text></g>
+                  <g style="--c:var(--lane-2)" transform="translate(392 82)"><rect width="110" height="20" rx="5"/><text x="55" y="14">feature/graph</text></g>
+                  <g style="--c:var(--lane-4)" transform="translate(392 146)"><rect width="110" height="20" rx="5"/><text x="55" y="14">origin/experiment</text></g>
+                  <g style="--c:var(--lane-1)" transform="translate(392 178)"><rect width="92" height="20" rx="5"/><text x="46" y="14">origin/main</text></g>
+                  <g style="--c:var(--lane-6)" transform="translate(392 274)"><rect width="56" height="20" rx="5"/><text x="28" y="14">v0.1.0</text></g>
+                </g>
+              </svg>
+            </div>
+            <div class="feat__body">
+              <h3><Icon name="branch" /><Fragment set:html={t.branches.graph[0]} /></h3>
+              <p set:html={t.branches.graph[1]} />
+            </div>
+          </article>
+
+          <article class="feat feat--drag card tilt spotlight reveal" data-animate style="--delay:60ms">
+            <div class="feat__art" aria-hidden="true">
+              <div class="dd">
+                <span class="ref dd__target" style="--ref:var(--lane-1)"><Icon name="laptop" />main</span>
+                <span class="ref dd__drag" style="--ref:var(--lane-3)"><Icon name="laptop" />feature/login</span>
+                <div class="dd__menu">
+                  <span class="is-hot"><Icon name="merge" /><em>Merge <b>feature/login</b> into <b>main</b></em></span>
+                  <span><Icon name="layers" /><em>Rebase <b>feature/login</b> onto <b>main</b></em></span>
+                  <span><Icon name="arrow-up-right" /><em>Fast-forward <b>main</b></em></span>
+                </div>
+              </div>
+            </div>
+            <div class="feat__body">
+              <h3><Icon name="merge" /><Fragment set:html={t.branches.drag[0]} /></h3>
+              <p set:html={t.branches.drag[1]} />
+            </div>
+          </article>
+
+          <article class="feat feat--stage card tilt spotlight reveal" data-animate style="--delay:120ms">
+            <div class="feat__art" aria-hidden="true">
+              <div class="diffbox">
+                <div class="dl-row"><i></i><span class="ln">12</span><code>export function grow(tree) {'{'}</code></div>
+                <div class="dl-row dl-del"><i></i><span class="ln">13</span><code>-  return tree.branches</code></div>
+                <div class="dl-row dl-add pick" style="--i:0"><i></i><span class="ln">13</span><code>+  const tips = tree.branches</code></div>
+                <div class="dl-row dl-add pick" style="--i:1"><i></i><span class="ln">14</span><code>+    .filter(isAlive)</code></div>
+                <div class="dl-row dl-add"><i></i><span class="ln">15</span><code>+  console.log(tips)</code></div>
+                <div class="dl-row"><i></i><span class="ln">16</span><code>{'}'}</code></div>
+                <div class="diffbox__bar"><span>2 lines selected</span><b>Stage lines</b></div>
+              </div>
+            </div>
+            <div class="feat__body">
+              <h3><Icon name="check" /><Fragment set:html={t.branches.stage[0]} /></h3>
+              <p set:html={t.branches.stage[1]} />
+            </div>
+          </article>
+
+          <article class="feat feat--rebase card tilt spotlight reveal" data-animate>
+            <div class="feat__art" aria-hidden="true">
+              <ol class="rb">
+                <li class="rb__row"><Icon name="grip" /><span class="rb__act">pick</span>Add login form</li>
+                <li class="rb__row rb__row--move"><Icon name="grip" /><span class="rb__act rb__act--sq">squash</span>Fix typo in form</li>
+                <li class="rb__row rb__row--swap"><Icon name="grip" /><span class="rb__act rb__act--rw">reword</span>wip</li>
+                <li class="rb__row rb__row--drop"><Icon name="grip" /><span class="rb__act rb__act--dr">drop</span>Debug logs</li>
+              </ol>
+            </div>
+            <div class="feat__body">
+              <h3><Icon name="list" /><Fragment set:html={t.branches.rebase[0]} /></h3>
+              <p set:html={t.branches.rebase[1]} />
+            </div>
+          </article>
+
+          <article class="feat feat--conflict card tilt spotlight reveal" data-animate style="--delay:120ms">
+            <div class="feat__art" aria-hidden="true">
+              <div class="cfx">
+                <div class="cfx__col"><b>A · main</b><i style="--w:70%"></i><i class="a" style="--w:84%"></i><i style="--w:52%"></i></div>
+                <div class="cfx__col"><b>B · feature</b><i style="--w:70%"></i><i class="b" style="--w:62%"></i><i style="--w:52%"></i></div>
+                <div class="cfx__col cfx__out"><b>Output</b><i style="--w:70%"></i><i class="a pick" style="--w:84%"></i><i class="b pick2" style="--w:62%"></i><i style="--w:52%"></i></div>
+              </div>
+            </div>
+            <div class="feat__body">
+              <h3><Icon name="conflict" /><Fragment set:html={t.branches.conflict[0]} /></h3>
+              <p set:html={t.branches.conflict[1]} />
+            </div>
+          </article>
+
+          <article class="feat feat--palette card tilt spotlight reveal" data-animate>
+            <div class="feat__art" aria-hidden="true">
+              <div class="pal">
+                <div class="pal__input"><Icon name="search" /><span class="pal__typed" data-type="rebase onto"></span><span class="pal__caret"></span><span class="kbd">⌘P</span></div>
+                <ul>
+                  <li class="is-hot"><Icon name="layers" /><em>Rebase <b>feature/graph</b> onto…</em><span class="kbd">↩</span></li>
+                  <li><Icon name="merge" />Merge into current branch…</li>
+                  <li><Icon name="terminal" />Open git console<span class="kbd">⌃`</span></li>
+                </ul>
+              </div>
+            </div>
+            <div class="feat__body">
+              <h3><Icon name="command" /><Fragment set:html={t.branches.palette[0]} /></h3>
+              <p set:html={t.branches.palette[1]} />
+            </div>
+          </article>
+
+          <article class="feat feat--groups card tilt spotlight reveal" data-animate style="--delay:60ms">
+            <div class="feat__art" aria-hidden="true">
+              <div class="tabs">
+                <span class="tabs__group"><i></i>shop</span>
+                <span class="tabs__tab is-active"><Icon name="folder" />api</span>
+                <span class="tabs__tab"><Icon name="folder" />app</span>
+                <span class="tabs__tab"><Icon name="folder" />landing</span>
+                <span class="tabs__tab tabs__tab--solo"><Icon name="folder" />dotfiles</span>
+              </div>
+            </div>
+            <div class="feat__body">
+              <h3><Icon name="layers" /><Fragment set:html={t.branches.groups[0]} /></h3>
+              <p set:html={t.branches.groups[1]} />
+            </div>
+          </article>
+        </div>
+
+        <ul class="more-feats reveal" aria-label={t.branches.moreAria}>
+          {t.branches.more.map((m) => <li set:html={m} />)}
+        </ul>
+      </div>
+    </section>
+
+    <!-- IV · Eraztunak -->
+    <section class="section rings-section" id={C[4].id} aria-labelledby="rings-title-h">
+      <div class="wrap">
+        <Chapter n={C[4].n} eu={C[4].eu} en={C[4].en} story={t.rings.story}>
+          <h2 id="rings-title-h" set:html={t.rings.title} />
+          <p>{t.rings.text}</p>
+        </Chapter>
+        <div class="history">
+          <Rings releases={releases} lang={lang} />
+          <ul class="history__list">
+            <li class="history__item card reveal">
+              <Icon name="undo" />
+              <div>
+                <h3 set:html={t.rings.undo[0]} />
+                <p>{t.rings.undo[1]}</p>
+                <div class="history__keys" aria-label={t.rings.shortcuts}><span class="kbd">⌘</span><span class="kbd">Z</span><span class="kbd">⇧⌘Z</span></div>
+              </div>
+            </li>
+            <li class="history__item card reveal" style="--delay:80ms">
+              <Icon name="list" />
+              <div><h3 set:html={t.rings.history[0]} /><p>{t.rings.history[1]}</p></div>
+            </li>
+            <li class="history__item card reveal" style="--delay:160ms">
+              <Icon name="commit" />
+              <div><h3>{t.rings.edit[0]}</h3><p>{t.rings.edit[1]}</p></div>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- V · Sustraiak -->
+    <section class="section yours" id={C[5].id} aria-labelledby="yours-title">
+      <Fireflies count={18} />
+      <div class="wrap yours__grid">
+        <div class="yours__copy chapter reveal">
+          <p class="chapter__mark"><span class="chapter__n">{C[5].n}</span><span class="chapter__eu" lang="eu">{C[5].eu}</span><span class="chapter__en">{C[5].en}</span></p>
+          <p class="chapter__story">{t.roots.story}</p>
+          <h2 id="yours-title" set:html={t.roots.title} />
+          <p set:html={t.roots.text} />
+          <ul class="ticks">
+            {['key', 'shield', 'terminal', 'layers'].map((icon, i) => <li><Icon name={icon} /><Fragment set:html={t.roots.ticks[i]} /></li>)}
+          </ul>
+        </div>
+        <div class="orbit reveal" aria-hidden="true">
+          <div class="orbit__core"><img src={url('assets/adar-mark.svg')} width="64" height="64" alt=""></div>
+          <div class="orbit__plane">
+            <div class="orbit__ring orbit__ring--1"><span style="--a:0deg">GitHub</span><span style="--a:120deg">GitLab</span><span style="--a:240deg">Bitbucket</span></div>
+            <div class="orbit__ring orbit__ring--2"><span style="--a:30deg">Azure DevOps</span><span style="--a:120deg">Gitea</span><span style="--a:210deg">Forgejo</span><span style="--a:300deg">{t.roots.ownServer}</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="wrap pillars">
+        {[['user-off', 0], ['eye-off', 80], ['shield', 160]].map(([icon, delay], i) => (
+          <article class="pillar card reveal" style={`--delay:${delay}ms`}><Icon name={String(icon)} /><h3>{t.roots.pillars[i][0]}</h3><p>{t.roots.pillars[i][1]}</p></article>
+        ))}
+      </div>
+    </section>
+
+    <section class="section cli" id="cli" aria-labelledby="cli-title">
+      <div class="wrap cli__grid">
+        <figure class="term card reveal" data-term aria-label={t.roots.cli.aria}>
+          <div class="term__bar" aria-hidden="true"><i></i><i></i><i></i><span>~/code — zsh</span></div>
+          <pre class="term__body"><code data-term-body></code><span class="term__caret" aria-hidden="true"></span></pre>
+          <noscript><pre class="term__body"><code>$ adar
+$ adar ~/code/shop</code></pre></noscript>
+        </figure>
+        <div class="cli__copy reveal" style="--delay:80ms">
+          <p class="eyebrow">{t.roots.cli.eyebrow}</p>
+          <h2 id="cli-title" set:html={t.roots.cli.title} />
+          <p set:html={t.roots.cli.text} />
+          <dl class="keys">
+            {[['⌘', 'P'], ['⇧⌘F', '⇧⌘↓', '⇧⌘↑'], ['⌘', 'Z'], ['N', 'P'], ['⌃', '`']].map((keys, i) => (
+              <div><dt>{t.roots.cli.keys[i]}</dt><dd>{keys.map((k) => <span class="kbd">{k}</span>)}</dd></div>
+            ))}
+          </dl>
+        </div>
+      </div>
+    </section>
+
+    <!-- VI · Egunsentia -->
+    <section class="section download" id={C[6].id} aria-labelledby="dawn-title" data-dawn>
+      <div class="wrap">
+        <Chapter n={C[6].n} eu={C[6].eu} en={C[6].en} story={t.dawn.story} center>
+          <h2 id="dawn-title" set:html={t.dawn.title} />
+          <p>{t.dawn.text}</p>
+        </Chapter>
+        <Antlers releases={releases} latest={latest} lang={lang} label={t.dawn.antlersAria} />
+        <div class="dl reveal">
+          <div class="dl__main">
+            <div class="dl__icon" aria-hidden="true"><img src={url('assets/favicon.svg')} width="96" height="96" alt=""></div>
+            <p class="eyebrow">{t.dawn.eyebrow}</p>
+            <h2 id="download-title" set:html={t.dawn.card} />
+            <p class="dl__meta">{latest ? <><span>Adar {latest.version}</span><span>{formatDateIn(latest.date, lang)}</span></> : <span>{t.dawn.latest}</span>}</p>
+            <p class="dl__arch"><Icon name="laptop" />{t.dawn.arch}</p>
+            <div class="dl__ctas">
+              <a class="btn btn--primary btn--lg" href={dmg?.url ?? `${REPO_URL}/releases/latest`}>
+                <Icon name="download" />{t.dawn.dmg}{dmg && <span class="btn__meta">{formatSize(dmg.size)}</span>}
+              </a>
+              <a class="btn btn--ghost btn--lg" href={zip?.url ?? `${REPO_URL}/releases/latest`}>.zip{zip && <span class="btn__meta">{formatSize(zip.size)}</span>}</a>
+            </div>
+            <p class="dl__req" set:html={t.dawn.req} />
+            <p class="dl__platform" data-dl="platform" hidden set:html={t.dawn.platform(pageUrl('roadmap', lang, 'later'))} />
+            {sums.length > 0 && (
+              <details class="dl__sums">
+                <summary>{t.dawn.sums}</summary>
+                <div class="dl__sums-list">{sums.map((a) => <div class="sum"><b>{a.name}</b>{a.sha256}</div>)}</div>
+              </details>
+            )}
+          </div>
+          <ol class="dl__steps">
+            <li>
+              <span class="dl__n">1</span>
+              <div><h3>{t.dawn.steps[0][0]}</h3><p set:html={t.dawn.steps[0][1]} /></div>
+            </li>
+            <li>
+              <span class="dl__n">2</span>
+              <div>
+                <h3>{t.dawn.steps[1][0]}</h3>
+                <p>{t.dawn.steps[1][1]}</p>
+                <div class="code"><code>xattr -dr com.apple.quarantine /Applications/Adar.app</code><button class="copy" type="button" data-copy aria-label={t.dawn.copyCommand}><Icon name="copy" /><span data-label={ui[lang].client.copy}>{ui[lang].client.copy}</span></button></div>
+              </div>
+            </li>
+            <li>
+              <span class="dl__n">3</span>
+              <div><h3>{t.dawn.steps[2][0]}</h3><p set:html={t.dawn.steps[2][1]} /></div>
+            </li>
+          </ol>
+        </div>
+
+        <div class="dl-more">
+          <article class="card dl-more__card reveal">
+            <h3><Icon name="code" />{t.dawn.build[0]}</h3>
+            <pre class="code code--block" tabindex="0" role="region" aria-label={t.dawn.build[1]}><code><span class="prompt">$</span>git clone https://github.com/mikelgarciaurbina/adar.git
+<span class="prompt">$</span>cd adar &amp;&amp; npm install
+<span class="prompt">$</span>npm run dev</code></pre>
+            <p class="muted" set:html={t.dawn.build[2]} />
+          </article>
+          <article class="card dl-more__card reveal" style="--delay:80ms">
+            <h3><Icon name="tag" />{t.dawn.releases[0]}</h3>
+            <p class="muted">{t.dawn.releases[1]}</p>
+            <div class="dl-more__links">
+              <a class="btn btn--ghost" href={`${REPO_URL}/releases`}>{t.dawn.releases[2]}<Icon name="arrow-up-right" /></a>
+              <a class="btn btn--ghost" href={pageUrl('roadmap', lang, 'changelog')}>{t.dawn.releases[3]}<Icon name="arrow-right" /></a>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- VII · Auzolana -->
+    <section class="section oss" id={C[7].id} aria-labelledby="oss-title">
+      <div class="wrap">
+        <div class="oss__inner chapter reveal">
+          <p class="chapter__mark"><span class="chapter__n">{C[7].n}</span><span class="chapter__eu" lang="eu">{C[7].eu}</span><span class="chapter__en">{C[7].en}</span></p>
+          <p class="chapter__story" set:html={t.together.story} />
+          <h2 id="oss-title" set:html={t.together.title} />
+          <p>{t.together.text}</p>
+          <dl class="oss__stats">
+            <div><dt>{t.together.stats[0]}</dt><dd>{latest?.version ?? '—'}</dd></div>
+            <div><dt>{t.together.stats[1]}</dt><dd>{releases.length || '—'}</dd></div>
+            <div><dt>{t.together.stats[2]}</dt><dd>MIT</dd></div>
+            <div><dt>{t.together.stats[3]}</dt><dd>{t.together.stats[4]}</dd></div>
+          </dl>
+        </div>
+        <div class="oss__links">
+          <a class="oss__card card tilt spotlight reveal" href={pageUrl('roadmap', lang)}>
+            <Icon name="map" />
+            <h3>{t.together.roadmap[0]}</h3><p>{t.together.roadmap[1]}</p>
+            <span class="oss__go">{t.together.roadmap[2]}<Icon name="arrow-right" /></span>
+          </a>
+          <a class="oss__card card tilt spotlight reveal" href={pageUrl('design', lang)} style="--delay:80ms">
+            <Icon name="palette" />
+            <h3>{t.together.design[0]}</h3><p>{t.together.design[1]}</p>
+            <span class="oss__go">{t.together.design[2]}<Icon name="arrow-right" /></span>
+          </a>
+          <a class="oss__card card tilt spotlight reveal" href="https://github.com/mikelgarciaurbina/adar/blob/main/CONTRIBUTING.md" style="--delay:160ms">
+            <Icon name="heart" />
+            <h3>{t.together.contribute[0]}</h3><p>{t.together.contribute[1]}</p>
+            <span class="oss__go">{t.together.contribute[2]}<Icon name="arrow-up-right" /></span>
+          </a>
+        </div>
+      </div>
+    </section>
+  </main>
+</Base>
+
+<script>
+  import '../scripts/home.js';
+</script>

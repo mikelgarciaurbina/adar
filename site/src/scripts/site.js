@@ -4,6 +4,11 @@ import { repo, formatCount } from './github.js';
 document.documentElement.classList.remove('no-js');
 export const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+// Strings for scripts, in the page's language (rendered by the layout into #i18n).
+let strings = {};
+try { strings = JSON.parse(document.getElementById('i18n')?.textContent || '{}'); } catch { /* keep English fallbacks */ }
+export const t = (key, fallback) => strings[key] ?? fallback;
+
 // Motion can be paused from the floating toggle (remembered per browser); scenes subscribe to it.
 const MOTION_KEY = 'adar:motion';
 const motionListeners = new Set();
@@ -19,7 +24,7 @@ function setMotionPaused(paused, remember) {
   document.documentElement.classList.toggle('motion-paused', paused);
   if (motionToggle) {
     motionToggle.setAttribute('aria-pressed', String(paused));
-    motionToggle.querySelector('[data-motion-label]').textContent = paused ? 'Play animations' : 'Pause animations';
+    motionToggle.querySelector('[data-motion-label]').textContent = paused ? t('play', 'Play animations') : t('pause', 'Pause animations');
   }
   if (remember) {
     try { if (paused) localStorage.setItem(MOTION_KEY, 'paused'); else localStorage.removeItem(MOTION_KEY); } catch { /* ignore */ }
@@ -81,12 +86,12 @@ document.addEventListener('click', async (e) => {
   }
   const label = btn.querySelector('[data-label]');
   btn.classList.add('is-done');
-  announce('Copied to clipboard');
-  if (label) label.textContent = 'Copied';
+  announce(t('copiedAnnounce', 'Copied to clipboard'));
+  if (label) label.textContent = t('copied', 'Copied');
   clearTimeout(btn._t);
   btn._t = setTimeout(() => {
     btn.classList.remove('is-done');
-    if (label) label.textContent = label.dataset.label || 'Copy';
+    if (label) label.textContent = label.dataset.label || t('copy', 'Copy');
   }, 1600);
 });
 

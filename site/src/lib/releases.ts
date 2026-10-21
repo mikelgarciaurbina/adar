@@ -42,8 +42,6 @@ export async function getLatest() {
   return (await getReleases()).find((r) => !r.prerelease) ?? null;
 }
 
-export const formatDate = (iso: string) =>
-  new Date(iso).toLocaleDateString('en', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' });
 export const formatSize = (bytes: number) => `${Math.round(bytes / 1048576)} MB`;
 // The release notes repeat the install steps the download section already shows.
 export const withoutInstall = (body: string) => body.replace(/^#{1,4}\s+Install\b[\s\S]*?(?=^#{1,4}\s|(?![\s\S]))/m, '').trim();

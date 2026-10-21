@@ -7,7 +7,8 @@ const siteUrl = new URL(process.env.SITE_URL || 'https://adargit.com/');
 export default defineConfig({
   site: siteUrl.origin,
   base: siteUrl.pathname.replace(/\/$/, '') || '/',
-  // Keep the .html URLs the site has always had (README and release notes link to roadmap.html).
+  // One .html file per page (es/hoja-de-ruta.html); Cloudflare Pages serves them without the extension,
+  // which is how the site links to them (/es/hoja-de-ruta). Routes per language: src/i18n/config.ts.
   build: { format: 'file', inlineStylesheets: 'never' },
   devToolbar: { enabled: false },
   vite: {

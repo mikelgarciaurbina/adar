@@ -1,7 +1,7 @@
 // Roadmap page: the 3D git graph in the hero and the filters over the roadmap graph (which is rendered
 // at build time from ROADMAP.md).
 import { createScene } from './branches.js';
-import { reducedMotion, motion } from './site.js';
+import { reducedMotion, motion, t } from './site.js';
 
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
@@ -47,7 +47,7 @@ function apply() {
     shown += n;
   }
   $('.rm-head', graph).hidden = state.kind !== 'all' || state.gfi || !!state.q;
-  $('[data-count]').textContent = `${shown} ${shown === 1 ? 'item' : 'items'}`;
+  $('[data-count]').textContent = `${shown} ${shown === 1 ? t('item', 'item') : t('items', 'items')}`;
   $('[data-empty]').hidden = shown > 0;
 }
 

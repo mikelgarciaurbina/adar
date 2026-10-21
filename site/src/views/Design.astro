@@ -1,0 +1,304 @@
+---
+// Basoa, the design system, in any of the site's languages: the extruded 3D mark and the brand rules are
+// static; the colour, space and motion documentation is generated in the browser from the live CSS
+// variables (scripts/design.js), so it always shows what tokens.css really says.
+import Base from '../layouts/Base.astro';
+import Icon from '../components/Icon.astro';
+import '../styles/design.css';
+import { url } from '../lib/url';
+import sprite from '../icons/icons.svg?raw';
+import { chaptersFor } from '../lib/story';
+import type { Locale } from '../i18n/config';
+import { design, SECTIONS } from '../i18n/design';
+import { ui } from '../i18n/ui';
+
+interface Props { lang: Locale }
+const { lang } = Astro.props;
+const t = design[lang];
+const id = t.ids;
+const copy = ui[lang].client.copy;
+const icons = [...sprite.matchAll(/<symbol[^>]*\bid="([\w-]+)"/g)].map((m) => m[1]);
+const head = (n: number, key: keyof typeof id, title = t.nav[key]) => ({ n: String(n).padStart(2, '0'), id: `h-${id[key]}`, title });
+---
+<Base lang={lang} page="design" title={t.meta.title} description={t.meta.description} ogDescription={t.meta.ogDescription} client={t.client}>
+  <main id="main">
+    <section class="ds-hero" aria-labelledby="ds-title">
+      <div class="wrap ds-hero__grid">
+        <div class="ds-hero__copy">
+          <p class="eyebrow rise">{t.hero.eyebrow}</p>
+          <h1 id="ds-title" class="rise" style="--delay:80ms"><span class="serif" lang="eu">Basoa</span></h1>
+          <p class="ds-hero__lede rise" style="--delay:160ms" set:html={t.hero.lede} />
+          <div class="ds-hero__ctas rise" style="--delay:240ms">
+            <a class="btn btn--primary btn--lg" href={`#${id.downloads}`}><Icon name="download" />{t.hero.assets}</a>
+            <a class="btn btn--ghost btn--lg" href={url('tokens.css')}><Icon name="code" />tokens.css</a>
+          </div>
+        </div>
+        <figure class="mark3d rise" data-mark3d aria-label={t.hero.markAria}>
+          <div class="mark3d__stage" data-stage></div>
+          <div class="mark3d__floor" aria-hidden="true"></div>
+          <figcaption class="fig mono" set:html={t.hero.fig} />
+        </figure>
+      </div>
+    </section>
+
+    <div class="wrap ds-layout">
+      <nav class="ds-toc" aria-label={t.tocAria}>
+        <p class="ds-toc__title mono">{t.toc}</p>
+        <ol>
+          {SECTIONS.map((s) => <li><a href={`#${id[s]}`} set:html={t.nav[s]} /></li>)}
+        </ol>
+      </nav>
+
+      <div class="ds-content">
+        <section class="ds-sec" id={id.principles} aria-labelledby={head(1, 'principles').id}>
+          <header class="ds-sec__head"><p class="eyebrow">01</p><h2 id={head(1, 'principles').id}>{t.nav.principles}</h2></header>
+          <div class="ds-principles">
+            {t.principles.map(([title, text], i) => <article class="card ds-principle reveal" style={`--delay:${i * 60}ms`}><h3>{title}</h3><p>{text}</p></article>)}
+          </div>
+        </section>
+
+        <section class="ds-sec" id={id.logo} aria-labelledby={head(2, 'logo').id}>
+          <header class="ds-sec__head"><p class="eyebrow">02</p><h2 id={head(2, 'logo').id}>{t.nav.logo}</h2>
+            <p set:html={t.logo.text} /></header>
+
+          <figure class="construct card reveal">
+            <svg class="construct__svg" viewBox="-40 -6 144 76" role="img" aria-labelledby="construct-title">
+              <title id="construct-title">{t.logo.constructTitle}</title>
+              <defs>
+                <pattern id="grid4" width="4" height="4" patternUnits="userSpaceOnUse"><path d="M4 0H0V4" fill="none" stroke="currentColor" stroke-opacity=".07" stroke-width=".2"/></pattern>
+              </defs>
+              <rect x="0" y="0" width="64" height="64" fill="url(#grid4)"/>
+              <rect x="0" y="0" width="64" height="64" fill="none" stroke="currentColor" stroke-opacity=".18" stroke-width=".25" stroke-dasharray="1 1"/>
+              <path d="M32 0V64M0 32H64" stroke="currentColor" stroke-opacity=".14" stroke-width=".25"/>
+              <g class="construct__mark" fill="none" stroke-width="4.6" stroke-linecap="round">
+                <path d="M32 55V45"/><path d="M32 45C25 42 12 38 11 24C10.5 17 12 12 15.5 7.5"/><path d="M32 45C39 42 52 38 53 24C53.5 17 52 12 48.5 7.5"/><path d="M11.6 31C18 29.5 23 26 24.5 19.5"/><path d="M52.4 31C46 29.5 41 26 39.5 19.5"/>
+              </g>
+              <g class="construct__nodes"><circle cx="15.5" cy="7.5" r="4.4"/><circle cx="48.5" cy="7.5" r="4.4"/><circle cx="24.6" cy="19" r="4.4"/><circle cx="39.4" cy="19" r="4.4"/><circle cx="32" cy="55.5" r="5.4"/></g>
+              <g class="construct__guides" fill="none" stroke-width=".3"><circle cx="15.5" cy="7.5" r="7"/><circle cx="32" cy="55.5" r="8"/><path d="M32 45h-14"/></g>
+              <g class="construct__labels">
+                <path d="M23.5 55.5H-4"/><text x="-6" y="56.5" text-anchor="end">{t.logo.labels[0]}</text>
+                <path d="M24 45H-4"/><text x="-6" y="46" text-anchor="end">{t.logo.labels[1]}</text>
+                <path d="M11 24H-4"/><text x="-6" y="25" text-anchor="end">{t.logo.labels[2]}</text>
+                <path d="M53.5 7.5H68"/><text x="70" y="8.5">{t.logo.labels[3]}</text>
+                <path d="M44 19H68"/><text x="70" y="20">{t.logo.labels[4]}</text>
+                <path d="M55 31H68"/><text x="70" y="32">{t.logo.labels[5]}</text>
+                <path d="M38 55.5H68"/><text x="70" y="56.5">{t.logo.labels[6]}</text>
+              </g>
+            </svg>
+            <figcaption>{t.logo.caption}</figcaption>
+          </figure>
+
+          <div class="logos">
+            {[
+              ['night', 'assets/adar-lockup.svg', 188, 64],
+              ['day', 'assets/adar-lockup-light.svg', 188, 64],
+              ['fern', 'assets/adar-mark-mono.svg', 80, 80],
+              ['tile', 'assets/favicon.svg', 96, 96],
+            ].map(([kind, src, w, h], i) => (
+              <figure class={`logo-card logo-card--${kind} reveal`} style={`--delay:${i * 60}ms`}>
+                <img src={url(String(src))} width={w} height={h} alt={t.logo.cards[i][1]}><figcaption set:html={t.logo.cards[i][0]} />
+              </figure>
+            ))}
+          </div>
+
+          <div class="ds-rules">
+            <div class="ds-rule card"><h3>{t.logo.clear[0]}</h3><div class="clear-space" aria-hidden="true"><img src={url('assets/adar-mark.svg')} width="64" height="64" alt=""></div><p>{t.logo.clear[1]}</p></div>
+            <div class="ds-rule card"><h3>{t.logo.min[0]}</h3><div class="min-size" aria-hidden="true"><img src={url('assets/adar-mark.svg')} width="16" height="16" alt=""><img src={url('assets/adar-mark.svg')} width="24" height="24" alt=""><img src={url('assets/adar-lockup.svg')} width="70" height="24" alt=""></div><p>{t.logo.min[1]}</p></div>
+            <div class="ds-rule ds-rule--dont card"><h3>{t.logo.dont[0]}</h3><div class="donts" aria-hidden="true">
+              {['transform:rotate(30deg)', 'transform:scaleX(1.5)', 'filter:hue-rotate(160deg)', 'filter:drop-shadow(3px 3px 0 #ff8c5f)'].map((style, i) => (
+                <span><img src={url('assets/adar-mark.svg')} width="40" height="40" alt="" style={style}><i>{t.logo.dont[2][i]}</i></span>
+              ))}
+            </div><p>{t.logo.dont[1]}</p></div>
+          </div>
+        </section>
+
+        <section class="ds-sec" id={id.color} aria-labelledby={head(3, 'color').id}>
+          <header class="ds-sec__head"><p class="eyebrow">03</p><h2 id={head(3, 'color').id}>{t.nav.color}</h2>
+            <p>{t.color.text}</p></header>
+          <div class="swatches" data-swatches></div>
+          <h3 class="ds-h3">{t.color.neutrals}</h3>
+          <div class="ramps" data-ramps></div>
+          <h3 class="ds-h3">{t.color.semantic}</h3>
+          <div class="tokens-table card"><table data-tokens>
+            <thead><tr>{t.color.head.map((h) => <th scope="col">{h}</th>)}</tr></thead>
+            <tbody></tbody>
+          </table></div>
+        </section>
+
+        <section class="ds-sec" id={id.type} aria-labelledby={head(4, 'type').id}>
+          <header class="ds-sec__head"><p class="eyebrow">04</p><h2 id={head(4, 'type').id}>{t.nav.type}</h2>
+            <p>{t.type.text}</p></header>
+          <div class="faces">
+            <article class="face card reveal"><span class="face__aa" style="font-family:var(--font-sans);font-weight:600">Aa</span><h3>Geist</h3><p class="mono muted">--font-sans · 300–700</p><p>{t.type.faces[0]}</p></article>
+            <article class="face card reveal" style="--delay:60ms"><span class="face__aa serif">Aa</span><h3>Instrument Serif <i>{t.type.italic}</i></h3><p class="mono muted">--font-serif · 400</p><p>{t.type.faces[1]}</p></article>
+            <article class="face card reveal" style="--delay:120ms"><span class="face__aa mono">Aa</span><h3>Geist Mono</h3><p class="mono muted">--font-mono · 400–600</p><p>{t.type.faces[2]}</p></article>
+          </div>
+          <div class="scale card">
+            <div class="scale__row"><span class="mono">display</span><p style="font-size:var(--text-display);line-height:.95;letter-spacing:-.055em;font-weight:600" set:html={t.type.scale[0]} /></div>
+            <div class="scale__row"><span class="mono">3xl</span><p style="font-size:var(--text-3xl);line-height:1.02;letter-spacing:-.04em;font-weight:600">{t.type.scale[1]}</p></div>
+            <div class="scale__row"><span class="mono">2xl</span><p style="font-size:var(--text-2xl);font-weight:600;letter-spacing:-.02em">{t.type.scale[2]}</p></div>
+            <div class="scale__row"><span class="mono">xl</span><p style="font-size:var(--text-xl)">{t.type.scale[3]}</p></div>
+            <div class="scale__row"><span class="mono">md</span><p style="font-size:var(--text-md)">{t.type.scale[4]}</p></div>
+            <div class="scale__row"><span class="mono">sm</span><p style="font-size:var(--text-sm);color:var(--text-3)">{t.type.scale[5]}</p></div>
+            <div class="scale__row"><span class="mono">mono</span><p class="mono" style="font-size:var(--text-sm)">a0381a2 · origin/main · ⇧⌘F</p></div>
+          </div>
+        </section>
+
+        <section class="ds-sec" id={id.space} aria-labelledby={head(5, 'space').id}>
+          <header class="ds-sec__head"><p class="eyebrow">05</p><h2 id={head(5, 'space').id} set:html={t.space.title} />
+            <p>{t.space.text}</p></header>
+          <div class="space-grid">
+            <div class="card space-card"><h3>{t.space.cards[0]}</h3><ul class="spacing" data-spacing></ul></div>
+            <div class="card space-card"><h3>{t.space.cards[1]}</h3><div class="radii" data-radii></div></div>
+            <div class="card space-card"><h3 set:html={t.space.cards[2]} /><div class="depths">
+              <span style="box-shadow:var(--shadow-1)">shadow-1</span><span style="box-shadow:var(--shadow-2)">shadow-2</span><span style="box-shadow:var(--shadow-3)">shadow-3</span><span class="depth-glow" style="box-shadow:var(--glow-accent)">glow-accent</span>
+            </div></div>
+          </div>
+        </section>
+
+        <section class="ds-sec" id={id.motion} aria-labelledby={head(6, 'motion').id}>
+          <header class="ds-sec__head"><p class="eyebrow">06</p><h2 id={head(6, 'motion').id}>{t.nav.motion}</h2>
+            <p set:html={t.motion.text} /></header>
+          <div class="curves" data-curves></div>
+          <dl class="durations card">
+            {['--dur-1 · 120ms', '--dur-2 · 240ms', '--dur-3 · 520ms', '--dur-4 · 1100ms'].map((d, i) => <div><dt class="mono">{d}</dt><dd>{t.motion.durations[i]}</dd></div>)}
+          </dl>
+        </section>
+
+        <section class="ds-sec" id={id.icons} aria-labelledby={head(7, 'icons').id}>
+          <header class="ds-sec__head"><p class="eyebrow">07</p><h2 id={head(7, 'icons').id}>{t.nav.icons}</h2>
+            <p set:html={t.icons.text} /></header>
+          <div class="icons">
+            {icons.map((icon) => (
+              <button type="button" class="icon" data-copy={`<svg><use href="assets/icons.svg#${icon}"/></svg>`} title={`${t.icons.copy} ${icon}`}>
+                <Icon name={icon} /><span class="mono" data-label={icon}>{icon}</span>
+              </button>
+            ))}
+          </div>
+        </section>
+
+        <section class="ds-sec" id={id.graph} aria-labelledby={head(8, 'graph').id}>
+          <header class="ds-sec__head"><p class="eyebrow">08</p><h2 id={head(8, 'graph').id}>{t.nav.graph}</h2>
+            <p>{t.graph.text}</p></header>
+          <div class="graph-legend card">
+            <svg viewBox="0 0 640 210" class="graph-legend__svg" role="img" aria-labelledby="gl-title">
+              <title id="gl-title">{t.graph.title}</title>
+              <g fill="none" stroke-width="3" stroke-linecap="round">
+                <path d="M60 196V20" stroke="var(--lane-1)"/>
+                <path d="M60 170C60 150 110 156 110 136V60C110 40 60 46 60 26" stroke="var(--lane-2)"/>
+                <path d="M60 120C60 100 160 106 160 86V40" stroke="var(--lane-3)" stroke-dasharray="6 6"/>
+              </g>
+              <circle cx="60" cy="20" r="11" fill="var(--lane-1)" class="gl-head"/>
+              <circle cx="60" cy="196" r="9" fill="var(--bg)" stroke="var(--lane-1)" stroke-width="3"/>
+              <circle cx="110" cy="100" r="9" fill="var(--bg)" stroke="var(--lane-2)" stroke-width="3"/>
+              <circle cx="60" cy="72" r="5" fill="var(--lane-1)"/>
+              <circle cx="160" cy="40" r="9" fill="none" stroke="var(--text-3)" stroke-width="2.5" stroke-dasharray="3 3"/>
+              <g class="gl-labels">
+                <path d="M74 20H230"/><text x="238" y="24">{t.graph.labels[0]}</text>
+                <path d="M172 40H230"/><text x="238" y="44">{t.graph.labels[1]}</text>
+                <path d="M68 72H230"/><text x="238" y="80">{t.graph.labels[2]}</text>
+                <path d="M122 100H230"/><text x="238" y="104">{t.graph.labels[3]}</text>
+                <path d="M168 58H230"/><text x="238" y="60">{t.graph.labels[4]}</text>
+                <path d="M72 196H230"/><text x="238" y="200">{t.graph.labels[5]}</text>
+              </g>
+            </svg>
+            <div class="lanes" data-lanes></div>
+          </div>
+        </section>
+
+        <section class="ds-sec" id={id.components} aria-labelledby={head(9, 'components').id}>
+          <header class="ds-sec__head"><p class="eyebrow">09</p><h2 id={head(9, 'components').id}>{t.nav.components}</h2>
+            <p>{t.components.text}</p></header>
+          <div class="preview card" data-preview>
+            <div class="preview__bar">
+              <div class="seg" role="group" aria-label={t.components.theme}>
+                <button type="button" aria-pressed="true" data-theme-set="dark">{t.components.night}</button>
+                <button type="button" aria-pressed="false" data-theme-set="light">{t.components.day}</button>
+              </div>
+            </div>
+            <div class="preview__body">
+              <div class="cmp"><span class="cmp__label mono">{t.components.labels[0]}</span><div class="cmp__row">
+                <a class="btn btn--primary" href={`#${id.components}`}><Icon name="download" />{t.components.buttons[0]}</a>
+                <a class="btn" href={`#${id.components}`}>{t.components.buttons[1]}</a>
+                <a class="btn btn--ghost" href={`#${id.components}`}>{t.components.buttons[2]}<Icon name="arrow-right" /></a>
+                <a class="btn btn--primary btn--lg" href={`#${id.components}`}>{t.components.buttons[3]}<span class="btn__meta">{t.components.buttons[4]}</span></a>
+              </div></div>
+              <div class="cmp"><span class="cmp__label mono">{t.components.labels[1]}</span><div class="cmp__row">
+                <span class="ref" style="--ref:var(--lane-1)"><Icon name="laptop" />main</span>
+                <span class="ref" style="--ref:var(--lane-2)"><Icon name="laptop" />feature/graph</span>
+                <span class="ref" style="--ref:var(--lane-3)"><Icon name="cloud" />origin/main</span>
+                <span class="ref" style="--ref:var(--lane-4)"><Icon name="cloud" />origin/experiment</span>
+                <span class="ref" style="--ref:var(--lane-6)"><Icon name="tag" />v0.4.0</span>
+              </div></div>
+              <div class="cmp"><span class="cmp__label mono" set:html={t.components.labels[2]} /><div class="cmp__row">
+                <span class="chip chip--accent"><span class="dot"></span>{t.components.chip}</span>
+                <span class="chip">MIT</span>
+                <span class="kbd">⌘</span><span class="kbd">P</span><span class="kbd">⇧⌘F</span>
+              </div></div>
+              <div class="cmp"><span class="cmp__label mono">{t.components.labels[3]}</span><div class="code"><code><span class="prompt">$</span>adar ~/code/shop</code><button class="copy" type="button" data-copy="adar ~/code/shop" aria-label={t.components.copyCommand}><Icon name="copy" /><span data-label={copy}>{copy}</span></button></div></div>
+              <div class="cmp"><span class="cmp__label mono">{t.components.labels[4]}</span><article class="card cmp__card"><span class="eyebrow">{t.components.card[0]}</span><h3 set:html={t.components.card[1]} /><p>{t.components.card[2]}</p></article></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="ds-sec" id={id.voice} aria-labelledby={head(10, 'voice').id}>
+          <header class="ds-sec__head"><p class="eyebrow">10</p><h2 id={head(10, 'voice').id}>{t.nav.voice}</h2>
+            <p>{t.voice.text}</p></header>
+          <div class="voice">
+            <div class="voice__col card"><h3 class="voice__do">{t.voice.do}</h3><ul>{t.voice.good.map((g) => <li set:html={g} />)}</ul></div>
+            <div class="voice__col card"><h3 class="voice__dont">{t.voice.dont}</h3><ul>{t.voice.bad.map((b) => <li>{b}</li>)}</ul></div>
+          </div>
+        </section>
+
+        <section class="ds-sec" id={id.story} aria-labelledby={head(11, 'story').id}>
+          <header class="ds-sec__head"><p class="eyebrow">11</p><h2 id={head(11, 'story').id}>{t.nav.story}</h2>
+            <p set:html={t.story.text} /></header>
+          <div class="story-table card">
+            <table>
+              <thead><tr>{t.story.head.map((h) => <th scope="col">{h}</th>)}</tr></thead>
+              <tbody>
+                {chaptersFor(lang).map((c) => (
+                  <tr><td class="mono">{c.n}</td><th scope="row"><span class="serif" lang="eu">{c.eu}</span></th><td>{c.en}</td><td>{c.image}</td><td>{c.product}</td></tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <ol class="story-rules">
+            {t.story.rules.map(([title, text]) => <li class="card"><b>{title}</b> <Fragment set:html={text} /></li>)}
+          </ol>
+        </section>
+
+        <section class="ds-sec" id={id.downloads} aria-labelledby={head(12, 'downloads').id}>
+          <header class="ds-sec__head"><p class="eyebrow">12</p><h2 id={head(12, 'downloads').id}>{t.nav.downloads}</h2>
+            <p>{t.downloads.text}</p></header>
+          <div class="downloads">
+            {[
+              ['assets/adar-mark.svg', 'adar-mark.svg', 'img'],
+              ['assets/adar-mark-mono.svg', 'adar-mark-mono.svg', 'ink'],
+              ['assets/adar-lockup.svg', 'adar-lockup.svg', 'wide'],
+              ['assets/adar-lockup-light.svg', 'adar-lockup-light.svg', 'wide-ink'],
+              ['assets/favicon.svg', 'favicon.svg', 'img'],
+              ['assets/icons.svg', 'icons.svg', 'branch'],
+              ['tokens.css', 'tokens.css', 'palette'],
+              ['fonts/LICENSES.md', 'Geist · Instrument Serif · OFL', 'code'],
+            ].map(([href, file, kind], i) => (
+              <a class="dl-asset card" href={url(href)} download={i < 7 ? '' : undefined}>
+                {kind === 'img' && <img src={url(href)} width="40" height="40" alt="" />}
+                {kind === 'ink' && <img class="dl-asset__ink" src={url(href)} width="40" height="40" alt="" />}
+                {kind === 'wide' && <img src={url(href)} width="70" height="24" alt="" />}
+                {kind === 'wide-ink' && <img class="dl-asset__ink" src={url(href)} width="70" height="24" alt="" />}
+                {['branch', 'palette', 'code'].includes(kind) && <Icon name={kind} class="dl-asset__icon" />}
+                <span><b>{t.downloads.items[i]}</b><i class="mono">{file}</i></span>
+                <Icon name={i < 7 ? 'download' : 'arrow-up-right'} />
+              </a>
+            ))}
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+</Base>
+
+<script>
+  import '../scripts/design.js';
+</script>

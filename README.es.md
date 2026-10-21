@@ -9,7 +9,7 @@
   GitHub, GitLab, Bitbucket, Azure DevOps o tu propio servidor.
 </p>
 
-<p align="center"><a href="https://adargit.com">adargit.com</a> · <a href="https://adargit.com/roadmap.html">Roadmap</a> · <a href="README.md">Read in English</a></p>
+<p align="center"><a href="https://adargit.com/es">adargit.com</a> · <a href="https://adargit.com/es/hoja-de-ruta">Hoja de ruta</a> · <a href="README.md">Read in English</a></p>
 
 > *Adar* significa **rama** —y también **cuerna**— en euskera. El logo es las dos cosas: una cornamenta dibujada con carriles de git.
 

@@ -2,10 +2,10 @@
 // One set of antlers per release, oldest first, each with one more tine — the way a young deer grows
 // spikes in its first year and more branched antlers after every winter. The newest set is lit.
 import type { Release } from '../lib/releases';
-import { formatDate } from '../lib/releases';
+import { formatDateIn, type Locale } from '../i18n/config';
 
-interface Props { releases: Release[]; latest: Release | null }
-const { latest } = Astro.props;
+interface Props { releases: Release[]; latest: Release | null; lang: Locale; label: string }
+const { latest, lang, label } = Astro.props;
 const chrono = Astro.props.releases.filter((r) => !r.prerelease).slice().reverse().slice(-6);
 
 type P = [number, number];
@@ -36,7 +36,7 @@ function antlers(tines: number) {
 const sets = chrono.map((release, i) => ({ release, ...antlers(Math.min(i, 3)) }));
 ---
 {sets.length > 0 && (
-  <ol class="sheds reveal" aria-label="Releases, oldest first">
+  <ol class="sheds reveal" aria-label={label}>
     {sets.map((s) => (
       <li class:list={['shed', { 'is-latest': s.release === latest }]}>
         <svg viewBox="0 0 64 64" aria-hidden="true">
@@ -52,7 +52,7 @@ const sets = chrono.map((release, i) => ({ release, ...antlers(Math.min(i, 3)) }
           </g>
         </svg>
         <b class="mono">{s.release.tag}</b>
-        <time class="mono" datetime={s.release.date}>{formatDate(s.release.date)}</time>
+        <time class="mono" datetime={s.release.date}>{formatDateIn(s.release.date, lang)}</time>
       </li>
     ))}
   </ol>

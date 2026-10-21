@@ -1,27 +1,35 @@
 ---
 import Icon from './Icon.astro';
-import { url, REPO_URL } from '../lib/url';
+import LanguageSwitch from './LanguageSwitch.astro';
+import { REPO_URL, url } from '../lib/url';
+import { pageUrl, anchor, type Locale, type PageKey } from '../i18n/config';
+import { ui } from '../i18n/ui';
 
-interface Props { current: 'home' | 'roadmap' | 'design' }
-const { current } = Astro.props;
+interface Props { lang: Locale; page: PageKey }
+const { lang, page } = Astro.props;
+const t = ui[lang];
 // On the landing page the first links are anchors into the page itself.
-const links = current === 'home'
-  ? [['The name', '#name'], ['Features', '#features'], ['Download', '#download'], ['Roadmap', url('roadmap.html')], ['Design', url('design.html')]]
-  : [['Features', url('#features')], ['Download', url('#download')], ['Roadmap', url('roadmap.html')], ['Changelog', url('roadmap.html#changelog')], ['Design', url('design.html')]];
-const active = { home: '', roadmap: url('roadmap.html'), design: url('design.html') }[current];
+const links: [string, string][] = page === 'home'
+  ? [[t.nav.name, `#${anchor('name', lang)}`], [t.nav.features, `#${anchor('features', lang)}`], [t.nav.download, `#${anchor('download', lang)}`],
+     [t.nav.roadmap, pageUrl('roadmap', lang)], [t.nav.design, pageUrl('design', lang)]]
+  : [[t.nav.features, pageUrl('home', lang, 'features')], [t.nav.download, pageUrl('home', lang, 'download')], [t.nav.roadmap, pageUrl('roadmap', lang)],
+     [t.nav.changelog, pageUrl('roadmap', lang, 'changelog')], [t.nav.design, pageUrl('design', lang)]];
+const active = page === 'home' ? '' : pageUrl(page, lang);
+const downloadHref = page === 'home' ? `#${anchor('download', lang)}` : pageUrl('home', lang, 'download');
 ---
 <header class="nav">
   <div class="wrap nav__inner">
-    <a class="brand" href={url()} aria-label="Adar home"><img src={url('assets/adar-lockup.svg')} width="94" height="32" alt="Adar"></a>
-    <nav class="nav__links" id="site-nav" aria-label="Main">
+    <a class="brand" href={pageUrl('home', lang)} aria-label={t.home}><img src={url('assets/adar-lockup.svg')} width="94" height="32" alt="Adar"></a>
+    <nav class="nav__links" id="site-nav" aria-label={t.navAria}>
       {links.map(([label, href]) => <a href={href} aria-current={href === active ? 'page' : undefined}>{label}</a>)}
     </nav>
     <div class="nav__cta">
-      <a class="btn btn--ghost gh-stars" href={REPO_URL} aria-label="Adar on GitHub">
+      <LanguageSwitch lang={lang} page={page} />
+      <a class="btn btn--ghost gh-stars" href={REPO_URL} aria-label={t.github}>
         <Icon name="star" /><span>GitHub</span><span class="btn__meta" data-gh="stars"></span>
       </a>
-      <a class="btn btn--primary" href={current === 'home' ? '#download' : url('#download')}><Icon name="download" />Download</a>
+      <a class="btn btn--primary" href={downloadHref}><Icon name="download" />{t.download}</a>
     </div>
-    <button class="nav__toggle" type="button" aria-label="Menu" aria-expanded="false" aria-controls="site-nav"><span></span><span></span></button>
+    <button class="nav__toggle" type="button" aria-label={t.menu} aria-expanded="false" aria-controls="site-nav"><span></span><span></span></button>
   </div>
 </header>

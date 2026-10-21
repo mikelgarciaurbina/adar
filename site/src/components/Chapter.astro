@@ -1,11 +1,11 @@
 ---
-// A chapter of the landing page's story: a Roman numeral, the Basque word, its English meaning and one
-// sentence of the forest, followed by the product headline (slot). The story frames; the slot sells.
+// A chapter of the landing page's story: a Roman numeral, the Basque word, its meaning in the page's
+// language and one sentence of the forest, followed by the product headline (slot).
 interface Props { n: string; eu: string; en: string; story: string; center?: boolean }
 const { n, eu, en, story, center = false } = Astro.props;
 ---
 <header class:list={['section-head', 'chapter', 'reveal', { 'section-head--center': center }]}>
   <p class="chapter__mark"><span class="chapter__n">{n}</span><span class="chapter__eu" lang="eu">{eu}</span><span class="chapter__en">{en}</span></p>
-  <p class="chapter__story">{story}</p>
+  <p class="chapter__story" set:html={story} />
   <slot />
 </header>

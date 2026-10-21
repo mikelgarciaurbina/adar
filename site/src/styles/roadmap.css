@@ -81,6 +81,7 @@ code { color: var(--text); background: rgb(255 255 255 / 0.05); padding: 0.1em 0
 .rm-list { padding-top: var(--space-8); scroll-margin-top: calc(var(--nav-h) + 40px); }
 .rm-graph { --main: 14px; --lane: 38px; --text-x: 64px; position: relative; max-width: 920px; }
 .rm-loading { color: var(--text-3); padding: 40px 0; }
+.rm-note { max-width: 920px; margin-bottom: var(--space-6); padding-left: var(--space-8); font-size: var(--text-sm); color: var(--text-3); }
 .rm-ms { position: relative; padding-bottom: var(--space-6); }
 .rm-ms::before { /* main lane */
   content: ""; position: absolute; left: calc(var(--main) - 1px); top: 0; bottom: 0; width: 2px;

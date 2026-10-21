@@ -1,7 +1,7 @@
 // Design system page: the extruded 3D mark, and the token documentation, which is generated from the
 // live CSS variables in tokens.css so it can never drift from what the site actually uses. (The icon
 // grid is rendered at build time from the sprite.)
-import { motion, reveal } from './site.js';
+import { motion, reveal, t } from './site.js';
 
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
@@ -87,14 +87,16 @@ const NATURE = [
 ];
 const swatches = $('[data-swatches]');
 if (swatches) {
-  swatches.innerHTML = NATURE.map(([v, eu, en, use], i) => {
+  const local = t('swatches', []);
+  swatches.innerHTML = NATURE.map(([v, eu, en0, use0], i) => {
+    const [en, use] = local[i] ? [local[i][0], local[i][1]] : [en0, use0];
     const hex = toHex(token(v));
     return `<button type="button" class="swatch reveal" style="--sw:var(${v});--delay:${i * 40}ms" data-copy="${hex}">
       <span class="swatch__chip"></span>
-      <span class="swatch__name"><b lang="eu">${eu}</b> <span>${en}</span></span>
+      <span class="swatch__name"><b lang="eu">${eu}</b>${en ? ` <span>${en}</span>` : ''}</span>
       <span class="swatch__hex mono">${hex}<span class="swatch__var">${v}</span></span>
       <span class="swatch__use">${use}</span>
-      <span class="swatch__copied mono" data-label="">Copy</span>
+      <span class="swatch__copied mono" data-label="">${t('copy', 'Copy')}</span>
     </button>`;
   }).join('');
   $$('.reveal', swatches).forEach(reveal);
@@ -107,7 +109,8 @@ const RAMPS = [
 ];
 const ramps = $('[data-ramps]');
 if (ramps) {
-  ramps.innerHTML = RAMPS.map(([name, vars]) => `<div class="ramp"><p class="ramp__name">${name}</p><div class="ramp__row">${vars.map((v) => {
+  const rampNames = t('ramps', []);
+  ramps.innerHTML = RAMPS.map(([name0, vars], r) => `<div class="ramp"><p class="ramp__name">${rampNames[r] ?? name0}</p><div class="ramp__row">${vars.map((v) => {
     const hex = toHex(token(v));
     return `<button type="button" class="ramp__step" style="--sw:var(${v});color:${inkOn(hex)}" data-copy="${hex}"><span class="mono">${v.replace('--', '')}</span><span class="mono">${hex}</span></button>`;
   }).join('')}</div></div>`).join('');
@@ -126,7 +129,9 @@ if (table) {
   day.hidden = true;
   document.body.append(day);
   const dayStyle = getComputedStyle(day);
-  table.innerHTML = SEMANTIC.map(([v, role]) => {
+  const roles = t('roles', []);
+  table.innerHTML = SEMANTIC.map(([v, role0], i) => {
+    const role = roles[i] ?? role0;
     const n = toHex(token(v)), d = toHex(token(v, dayStyle));
     const cell = (val, theme) => `<td><button type="button" class="tok" data-copy="${val}" title="Copy ${val}"><i style="background:${val}" data-theme-swatch="${theme}"></i><span class="mono">${val}</span></button></td>`;
     return `<tr><th scope="row"><code>${v}</code></th><td>${role}</td>${cell(n, 'dark')}${cell(d, 'light')}</tr>`;
@@ -156,7 +161,9 @@ const CURVES = [
 ];
 const curves = $('[data-curves]');
 if (curves) {
-  curves.innerHTML = CURVES.map(([v, eu, en, use, [x1, y1, x2, y2]]) => {
+  const localCurves = t('curves', []);
+  curves.innerHTML = CURVES.map(([v, eu, en0, use0, [x1, y1, x2, y2]], i) => {
+    const [en, use] = localCurves[i] ? localCurves[i] : [en0, use0];
     const P = (x, y) => `${(x * 100).toFixed(1)} ${(100 - y * 100).toFixed(1)}`;
     return `<article class="curve card">
       <svg viewBox="-8 -30 116 160" class="curve__svg" aria-hidden="true">
@@ -167,7 +174,7 @@ if (curves) {
         <circle cx="${P(x2, y2).split(' ')[0]}" cy="${P(x2, y2).split(' ')[1]}" r="3" class="curve__knob"/>
       </svg>
       <div class="curve__track"><i style="animation-timing-function:var(${v})"></i></div>
-      <h3><span class="serif" lang="eu">${eu}</span> <span class="muted">· ${en}</span></h3>
+      <h3><span class="serif" lang="eu">${eu}</span>${en ? ` <span class="muted">· ${en}</span>` : ''}</h3>
       <p class="mono curve__val">${v}<br>cubic-bezier(${x1}, ${y1}, ${x2}, ${y2})</p>
       <p>${use}</p>
     </article>`;
@@ -177,7 +184,7 @@ if (curves) {
 // ── Lanes ───────────────────────────────────────────────────
 const lanes = $('[data-lanes]');
 if (lanes) {
-  const names = ['main', 'feature', 'remote', 'rewrite', 'hotfix', 'release'];
+  const names = t('lanes', ['main', 'feature', 'remote', 'rewrite', 'hotfix', 'release']);
   lanes.innerHTML = names.map((n, i) => `<span class="lane" style="--c:var(--lane-${i + 1})"><i></i><b class="mono">lane-${i + 1}</b><span>${n}</span></span>`).join('');
 }
 

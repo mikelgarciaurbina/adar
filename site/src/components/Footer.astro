@@ -1,12 +1,17 @@
 ---
 import { url, REPO_URL } from '../lib/url';
+import { pageUrl, anchor, type Locale, type PageKey, type AnchorKey } from '../i18n/config';
+import { ui } from '../i18n/ui';
 
-interface Props { current: 'home' | 'roadmap' | 'design' }
-const here = (page: string, hash: string) => (Astro.props.current === page ? hash : url(`${page === 'home' ? '' : `${page}.html`}${hash}`));
+interface Props { lang: Locale; page: PageKey }
+const { lang, page } = Astro.props;
+const f = ui[lang].footer;
+// Same-page links stay anchors; the rest go to the page in this language.
+const to = (target: PageKey, section?: AnchorKey) => (target === page && section ? `#${anchor(section, lang)}` : pageUrl(target, lang, section));
 const columns: [string, [string, string][]][] = [
-  ['Product', [['Features', here('home', '#features')], ['Download', here('home', '#download')], ['Changelog', here('roadmap', '#changelog')], ['Roadmap', url('roadmap.html')]]],
-  ['Project', [['GitHub', REPO_URL], ['Issues', `${REPO_URL}/issues`], ['Contributing', `${REPO_URL}/blob/main/CONTRIBUTING.md`], ['Security', `${REPO_URL}/blob/main/SECURITY.md`]]],
-  ['Brand', [['Design system', url('design.html')], ['Logo', here('design', '#logo')], ['Colour', here('design', '#color')], ['MIT license', `${REPO_URL}/blob/main/LICENSE`]]],
+  [f.product, [[f.features, to('home', 'features')], [f.download, to('home', 'download')], [f.changelog, to('roadmap', 'changelog')], [f.roadmap, pageUrl('roadmap', lang)]]],
+  [f.project, [[f.github, REPO_URL], [f.issues, `${REPO_URL}/issues`], [f.contributing, `${REPO_URL}/blob/main/CONTRIBUTING.md`], [f.security, `${REPO_URL}/blob/main/SECURITY.md`]]],
+  [f.brand, [[f.design, pageUrl('design', lang)], [f.logo, to('design', 'logo')], [f.colour, to('design', 'color')], [f.license, `${REPO_URL}/blob/main/LICENSE`]]],
 ];
 ---
 <footer class="footer">
@@ -14,15 +19,15 @@ const columns: [string, [string, string][]][] = [
     <div class="footer__grid">
       <div class="footer__brand">
         <img src={url('assets/adar-lockup.svg')} width="118" height="40" alt="Adar">
-        <p>A fast, visual Git client for every repository. Free and open source, made in Euskal Herria.</p>
+        <p>{f.about}</p>
       </div>
       {columns.map(([title, items]) => (
         <div><h2 class="footer__title">{title}</h2><ul>{items.map(([label, href]) => <li><a href={href}>{label}</a></li>)}</ul></div>
       ))}
     </div>
     <div class="footer__base">
-      <span>© {new Date().getFullYear()} Mikel García · MIT. Inspired by GitKraken’s UX; an independent project, not affiliated with GitKraken or Axosoft.</span>
-      <span><span class="serif" lang="eu">Ez dizugu adarrik jotzen</span> — no, we’re not pulling your leg: it’s free.</span>
+      <span>© {new Date().getFullYear()} {f.legal}</span>
+      <span><span class="serif" lang="eu">Ez dizugu adarrik jotzen</span> {f.joke}</span>
     </div>
   </div>
 </footer>

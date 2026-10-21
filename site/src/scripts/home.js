@@ -1,7 +1,7 @@
 // Landing page: drives the 3D scene from the scroll position, the app screenshot tilt, the terminal
 // demo and the platform note in the download section.
 import { createScene } from './branches.js';
-import { reducedMotion, motion } from './site.js';
+import { reducedMotion, motion, t } from './site.js';
 
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 const $ = (s, el = document) => el.querySelector(s);
@@ -9,15 +9,11 @@ const $ = (s, el = document) => el.querySelector(s);
 // ── Scene ───────────────────────────────────────────────────
 const canvas = $('#scene');
 const zone = $('#zone');
-const nameSection = $('#name');
+const nameSection = $('[data-name-section]');
 const senses = [...document.querySelectorAll('[data-sense]')];
 const steps = [...document.querySelectorAll('.name__steps span')];
 const fig = $('[data-fig]');
-const FIGS = [
-  'fig. 1 — orein adarrak · a deer’s antlers',
-  'fig. 2 — zuhaitzaren adarra · a tree branch',
-  'fig. 3 — git log --graph',
-];
+const FIGS = t('figs', ['fig. 1 — orein adarrak · a deer’s antlers', 'fig. 2 — zuhaitzaren adarra · a tree branch', 'fig. 3 — git log --graph']);
 // Scroll progress through the name section → morph value (0 antlers, 1 tree, 2 graph), with holds.
 const KEYS = [[0, 0], [0.14, 0], [0.38, 1], [0.56, 1], [0.8, 2], [1, 2]];
 
@@ -27,7 +23,7 @@ let inName = false;
 if (!scene) {
   document.documentElement.classList.add('no-webgl');
 } else {
-  $('[data-points]').textContent = scene.count.toLocaleString('en');
+  $('[data-points]').textContent = scene.count.toLocaleString(document.documentElement.lang);
   layout(true);
   motion.subscribe((p) => scene.setPaused(p));
   requestAnimationFrame(() => canvas.classList.add('is-ready'));
@@ -75,7 +71,7 @@ const shot = $('[data-shot]');
 
 // ── The night sky: dark at the top, the blue hour in the middle, dawn at the download ────────────
 const sky = $('.sky');
-const dawnAt = $('#download');
+const dawnAt = $('[data-dawn]');
 const smooth = (a, b, v) => { const t = clamp((v - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
 
 // ── Chapter rail ────────────────────────────────────────────

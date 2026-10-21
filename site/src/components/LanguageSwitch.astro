@@ -1,0 +1,15 @@
+---
+// Links to the same page in the other languages.
+import { LOCALES, LOCALE_INFO, pageUrl, type Locale, type PageKey } from '../i18n/config';
+import { ui } from '../i18n/ui';
+
+interface Props { lang: Locale; page: PageKey }
+const { lang, page } = Astro.props;
+---
+<nav class="langs" aria-label={ui[lang].language}>
+  {LOCALES.map((l) => (
+    <a href={pageUrl(page, l)} hreflang={l} lang={l} aria-current={l === lang ? 'true' : undefined} title={LOCALE_INFO[l].name}>
+      <span aria-hidden="true">{LOCALE_INFO[l].short}</span><span class="visually-hidden">{LOCALE_INFO[l].name}</span>
+    </a>
+  ))}
+</nav>

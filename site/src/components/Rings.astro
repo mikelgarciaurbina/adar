@@ -2,9 +2,11 @@
 // A cut trunk: one ring per growing season, and Adar's own releases as the outer rings (built from
 // GitHub Releases at build time). The rings draw themselves outwards when the figure scrolls in.
 import type { Release } from '../lib/releases';
-import { formatDate } from '../lib/releases';
+import { formatDateIn, type Locale } from '../i18n/config';
+import { home } from '../i18n/home';
 
-interface Props { releases: Release[] }
+interface Props { releases: Release[]; lang: Locale }
+const copy = home[Astro.props.lang].rings.figure;
 const chrono = Astro.props.releases.filter((r) => !r.prerelease).slice().reverse(); // oldest first
 
 let seed = 11;
@@ -46,7 +48,7 @@ const ringClass = (i: number) => {
 ---
 <figure class="rings reveal" data-animate>
   <svg class="rings__svg" viewBox="0 0 860 600" role="img" aria-labelledby="rings-title">
-    <title id="rings-title">A cross-section of a trunk. Its outer rings are Adar’s releases{chrono.length ? `, from ${chrono[0].tag} to ${chrono[chrono.length - 1].tag}` : ''}.</title>
+    <title id="rings-title">{chrono.length ? copy.title(chrono[0].tag, chrono[chrono.length - 1].tag) : ''}</title>
     <defs>
       <radialGradient id="wood" cx="0.5" cy="0.5" r="0.5">
         <stop offset="0" stop-color="#3a2f22" />
@@ -67,9 +69,9 @@ const ringClass = (i: number) => {
       <g class:list={['rings__label', { 'is-latest': l.latest }]}>
         <path class="rings__leader" d={`M${l.x.toFixed(1)} ${l.py.toFixed(1)}L${(l.x + 24).toFixed(1)} ${l.y.toFixed(1)}L640 ${l.y.toFixed(1)}`} />
         <circle class="rings__dot" cx={l.x.toFixed(1)} cy={l.py.toFixed(1)} r="4" />
-        <text x="652" y={(l.y + 5).toFixed(1)}><tspan class="rings__tag">{l.release.tag}</tspan><tspan class="rings__date" dx="10">{formatDate(l.release.date)}</tspan></text>
+        <text x="652" y={(l.y + 5).toFixed(1)}><tspan class="rings__tag">{l.release.tag}</tspan><tspan class="rings__date" dx="10">{formatDateIn(l.release.date, Astro.props.lang)}</tspan></text>
       </g>
     ))}
   </svg>
-  <figcaption class="fig mono"><span>fig. 4</span> zuhaitzaren eraztunak — <i>a tree’s rings</i>{chrono.length > 0 && ` · the outer ${chrono.length} are Adar’s releases`}</figcaption>
+  <figcaption class="fig mono" set:html={copy.caption(chrono.length)} />
 </figure>

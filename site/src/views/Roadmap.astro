@@ -1,0 +1,186 @@
+---
+// The roadmap, in any of the site's languages: ROADMAP.md drawn as a git graph (one dashed branch per
+// area), the changelog from GitHub Releases and the contributor path — all rendered at build time; the
+// script only adds the 3D graph in the hero and the filters. Roadmap items and release notes stay English.
+import Base from '../layouts/Base.astro';
+import Icon from '../components/Icon.astro';
+import '../styles/roadmap.css';
+import { render } from '../lib/markdown.js';
+import { principles as englishPrinciples, shipped, milestones, limits, stats } from '../lib/roadmap';
+import { getReleases, getLatest, withoutInstall } from '../lib/releases';
+import { anchor, formatDateIn, type Locale } from '../i18n/config';
+import { roadmap } from '../i18n/roadmap';
+import { ui } from '../i18n/ui';
+
+interface Props { lang: Locale }
+const { lang } = Astro.props;
+const t = roadmap[lang];
+const copy = ui[lang].client.copy;
+const principles = t.principles ?? englishPrinciples;
+const shippedVersion = shipped?.title.match(/\d+(\.\d+)*/)?.[0] ?? '';
+
+const releases = await getReleases();
+const latest = await getLatest();
+let lane = 1;
+---
+<Base lang={lang} page="roadmap" title={t.meta.title} description={t.meta.description} ogTitle={t.meta.ogTitle} ogDescription={t.meta.ogDescription}
+  client={t.client}>
+  <main id="main">
+    <section class="rm-hero" aria-labelledby="rm-title">
+      <canvas class="rm-hero__scene" id="scene" aria-hidden="true"></canvas>
+      <div class="wrap rm-hero__inner">
+        <p class="eyebrow rise">{t.hero.eyebrow}</p>
+        <h1 id="rm-title" class="rise" style="--delay:80ms" set:html={t.hero.title} />
+        <p class="rm-hero__lede rise" style="--delay:160ms" set:html={t.hero.lede} />
+        <div class="rm-hero__ctas rise" style="--delay:240ms">
+          <button class="btn btn--primary btn--lg" type="button" data-show-gfi><Icon name="sparkle" />{t.hero.showGfi}</button>
+          <a class="btn btn--ghost btn--lg" href="https://github.com/mikelgarciaurbina/adar/issues/new/choose"><Icon name="issue" />{t.hero.suggest}</a>
+        </div>
+        <dl class="rm-stats rise" style="--delay:320ms">
+          <div><dt>{t.hero.stats[0]}</dt><dd>{stats.planned}</dd></div>
+          <div><dt>{t.hero.stats[1]}</dt><dd>{stats.gfi}</dd></div>
+          <div><dt>{t.hero.stats[2]}</dt><dd>{stats.areas}</dd></div>
+          <div><dt>{t.hero.stats[3]}</dt><dd>{releases.length || '—'}</dd></div>
+        </dl>
+      </div>
+      <p class="fig rm-hero__fig mono" aria-hidden="true" set:html={t.hero.fig} />
+    </section>
+
+    <section class="section section--tight rm-principles" aria-labelledby="principles-title">
+      <div class="wrap">
+        <h2 id="principles-title" class="visually-hidden">{t.principlesTitle}</h2>
+        <div class="principles">
+          {principles.map((p, i) => (
+            <article class="principle card reveal" style={`--delay:${i * 60}ms`}>
+              <span class="principle__n mono">{String(i + 1).padStart(2, '0')}</span>
+              <h3 set:html={p.title} /><p set:html={p.text} />
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+
+    <div class="rm-bar" data-bar>
+      <div class="wrap rm-bar__inner">
+        <div class="seg" role="group" aria-label={t.bar.show}>
+          {['all', 'next', 'later', 'shipped'].map((f, i) => <button type="button" aria-pressed={i === 0 ? 'true' : 'false'} data-filter={f}>{t.bar.filters[i]}</button>)}
+        </div>
+        <label class="toggle"><input type="checkbox" data-gfi-toggle><span class="toggle__track"></span>{t.bar.gfi}</label>
+        <label class="rm-search"><Icon name="search" /><input type="search" placeholder={t.bar.search} data-search aria-label={t.bar.search}></label>
+        <span class="rm-bar__count mono" data-count aria-live="polite"></span>
+      </div>
+    </div>
+
+    <section class="section rm-list" aria-label={t.graph.listLabel}>
+      <div class="wrap">
+        {t.englishNote && <p class="rm-note" lang={lang}>{t.englishNote}</p>}
+        <div class="rm-graph" data-graph lang="en">
+          {shipped && (
+            <section class="rm-ms rm-ms--shipped" data-kind="shipped" id={anchor('shipped', lang)}>
+              <header class="rm-ms__head reveal" lang={lang}><span class="rm-ms__node" aria-hidden="true"></span><span class="ref" style="--ref:var(--lane-1)">{t.graph.kinds.shipped}</span><h2>{t.graph.shipped(shippedVersion)}</h2><span class="rm-ms__count mono">{shipped.features.length} {t.graph.features}</span></header>
+              <ul class="rm-shipped reveal">
+                {shipped.features.map((f) => <li class="rm-item rm-item--chip" data-gfi="0" data-text={f.text} set:html={f.html} />)}
+              </ul>
+            </section>
+          )}
+          <div class="rm-head reveal" aria-label={t.graph.hereAria} lang={lang}>
+            <span class="rm-head__node" aria-hidden="true"></span>
+            <span class="ref" style="--ref:var(--lane-1)"><Icon name="laptop" />HEAD → main</span>
+            {latest && <span class="ref" style="--ref:var(--lane-6)"><Icon name="tag" />{latest.tag}</span>}
+            <span class="rm-head__label">{t.graph.here}{latest && ` · ${formatDateIn(latest.date, lang)}`}</span>
+          </div>
+          {milestones.map((ms) => (
+            <section class={`rm-ms rm-ms--${ms.kind}`} data-kind={ms.kind} id={anchor(ms.kind, lang)}>
+              <header class="rm-ms__head reveal" lang={lang}>
+                <span class="rm-ms__node" aria-hidden="true"></span>
+                <span class="ref" style={`--ref:${ms.kind === 'next' ? 'var(--lane-2)' : 'var(--lane-4)'}`}>{t.graph.kinds[ms.kind]}</span>
+                <h2>{t.graph.titles[ms.kind]}</h2>
+                <span class="rm-ms__count mono">{ms.range && `${ms.range} · `}{ms.count} {t.graph.items}</span>
+              </header>
+              {ms.areas.map((area) => (
+                <div class="rm-area reveal" id={area.id} style={`--c: var(--lane-${(lane++ % 6) + 1})`}>
+                  <svg class="rm-fork" viewBox="0 0 40 44" aria-hidden="true"><path d="M14 0 C14 22 38 18 38 40" /></svg>
+                  <h3 class="rm-area__title"><Fragment set:html={area.title} /> <span class="rm-area__count mono">{area.items.length}</span></h3>
+                  {area.note && <p class="rm-area__note" set:html={area.note} />}
+                  <ul class="rm-items">
+                    {area.items.map((it) => (
+                      <li class:list={['rm-item', { 'is-gfi': it.gfi, 'is-done': it.done }]} data-gfi={it.gfi ? '1' : '0'} data-text={it.text}>
+                        <span class="rm-node" aria-hidden="true"></span>
+                        <div class="rm-item__body">
+                          <p>
+                            <Fragment set:html={it.html} />
+                            {it.gfi && <span class="gfi">good first issue</span>}
+                            {it.done && <span class="gfi gfi--done" lang={lang}>{t.graph.done}</span>}
+                            <a class="rm-item__link" href={it.discuss} lang={lang}>{t.graph.discuss}<Icon name="arrow-up-right" /></a>
+                          </p>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </section>
+          ))}
+        </div>
+        <p class="rm-empty" data-empty hidden set:html={t.graph.empty} />
+      </div>
+    </section>
+
+    <section class="section rm-changelog" id={anchor('changelog', lang)} aria-labelledby="changelog-title">
+      <div class="wrap">
+        <div class="section-head reveal">
+          <p class="eyebrow">{t.changelog.eyebrow}</p>
+          <h2 id="changelog-title" set:html={t.changelog.title} />
+          <p>{t.changelog.text}</p>
+        </div>
+        <ol class="releases">
+          {releases.map((r) => (
+            <li class:list={['release', 'reveal', { 'is-latest': r === latest }]}>
+              <span class="release__node" aria-hidden="true"></span>
+              <div class="release__head">
+                <span class="ref" style="--ref:var(--lane-6)"><Icon name="tag" />{r.tag}</span>
+                {r === latest && <span class="chip chip--accent"><span class="dot"></span>{t.changelog.latest}</span>}
+                {r.prerelease && <span class="chip">{t.changelog.prerelease}</span>}
+                <time class="mono" datetime={r.date}>{formatDateIn(r.date, lang)}</time>
+              </div>
+              <h3>{r.name}</h3>
+              <div class="release__body md" lang="en" set:html={render(withoutInstall(r.body))} />
+              <a class="release__link" href={r.url}><Fragment set:html={t.changelog.link} /><Icon name="arrow-up-right" /></a>
+            </li>
+          ))}
+          {releases.length === 0 && <li class="releases__loading" set:html={t.changelog.none} />}
+        </ol>
+      </div>
+    </section>
+
+    <section class="section rm-contribute" id={anchor('contribute', lang)} aria-labelledby="contribute-title">
+      <div class="wrap">
+        <div class="section-head section-head--center reveal">
+          <p class="eyebrow">{t.contribute.eyebrow}</p>
+          <h2 id="contribute-title" set:html={t.contribute.title} />
+          <p>{t.contribute.text}</p>
+        </div>
+        <ol class="steps">
+          {t.contribute.steps.map(([title, text], i) => (
+            <li class="step card reveal" style={`--delay:${i * 60}ms`}>
+              <span class="step__n mono">{i + 1}</span><h3>{title}</h3>
+              {i === 1
+                ? <div class="code"><code><span class="prompt">$</span>npm install &amp;&amp; npm run dev</code><button class="copy" type="button" data-copy="npm install && npm run dev" aria-label={t.contribute.copyCommand}><Icon name="copy" /><span data-label={copy}>{copy}</span></button></div>
+                : <p set:html={text} />}
+            </li>
+          ))}
+        </ol>
+        {limits && (
+          <details class="limits reveal">
+            <summary><span>{t.contribute.limits ?? limits.title}</span><span class="mono muted">{limits.items.length}</span></summary>
+            <ul lang="en">{limits.items.map((l) => <li set:html={l} />)}</ul>
+          </details>
+        )}
+      </div>
+    </section>
+  </main>
+</Base>
+
+<script>
+  import '../scripts/roadmap.js';
+</script>
