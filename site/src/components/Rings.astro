@@ -1,0 +1,75 @@
+---
+// A cut trunk: one ring per growing season, and Adar's own releases as the outer rings (built from
+// GitHub Releases at build time). The rings draw themselves outwards when the figure scrolls in.
+import type { Release } from '../lib/releases';
+import { formatDate } from '../lib/releases';
+
+interface Props { releases: Release[] }
+const chrono = Astro.props.releases.filter((r) => !r.prerelease).slice().reverse(); // oldest first
+
+let seed = 11;
+const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+const C = 300, N = 22, MAX = 236, PITH = 12;
+const widths = Array.from({ length: N }, () => 4 + rand() * 8);
+const total = PITH + widths.reduce((a, b) => a + b, 0);
+
+let acc = PITH;
+const rings = widths.map((w, i) => {
+  acc += w;
+  const rad = (acc / total) * MAX;
+  const ph = [rand() * 6.283, rand() * 6.283, rand() * 6.283];
+  const amp = 0.016 + (i / N) * 0.024;
+  // Trees grow a little off-centre, and every ring is slightly wobbly.
+  const cx = C + i * 0.9, cy = C - i * 0.45;
+  const rho = (t: number) => rad * (1 + amp * (0.6 * Math.sin(3 * t + ph[0]) + 0.3 * Math.sin(5 * t + ph[1]) + 0.15 * Math.sin(9 * t + ph[2])));
+  const at = (t: number) => [cx + rho(t) * Math.cos(t), cy + rho(t) * Math.sin(t)] as const;
+  const pts = Array.from({ length: 121 }, (_, k) => at((k / 120) * Math.PI * 2).map((v) => v.toFixed(1)).join(' '));
+  return { d: `M${pts.join('L')}Z`, rad, cx, cy, at, late: i % 2 === 1 };
+});
+
+const releaseRings = chrono.slice(-N).map((r, j, list) => ({ release: r, index: N - list.length + j }));
+const labelled = releaseRings.slice().reverse(); // latest first, at the top
+const labels = labelled.map((item, j) => {
+  const ring = rings[item.index];
+  const y = labelled.length === 1 ? C : 168 + (j * 264) / (labelled.length - 1);
+  const t = Math.asin(Math.max(-0.95, Math.min(0.95, (y - ring.cy) / ring.rad)));
+  const [x, py] = ring.at(t);
+  return { ...item, x, py, y, latest: j === 0 };
+});
+const rays = Array.from({ length: 9 }, () => rand() * Math.PI * 2);
+const cracks = Array.from({ length: 26 }, () => ({ t: rand() * Math.PI * 2, l: 6 + rand() * 12 }));
+const bark = MAX + 15;
+const ringClass = (i: number) => {
+  const rel = releaseRings.find((r) => r.index === i);
+  return ['rings__ring', rings[i].late && 'rings__ring--late', rel && 'rings__ring--release', rel && rel === releaseRings[releaseRings.length - 1] && 'is-latest'].filter(Boolean).join(' ');
+};
+---
+<figure class="rings reveal" data-animate>
+  <svg class="rings__svg" viewBox="0 0 860 600" role="img" aria-labelledby="rings-title">
+    <title id="rings-title">A cross-section of a trunk. Its outer rings are Adar’s releases{chrono.length ? `, from ${chrono[0].tag} to ${chrono[chrono.length - 1].tag}` : ''}.</title>
+    <defs>
+      <radialGradient id="wood" cx="0.5" cy="0.5" r="0.5">
+        <stop offset="0" stop-color="#3a2f22" />
+        <stop offset="0.75" stop-color="#2a2219" />
+        <stop offset="1" stop-color="#1c1712" />
+      </radialGradient>
+    </defs>
+    <circle class="rings__bark" cx={C + 10} cy={C - 5} r={bark} />
+    <circle cx={C + 10} cy={C - 5} r={bark - 12} fill="url(#wood)" />
+    {cracks.map((c) => (
+      <path class="rings__crack" d={`M${(C + 10 + (bark + 9) * Math.cos(c.t)).toFixed(1)} ${(C - 5 + (bark + 9) * Math.sin(c.t)).toFixed(1)}L${(C + 10 + (bark + 9 - c.l) * Math.cos(c.t)).toFixed(1)} ${(C - 5 + (bark + 9 - c.l) * Math.sin(c.t)).toFixed(1)}`} />
+    ))}
+    {rays.map((t) => <path class="rings__ray" d={`M${C} ${C}L${(C + MAX * Math.cos(t)).toFixed(1)} ${(C + MAX * Math.sin(t)).toFixed(1)}`} />)}
+    <path class="rings__split" d={`M${C + 4} ${C - 2}L${(C + 10 + bark * Math.cos(2.4)).toFixed(1)} ${(C - 5 + bark * Math.sin(2.4)).toFixed(1)}L${(C + 10 + bark * Math.cos(2.47)).toFixed(1)} ${(C - 5 + bark * Math.sin(2.47)).toFixed(1)}Z`} />
+    {rings.map((r, i) => <path class={ringClass(i)} d={r.d} pathLength="1" style={`--i:${i}`} />)}
+    <circle class="rings__pith" cx={C} cy={C} r="5" />
+    {labels.map((l) => (
+      <g class:list={['rings__label', { 'is-latest': l.latest }]}>
+        <path class="rings__leader" d={`M${l.x.toFixed(1)} ${l.py.toFixed(1)}L${(l.x + 24).toFixed(1)} ${l.y.toFixed(1)}L640 ${l.y.toFixed(1)}`} />
+        <circle class="rings__dot" cx={l.x.toFixed(1)} cy={l.py.toFixed(1)} r="4" />
+        <text x="652" y={(l.y + 5).toFixed(1)}><tspan class="rings__tag">{l.release.tag}</tspan><tspan class="rings__date" dx="10">{formatDate(l.release.date)}</tspan></text>
+      </g>
+    ))}
+  </svg>
+  <figcaption class="fig mono"><span>fig. 4</span> zuhaitzaren eraztunak — <i>a tree’s rings</i>{chrono.length > 0 && ` · the outer ${chrono.length} are Adar’s releases`}</figcaption>
+</figure>

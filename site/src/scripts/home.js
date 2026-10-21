@@ -30,6 +30,8 @@ if (!scene) {
   $('[data-points]').textContent = scene.count.toLocaleString('en');
   layout(true);
   requestAnimationFrame(() => canvas.classList.add('is-ready'));
+  // After the fade-in, the scene's opacity follows the scroll position directly.
+  setTimeout(() => canvas.classList.add('is-live'), 1300);
   new IntersectionObserver(([e]) => {
     zoneVisible = e.isIntersecting;
     if (zoneVisible && !document.hidden) scene.start(); else scene.stop();
@@ -70,6 +72,33 @@ function setSense(i) {
 // ── Screenshot tilt ─────────────────────────────────────────
 const shot = $('[data-shot]');
 
+// ── The night sky: dark at the top, the blue hour in the middle, dawn at the download ────────────
+const sky = $('.sky');
+const dawnAt = $('#download');
+const smooth = (a, b, v) => { const t = clamp((v - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+
+// ── Chapter rail ────────────────────────────────────────────
+const rail = $('[data-rail]');
+const railLinks = rail ? [...rail.querySelectorAll('[data-chapter]')] : [];
+const chapters = railLinks.map((a) => document.getElementById(a.dataset.chapter)).filter(Boolean);
+if (rail && chapters.length) {
+  // The chapter crossing the middle of the viewport is the current one.
+  const spy = new IntersectionObserver((entries) => {
+    for (const e of entries) {
+      if (!e.isIntersecting) continue;
+      const i = chapters.indexOf(e.target);
+      railLinks.forEach((a, k) => {
+        a.classList.toggle('is-done', k < i);
+        if (k === i) a.setAttribute('aria-current', 'step'); else a.removeAttribute('aria-current');
+      });
+      rail.classList.toggle('is-on', i > 0);
+    }
+  }, { rootMargin: '-48% 0px -48% 0px' });
+  chapters.forEach((c) => spy.observe(c));
+  // Off at the footer, where the story is over.
+  new IntersectionObserver(([e]) => { if (e.isIntersecting) rail.classList.remove('is-on'); }).observe($('.footer'));
+}
+
 let queued = false;
 function update() {
   queued = false;
@@ -79,6 +108,21 @@ function update() {
   scene?.setMorph(m);
   if (scene && inName !== r.top < innerHeight * 0.5) { inName = !inName; layout(false); }
   setSense(m < 0.5 ? 0 : m < 1.5 ? 1 : 2);
+
+  // The 3D scene belongs to the first two chapters; it fades into the sky as the trunk comes up.
+  if (scene) {
+    const z = zone.getBoundingClientRect();
+    const fade = clamp((z.bottom - innerHeight * 0.35) / (innerHeight * 0.45), 0, 1);
+    canvas.style.opacity = canvas.classList.contains('is-live') || fade < 1 ? fade.toFixed(3) : '';
+  }
+  if (sky && dawnAt) {
+    const top = dawnAt.getBoundingClientRect().top + scrollY;
+    const t = clamp(scrollY / Math.max(1, top - innerHeight * 0.3), 0, 1);
+    sky.style.setProperty('--stars', (1 - smooth(0.45, 0.85, t)).toFixed(3));
+    sky.style.setProperty('--deep', (smooth(0.2, 0.55, t) * (1 - smooth(0.7, 1, t))).toFixed(3));
+    sky.style.setProperty('--dawn', smooth(0.62, 1, t).toFixed(3));
+    sky.style.setProperty('--sun', smooth(0.8, 1, t).toFixed(3));
+  }
 
   if (shot) {
     const s = shot.getBoundingClientRect();

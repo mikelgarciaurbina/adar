@@ -248,6 +248,18 @@ code { color: var(--text); background: rgb(255 255 255 / 0.05); padding: 0.1em 0
 .voice__col:last-child li { color: var(--text-3); text-decoration: line-through; text-decoration-color: rgb(255 140 95 / 0.5); }
 @media (max-width: 640px) { .voice { grid-template-columns: 1fr; } }
 
+/* ── Story ───────────────────────────────────────────────── */
+.story-table { overflow-x: auto; }
+.story-table table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
+.story-table th, .story-table td { padding: 12px 16px; text-align: left; vertical-align: baseline; border-bottom: 1px solid var(--line); color: var(--text-3); }
+.story-table thead th { font: 500 var(--text-2xs) / 1 var(--font-mono); letter-spacing: var(--tracking-wide); text-transform: uppercase; color: var(--text-4); white-space: nowrap; }
+.story-table tbody tr:last-child > * { border-bottom: 0; }
+.story-table td.mono { color: var(--accent-text); font-size: var(--text-xs); }
+.story-table th .serif { font-size: 1.35em; color: var(--text); }
+.story-rules { list-style: none; padding: 0; margin-top: 16px; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; counter-reset: rule; }
+.story-rules li { padding: 18px 20px; font-size: var(--text-sm); color: var(--text-3); }
+.story-rules b { display: block; margin-bottom: 4px; color: var(--text); font-weight: 600; }
+
 /* ── Downloads ───────────────────────────────────────────── */
 .downloads { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; }
 .dl-asset { display: flex; align-items: center; gap: 14px; padding: 16px 18px; transition: border-color var(--dur-2), transform var(--dur-2) var(--ease-grow); }

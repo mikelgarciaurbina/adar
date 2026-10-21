@@ -1,0 +1,12 @@
+---
+// The chapter rail: the page's story drawn as a git lane, one commit per chapter (wide screens only).
+interface Props { chapters: { id: string; n: string; eu: string; en: string }[] }
+const { chapters } = Astro.props;
+---
+<nav class="rail" aria-label="Chapters" data-rail>
+  <ol>
+    {chapters.map((c) => (
+      <li><a href={`#${c.id}`} data-chapter={c.id}><span class="rail__node" aria-hidden="true"></span><span class="rail__label"><b lang="eu">{c.eu}</b><i>{c.n} · {c.en}</i></span></a></li>
+    ))}
+  </ol>
+</nav>

@@ -3,9 +3,17 @@
 // download section is filled from the latest GitHub release at build time.
 import Base from '../layouts/Base.astro';
 import Icon from '../components/Icon.astro';
+import Chapter from '../components/Chapter.astro';
+import Fireflies from '../components/Fireflies.astro';
+import Rail from '../components/Rail.astro';
+import Sky from '../components/Sky.astro';
+import Rings from '../components/Rings.astro';
+import Antlers from '../components/Antlers.astro';
 import '../styles/home.css';
+import '../styles/story.css';
 import { url, REPO_URL } from '../lib/url';
 import { getReleases, getLatest, formatDate, formatSize } from '../lib/releases';
+import { chapters } from '../lib/story';
 
 const releases = await getReleases();
 const latest = await getLatest();
@@ -21,13 +29,15 @@ const sums = [dmg, zip].filter((a) => a?.sha256) as NonNullable<typeof dmg>[];
   path=""
   current="home"
 >
+  <Sky />
+  <Rail chapters={chapters} />
   <canvas class="scene" id="scene" aria-hidden="true"></canvas>
   <div class="scene-fallback" aria-hidden="true"><img src={url('assets/adar-mark.svg')} width="64" height="64" alt=""></div>
 
-  <main id="main">
+  <main id="main" class="story">
     <div id="zone">
       <!-- Hero -->
-      <section class="hero" aria-labelledby="hero-title">
+      <section class="hero" id="night" aria-labelledby="hero-title">
         <div class="wrap hero__inner">
           <a class="chip chip--accent hero__news reveal" href={url('roadmap.html#changelog')}>
             <span class="dot"></span>{latest ? <>New in {latest.version}</> : 'Latest release'}<span class="hero__news-sep"></span><span class="hero__news-cta">What’s new</span>
@@ -49,7 +59,7 @@ const sums = [dmg, zip].filter((a) => a?.sha256) as NonNullable<typeof dmg>[];
           <p class="hero__fine reveal" style="--delay:320ms">Free &amp; open source · MIT · No account · No telemetry</p>
         </div>
         <p class="fig hero__fig mono" aria-hidden="true"><span>fig. 1</span> orein adarrak — <i>a deer’s antlers</i> · <span data-points>38,000</span> points</p>
-        <a class="hero__scroll" href="#name"><span>Scroll — watch it change shape</span><Icon name="arrow-down" size={16} /></a>
+        <a class="hero__scroll" href="#name"><span>Scroll — walk into the forest</span><Icon name="arrow-down" size={16} /></a>
       </section>
 
       <!-- The name: antler → branch → git -->
@@ -57,7 +67,7 @@ const sums = [dmg, zip].filter((a) => a?.sha256) as NonNullable<typeof dmg>[];
         <div class="name__sticky">
           <div class="wrap name__inner">
             <div class="name__copy">
-              <p class="eyebrow">Why “Adar”</p>
+              <p class="chapter__mark name__mark"><span class="chapter__n">I</span><span class="chapter__en">Why “Adar”</span></p>
               <article class="dict" aria-labelledby="name-title">
                 <header class="dict__head">
                   <h2 class="dict__word" id="name-title" lang="eu">adar</h2>
@@ -83,12 +93,13 @@ const sums = [dmg, zip].filter((a) => a?.sha256) as NonNullable<typeof dmg>[];
 
     <!-- App showcase -->
     <section class="section showcase" id="showcase" aria-labelledby="showcase-title">
+      <div class="fog fog--top" aria-hidden="true"></div>
       <div class="wrap">
-        <div class="section-head section-head--center reveal">
-          <p class="eyebrow">The app</p>
+        <Chapter n="II" eu="Enborra" en="The trunk" center
+          story="Every forest starts with a trunk, and so does every repository: one history that everything else grows from.">
           <h2 id="showcase-title">A commit graph you can <span class="serif">hold in your hands.</span></h2>
           <p>Lanes, labels, avatars and a live <code>// WIP</code> node. Drag a branch onto another to merge or rebase. Tens of thousands of commits, still smooth.</p>
-        </div>
+        </Chapter>
         <figure class="shot" data-shot>
           <div class="shot__glow" aria-hidden="true"></div>
           <div class="shot__frame">
@@ -109,11 +120,11 @@ const sums = [dmg, zip].filter((a) => a?.sha256) as NonNullable<typeof dmg>[];
     <!-- Features -->
     <section class="section features" id="features" aria-labelledby="features-title">
       <div class="wrap">
-        <div class="section-head reveal">
-          <p class="eyebrow">Features</p>
+        <Chapter n="III" eu="Adarrak" en="The branches"
+          story="Branches split to reach the light, grow on their own, and sometimes grow back together.">
           <h2 id="features-title">Everything you do in git. <span class="serif">Now you can see it.</span></h2>
           <p>Adar is the whole of your daily git — commits, branches, rebases, conflicts, remotes — laid out where you can touch it, with an undo button for when you touch the wrong thing.</p>
-        </div>
+        </Chapter>
 
         <div class="bento">
           <article class="feat feat--graph card tilt spotlight reveal" data-animate>
@@ -214,19 +225,6 @@ const sums = [dmg, zip].filter((a) => a?.sha256) as NonNullable<typeof dmg>[];
             </div>
           </article>
 
-          <article class="feat feat--undo card tilt spotlight reveal" data-animate style="--delay:60ms">
-            <div class="feat__art" aria-hidden="true">
-              <div class="undo">
-                <div class="undo__keys"><span class="kbd kbd--xl">⌘</span><span class="kbd kbd--xl undo__z">Z</span></div>
-                <div class="undo__toast"><Icon name="undo" /><em>Undid “Delete branch <b>experiment</b>”</em></div>
-              </div>
-            </div>
-            <div class="feat__body">
-              <h3><Icon name="undo" />Undo &amp; redo</h3>
-              <p>Checkouts, commits, branches, tags, resets, stashes: take them back with ⌘Z.</p>
-            </div>
-          </article>
-
           <article class="feat feat--conflict card tilt spotlight reveal" data-animate style="--delay:120ms">
             <div class="feat__art" aria-hidden="true">
               <div class="cfx">
@@ -276,19 +274,53 @@ const sums = [dmg, zip].filter((a) => a?.sha256) as NonNullable<typeof dmg>[];
         </div>
 
         <ul class="more-feats reveal" aria-label="More features">
-          <li>Unified &amp; split diffs</li><li>Intra-line highlights</li><li>Image diffs</li><li>File history &amp; blame</li>
-          <li>Edit any commit message</li><li>Amend</li><li>Stashes</li><li>Submodules</li><li>Tags</li><li>Background fetch</li>
+          <li>Unified &amp; split diffs</li><li>Intra-line highlights</li><li>Image diffs</li>
+          <li>Command palette &amp; git console</li><li>Amend</li><li>Stashes</li><li>Submodules</li><li>Tags</li><li>Background fetch</li>
           <li>Pull: ff-only, merge or rebase</li><li>Force-push with lease</li><li>Clone with progress</li>
           <li>Dark &amp; light themes</li><li>In-app updates</li><li>Keyboard first</li>
         </ul>
       </div>
     </section>
 
+    <!-- IV · The rings -->
+    <section class="section rings-section" id="rings" aria-labelledby="rings-title-h">
+      <div class="wrap">
+        <Chapter n="IV" eu="Eraztunak" en="The rings"
+          story="A tree adds one ring every year and never loses one: its whole life is written in the wood.">
+          <h2 id="rings-title-h">Every change, <span class="serif">kept in the rings.</span></h2>
+          <p>Read the history of any file, see the last change to every line, and take back what you just did.</p>
+        </Chapter>
+        <div class="history">
+          <Rings releases={releases} />
+          <ul class="history__list">
+            <li class="history__item card reveal">
+              <Icon name="undo" />
+              <div>
+                <h3>Undo &amp; redo</h3>
+                <p>Checkouts, commits, branches, tags, resets and stashes: take them back. Undo refuses to run if the repository changed since, so it never makes things worse.</p>
+                <div class="history__keys" aria-label="Shortcuts"><span class="kbd">⌘</span><span class="kbd">Z</span><span class="kbd">⇧⌘Z</span></div>
+              </div>
+            </li>
+            <li class="history__item card reveal" style="--delay:80ms">
+              <Icon name="list" />
+              <div><h3>File history &amp; blame</h3><p>Every version of a file and the commit behind every line, with syntax highlighting and intra-line changes.</p></div>
+            </li>
+            <li class="history__item card reveal" style="--delay:160ms">
+              <Icon name="commit" />
+              <div><h3>Edit any commit message</h3><p>Fix the message of the latest commit or an older one on your branch, in place. Adar tells you first if it was already pushed.</p></div>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
     <!-- Your git -->
     <section class="section yours" id="yours" aria-labelledby="yours-title">
+      <Fireflies count={18} />
       <div class="wrap yours__grid">
-        <div class="yours__copy reveal">
-          <p class="eyebrow">Works with every repository</p>
+        <div class="yours__copy chapter reveal">
+          <p class="chapter__mark"><span class="chapter__n">V</span><span class="chapter__eu" lang="eu">Sustraiak</span><span class="chapter__en">The roots</span></p>
+          <p class="chapter__story">Roots drink from what is already in the ground. Adar runs on the git, the keys and the terminal already on your Mac.</p>
           <h2 id="yours-title">Your git. Your keys. <span class="serif">Your machine.</span></h2>
           <p>Adar drives the <code>git</code> already installed on your Mac, so it works with exactly the credentials you use in the terminal. When git needs a username, a token or an SSH passphrase, Adar asks in a dialog and git stores it with your usual credential helper.</p>
           <ul class="ticks">
@@ -338,8 +370,14 @@ $ adar ~/code/shop</code></pre></noscript>
     </section>
 
     <!-- Download -->
-    <section class="section download" id="download" aria-labelledby="download-title">
+    <section class="section download" id="download" aria-labelledby="dawn-title">
       <div class="wrap">
+        <Chapter n="VI" eu="Egunsentia" en="Dawn" center
+          story="After every winter a deer sheds its antlers and grows a new set — larger, with more tines, as it grows older. Adar grows the same way.">
+          <h2 id="dawn-title">A new set of antlers, <span class="serif">every release.</span></h2>
+          <p>Each version branches a little further, and the app updates itself when the next one is out.</p>
+        </Chapter>
+        <Antlers releases={releases} latest={latest} />
         <div class="dl reveal">
           <div class="dl__main">
             <div class="dl__icon" aria-hidden="true"><img src={url('assets/favicon.svg')} width="96" height="96" alt=""></div>
@@ -405,8 +443,9 @@ $ adar ~/code/shop</code></pre></noscript>
     <!-- Open source -->
     <section class="section oss" id="open-source" aria-labelledby="oss-title">
       <div class="wrap">
-        <div class="oss__inner reveal">
-          <p class="eyebrow">Open source</p>
+        <div class="oss__inner chapter reveal">
+          <p class="chapter__mark"><span class="chapter__n">VII</span><span class="chapter__eu" lang="eu">Auzolana</span><span class="chapter__en">Built together</span></p>
+          <p class="chapter__story">In Basque villages, <i lang="eu">auzolan</i> is neighbours working together on what belongs to everyone. Adar is grown the same way.</p>
           <h2 id="oss-title">Grown <span class="serif">in the open.</span></h2>
           <p>Adar is MIT-licensed and built in public. Read the code, suggest an idea, or pick up a good first issue — every branch starts somewhere.</p>
           <dl class="oss__stats">

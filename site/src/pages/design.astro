@@ -7,6 +7,7 @@ import Icon from '../components/Icon.astro';
 import '../styles/design.css';
 import { url } from '../lib/url';
 import sprite from '../icons/icons.svg?raw';
+import { chapters } from '../lib/story';
 
 const icons = [...sprite.matchAll(/<symbol[^>]*\bid="([\w-]+)"/g)].map((m) => m[1]);
 ---
@@ -51,6 +52,7 @@ const icons = [...sprite.matchAll(/<symbol[^>]*\bid="([\w-]+)"/g)].map((m) => m[
           <li><a href="#graph">Graph language</a></li>
           <li><a href="#components">Components</a></li>
           <li><a href="#voice">Voice</a></li>
+          <li><a href="#story">Story</a></li>
           <li><a href="#downloads">Downloads</a></li>
         </ol>
       </nav>
@@ -276,8 +278,31 @@ const icons = [...sprite.matchAll(/<symbol[^>]*\bid="([\w-]+)"/g)].map((m) => m[
         </section>
 
         <!-- Downloads -->
+        <section class="ds-sec" id="story" aria-labelledby="h-story">
+          <header class="ds-sec__head"><p class="eyebrow">11</p><h2 id="h-story">Story</h2>
+            <p>The story is what makes Adar different. In Basque one word, <i lang="eu">adar</i>, names a tree’s branch and a deer’s antler, and a git branch grows the same way. The website tells it as one night in the forest, from dark to dawn, and every chapter pairs a Basque word with a part of the product.</p></header>
+          <div class="story-table card">
+            <table>
+              <thead><tr><th scope="col">#</th><th scope="col">Euskara</th><th scope="col">Meaning</th><th scope="col">In the forest</th><th scope="col">In Adar</th></tr></thead>
+              <tbody>
+                {chapters.map((c) => (
+                  <tr><td class="mono">{c.n}</td><th scope="row"><span class="serif" lang="eu">{c.eu}</span></th><td>{c.en}</td><td>{c.image}</td><td>{c.product}</td></tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <ol class="story-rules">
+            <li class="card"><b>The story frames, the product sells.</b> One sentence of forest, then a literal headline about what Adar does.</li>
+            <li class="card"><b>Only true images.</b> Deer really shed their antlers every year; trees really add a ring a year. If it isn’t true in the forest, it doesn’t go in.</li>
+            <li class="card"><b>Basque first, then its meaning.</b> Basque words in the serif italic, marked <code>lang="eu"</code>, with the English meaning beside them.</li>
+            <li class="card"><b>Never rename git.</b> Branches, commits and rebases keep their names; the metaphor lives in captions and chapter titles.</li>
+            <li class="card"><b>Imply the deer.</b> Its antlers are enough: no illustrated deer, leaves or wood textures in the interface.</li>
+            <li class="card"><b>Night to dawn.</b> Light grows as the story moves on, and the download is at dawn.</li>
+          </ol>
+        </section>
+
         <section class="ds-sec" id="downloads" aria-labelledby="h-downloads">
-          <header class="ds-sec__head"><p class="eyebrow">11</p><h2 id="h-downloads">Downloads</h2>
+          <header class="ds-sec__head"><p class="eyebrow">12</p><h2 id="h-downloads">Downloads</h2>
             <p>Everything is MIT-licensed with the rest of Adar. Use it for articles, talks, forks and integrations — just don’t present a fork as the official Adar.</p></header>
           <div class="downloads">
             <a class="dl-asset card" href={url('assets/adar-mark.svg')} download><img src={url('assets/adar-mark.svg')} width="40" height="40" alt=""><span><b>Mark</b><i class="mono">adar-mark.svg</i></span><Icon name="download" /></a>

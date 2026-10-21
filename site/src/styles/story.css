@@ -1,0 +1,146 @@
+/* The landing page as one night in the forest: chapters, sky, fog, fireflies, rings and antlers. */
+
+/* ── Sky (night → blue hour → dawn) ──────────────────────── */
+.sky { position: fixed; inset: 0; z-index: -1; pointer-events: none; background: var(--gau-900); --stars: 1; --deep: 0; --dawn: 0; --sun: 0; }
+.sky > div { position: absolute; inset: 0; }
+.sky__deep { opacity: var(--deep); background: linear-gradient(180deg, #070e14 0%, #0a1418 55%, #0c1513 100%); }
+.sky__dawn { opacity: var(--dawn); background: linear-gradient(180deg, #0c0e16 0%, #15121a 38%, #241815 72%, #3a2416 100%); }
+.sky__sun {
+  opacity: var(--sun);
+  background: radial-gradient(70% 42% at 50% 108%, rgb(255 205 120 / 0.42), rgb(255 140 95 / 0.18) 42%, transparent 72%);
+  transform: translateY(calc((1 - var(--sun)) * 12vh));
+}
+.sky__stars {
+  opacity: calc(var(--stars) * 0.9);
+  background-image:
+    radial-gradient(1.2px 1.2px at 12% 18%, #fff, transparent 60%), radial-gradient(1px 1px at 33% 42%, #dfe, transparent 60%),
+    radial-gradient(1.4px 1.4px at 58% 12%, #fff, transparent 60%), radial-gradient(1px 1px at 77% 33%, #eef, transparent 60%),
+    radial-gradient(1.1px 1.1px at 89% 71%, #fff, transparent 60%), radial-gradient(1px 1px at 22% 77%, #dfe, transparent 60%),
+    radial-gradient(1.3px 1.3px at 46% 63%, #fff, transparent 60%), radial-gradient(1px 1px at 67% 88%, #eef, transparent 60%);
+  background-size: 420px 420px;
+  animation: twinkle 7s ease-in-out infinite alternate;
+}
+.sky__stars--far { opacity: calc(var(--stars) * 0.45); background-size: 260px 260px; background-position: 90px 140px; animation-duration: 11s; animation-delay: -3s; }
+@keyframes twinkle { 50% { filter: brightness(0.55); } }
+
+/* The landing's sections let the sky through; the 3D scene fades out as the story moves on. */
+#main.story .section { background: transparent; }
+#main.story .showcase::before { display: none; }
+/* The name chapter's reading shade fades out at its lower edge instead of ending in a line over the sky. */
+@media (min-width: 861px) {
+  #main.story .name__sticky::before { -webkit-mask: linear-gradient(#000 55%, transparent); mask: linear-gradient(#000 55%, transparent); }
+}
+#main.story .oss::before { top: 8%; background: radial-gradient(closest-side, rgb(197 245 106 / 0.08), transparent); }
+.scene.is-live { transition: none; }
+
+/* ── Fog ─────────────────────────────────────────────────── */
+.fog {
+  position: absolute; left: 0; right: 0; height: 420px; pointer-events: none; overflow: hidden; z-index: 0;
+  -webkit-mask: linear-gradient(transparent, #000 35%, #000 65%, transparent); mask: linear-gradient(transparent, #000 35%, #000 65%, transparent);
+}
+/* Inside its section (sections may clip overflow), fading in from the section's edge. */
+.fog--top { top: 0; }
+.fog--bottom { bottom: 0; }
+.fog::before, .fog::after {
+  content: ""; position: absolute; inset: 25% -30%; border-radius: 50%;
+  background: radial-gradient(closest-side, rgb(205 225 215 / 0.055), transparent);
+  filter: blur(30px); animation: drift 38s ease-in-out infinite alternate;
+}
+.fog::after { inset: 35% -10% 15% 20%; background: radial-gradient(closest-side, rgb(180 210 200 / 0.045), transparent); animation-duration: 52s; animation-direction: alternate-reverse; }
+@keyframes drift { to { transform: translateX(14%); } }
+.section > .wrap { position: relative; z-index: 1; }
+
+/* ── Fireflies ───────────────────────────────────────────── */
+.fireflies { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 0; }
+.fireflies i {
+  position: absolute; left: var(--x); top: var(--y); width: 4px; height: 4px; border-radius: 50%;
+  background: #e9ff9a; box-shadow: 0 0 10px 2px rgb(205 255 120 / 0.7), 0 0 26px 6px rgb(197 245 106 / 0.25);
+  opacity: 0; animation: fly var(--t) ease-in-out var(--d) infinite;
+}
+@keyframes fly {
+  0% { opacity: 0; transform: translate(0, 0); }
+  20%, 60% { opacity: 0.9; }
+  45% { opacity: 0.25; }
+  80% { opacity: 0; transform: translate(var(--dx), var(--dy)); }
+  100% { opacity: 0; transform: translate(var(--dx), var(--dy)); }
+}
+
+/* ── Chapter headers ─────────────────────────────────────── */
+.chapter { gap: var(--space-3); }
+.chapter p.chapter__mark, p.name__mark { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; margin-bottom: var(--space-2); font-size: inherit; color: inherit; }
+.section-head--center .chapter__mark, .oss__inner .chapter__mark { justify-content: center; }
+.name p.name__mark { margin-bottom: var(--space-5); }
+.oss__inner p.chapter__story { margin: 0 auto; text-align: center; }
+.chapter__n { font: 500 var(--text-xs) / 1 var(--font-mono); letter-spacing: var(--tracking-wide); color: var(--accent-text); padding: 5px 8px; border: 1px solid rgb(197 245 106 / 0.35); border-radius: var(--radius-full); }
+.chapter__eu { font: italic 400 clamp(2rem, 1.4rem + 2vw, 2.75rem) / 1 var(--font-serif); color: var(--text); letter-spacing: -0.01em; }
+.chapter__en { font: 500 var(--text-xs) / 1 var(--font-mono); letter-spacing: var(--tracking-wide); text-transform: uppercase; color: var(--text-4); }
+.chapter p.chapter__story { max-width: 600px; margin-bottom: var(--space-4); font: italic 400 var(--text-xl) / 1.4 var(--font-serif); color: var(--text-2); }
+.section-head--center .chapter__story { margin-left: auto; margin-right: auto; }
+
+/* ── Chapter rail ────────────────────────────────────────── */
+.rail { position: fixed; left: 22px; top: 50%; z-index: 40; transform: translateY(-50%); opacity: 0; pointer-events: none; transition: opacity var(--dur-3) var(--ease-grow); }
+.rail.is-on { opacity: 1; pointer-events: auto; }
+.rail ol { position: relative; list-style: none; margin: 0; padding: 0; display: grid; gap: 20px; }
+.rail ol::before { content: ""; position: absolute; left: 6px; top: 6px; bottom: 6px; width: 2px; background: repeating-linear-gradient(to bottom, rgb(197 245 106 / 0.35) 0 4px, transparent 4px 8px); }
+.rail a { position: relative; display: flex; align-items: center; gap: 12px; height: 14px; }
+.rail__node { position: relative; width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--text-4); background: var(--bg); transition: border-color var(--dur-2), background var(--dur-2), box-shadow var(--dur-2), transform var(--dur-2) var(--ease-spring); }
+.rail a:hover .rail__node { border-color: var(--accent); transform: scale(1.15); }
+.rail a.is-done .rail__node { border-color: rgb(197 245 106 / 0.6); }
+.rail a[aria-current] .rail__node { border-color: var(--accent); background: var(--accent); box-shadow: 0 0 14px var(--accent); }
+.rail__label {
+  display: grid; gap: 2px; padding: 6px 10px; border-radius: var(--radius-sm); white-space: nowrap;
+  background: rgb(10 13 12 / 0.86); border: 1px solid var(--line); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  opacity: 0; transform: translateX(-6px); transition: opacity var(--dur-2), transform var(--dur-2) var(--ease-grow); pointer-events: none;
+}
+.rail__label b { font: italic 400 17px / 1 var(--font-serif); color: var(--text); }
+.rail__label i { font: normal 400 var(--text-2xs) / 1 var(--font-mono); color: var(--text-4); text-transform: uppercase; letter-spacing: 0.08em; }
+.rail a:hover .rail__label, .rail a:focus-visible .rail__label { opacity: 1; transform: none; }
+@media (max-width: 1279px) { .rail { display: none; } }
+
+/* ── Rings (chapter IV) ──────────────────────────────────── */
+.history { display: grid; grid-template-columns: 1.15fr 1fr; gap: var(--space-8); align-items: center; }
+.rings { margin: 0; display: grid; gap: 14px; }
+.rings__svg { width: 100%; height: auto; overflow: visible; }
+.rings__bark { fill: none; stroke: #2b231b; stroke-width: 26; }
+.rings__crack { stroke: #120f0c; stroke-width: 2; stroke-linecap: round; }
+.rings__ray { stroke: rgb(238 230 212 / 0.05); stroke-width: 1; }
+.rings__split { fill: #0d0b09; opacity: 0.85; }
+.rings__ring { fill: none; stroke: rgb(238 230 212 / 0.22); stroke-width: 1.4; stroke-dasharray: 1; stroke-dashoffset: 1; transition: stroke-dashoffset 1.4s var(--ease-grow) calc(var(--i) * 45ms); }
+.rings__ring--late { stroke: rgb(238 230 212 / 0.12); stroke-width: 3; }
+.rings__ring--release { stroke: rgb(238 230 212 / 0.55); stroke-width: 2; }
+.rings__ring--release.is-latest { stroke: var(--iratze); stroke-width: 3; filter: drop-shadow(0 0 6px rgb(197 245 106 / 0.7)); }
+.is-in .rings__ring { stroke-dashoffset: 0; }
+.rings__pith { fill: rgb(238 230 212 / 0.5); }
+.rings__label { opacity: 0; transition: opacity 0.8s var(--ease-grow) 1.3s; }
+.is-in .rings__label { opacity: 1; }
+.rings__leader { fill: none; stroke: rgb(238 230 212 / 0.3); stroke-width: 1; stroke-dasharray: 3 4; }
+.rings__dot { fill: var(--bg); stroke: var(--hezur); stroke-width: 2; }
+.rings__label.is-latest .rings__dot { fill: var(--iratze); stroke: var(--iratze); }
+.rings__label.is-latest .rings__leader { stroke: rgb(197 245 106 / 0.6); }
+.rings__label text { font: 400 15px var(--font-mono); fill: var(--text-3); }
+.rings__tag { fill: var(--text); font-weight: 500; }
+.rings__label.is-latest .rings__tag { fill: var(--iratze); }
+.rings__date { font-size: 13px; }
+.history__list { list-style: none; padding: 0; display: grid; gap: 14px; }
+.history__item { display: grid; grid-template-columns: 44px 1fr; gap: 16px; padding: 20px; }
+.history__item > svg { width: 22px; height: 22px; color: var(--accent-text); margin: 3px auto 0; }
+.history__item h3 { font-size: var(--text-lg); margin-bottom: 4px; }
+.history__item p { font-size: var(--text-sm); color: var(--text-3); }
+.history__keys { display: flex; gap: 6px; margin-top: 10px; }
+@media (max-width: 960px) { .history { grid-template-columns: 1fr; } }
+
+/* ── Antlers (chapter VI) ────────────────────────────────── */
+.sheds { list-style: none; padding: 0; margin: 0 0 var(--space-7); display: flex; justify-content: center; align-items: flex-end; gap: clamp(12px, 4vw, 48px); flex-wrap: wrap; }
+.shed { display: grid; justify-items: center; gap: 6px; color: rgb(238 230 212 / 0.4); transition: color var(--dur-3); }
+.shed svg { width: clamp(52px, 7vw, 84px); height: auto; margin-bottom: 6px; }
+.shed b { font-size: var(--text-sm); font-weight: 500; color: var(--text-2); }
+.shed time { font-size: var(--text-2xs); color: var(--text-4); }
+.shed.is-latest { color: var(--iratze); }
+.shed.is-latest svg { width: clamp(68px, 9vw, 110px); filter: drop-shadow(0 0 18px rgb(197 245 106 / 0.45)); }
+.shed.is-latest b { color: var(--accent-text); }
+.shed:not(:last-child)::after { content: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .fireflies i { animation: none; opacity: 0.6; }
+  .fog::before, .fog::after, .sky__stars { animation: none; }
+}

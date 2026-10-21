@@ -1,0 +1,59 @@
+---
+// One set of antlers per release, oldest first, each with one more tine — the way a young deer grows
+// spikes in its first year and more branched antlers after every winter. The newest set is lit.
+import type { Release } from '../lib/releases';
+import { formatDate } from '../lib/releases';
+
+interface Props { releases: Release[]; latest: Release | null }
+const { latest } = Astro.props;
+const chrono = Astro.props.releases.filter((r) => !r.prerelease).slice().reverse().slice(-6);
+
+type P = [number, number];
+const bez = (a: P, b: P, c: P, d: P, t: number): P => {
+  const u = 1 - t;
+  return [0, 1].map((k) => u * u * u * a[k] + 3 * u * u * t * b[k] + 3 * u * t * t * c[k] + t * t * t * d[k]) as P;
+};
+// The left beam of the Adar mark (two cubic segments); the right one is its mirror image.
+const SEG1: [P, P, P, P] = [[32, 45], [25, 42], [12, 38], [11, 24]];
+const SEG2: [P, P, P, P] = [[11, 24], [10.5, 17], [12, 12], [15.5, 7.5]];
+const beamAt = (u: number): P => (u < 0.5 ? bez(...SEG1, u * 2) : bez(...SEG2, (u - 0.5) * 2));
+const f = (n: number) => n.toFixed(1);
+
+function antlers(tines: number) {
+  const us = tines === 1 ? [0.42] : Array.from({ length: tines }, (_, k) => 0.34 + (k * 0.36) / Math.max(1, tines - 1));
+  const left = us.map((u, k) => {
+    const [x, y] = beamAt(u);
+    const len = 1 - k * 0.2;
+    const dx = 12 * len, dy = -11 * len;
+    return { d: `M${f(x)} ${f(y)}C${f(x + dx * 0.15)} ${f(y + dy * 0.5)} ${f(x + dx * 0.62)} ${f(y + dy * 0.85)} ${f(x + dx)} ${f(y + dy)}`, tip: [x + dx, y + dy] as P };
+  });
+  const mirror = (d: string) => d.replace(/(-?\d+\.?\d*) (-?\d+\.?\d*)/g, (_, x, y) => `${f(64 - Number(x))} ${y}`);
+  return {
+    tines: [...left.map((t) => t.d), ...left.map((t) => mirror(t.d))],
+    tips: [...left.map((t) => t.tip), ...left.map((t) => [64 - t.tip[0], t.tip[1]] as P)],
+  };
+}
+const sets = chrono.map((release, i) => ({ release, ...antlers(Math.min(i, 3)) }));
+---
+{sets.length > 0 && (
+  <ol class="sheds reveal" aria-label="Releases, oldest first">
+    {sets.map((s) => (
+      <li class:list={['shed', { 'is-latest': s.release === latest }]}>
+        <svg viewBox="0 0 64 64" aria-hidden="true">
+          <g fill="none" stroke="currentColor" stroke-width="4.6" stroke-linecap="round">
+            <path d="M32 55V45" />
+            <path d="M32 45C25 42 12 38 11 24C10.5 17 12 12 15.5 7.5" />
+            <path d="M32 45C39 42 52 38 53 24C53.5 17 52 12 48.5 7.5" />
+            {s.tines.map((d) => <path d={d} />)}
+          </g>
+          <g fill="currentColor">
+            <circle cx="15.5" cy="7.5" r="4.4" /><circle cx="48.5" cy="7.5" r="4.4" /><circle cx="32" cy="55.5" r="5.4" />
+            {s.tips.map(([x, y]) => <circle cx={f(x)} cy={f(y)} r="3.8" />)}
+          </g>
+        </svg>
+        <b class="mono">{s.release.tag}</b>
+        <time class="mono" datetime={s.release.date}>{formatDate(s.release.date)}</time>
+      </li>
+    ))}
+  </ol>
+)}
