@@ -101,6 +101,9 @@ tab groups (a project's repositories together, reopened in one click).
   fetch/pull, and favourites. (Tab groups themselves are done.)
 - [ ] Tab groups: any colour for a group (colour picker or hex value) besides the preset palette, with the chip's
   text switching between light and dark so it stays readable in both themes. *(good first issue)*
+- [ ] App menu: once the `adar` command is installed, show **Uninstall Command Line Tool…** instead of *Install…*
+  (rebuild the menu after installing or uninstalling, and check at startup). Today uninstalling is only in
+  Settings → Integrations and the command palette. *(good first issue)*
 - [ ] Optional system notifications when a fetch brings new commits to branches you track.
 - [ ] Accessibility pass: screen-reader labels, full keyboard navigation, reduced motion.
 - [ ] First-run tour.
