@@ -15,7 +15,7 @@
   <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-blue"></a>
 </p>
 
-<p align="center"><a href="https://mikelgarciaurbina.github.io/adar/">Website</a> · <a href="https://mikelgarciaurbina.github.io/adar/roadmap.html">Roadmap</a> · <a href="README.es.md">Leer en castellano</a></p>
+<p align="center"><a href="ROADMAP.md">Roadmap</a> · <a href="README.es.md">Leer en castellano</a></p>
 
 > *Adar* means **branch** — and **antler** — in Basque (euskara). The logo is both: antlers drawn with git lanes.
 
@@ -128,7 +128,7 @@ Pushing a `v*` tag builds the macOS app on GitHub Actions and publishes a releas
 the in-app updater:
 
 ```bash
-npm version 0.3.1   # bumps package.json and creates the v0.3.1 tag
+npm version 0.4.0   # bumps package.json and creates the v0.4.0 tag
 git push origin main --tags
 ```
 

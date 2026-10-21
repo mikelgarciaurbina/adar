@@ -1,8 +1,9 @@
-// The Adar website: static pages. SITE_URL is the public address, path included; the default is GitHub
-// Pages (.github/workflows/pages.yml). Elsewhere, e.g. Cloudflare Pages, set SITE_URL=https://adar.pages.dev/.
+// The Adar website: static pages, deployed by Cloudflare Pages from this repository (root directory `site`).
+// SITE_URL is the public address (path included) used for canonical and social-card URLs; until it is set,
+// Cloudflare builds fall back to the deployment's own URL (CF_PAGES_URL) and local builds to localhost.
 import { defineConfig } from 'astro/config';
 
-const siteUrl = new URL(process.env.SITE_URL || 'https://mikelgarciaurbina.github.io/adar/');
+const siteUrl = new URL(process.env.SITE_URL || process.env.CF_PAGES_URL || 'http://localhost:4321/');
 
 export default defineConfig({
   site: siteUrl.origin,

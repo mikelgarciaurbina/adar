@@ -9,7 +9,7 @@
   GitHub, GitLab, Bitbucket, Azure DevOps o tu propio servidor.
 </p>
 
-<p align="center"><a href="https://mikelgarciaurbina.github.io/adar/">Web</a> · <a href="https://mikelgarciaurbina.github.io/adar/roadmap.html">Roadmap</a> · <a href="README.md">Read in English</a></p>
+<p align="center"><a href="ROADMAP.md">Roadmap</a> · <a href="README.md">Read in English</a></p>
 
 > *Adar* significa **rama** —y también **cuerna**— en euskera. El logo es las dos cosas: una cornamenta dibujada con carriles de git.
 
@@ -104,7 +104,7 @@ Al subir un tag `v*`, GitHub Actions compila la app y publica una release; las c
 actualizador integrado:
 
 ```bash
-npm version 0.3.1   # actualiza package.json y crea el tag v0.3.1
+npm version 0.4.0   # actualiza package.json y crea el tag v0.4.0
 git push origin main --tags
 ```
 

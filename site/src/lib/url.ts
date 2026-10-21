@@ -1,4 +1,4 @@
-// Site-relative URLs that respect the deploy base (/adar/ on GitHub Pages, / elsewhere; see astro.config.mjs).
+// Site-relative URLs that respect the deploy base (the path of SITE_URL, usually /; see astro.config.mjs).
 const BASE = import.meta.env.BASE_URL.replace(/\/?$/, '/');
 
 export const url = (path = '') => BASE + path.replace(/^\//, '');
