@@ -1,23 +1,25 @@
-### Improved
-- **The rest of the new design.** The checked-out branch is a highlighted row with a filled dot, also in the toolbar
-  and the status bar; every branch in the left panel keeps the colour of its lane in the graph; the selected commit and
-  file use the fern highlight; files show their status as a letter (M, A, D, U…); the commit details show the
-  commit's lane colour and its branches under the author.
-- **Settings, redesigned**: options grouped in cards, and theme cards with a preview of *Gaua* (night), *Eguna* (day)
-  and System.
-- **A tab bar that fits.** Tabs share the bar and shrink instead of scrolling; when even that is not enough, a list of
-  every open repository appears at its end. Tabs inside a group no longer repeat the folder name the group already
-  shows.
-- **Diff**: change markers on the scrollbar show where a long file changed (click one to jump there), and the header
-  no longer repeats the commit the right panel already shows.
-- New commits grow into their lane, and switching themes fades between them.
+### New
+- **Adar for Windows and Linux (beta).** Adar now runs on 64-bit Windows 10 and 11 (an installer for your user, no
+  administrator rights needed) and on 64-bit Linux (an AppImage for most distributions, and a `.deb` for Debian,
+  Ubuntu and their derivatives). It is the same app with the same features, and keyboard shortcuts use Ctrl. These
+  builds are new: if something misbehaves, please [open an issue](https://github.com/mikelgarciaurbina/adar/issues).
+- On Windows and Linux, Adar tells you when a new version is out, and its **Download** button opens the release page
+  to get the new installer.
+- Nothing changes on macOS. Every change to Adar is now tested on macOS, Windows and Linux.
 
 ### Install
-Download `Adar-0.5.1-arm64.dmg` (Apple Silicon Macs) and drag Adar to Applications. The app is not signed with an
-Apple Developer ID yet, so macOS may say it "is damaged" the first time; run this once in Terminal and open it again:
+**macOS** (Apple Silicon): download `Adar-0.6.0-arm64.dmg` and drag Adar to Applications. The app is not signed with
+an Apple Developer ID yet, so macOS may say it "is damaged" the first time; run this once in Terminal and open it
+again:
 
 ```
 xattr -dr com.apple.quarantine /Applications/Adar.app
 ```
 
-Already using Adar? Use **Adar → Check for Updates…**. Requires Git 2.26 or newer.
+**Windows** (64-bit): download `Adar-0.6.0-win-x64.exe` and run it. The installer is not signed yet, so SmartScreen
+may say "Windows protected your PC"; click **More info**, then **Run anyway**. Needs Git for Windows.
+
+**Linux** (64-bit): download `Adar-0.6.0-linux-x86_64.AppImage`, make it executable (`chmod +x`) and run it (it needs
+`libfuse2`), or install `Adar-0.6.0-linux-amd64.deb` with `sudo apt install ./Adar-0.6.0-linux-amd64.deb`.
+
+Already using Adar on a Mac? Use **Adar → Check for Updates…**. Requires Git 2.26 or newer.
