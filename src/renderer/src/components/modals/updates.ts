@@ -2,7 +2,7 @@
 // No DOM / store access so they can be unit-tested in node.
 
 import { relativeTime } from '@renderer/lib/format'
-import { UPDATE_REPO, type UpdateStatus } from '@shared/update'
+import { UPDATE_REPO, updatesFromReleasePage, type UpdateStatus } from '@shared/update'
 
 /** Public source repository (also where releases are published). */
 export const REPO_URL = `https://github.com/${UPDATE_REPO}`
@@ -36,7 +36,11 @@ export function describeUpdateStatus(status: UpdateStatus | null, opts: Describe
   const version = status?.info?.latestVersion
   switch (status?.state) {
     case 'available':
-      if (version) return { text: `Adar ${version} is available`, tone: 'accent', action: 'update', actionLabel: 'Update' }
+      if (version) {
+        // Windows / Linux: the button opens the release page.
+        const label = status.info && updatesFromReleasePage(status.info) ? 'Download' : 'Update'
+        return { text: `Adar ${version} is available`, tone: 'accent', action: 'update', actionLabel: label }
+      }
       break
     case 'downloading':
       if (version)

@@ -7,6 +7,8 @@
 //               waits for Adar to quit, swaps the .app bundle and relaunches it. Anything else
 //               (dev build, .dmg only, read-only /Applications) falls back to opening the .dmg
 //               or the release page.
+// Windows and Linux builds only check: the release has no asset for them to install in place, so
+// "Update" opens the release page (pickAssets gives them none).
 //
 // Integrity (releases are unsigned, so this catches corruption, truncation, replaced or mixed-up
 // assets — not a compromised GitHub account): downloads only from GitHub's release hosts over https;
@@ -186,7 +188,7 @@ export class Updater implements UpdateApi {
         // Background checks stay silent when nothing is new.
         return this.set({ state: 'not-available', info: null, manual, checkedAt: Date.now(), error: undefined }, manual)
       }
-      const { zip, dmg } = pickAssets(Array.isArray(release.assets) ? release.assets : [], process.arch)
+      const { zip, dmg } = pickAssets(Array.isArray(release.assets) ? release.assets : [], process.arch, process.platform)
       const info: UpdateInfo = {
         currentVersion: this.deps.currentVersion,
         latestVersion: latest,

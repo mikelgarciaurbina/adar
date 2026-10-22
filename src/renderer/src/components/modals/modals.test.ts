@@ -268,7 +268,7 @@ describe('describeUpdateStatus', () => {
     notes: '',
     releaseUrl: `${REPO_URL}/releases/tag/v0.2.0`,
     publishedAt: '',
-    zip: null,
+    zip: { name: 'Adar-0.2.0-arm64.zip', url: `${REPO_URL}/releases/download/v0.2.0/Adar-0.2.0-arm64.zip`, size: 1 },
     dmg: null
   }
   const st = (patch: Partial<UpdateStatus>): UpdateStatus => ({ state: 'idle', currentVersion: '0.1.0', info: null, canInstall: false, ...patch })
@@ -282,6 +282,10 @@ describe('describeUpdateStatus', () => {
   })
   it('offers to update when a release is available', () => {
     expect(describeUpdateStatus(st({ state: 'available', info }), desktop)).toMatchObject({ text: 'Adar 0.2.0 is available', tone: 'accent', action: 'update', actionLabel: 'Update' })
+  })
+  it('offers a download from the release page when there is no asset to install (Windows, Linux)', () => {
+    const fromPage = { ...info, zip: null, dmg: null }
+    expect(describeUpdateStatus(st({ state: 'available', info: fromPage }), desktop)).toMatchObject({ action: 'update', actionLabel: 'Download' })
   })
   it('shows download progress as a busy update', () => {
     const d = describeUpdateStatus(st({ state: 'downloading', info, progress: 41.6 }), desktop)

@@ -10,7 +10,7 @@ import { showMenuBelow } from '@renderer/components/common/ContextMenu'
 import { Modal } from '@renderer/components/common/Modal'
 import { toast } from '@renderer/components/common/toast'
 import { AdarLogo } from '@renderer/components/layout/Logo'
-import type { UpdateStatus } from '@shared/update'
+import { updatesFromReleasePage, type UpdateStatus } from '@shared/update'
 import { ReleaseNotes } from './ReleaseNotes'
 import { useApp } from '@renderer/store/appStore'
 import { installUpdate, startUpdate } from './restart'
@@ -68,6 +68,8 @@ export function UpdateNotice() {
   if (!status || !info) return null
   const visible = ['available', 'downloading', 'downloaded'].includes(status.state) || (status.state === 'error' && !!info)
   const hidden = dismissed === info.latestVersion && status.state === 'available'
+  // Windows / Linux: "Update" opens the release page instead of downloading.
+  const fromPage = updatesFromReleasePage(info)
 
   return (
     <>
@@ -105,10 +107,14 @@ export function UpdateNotice() {
                   variant="primary"
                   icon={<Download size={13} />}
                   loading={status.state === 'downloading'}
-                  title="Download the update. You choose when Adar restarts to install it."
+                  title={
+                    fromPage
+                      ? 'Open the release page to download and install it.'
+                      : 'Download the update. You choose when Adar restarts to install it.'
+                  }
                   onClick={() => void startUpdate()}
                 >
-                  {status.state === 'error' ? 'Retry' : 'Update'}
+                  {status.state === 'error' ? 'Retry' : fromPage ? 'Download' : 'Update'}
                 </Button>
               )}
               <Button size="sm" variant="ghost" onClick={() => useUpdates.getState().setNotesOpen(true)}>
@@ -166,7 +172,7 @@ export function UpdateNotice() {
                     void startUpdate()
                   }}
                 >
-                  Update to {info.latestVersion}
+                  {fromPage ? 'Download' : 'Update to'} {info.latestVersion}
                   {info.zip || info.dmg ? ` (${formatBytes((info.zip ?? info.dmg)!.size)})` : ''}
                 </Button>
               )}

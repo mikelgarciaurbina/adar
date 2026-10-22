@@ -18,7 +18,8 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
     `gitNetwork`, `exclusive`, `gitDir`, `operationState`); `git/ops.ts` (read/write split).
   - `system/` — settings/recents/trusted repos store, askpass bridge (credential prompts → UI), file watcher with
     polling fallback, login-shell `PATH` fix.
-  - `updater.ts` — in-app updates from GitHub Releases (check → download → verify → replace bundle → relaunch).
+  - `updater.ts` — in-app updates from GitHub Releases (check → download → verify → replace bundle → relaunch) on
+    macOS; Windows and Linux builds only check, and "Download" opens the release page.
   - `cli.ts` / `cliPath.ts` — install/uninstall the `adar` command (symlink to `resources/bin/adar`, shipped in the
     bundle as `Contents/Resources/bin/adar`); `openRequests.ts` queues folders to open from the CLI/Dock
     (`open-file`), `--open-repo=<path>` launch args and second instances until the renderer takes them.
@@ -92,6 +93,9 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
 - Updater end to end with packaged builds: `scripts/test-updater.sh <workdir>` (must print `UPDATER TEST PASSED`).
 
 ## Commands
-- `npm run dev` (desktop app), `npm run web` (browser), `npm run build`, `npm run dist` (local .dmg/.zip).
-- Release: bump the version (`npm version x.y.z`), push the tag; `.github/workflows/release.yml` builds, uploads to a
-  draft release, verifies the assets and publishes it. Installed apps pick it up through the in-app updater.
+- `npm run dev` (desktop app), `npm run web` (browser), `npm run build`, `npm run dist` (local .dmg/.zip),
+  `npm run dist:win` / `npm run dist:linux` (x64 NSIS installer / AppImage + .deb; best built on their own system).
+- Release: bump the version (`npm version x.y.z`), push the tag; `.github/workflows/release.yml` builds macOS, Windows
+  and Linux on their own runners, uploads everything to a draft release, verifies the assets and publishes it. Installed
+  apps pick it up through the in-app updater. macOS assets keep their arch-only names (`Adar-<v>-arm64.zip`), which
+  installed apps look for; Windows/Linux assets name their system and are never .zip/.dmg.

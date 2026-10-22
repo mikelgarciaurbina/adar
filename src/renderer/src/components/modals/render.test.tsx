@@ -33,7 +33,7 @@ const releaseInfo = {
   notes: '',
   releaseUrl: 'https://github.com/mikelgarciaurbina/adar/releases/tag/v0.2.0',
   publishedAt: '',
-  zip: null,
+  zip: { name: 'Adar-0.2.0-arm64.zip', url: 'https://github.com/mikelgarciaurbina/adar/releases/download/v0.2.0/Adar-0.2.0-arm64.zip', size: 1 },
   dmg: null
 }
 
@@ -148,6 +148,15 @@ describe('ModalHost', () => {
     expect(html).toMatch(/aria-checked="false" aria-label="Check for updates automatically"/)
     expect(html).toContain('Skipped version 0.1.5')
     expect(html).toContain('>Reset<')
+  })
+
+  it('offers a download from the release page when the release has nothing to install in place (Windows, Linux)', () => {
+    seedUpdates({ status: { state: 'available', currentVersion: '0.1.0', info: { ...releaseInfo, zip: null }, canInstall: false } })
+    seed({ settings: DEFAULT_SETTINGS })
+    const html = render({ kind: 'settings' })
+    expect(html).toContain('Adar 0.2.0 is available')
+    expect(html).toContain('>Download<')
+    expect(html).not.toContain('>Update<')
   })
 
   it('reflects diff settings in the controls', () => {

@@ -1,10 +1,10 @@
-# Builds Adar for macOS (Apple Silicon) and publishes a GitHub Release when a version
-# tag is pushed. The app's in-app updater reads the latest release, so:
+# Builds Adar for macOS (Apple Silicon), Windows (x64) and Linux (x64) and publishes a GitHub Release when a
+# version tag is pushed. The app's in-app updater reads the latest release, so:
 #   1. update build/release-notes.md
 #   2. npm version 0.4.0 && git push origin main --tags
-# The app is built without publishing; the last step creates a single fresh DRAFT release (which the
-# updater ignores), uploads the arm64 .dmg and .zip, checks that both are complete and match the local
-# build, and only then publishes it.
+# Each system is built on its own runner without publishing. The publish job then creates a single fresh DRAFT
+# release (which the updater ignores), uploads every asset, checks that they are complete and match the builds,
+# and only then publishes it. If any build fails, nothing is published.
 name: Release
 
 on:
@@ -21,12 +21,22 @@ permissions:
   contents: read
 
 jobs:
-  release:
+  build:
     # Manual runs only from main (tag pushes build the tagged commit).
     if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main'
-    runs-on: macos-latest
-    permissions:
-      contents: write # create the draft release, upload assets, publish
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            script: dist
+          - os: windows-latest
+            script: dist:win
+          - os: ubuntu-latest
+            script: dist:linux
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
         with:
@@ -39,7 +49,9 @@ jobs:
 
       - run: npm ci
 
+      # Once, on macOS: the test suite has not been run on Windows and Linux yet.
       - name: Typecheck and test
+        if: runner.os == 'macOS'
         run: |
           npm run typecheck
           npm test
@@ -55,7 +67,35 @@ jobs:
       - name: Build (no publishing)
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-        run: npm run dist
+        run: npm run ${{ matrix.script }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ runner.os }}
+          path: |
+            release/Adar-*.dmg
+            release/Adar-*.zip
+            release/Adar-*.exe
+            release/Adar-*.AppImage
+            release/Adar-*.deb
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create the draft release, upload assets, publish
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: release
+          merge-multiple: true
 
       - name: Create, verify and publish the release
         env:
@@ -65,7 +105,9 @@ jobs:
           V="$(node -p "require('./package.json').version")"
           TAG="v$V"
           R="$GITHUB_REPOSITORY"
-          FILES="Adar-$V-arm64.dmg Adar-$V-arm64.zip"
+          # macOS keeps the arch-only names that installed apps (0.5.x) and the website look for; Windows and
+          # Linux name their system and never ship a .zip or .dmg (see electron-builder.yml).
+          FILES="Adar-$V-arm64.dmg Adar-$V-arm64.zip Adar-$V-win-x64.exe Adar-$V-linux-x86_64.AppImage Adar-$V-linux-amd64.deb"
           for f in $FILES; do [ -f "release/$f" ] || { echo "::error::release/$f was not built"; exit 1; }; done
 
           # Never touch a release that is already published.
@@ -95,7 +137,7 @@ jobs:
             ASSETS="$(gh api "repos/$R/releases/$ID/assets?per_page=100" --jq '.[] | "\(.name) \(.size) \(.state)"')"
             BAD=""
             for f in $FILES; do
-              SIZE="$(stat -f %z "release/$f")"
+              SIZE="$(stat -c %s "release/$f")"
               printf '%s\n' "$ASSETS" | grep -qxF "$f $SIZE uploaded" || BAD="$BAD $f"
             done
             [ -z "$BAD" ] && break

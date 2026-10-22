@@ -93,6 +93,8 @@ npm run web        # la misma interfaz en el navegador: abre la URL http://127.0
 npm run typecheck
 npm test           # tests unitarios y de integración sobre repos git temporales
 npm run dist       # genera release/Adar-<versión>-arm64.dmg y .zip
+npm run dist:win   # instalador de Windows x64 (release/Adar-<versión>-win-x64.exe)
+npm run dist:linux # AppImage y .deb de Linux x64
 ```
 
 La arquitectura, las convenciones y las herramientas de test (incluidas las pruebas guionizadas de la app real) están
@@ -100,8 +102,8 @@ en [AGENTS.md](AGENTS.md). El flujo para contribuir está en [CONTRIBUTING.md](C
 
 ### Publicar una versión
 
-Al subir un tag `v*`, GitHub Actions compila la app y publica una release; las copias instaladas la detectan con el
-actualizador integrado:
+Al subir un tag `v*`, GitHub Actions compila la app para macOS, Windows y Linux y publica una release; las copias
+instaladas la detectan con el actualizador integrado:
 
 ```bash
 npm version 0.4.0   # actualiza package.json y crea el tag v0.4.0

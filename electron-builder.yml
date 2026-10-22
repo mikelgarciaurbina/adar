@@ -7,10 +7,9 @@ directories:
 files:
   - out/**
   - package.json
-extraResources:
-  # `adar` command-line tool (Adar → Install Command Line Tool… links it into PATH).
-  - from: resources/bin/adar
-    to: bin/adar
+# macOS assets are named by architecture only (Adar-<version>-arm64.zip): installed apps (0.5.x) and the website pick
+# them that way. Windows and Linux put the system in the name and never ship a .zip or .dmg, so no macOS updater
+# can mistake them for its own.
 artifactName: ${productName}-${version}-${arch}.${ext}
 mac:
   category: public.app-category.developer-tools
@@ -27,6 +26,10 @@ mac:
         LSHandlerRank: Alternate
         LSItemContentTypes:
           - public.folder
+  extraResources:
+    # `adar` command-line tool (Adar → Install Command Line Tool… links it into PATH).
+    - from: resources/bin/adar
+      to: bin/adar
   # Apple Silicon only (Intel Macs are not supported).
   target:
     - target: dmg
@@ -35,6 +38,27 @@ mac:
       arch: [arm64]
 dmg:
   title: ${productName} ${version}
+# Windows and Linux: x64 only. Unsigned like macOS (SmartScreen warns on the first run of the installer); the in-app
+# updater sends these builds to the release page.
+win:
+  icon: build/icon.png
+  artifactName: ${productName}-${version}-win-${arch}.${ext}
+  # One-click per-user installer: no administrator prompt, installs into %LOCALAPPDATA%\Programs.
+  target:
+    - target: nsis
+      arch: [x64]
+linux:
+  icon: build/icon.png
+  category: Development
+  synopsis: Fast, visual Git client
+  maintainer: Mikel García <mikelgarciaurbina@gmail.com>
+  # AppImage names the architecture x86_64, deb amd64.
+  artifactName: ${productName}-${version}-linux-${arch}.${ext}
+  target:
+    - target: AppImage
+      arch: [x64]
+    - target: deb
+      arch: [x64]
 releaseInfo:
   # Body of the GitHub release (shown in the app's "What's new"). Update it before tagging a version.
   releaseNotesFile: build/release-notes.md

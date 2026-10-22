@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { bundleMismatch, compareVersions, isAllowedDownloadUrl, parseAssetDigest, pickAssets, releasePageUrl } from './update'
+import { bundleMismatch, compareVersions, isAllowedDownloadUrl, parseAssetDigest, pickAssets, releasePageUrl, updatesFromReleasePage } from './update'
 
 describe('compareVersions', () => {
   it('orders numerically', () => {
@@ -23,13 +23,53 @@ describe('pickAssets', () => {
     asset('Adar-0.2.0-arm64.zip'),
     asset('Adar-0.2.0-x64.zip')
   ]
+  // What release.yml publishes: macOS by architecture alone, Windows and Linux with the system in the name.
+  const release = [
+    asset('Adar-0.6.0-arm64.dmg'),
+    asset('Adar-0.6.0-arm64.zip'),
+    asset('Adar-0.6.0-win-x64.exe'),
+    asset('Adar-0.6.0-linux-x86_64.AppImage'),
+    asset('Adar-0.6.0-linux-amd64.deb')
+  ]
   it('prefers the matching architecture', () => {
-    expect(pickAssets(assets, 'arm64')).toEqual({ zip: assets[3] && { name: 'Adar-0.2.0-arm64.zip', url: 'https://x/Adar-0.2.0-arm64.zip', size: 1 }, dmg: { name: 'Adar-0.2.0-arm64.dmg', url: 'https://x/Adar-0.2.0-arm64.dmg', size: 1 } })
-    expect(pickAssets(assets, 'x64').zip?.name).toBe('Adar-0.2.0-x64.zip')
+    expect(pickAssets(assets, 'arm64', 'darwin')).toEqual({ zip: assets[3] && { name: 'Adar-0.2.0-arm64.zip', url: 'https://x/Adar-0.2.0-arm64.zip', size: 1 }, dmg: { name: 'Adar-0.2.0-arm64.dmg', url: 'https://x/Adar-0.2.0-arm64.dmg', size: 1 } })
+    expect(pickAssets(assets, 'x64', 'darwin').zip?.name).toBe('Adar-0.2.0-x64.zip')
   })
   it('never picks the other architecture', () => {
-    expect(pickAssets([asset('Adar-0.2.0-x64.zip')], 'arm64').zip).toBeNull()
-    expect(pickAssets([asset('Adar-0.2.0-universal.zip')], 'arm64').zip?.name).toBe('Adar-0.2.0-universal.zip')
+    expect(pickAssets([asset('Adar-0.2.0-x64.zip')], 'arm64', 'darwin').zip).toBeNull()
+    expect(pickAssets([asset('Adar-0.2.0-x86_64.zip'), asset('Adar-0.2.0-amd64.dmg')], 'arm64', 'darwin')).toEqual({ zip: null, dmg: null })
+    expect(pickAssets([asset('Adar-0.2.0-aarch64.zip')], 'x64', 'darwin').zip).toBeNull()
+    expect(pickAssets([asset('Adar-0.2.0-universal.zip')], 'arm64', 'darwin').zip?.name).toBe('Adar-0.2.0-universal.zip')
+  })
+  it('never picks an asset of another system', () => {
+    expect(pickAssets(release, 'arm64', 'darwin')).toEqual({
+      zip: { name: 'Adar-0.6.0-arm64.zip', url: 'https://x/Adar-0.6.0-arm64.zip', size: 1 },
+      dmg: { name: 'Adar-0.6.0-arm64.dmg', url: 'https://x/Adar-0.6.0-arm64.dmg', size: 1 }
+    })
+    for (const name of ['Adar-0.6.0-linux-arm64.zip', 'Adar-0.6.0-win-arm64.zip', 'Adar-0.6.0-windows-arm64.dmg']) {
+      expect(pickAssets([asset(name)], 'arm64', 'darwin')).toEqual({ zip: null, dmg: null })
+    }
+    expect(pickAssets([asset('Adar-0.6.0-darwin-arm64.zip')], 'arm64', 'darwin').zip?.name).toBe('Adar-0.6.0-darwin-arm64.zip')
+  })
+  it('gives Windows and Linux nothing to download (they update from the release page)', () => {
+    for (const platform of ['win32', 'linux']) {
+      for (const arch of ['x64', 'arm64']) expect(pickAssets(release, arch, platform)).toEqual({ zip: null, dmg: null })
+    }
+  })
+  it('sends to the release page only when there is no asset', () => {
+    const info = (zip: boolean, dmg: boolean) => ({
+      currentVersion: '0.5.1',
+      latestVersion: '0.6.0',
+      releaseName: 'Adar 0.6.0',
+      notes: '',
+      releaseUrl: 'https://github.com/mikelgarciaurbina/adar/releases/tag/v0.6.0',
+      publishedAt: '',
+      zip: zip ? { name: 'a.zip', url: 'https://x/a.zip', size: 1 } : null,
+      dmg: dmg ? { name: 'a.dmg', url: 'https://x/a.dmg', size: 1 } : null
+    })
+    expect(updatesFromReleasePage(info(false, false))).toBe(true)
+    expect(updatesFromReleasePage(info(true, false))).toBe(false)
+    expect(updatesFromReleasePage(info(false, true))).toBe(false)
   })
 })
 
@@ -46,12 +86,13 @@ describe('update verification helpers', () => {
         { name: 'Adar-1.0.0-arm64.zip', browser_download_url: 'https://x/a.zip', size: 5, digest: `sha256:${hex}`, state: 'uploaded' },
         { name: 'Adar-1.0.0-arm64.dmg', browser_download_url: 'https://x/a.dmg', size: 7, digest: null }
       ],
-      'arm64'
+      'arm64',
+      'darwin'
     )
     expect(picked.zip).toEqual({ name: 'Adar-1.0.0-arm64.zip', url: 'https://x/a.zip', size: 5, sha256: hex })
     expect(picked.dmg).toEqual({ name: 'Adar-1.0.0-arm64.dmg', url: 'https://x/a.dmg', size: 7 })
     // An upload still in progress is never offered.
-    expect(pickAssets([{ name: 'Adar-1.0.0-arm64.zip', browser_download_url: 'https://x/a.zip', size: 5, state: 'open' }], 'arm64').zip).toBeNull()
+    expect(pickAssets([{ name: 'Adar-1.0.0-arm64.zip', browser_download_url: 'https://x/a.zip', size: 5, state: 'open' }], 'arm64', 'darwin').zip).toBeNull()
   })
 
   it('downloads only from GitHub release hosts over https (loopback http only for test feeds)', () => {

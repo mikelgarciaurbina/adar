@@ -39,7 +39,10 @@ export interface UpdateInfo {
   /** Web page of the release. */
   releaseUrl: string
   publishedAt: string
-  /** .zip for in-place install (preferred) and .dmg for manual install, for this CPU architecture. */
+  /**
+   * .zip for in-place install (preferred) and .dmg for manual install, for this CPU architecture. Always null on
+   * Windows and Linux, which update from the release page (see updatesFromReleasePage).
+   */
   zip: UpdateAsset | null
   dmg: UpdateAsset | null
 }
@@ -98,10 +101,21 @@ export function parseAssetDigest(digest: unknown): string | null {
   return m ? m[1].toLowerCase() : null
 }
 
-/** Pick the .zip / .dmg assets matching the CPU architecture (falls back to universal / arch-less names). */
-export function pickAssets(assets: GithubReleaseAsset[], arch: string): { zip: UpdateAsset | null; dmg: UpdateAsset | null } {
-  const otherArch = arch === 'arm64' ? /x64|x86_64|intel/i : /arm64|aarch64|apple-silicon/i
-  const score = (name: string) => (new RegExp(arch, 'i').test(name) ? 3 : /universal/i.test(name) ? 2 : otherArch.test(name) ? 0 : 1)
+/** How asset names spell each CPU architecture (electron-builder: x64 / x86_64 for AppImage / amd64 for deb). */
+const ARCH_NAMES: Record<string, RegExp> = { x64: /x64|x86_64|amd64|intel/i, arm64: /arm64|aarch64|apple-silicon/i }
+/** Systems named in asset names. macOS assets name none (Adar-<version>-arm64.zip); Windows and Linux ones do. */
+const OS_NAMES: Record<string, RegExp> = { darwin: /\b(mac|macos|darwin)\b/i, win32: /\b(win|windows)\b/i, linux: /\blinux\b/i }
+
+/**
+ * Pick the .zip / .dmg assets for this system and CPU architecture (falls back to universal / arch-less names).
+ * Only macOS updates from release assets: Windows and Linux get none and are sent to the release page.
+ */
+export function pickAssets(assets: GithubReleaseAsset[], arch: string, platform: string): { zip: UpdateAsset | null; dmg: UpdateAsset | null } {
+  if (platform !== 'darwin') return { zip: null, dmg: null }
+  const own = ARCH_NAMES[arch] ?? new RegExp(arch, 'i')
+  const otherArch = (name: string) => Object.entries(ARCH_NAMES).some(([a, re]) => a !== arch && re.test(name))
+  const otherOs = (name: string) => Object.entries(OS_NAMES).some(([os, re]) => os !== platform && re.test(name))
+  const score = (name: string) => (otherOs(name) ? 0 : own.test(name) ? 3 : /universal/i.test(name) ? 2 : otherArch(name) ? 0 : 1)
   const best = (ext: string): UpdateAsset | null => {
     const list = assets
       .filter((a) => a.name.toLowerCase().endsWith(ext) && !a.name.toLowerCase().endsWith('.blockmap') && score(a.name) > 0)
@@ -114,6 +128,11 @@ export function pickAssets(assets: GithubReleaseAsset[], arch: string): { zip: U
     return { name: a.name, url: a.browser_download_url, size: a.size, ...(sha256 ? { sha256 } : {}) }
   }
   return { zip: best('.zip'), dmg: best('.dmg') }
+}
+
+/** No asset this build can download (Windows, Linux, or a release without one): "Update" opens the release page. */
+export function updatesFromReleasePage(info: UpdateInfo): boolean {
+  return !info.zip && !info.dmg
 }
 
 /**
