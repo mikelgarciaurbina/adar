@@ -46,7 +46,7 @@ const builds = [
   {
     os: 'mac', name: 'macOS', ld: 'macOS (Apple Silicon)',
     files: [{ asset: dmg, label: '.dmg' }, { asset: zip, label: '.zip' }],
-    steps: [S.mac[0], [...S.mac[1], 'xattr -dr com.apple.quarantine /Applications/Adar.app'], S.mac[2]],
+    steps: S.mac,
   },
   exe && { os: 'win', name: 'Windows', ld: 'Windows (x64)', files: [{ asset: exe, label: '.exe' }], steps: S.win },
   (appImage || deb) && {

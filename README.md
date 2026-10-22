@@ -58,22 +58,16 @@ branding and is not affiliated with GitKraken or Axosoft.
 ## Download
 
 Grab the build for your system from the [Releases page](https://github.com/mikelgarciaurbina/adar/releases/latest)
-(or [adargit.com](https://adargit.com/#download)). Adar is not code-signed yet, so on macOS and Windows the first launch
-takes one extra step.
+(or [adargit.com](https://adargit.com/#download)). The macOS app is signed and notarized by Apple; the Windows installer
+is not signed yet, so on Windows the first launch takes one extra step.
 
 ### macOS
 
 `Adar-<version>-arm64.dmg` (or `.zip`), built for **Apple Silicon Macs** (M1 and newer); Intel Macs are not supported.
 
-Open the `.dmg` and drag **Adar** to **Applications**. The app is not signed with an Apple Developer ID yet, so
-macOS may say it "is damaged" the first time (right-click → Open no longer bypasses this on macOS 15 and later).
-Run this once in Terminal, then open Adar normally:
-
-```bash
-xattr -dr com.apple.quarantine /Applications/Adar.app
-```
-
-After that, Adar keeps itself up to date (*Adar → Check for Updates…*).
+Open the `.dmg` and drag **Adar** to **Applications**. Adar is signed with an Apple Developer ID and notarized, so the
+first time macOS only asks whether to open an app downloaded from the Internet: click **Open**. After that, Adar keeps
+itself up to date (*Adar → Check for Updates…*).
 
 Requirements: a recent macOS on Apple Silicon and Git 2.26+ (`xcode-select --install` or `brew install git`).
 
@@ -165,7 +159,7 @@ git push origin main --tags
 
 ## Roadmap
 
-Localization (English, Spanish, Basque), pull-request integrations, signed builds, worktrees, Linux/Windows and
+Localization (English, Spanish, Basque), pull-request integrations, a signed Windows installer, worktrees and
 more — see [ROADMAP.md](ROADMAP.md).
 
 ## Contributing

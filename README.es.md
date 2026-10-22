@@ -53,23 +53,17 @@ no contiene código, recursos ni marca de GitKraken y no tiene relación con Git
 ## Descarga
 
 Descarga la versión para tu sistema desde la [página de Releases](https://github.com/mikelgarciaurbina/adar/releases/latest)
-(o desde [adargit.com](https://adargit.com/es#descarga)). Adar todavía no está firmada, así que en macOS y Windows la
-primera vez hace falta un paso más.
+(o desde [adargit.com](https://adargit.com/es#descarga)). La app de macOS está firmada y notarizada por Apple; el
+instalador de Windows aún no está firmado, así que en Windows la primera vez hace falta un paso más.
 
 ### macOS
 
 `Adar-<versión>-arm64.dmg` (o `.zip`), hecha para **Macs con Apple Silicon** (M1 o posterior); los Mac con Intel no
 están soportados.
 
-Abre el `.dmg` y arrastra **Adar** a **Aplicaciones**. La app todavía no está firmada con un Developer ID de Apple,
-así que la primera vez macOS puede decir que "está dañada" (en macOS 15 y posteriores ya no sirve clic derecho →
-Abrir). Ejecuta esto una vez en Terminal y ábrela con normalidad:
-
-```bash
-xattr -dr com.apple.quarantine /Applications/Adar.app
-```
-
-A partir de ahí, Adar se actualiza sola (*Adar → Check for Updates…*).
+Abre el `.dmg` y arrastra **Adar** a **Aplicaciones**. Adar está firmada con un Developer ID de Apple y notarizada,
+así que la primera vez macOS solo pregunta si quieres abrir una app descargada de Internet: pulsa **Abrir**. A partir
+de ahí, Adar se actualiza sola (*Adar → Check for Updates…*).
 
 Requisitos: un macOS reciente con Apple Silicon y Git 2.26+ (`xcode-select --install` o `brew install git`).
 
@@ -142,8 +136,8 @@ git push origin main --tags
 
 ## Roadmap
 
-Multi-idioma (inglés, castellano y euskera), integración con pull requests, builds firmadas, worktrees,
-Linux/Windows y más: consulta [ROADMAP.md](ROADMAP.md).
+Multi-idioma (inglés, castellano y euskera), integración con pull requests, el instalador de Windows firmado,
+worktrees y más: consulta [ROADMAP.md](ROADMAP.md).
 
 ## Licencia
 

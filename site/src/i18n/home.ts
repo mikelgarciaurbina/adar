@@ -112,12 +112,12 @@ const en = {
     steps: {
       mac: [
         ['Install', 'Open the <code>.dmg</code> and drag <b>Adar</b> to <b>Applications</b>.'],
-        ['First launch', 'Adar isn’t signed with an Apple Developer ID yet, so macOS may say it “is damaged”. Run this once in Terminal, then open Adar normally:'],
+        ['First launch', 'Adar is signed and notarized by Apple: the first time, macOS only asks whether to open an app downloaded from the Internet. Click <b>Open</b>.'],
         ['Stay current', 'Adar updates itself from GitHub Releases — <i>Adar → Check for Updates…</i>'],
       ],
       win: [
         ['Install', 'Run the installer. It installs Adar for your user — no administrator rights needed — and adds it to the Start menu.'],
-        ['First launch', 'Adar isn’t signed yet, so Windows SmartScreen may stop the installer the first time (“Windows protected your PC”). Click <b>More info</b>, then <b>Run anyway</b>.'],
+        ['First launch', 'The Windows installer isn’t signed yet, so SmartScreen may stop it the first time (“Windows protected your PC”). Click <b>More info</b>, then <b>Run anyway</b>.'],
         ['Stay current', 'Adar tells you when a new version is out, and its <i>Download</i> button opens the release page: run the new installer over the old version.'],
       ],
       linux: [
@@ -250,12 +250,12 @@ const es: HomeContent = {
     steps: {
       mac: [
         ['Instala', 'Abre el <code>.dmg</code> y arrastra <b>Adar</b> a <b>Aplicaciones</b>.'],
-        ['Primera vez', 'Adar aún no está firmado con un Apple Developer ID, así que macOS puede decir que «está dañado». Ejecuta esto una vez en Terminal y luego abre Adar con normalidad:'],
+        ['Primera vez', 'Adar está firmado y notarizado por Apple: la primera vez, macOS solo pregunta si quieres abrir una app descargada de Internet. Pulsa <b>Abrir</b>.'],
         ['Mantente al día', 'Adar se actualiza solo desde GitHub Releases: <i>Adar → Check for Updates…</i>'],
       ],
       win: [
         ['Instala', 'Ejecuta el instalador. Instala Adar para tu usuario, sin permisos de administrador, y lo añade al menú Inicio.'],
-        ['Primera vez', 'Adar aún no está firmado, así que Windows SmartScreen puede frenar el instalador la primera vez («Windows protegió su PC»). Pulsa <b>Más información</b> y luego <b>Ejecutar de todas formas</b>.'],
+        ['Primera vez', 'El instalador de Windows aún no está firmado, así que SmartScreen puede frenarlo la primera vez («Windows protegió su PC»). Pulsa <b>Más información</b> y luego <b>Ejecutar de todas formas</b>.'],
         ['Mantente al día', 'Adar te avisa cuando sale una versión nueva, y su botón <i>Download</i> abre la página de la versión: ejecuta el nuevo instalador encima del anterior.'],
       ],
       linux: [
@@ -386,12 +386,12 @@ const eu: HomeContent = {
     steps: {
       mac: [
         ['Instalatu', 'Ireki <code>.dmg</code> fitxategia eta arrastatu <b>Adar</b> <b>Aplikazioak</b> karpetara.'],
-        ['Lehen aldia', 'Adar ez dago oraindik Apple Developer ID batekin sinatuta, eta macOSek «hondatuta» dagoela esan dezake. Exekutatu hau behin Terminalean, eta ireki Adar ohi bezala:'],
+        ['Lehen aldia', 'Adar Applek sinatuta eta notarizatuta dago: lehen aldian, Internetetik deskargatutako aplikazio bat ireki nahi duzun bakarrik galdetuko dizu macOSek. Onartu, eta Adar irekiko da.'],
         ['Egon egunean', 'Adarrek bere burua eguneratzen du GitHub Releases-etik: <i>Adar → Check for Updates…</i>'],
       ],
       win: [
         ['Instalatu', 'Exekutatu instalatzailea. Adar zure erabiltzailearentzat instalatzen du, administratzaile-baimenik gabe, eta Hasiera menuan jartzen du.'],
-        ['Lehen aldia', 'Adar oraindik sinatu gabe dagoenez, Windows SmartScreen-ek instalatzailea gelditu dezake lehen aldian. Sakatu informazio gehiagoko esteka, eta exekutatu hala ere.'],
+        ['Lehen aldia', 'Windowserako instalatzailea oraindik sinatu gabe dagoenez, SmartScreen-ek gelditu dezake lehen aldian. Sakatu informazio gehiagoko esteka, eta exekutatu hala ere.'],
         ['Egon egunean', 'Bertsio berri bat ateratzen denean, Adarrek abisatzen dizu, eta <i>Download</i> botoiak bertsioaren orria irekitzen du: exekutatu instalatzaile berria zaharraren gainean.'],
       ],
       linux: [

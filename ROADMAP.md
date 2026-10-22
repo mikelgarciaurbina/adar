@@ -24,17 +24,19 @@ dark/light themes · credential prompts for HTTPS tokens and SSH passphrases · 
 tab groups (a project's repositories together, reopened in one click) · the Basoa look of adargit.com in the app (night
 and day themes, six lane colours, tab groups as trays) · Fetch All for a tab group · branches keep their lane colour in
 the left panel · change markers on the diff's scrollbar · tabs shrink to share the bar · Windows and Linux builds
-(beta since 0.6.0: x64 installer, AppImage and .deb), with the tests run on macOS, Windows and Linux.
+(beta since 0.6.0: x64 installer, AppImage and .deb), with the tests run on macOS, Windows and Linux · the macOS app
+signed with an Apple Developer ID and notarized (since 0.6.1).
 
 ---
 
 ## Next (0.2 – 0.4)
 
 ### Distribution
-- [ ] **Code signing & notarization** with an Apple Developer ID, so macOS opens Adar without Gatekeeper warnings.
 - [ ] **Homebrew cask** — `brew install --cask adar`.
 - [ ] **Update channels** (stable / beta) and a "What's new" panel after updating.
-- [ ] Delta updates (smaller downloads) once the app is signed.
+- [ ] Delta updates (smaller downloads).
+- [ ] The updater checks that a downloaded macOS update is signed with Adar's Developer ID (the same team as the
+      running app) before replacing it.
 - [ ] Sign update archives with an offline maintainer key (ed25519) and verify them in the updater, on top of today's
       GitHub digest, host, bundle-identity and version checks.
 
@@ -133,8 +135,8 @@ Bring-your-own-key or local models only, disabled by default, and never sending 
 
 ## Known limitations in 0.1
 
-- macOS on Apple Silicon only (no Intel builds); Windows and Linux on x64 only, in beta. Nothing is signed yet (see
-  *Distribution* and *Platforms*).
+- macOS on Apple Silicon only (no Intel builds); Windows and Linux on x64 only, in beta. The Windows installer is not
+  signed yet (see *Platforms*).
 - The interface is English-only (see *Localization*).
 - Conflict resolution works per conflict chunk, not per line; there is no base pane.
 - Line staging is mouse-only; untracked, added, deleted and binary files can only be staged whole.
