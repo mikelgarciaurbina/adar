@@ -14,9 +14,9 @@ artifactName: ${productName}-${version}-${arch}.${ext}
 mac:
   category: public.app-category.developer-tools
   icon: build/icon.icns
-  # Signed with this Developer ID Application certificate only, never another one in the keychain: in the release
-  # workflow it comes from CSC_LINK (which then checks the team), locally from the login keychain; builds without it
-  # stay unsigned. electron-builder's defaults do the rest: hardened runtime, its default entitlements (allow-jit,
+  # Signed with this Developer ID Application certificate only, never another one in the keychain: the release
+  # workflow imports it into its own keychain (CSC_KEYCHAIN) and checks the team, local builds take it from the login
+  # keychain, and builds without it stay unsigned. electron-builder's defaults do the rest: hardened runtime, its default entitlements (allow-jit,
   # which Electron needs on Apple Silicon) and notarization when the APPLE_API_KEY* variables are set. The in-app
   # updater (src/main/updater.ts) still installs the .zip asset in place.
   identity: Mikel Garcia (54RSVZ573J)

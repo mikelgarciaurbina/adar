@@ -204,7 +204,14 @@ describe('release configuration', () => {
     // the release workflow checks that the signed app belongs to its team.
     const identity = section('mac').match(/^\s+identity: (.+) \(([A-Z0-9]{10})\)$/m)
     expect(identity?.[1]).toBe('Mikel Garcia')
+    expect(macBuild[0]).toContain(`grep -F 'Developer ID Application: ${identity?.[1]} (${identity?.[2]})'`)
     expect(macBuild[0]).toContain(`grep -qx 'TeamIdentifier=${identity?.[2]}'`)
+    // The certificate goes into a keychain of the workflow's own, unlocked with that keychain's password: with
+    // CSC_LINK, electron-builder 26 passes the certificate's password instead and current macOS refuses it.
+    expect(workflow).not.toMatch(/^\s+CSC_LINK:/m)
+    expect(macBuild[0]).toContain('export CSC_KEYCHAIN="$RUNNER_TEMP/')
+    expect(macBuild[0]).toContain('security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$CSC_KEYCHAIN"')
+    expect(macBuild[0]).toContain('https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer')
     for (const secret of ['MAC_CERT_P12_BASE64', 'MAC_CERT_PASSWORD', 'APPLE_API_KEY_P8', 'APPLE_API_KEY_ID', 'APPLE_API_ISSUER']) {
       expect(steps.filter((s) => s.includes(`secrets.${secret}`))).toEqual(macBuild)
     }
