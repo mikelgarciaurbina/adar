@@ -23,7 +23,8 @@ dark/light themes · credential prompts for HTTPS tokens and SSH passphrases · 
 `adar` command-line tool (open the current repository from a terminal) · edit the message of existing commits in place ·
 tab groups (a project's repositories together, reopened in one click) · the Basoa look of adargit.com in the app (night
 and day themes, six lane colours, tab groups as trays) · Fetch All for a tab group · branches keep their lane colour in
-the left panel · change markers on the diff's scrollbar · tabs shrink to share the bar.
+the left panel · change markers on the diff's scrollbar · tabs shrink to share the bar · Windows and Linux builds
+(beta since 0.6.0: x64 installer, AppImage and .deb), with the tests run on macOS, Windows and Linux.
 
 ---
 
@@ -79,8 +80,13 @@ the left panel · change markers on the diff's scrollbar · tabs shrink to share
 ## Later
 
 ### Platforms
-- [ ] **Linux** builds (AppImage, deb, rpm) — verify file watching, askpass and terminal integration.
-- [ ] **Windows** builds (NSIS installer) — `.cmd` editors, Git for Windows askpass, path handling.
+Windows and Linux builds shipped in 0.6.0 as a beta. Still to do:
+- [ ] **Windows**: sign the installer (for example through SignPath's free signing for open source) so SmartScreen
+  stops warning; check `.cmd` editors and the Git for Windows askpass on real machines; an arm64 build.
+- [ ] **Linux**: an `.rpm` package and arm64 builds; check file watching, askpass and terminal integration on real
+  desktops (GNOME, KDE).
+- [ ] **Windows and Linux**: install updates from inside the app (today **Download** opens the release page), and the
+  `adar` command-line tool (macOS only for now).
 
 ### Power features
 - [ ] **Bisect UI**: mark good / bad / skip from the graph, show the remaining range.
@@ -127,7 +133,8 @@ Bring-your-own-key or local models only, disabled by default, and never sending 
 
 ## Known limitations in 0.1
 
-- macOS on Apple Silicon only (no Intel builds), unsigned (see *Distribution*).
+- macOS on Apple Silicon only (no Intel builds); Windows and Linux on x64 only, in beta. Nothing is signed yet (see
+  *Distribution* and *Platforms*).
 - The interface is English-only (see *Localization*).
 - Conflict resolution works per conflict chunk, not per line; there is no base pane.
 - Line staging is mouse-only; untracked, added, deleted and binary files can only be staged whole.
