@@ -6,7 +6,10 @@ import { cleanupTmp, commitFile, configure, exists, expectCode, git, head, initR
 beforeAll(isolateGitConfig)
 afterAll(cleanupTmp)
 
-const WEIRD = ['with space.txt', 'ünïcödé-ñ.txt', 'star*.txt', 'q?[x].txt', '-dash.txt']
+// '*' and '?' are not allowed in Windows file names: there a bracket glob shows the same (no globbing).
+const windows = process.platform === 'win32'
+const STAR = windows ? 'star[X].txt' : 'star*.txt'
+const WEIRD = ['with space.txt', 'ünïcödé-ñ.txt', STAR, windows ? 'q[x].txt' : 'q?[x].txt', '-dash.txt']
 
 const staged = (dir: string) =>
   git(dir, ['diff', '--cached', '--name-only', '-z'])
@@ -20,17 +23,17 @@ describe('staging', () => {
     const dir = initRepo()
     commitFile(dir, 'base.txt', 'base\n', 'base')
     for (const f of WEIRD) write(dir, f, `${f}\n`)
-    write(dir, 'starX.txt', 'must not match star*\n')
+    write(dir, 'starX.txt', `must not match ${STAR}\n`)
 
-    await ops.stageFiles(dir, ['star*.txt'])
-    expect(staged(dir)).toEqual(['star*.txt'])
+    await ops.stageFiles(dir, [STAR])
+    expect(staged(dir)).toEqual([STAR])
 
     await ops.stageFiles(dir, WEIRD)
     expect(staged(dir)).toEqual([...WEIRD].sort())
 
-    await ops.unstageFiles(dir, ['star*.txt', 'with space.txt'])
-    expect(staged(dir)).toEqual(WEIRD.filter((f) => f !== 'star*.txt' && f !== 'with space.txt').sort())
-    expect(exists(dir, 'star*.txt')).toBe(true)
+    await ops.unstageFiles(dir, [STAR, 'with space.txt'])
+    expect(staged(dir)).toEqual(WEIRD.filter((f) => f !== STAR && f !== 'with space.txt').sort())
+    expect(exists(dir, STAR)).toBe(true)
 
     await ops.stageAll(dir)
     expect(staged(dir)).toContain('starX.txt')
@@ -145,20 +148,21 @@ describe('discard', () => {
   it('reverts tracked files and deletes untracked ones (files and directories)', async () => {
     const { ops } = makeOps()
     const dir = initRepo()
+    const odd = windows ? 'new file[1].txt' : 'new file*.txt' // ('*' is not allowed in Windows file names)
     commitFile(dir, 'tracked.txt', 'original\n', 'base')
     commitFile(dir, 'keep.txt', 'keep\n', 'keep')
     write(dir, 'tracked.txt', 'modified\n')
     write(dir, 'keep.txt', 'keep modified\n')
-    write(dir, 'new file*.txt', 'new\n')
+    write(dir, odd, 'new\n')
     write(dir, 'newdir/a.txt', 'a\n')
     write(dir, 'newdir/sub/b.txt', 'b\n')
     write(dir, '.gitignore', 'ignored.log\n')
     write(dir, 'newdir/ignored.log', 'stay\n')
 
-    await ops.discardFiles(dir, ['tracked.txt', 'new file*.txt', 'newdir/'])
+    await ops.discardFiles(dir, ['tracked.txt', odd, 'newdir/'])
     expect(read(dir, 'tracked.txt')).toBe('original\n')
     expect(read(dir, 'keep.txt')).toBe('keep modified\n')
-    expect(exists(dir, 'new file*.txt')).toBe(false)
+    expect(exists(dir, odd)).toBe(false)
     expect(exists(dir, 'newdir/a.txt')).toBe(false)
     expect(exists(dir, 'newdir/sub')).toBe(false)
     // Ignored files are kept (like git clean without -x), so the directory survives.

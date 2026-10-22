@@ -39,16 +39,18 @@ describe('stash', () => {
 
   it('stashes only the given paths and supports keepIndex', async () => {
     const { ops } = makeOps()
+    // A glob as a literal file name ('*' is not allowed in Windows file names: a bracket glob there).
+    const glob = process.platform === 'win32' ? 'b[X].txt' : 'b*.txt'
     const dir = initRepo()
     commitFile(dir, 'a.txt', 'a\n', 'a')
-    commitFile(dir, 'b*.txt', 'b\n', 'b')
+    commitFile(dir, glob, 'b\n', 'b')
     commitFile(dir, 'bX.txt', 'x\n', 'x')
     write(dir, 'a.txt', 'a2\n')
-    write(dir, 'b*.txt', 'b2\n')
+    write(dir, glob, 'b2\n')
     write(dir, 'bX.txt', 'x2\n')
-    await ops.stashSave(dir, { paths: ['b*.txt'] })
+    await ops.stashSave(dir, { paths: [glob] })
     expect(status(dir)).toBe(' M a.txt\n M bX.txt')
-    expect(read(dir, 'b*.txt')).toBe('b\n')
+    expect(read(dir, glob)).toBe('b\n')
 
     git(dir, ['add', 'a.txt'])
     await ops.stashSave(dir, { keepIndex: true })

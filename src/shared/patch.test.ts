@@ -372,6 +372,7 @@ interface Node {
   path: any
   os: any
   env: Record<string, string | undefined>
+  platform: string
 }
 let node: Node
 let tmpRoot = ''
@@ -385,7 +386,7 @@ beforeAll(async () => {
     load('node:os'),
     load('node:process')
   ])
-  node = { cp, fs, path, os, env: (proc.default ?? proc).env }
+  node = { cp, fs, path, os, env: (proc.default ?? proc).env, platform: (proc.default ?? proc).platform }
   tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'adar-patch-'))
   emptyConfig = path.join(tmpRoot, 'gitconfig')
   fs.writeFileSync(emptyConfig, '')
@@ -682,7 +683,8 @@ describe('buildPartialPatch applies with git', () => {
 
   it('stages lines of files whose paths need quoting', () => {
     const repo = new Repo()
-    const names = ['with space.txt', 'quo"te.txt', 'tab\tname.txt', 'back\\slash.txt']
+    // Windows file names cannot hold a double quote or a tab, and a backslash separates folders there.
+    const names = ['with space.txt', 'quo"te.txt', 'tab\tname.txt', 'back\\slash.txt'].filter((n) => node.platform !== 'win32' || !/["\t\\]/.test(n))
     for (const n of names) repo.write(n, 'one\ntwo\nthree\n')
     repo.commitAll()
     for (const n of names) {
