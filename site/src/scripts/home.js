@@ -1,5 +1,5 @@
 // Landing page: drives the 3D scene from the scroll position, the app screenshot tilt, the terminal
-// demo and the platform note in the download section.
+// demo and the visitor's system in the download section.
 import { createScene } from './branches.js';
 import { reducedMotion, motion, t } from './site.js';
 
@@ -171,6 +171,14 @@ if (term) {
 }
 
 // ── Download ────────────────────────────────────────────────
-// The links are rendered at build time; only the note for visitors on other systems is decided here.
-const isMac = /Macintosh|Mac OS X/.test(navigator.userAgent) && navigator.maxTouchPoints < 2;
-if (!isMac) $('[data-dl="platform"]').hidden = false;
+// The links are rendered at build time. Here the visitor's system is picked when the release has a build for it;
+// otherwise (phones and tablets too) the note for other systems shows.
+const ua = navigator.userAgent;
+const os = /Android|CrOS/.test(ua) ? ''
+  : /Macintosh|Mac OS X/.test(ua) ? (navigator.maxTouchPoints < 2 ? 'mac' : '') // iPads and iPhones say "Mac OS X" too
+  : /Windows/.test(ua) ? 'win'
+  : /Linux|X11/.test(ua) ? 'linux'
+  : '';
+const pick = os && $(`[data-dl="os"][value="${os}"]`);
+if (pick) pick.checked = true;
+else if (os !== 'mac') $('[data-dl="platform"]').hidden = false;

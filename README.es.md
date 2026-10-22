@@ -52,8 +52,14 @@ no contiene código, recursos ni marca de GitKraken y no tiene relación con Git
 
 ## Descarga
 
-Descarga el último `.dmg` desde la [página de Releases](https://github.com/mikelgarciaurbina/adar/releases/latest).
-Adar está hecha para **Macs con Apple Silicon** (M1 o posterior); los Mac con Intel no están soportados.
+Descarga la versión para tu sistema desde la [página de Releases](https://github.com/mikelgarciaurbina/adar/releases/latest)
+(o desde [adargit.com](https://adargit.com/es#descarga)). Adar todavía no está firmada, así que en macOS y Windows la
+primera vez hace falta un paso más.
+
+### macOS
+
+`Adar-<versión>-arm64.dmg` (o `.zip`), hecha para **Macs con Apple Silicon** (M1 o posterior); los Mac con Intel no
+están soportados.
 
 Abre el `.dmg` y arrastra **Adar** a **Aplicaciones**. La app todavía no está firmada con un Developer ID de Apple,
 así que la primera vez macOS puede decir que "está dañada" (en macOS 15 y posteriores ya no sirve clic derecho →
@@ -65,8 +71,32 @@ xattr -dr com.apple.quarantine /Applications/Adar.app
 
 A partir de ahí, Adar se actualiza sola (*Adar → Check for Updates…*).
 
-Requisitos: un macOS reciente con Apple Silicon y Git 2.26+ (`xcode-select --install` o `brew install git`). Linux y Windows todavía no están
-soportados (el código es casi todo portable: se aceptan contribuciones).
+Requisitos: un macOS reciente con Apple Silicon y Git 2.26+ (`xcode-select --install` o `brew install git`).
+
+### Windows
+
+`Adar-<versión>-win-x64.exe`, para Windows 10 y 11 de 64 bits. Ejecútalo: instala Adar para tu usuario (sin permisos
+de administrador) y la añade al menú Inicio. El instalador aún no está firmado, así que la primera vez SmartScreen
+puede decir "Windows protegió su PC"; pulsa **Más información** y luego **Ejecutar de todas formas**.
+
+Requisitos: Git for Windows 2.26+ ([git-scm.com](https://git-scm.com/downloads/win) o `winget install Git.Git`).
+
+### Linux
+
+`Adar-<versión>-linux-x86_64.AppImage` para casi cualquier distribución, o `Adar-<versión>-linux-amd64.deb` para
+Debian, Ubuntu y derivadas (solo x64). Desde la carpeta donde lo hayas descargado:
+
+```bash
+chmod +x Adar-<versión>-linux-x86_64.AppImage && ./Adar-<versión>-linux-x86_64.AppImage
+# o bien
+sudo apt install ./Adar-<versión>-linux-amd64.deb
+```
+
+Requisitos: Git 2.26+ de tu gestor de paquetes (`sudo apt install git`…); el AppImage también necesita FUSE 2
+(`libfuse2`).
+
+En Windows y Linux, Adar te avisa cuando sale una versión nueva, y su botón **Download** abre la página de la versión:
+ejecuta el nuevo instalador, sustituye el AppImage o instala el nuevo `.deb`.
 
 ## Línea de comandos
 

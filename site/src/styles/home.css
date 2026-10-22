@@ -414,8 +414,20 @@ em { font-style: normal; }
 .dl__meta span:first-child { color: var(--text); }
 .dl__arch { display: flex; align-items: center; gap: 8px; margin-bottom: var(--space-6); font-size: var(--text-sm); color: var(--text-3); }
 .dl__arch svg { width: 16px; height: 16px; color: var(--accent-text); }
+.dl__os { display: flex; flex-wrap: wrap; gap: 2px; width: fit-content; max-width: 100%; margin: var(--space-4) 0 var(--space-5); padding: 3px; border: 1px solid var(--line-strong); border-radius: var(--radius-full); }
+.dl__os label { position: relative; cursor: pointer; }
+.dl__os input { position: absolute; inset: 0; margin: 0; opacity: 0; cursor: pointer; }
+.dl__os span { display: grid; place-items: center; height: 34px; padding: 0 16px; border-radius: var(--radius-full); font-size: var(--text-sm); font-weight: 500; color: var(--text-3); transition: color var(--dur-2), background var(--dur-2); }
+.dl__os label:hover span, .dl__os :checked + span { color: var(--text); }
+.dl__os :checked + span { background: var(--surface-3); }
+.dl__os :focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* The picker shows one system at a time, without scripts (home.js only preselects the visitor's). */
+.dl:has([data-dl="os"][value="mac"]:checked) [data-os]:not([data-os="mac"]),
+.dl:has([data-dl="os"][value="win"]:checked) [data-os]:not([data-os="win"]),
+.dl:has([data-dl="os"][value="linux"]:checked) [data-os]:not([data-os="linux"]) { display: none; }
 .dl__ctas { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: var(--space-5); }
 .dl__req { font-size: var(--text-sm); color: var(--text-3); max-width: 460px; }
+.dl__req .link { white-space: nowrap; }
 .dl__platform { margin-top: var(--space-4); padding: 12px 14px; border-radius: var(--radius-sm); border: 1px solid rgb(255 211 110 / 0.3); background: rgb(255 211 110 / 0.06); font-size: var(--text-sm); color: var(--text-2); }
 .dl__platform a { color: var(--eguzki); text-decoration: underline; text-underline-offset: 3px; }
 .dl__sums { margin-top: var(--space-5); font-size: var(--text-sm); color: var(--text-3); }
@@ -424,6 +436,7 @@ em { font-style: normal; }
 .dl__sums-list { display: grid; gap: 8px; margin-top: 12px; }
 .dl__sums .sum { display: grid; gap: 2px; font: 400 var(--text-2xs) / 1.5 var(--font-mono); word-break: break-all; color: var(--text-4); }
 .dl__sums .sum b { color: var(--text-2); font-weight: 500; }
+.dl__guide { display: grid; }
 .dl__steps { list-style: none; padding: 0; display: grid; gap: 4px; align-content: center; counter-reset: s; }
 .dl__steps li { display: grid; grid-template-columns: 40px 1fr; gap: 16px; padding: 18px 0; border-top: 1px solid var(--line); }
 .dl__steps li:first-child { border-top: 0; }

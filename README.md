@@ -57,8 +57,13 @@ branding and is not affiliated with GitKraken or Axosoft.
 
 ## Download
 
-Grab the latest `.dmg` from the [Releases page](https://github.com/mikelgarciaurbina/adar/releases/latest).
-Adar is built for **Apple Silicon Macs** (M1 and newer); Intel Macs are not supported.
+Grab the build for your system from the [Releases page](https://github.com/mikelgarciaurbina/adar/releases/latest)
+(or [adargit.com](https://adargit.com/#download)). Adar is not code-signed yet, so on macOS and Windows the first launch
+takes one extra step.
+
+### macOS
+
+`Adar-<version>-arm64.dmg` (or `.zip`), built for **Apple Silicon Macs** (M1 and newer); Intel Macs are not supported.
 
 Open the `.dmg` and drag **Adar** to **Applications**. The app is not signed with an Apple Developer ID yet, so
 macOS may say it "is damaged" the first time (right-click → Open no longer bypasses this on macOS 15 and later).
@@ -70,8 +75,32 @@ xattr -dr com.apple.quarantine /Applications/Adar.app
 
 After that, Adar keeps itself up to date (*Adar → Check for Updates…*).
 
-Requirements: a recent macOS on Apple Silicon and Git 2.26+ (`xcode-select --install` or `brew install git`). Linux and Windows are not
-supported yet (the code is mostly portable — contributions welcome).
+Requirements: a recent macOS on Apple Silicon and Git 2.26+ (`xcode-select --install` or `brew install git`).
+
+### Windows
+
+`Adar-<version>-win-x64.exe`, for 64-bit Windows 10 and 11. Run it: it installs Adar for your user (no administrator
+rights needed) and adds it to the Start menu. The installer is not signed yet, so SmartScreen may say "Windows
+protected your PC" the first time; click **More info**, then **Run anyway**.
+
+Requirements: Git for Windows 2.26+ ([git-scm.com](https://git-scm.com/downloads/win) or `winget install Git.Git`).
+
+### Linux
+
+`Adar-<version>-linux-x86_64.AppImage` for most distributions, or `Adar-<version>-linux-amd64.deb` for Debian, Ubuntu
+and their derivatives (x64 only). From the folder you downloaded it to:
+
+```bash
+chmod +x Adar-<version>-linux-x86_64.AppImage && ./Adar-<version>-linux-x86_64.AppImage
+# or
+sudo apt install ./Adar-<version>-linux-amd64.deb
+```
+
+Requirements: Git 2.26+ from your package manager (`sudo apt install git`…); the AppImage also needs FUSE 2
+(`libfuse2`).
+
+On Windows and Linux, Adar tells you when a new version is out, and its **Download** button opens the release page:
+run the new installer, replace the AppImage or install the new `.deb`.
 
 ## Command line
 

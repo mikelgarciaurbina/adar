@@ -14,7 +14,7 @@ import Antlers from '../components/Antlers.astro';
 import '../styles/home.css';
 import '../styles/story.css';
 import { url, REPO_URL } from '../lib/url';
-import { getReleases, getLatest, formatSize } from '../lib/releases';
+import { getReleases, getLatest, formatSize, type Asset } from '../lib/releases';
 import { chaptersFor } from '../lib/story';
 import { absoluteUrl, formatDateIn, pageUrl, type Locale } from '../i18n/config';
 import { home } from '../i18n/home';
@@ -28,13 +28,45 @@ const at = (i: number) => `#${C[i].id}`;
 
 const releases = await getReleases();
 const latest = await getLatest();
-const dmg = latest?.assets.find((a) => /arm64\.dmg$/.test(a.name));
-const zip = latest?.assets.find((a) => /arm64\.zip$/.test(a.name));
-const sums = [dmg, zip].filter((a) => a?.sha256) as NonNullable<typeof dmg>[];
+const assetNamed = (name: RegExp) => latest?.assets.find((a) => name.test(a.name));
+// macOS assets keep their arch-only names (installed apps update from them); Windows and Linux name their system,
+// in plain characters only, since the Linux names go into the commands the page offers to copy.
+const dmg = assetNamed(/arm64\.dmg$/);
+const zip = assetNamed(/arm64\.zip$/);
+const exe = assetNamed(/^[\w.-]+-win-x64\.exe$/);
+const appImage = assetNamed(/^[\w.-]+-linux-x86_64\.AppImage$/);
+const deb = assetNamed(/^[\w.-]+-linux-amd64\.deb$/);
+
+// One entry per system with a build in the latest release: macOS always (its buttons fall back to the releases
+// page), Windows and Linux once their assets are there. With more than one, a picker shows one system at a time.
+type Os = 'mac' | 'win' | 'linux';
+interface Build { os: Os; name: string; ld: string; files: { asset?: Asset; label: string }[]; steps: string[][] }
+const S = t.dawn.steps;
+const builds = [
+  {
+    os: 'mac', name: 'macOS', ld: 'macOS (Apple Silicon)',
+    files: [{ asset: dmg, label: '.dmg' }, { asset: zip, label: '.zip' }],
+    steps: [S.mac[0], [...S.mac[1], 'xattr -dr com.apple.quarantine /Applications/Adar.app'], S.mac[2]],
+  },
+  exe && { os: 'win', name: 'Windows', ld: 'Windows (x64)', files: [{ asset: exe, label: '.exe' }], steps: S.win },
+  (appImage || deb) && {
+    os: 'linux', name: 'Linux', ld: 'Linux (x64)',
+    files: [{ asset: appImage, label: 'AppImage' }, { asset: deb, label: '.deb' }].filter((f) => f.asset),
+    steps: [
+      ...(appImage ? [[...S.linux[0], `chmod +x ${appImage.name}\n./${appImage.name}`]] : []),
+      ...(deb ? [[...S.linux[1], `sudo apt install ./${deb.name}`]] : []),
+      S.linux[2],
+    ],
+  },
+].filter(Boolean) as Build[];
+const several = builds.length > 1;
+const sums = builds.flatMap((b) => b.files.flatMap(({ asset }) => (asset?.sha256 ? [{ os: b.os, asset }] : [])));
+// Search results and social cards name every system once the release has them all.
+const meta = builds.length === 3 ? t.meta.allSystems : t.meta;
 // The app screenshot is served as AVIF/WebP in a few widths; structured data points at the WebP.
 const screenshotWebp = await getImage({ src: screenshot, format: 'webp', width: 1440 });
 const self = absoluteUrl('home', lang);
-// Structured data for search engines: Adar as a free macOS developer application.
+// Structured data for search engines: Adar as a free developer application for the systems it has builds for.
 const jsonLd = JSON.stringify({
   '@context': 'https://schema.org',
   '@type': 'SoftwareApplication',
@@ -45,7 +77,7 @@ const jsonLd = JSON.stringify({
   image: new URL('assets/og.jpg', self).href,
   screenshot: new URL(screenshotWebp.src, self).href,
   applicationCategory: 'DeveloperApplication',
-  operatingSystem: 'macOS (Apple Silicon)',
+  operatingSystem: builds.map((b) => b.ld).join(', '),
   isAccessibleForFree: true,
   offers: { '@type': 'Offer', price: '0', priceCurrency: 'EUR' },
   license: `${REPO_URL}/blob/main/LICENSE`,
@@ -54,7 +86,7 @@ const jsonLd = JSON.stringify({
   ...(latest && { softwareVersion: latest.version, datePublished: latest.date.slice(0, 10), downloadUrl: dmg?.url ?? latest.url }),
 }).replace(/</g, '\\u003c');
 ---
-<Base lang={lang} page="home" title={t.meta.title} description={t.meta.description} ogTitle={t.meta.ogTitle} ogDescription={t.meta.ogDescription}
+<Base lang={lang} page="home" title={t.meta.title} description={meta.description} ogTitle={t.meta.ogTitle} ogDescription={meta.ogDescription}
   client={{ figs: t.name.figs }}>
   <script slot="head" type="application/ld+json" is:inline set:html={jsonLd} />
   <Sky />
@@ -75,7 +107,7 @@ const jsonLd = JSON.stringify({
           <p class="hero__lede rise" style="--delay:160ms">{t.hero.lede}</p>
           <div class="hero__ctas rise" style="--delay:240ms">
             <a class="btn btn--primary btn--lg" href={at(6)}>
-              <Icon name="download" />{t.hero.download}<span class="btn__meta">Apple Silicon</span>
+              <Icon name="download" />{several ? t.hero.downloadAll : t.hero.download}<span class="btn__meta">{several ? builds.map((b) => b.name).join(' · ') : 'Apple Silicon'}</span>
             </a>
             <a class="btn btn--ghost btn--lg" href={REPO_URL}>
               <Icon name="star" />{t.hero.star}<span class="btn__meta" data-gh="stars"></span>
@@ -391,42 +423,50 @@ $ adar ~/code/shop</code></pre></noscript>
           <div class="dl__main">
             <div class="dl__icon" aria-hidden="true"><img src={url('assets/favicon.svg')} width="96" height="96" alt=""></div>
             <p class="eyebrow">{t.dawn.eyebrow}</p>
-            <h2 id="download-title" set:html={t.dawn.card} />
+            {builds.map((b) => <h2 data-os={b.os} set:html={t.dawn.card[b.os]} />)}
             <p class="dl__meta">{latest ? <><span>Adar {latest.version}</span><span>{formatDateIn(latest.date, lang)}</span></> : <span>{t.dawn.latest}</span>}</p>
-            <p class="dl__arch"><Icon name="laptop" />{t.dawn.arch}</p>
-            <div class="dl__ctas">
-              <a class="btn btn--primary btn--lg" href={dmg?.url ?? `${REPO_URL}/releases/latest`}>
-                <Icon name="download" />{t.dawn.dmg}{dmg && <span class="btn__meta">{formatSize(dmg.size)}</span>}
-              </a>
-              <a class="btn btn--ghost btn--lg" href={zip?.url ?? `${REPO_URL}/releases/latest`}>.zip{zip && <span class="btn__meta">{formatSize(zip.size)}</span>}</a>
-            </div>
-            <p class="dl__req" set:html={t.dawn.req} />
-            <p class="dl__platform" data-dl="platform" hidden set:html={t.dawn.platform(pageUrl('roadmap', lang, 'later'))} />
+            {several && (
+              <div class="dl__os" role="radiogroup" aria-label={t.dawn.system}>
+                {builds.map((b, i) => <label><input type="radio" name="dl-os" value={b.os} checked={i === 0} data-dl="os"><span>{b.name}</span></label>)}
+              </div>
+            )}
+            {builds.map((b) => (
+              <div data-os={b.os}>
+                <p class="dl__arch"><Icon name="laptop" />{t.dawn.arch[b.os]}</p>
+                <div class="dl__ctas">
+                  {b.files.map(({ asset, label }, i) => (
+                    <a class={`btn ${i ? 'btn--ghost' : 'btn--primary'} btn--lg`} href={asset?.url ?? `${REPO_URL}/releases/latest`}>
+                      {i === 0 && <Icon name="download" />}{i ? label : t.dawn.download(label)}{asset && <span class="btn__meta">{formatSize(asset.size)}</span>}
+                    </a>
+                  ))}
+                </div>
+                <p class="dl__req" set:html={t.dawn.req[b.os]} />
+              </div>
+            ))}
+            <p class="dl__platform" data-dl="platform" hidden set:html={several ? t.dawn.noBuild : t.dawn.platform(pageUrl('roadmap', lang, 'later'))} />
             {sums.length > 0 && (
               <details class="dl__sums">
                 <summary>{t.dawn.sums}</summary>
-                <div class="dl__sums-list">{sums.map((a) => <div class="sum"><b>{a.name}</b>{a.sha256}</div>)}</div>
+                <div class="dl__sums-list">{sums.map(({ os, asset }) => <div class="sum" data-os={os}><b>{asset.name}</b>{asset.sha256}</div>)}</div>
               </details>
             )}
           </div>
-          <ol class="dl__steps">
-            <li>
-              <span class="dl__n">1</span>
-              <div><h3>{t.dawn.steps[0][0]}</h3><p set:html={t.dawn.steps[0][1]} /></div>
-            </li>
-            <li>
-              <span class="dl__n">2</span>
-              <div>
-                <h3>{t.dawn.steps[1][0]}</h3>
-                <p>{t.dawn.steps[1][1]}</p>
-                <div class="code"><code>xattr -dr com.apple.quarantine /Applications/Adar.app</code><button class="copy" type="button" data-copy aria-label={t.dawn.copyCommand}><Icon name="copy" /><span data-label={ui[lang].client.copy}>{ui[lang].client.copy}</span></button></div>
-              </div>
-            </li>
-            <li>
-              <span class="dl__n">3</span>
-              <div><h3>{t.dawn.steps[2][0]}</h3><p set:html={t.dawn.steps[2][1]} /></div>
-            </li>
-          </ol>
+          <div class="dl__guide">
+            {builds.map((b) => (
+              <ol class="dl__steps" data-os={b.os}>
+                {b.steps.map(([title, text, code], i) => (
+                  <li>
+                    <span class="dl__n">{i + 1}</span>
+                    <div>
+                      <h3>{title}</h3>
+                      <p set:html={text} />
+                      {code && <div class="code"><code>{code}</code><button class="copy" type="button" data-copy aria-label={t.dawn.copyCommand}><Icon name="copy" /><span data-label={ui[lang].client.copy}>{ui[lang].client.copy}</span></button></div>}
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            ))}
+          </div>
         </div>
 
         <div class="dl-more">
