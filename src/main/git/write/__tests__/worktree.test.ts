@@ -98,7 +98,8 @@ describe('staging', () => {
   it('stageAll never stages unresolved conflicts (their markers would be committed as resolved)', async () => {
     const { ops, ctx } = makeOps()
     const dir = initRepo()
-    const weird = '-dash [x]*.txt'
+    // ('*' is not allowed in Windows file names: there the untracked name is one the bracket glob matches.)
+    const [weird, globMatch] = windows ? ['-dash [x].txt', '-dash x.txt'] : ['-dash [x]*.txt', '-dash [x]-glob.txt']
     commitFile(dir, 'f.txt', 'base\n', 'base')
     commitFile(dir, weird, 'base\n', 'weird base')
     commitFile(dir, 'g.txt', 'g\n', 'g')
@@ -113,7 +114,7 @@ describe('staging', () => {
     expect(() => git(dir, ['merge', 'other'])).toThrow()
     // Unrelated tweaks, including a name the weird conflicted path would match as a glob.
     write(dir, 'g.txt', 'g changed\n')
-    write(dir, '-dash [x]-glob.txt', 'new\n')
+    write(dir, globMatch, 'new\n')
     write(dir, 'new dir/a.txt', 'a\n')
     write(dir, 'new dir/sub/b.txt', 'b\n')
     write(dir, 'new dir/skip.log', 'ignored\n')
@@ -123,7 +124,7 @@ describe('staging', () => {
     expect((await ctx.conflictedPaths(dir)).sort()).toEqual([weird, 'f.txt'].sort())
     expect(read(dir, 'f.txt')).toContain('<<<<<<<')
     expect(status(dir).split('\n').sort()).toEqual(
-      ['A  "-dash [x]-glob.txt"', 'A  "new dir/a.txt"', 'A  "new dir/sub/b.txt"', 'D  gone.txt', 'M  g.txt', 'UU "-dash [x]*.txt"', 'UU f.txt'].sort()
+      [`A  "${globMatch}"`, 'A  "new dir/a.txt"', 'A  "new dir/sub/b.txt"', 'D  gone.txt', 'M  g.txt', `UU "${weird}"`, 'UU f.txt'].sort()
     )
     expect(exists(dir, '.git/MERGE_HEAD')).toBe(true)
 
