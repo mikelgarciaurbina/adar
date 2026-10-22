@@ -139,8 +139,10 @@ export async function locateRepo(ctx: GitContext, dir: string): Promise<RepoLoca
     }
     throw notARepo(dir, undefined, r.stderr)
   }
-  const [gitDir = '', bare = ''] = r.stdout.split('\n').map((l) => l.trim())
-  if (!gitDir) throw notARepo(dir, undefined, r.stderr)
+  const [printedGitDir = '', bare = ''] = r.stdout.split('\n').map((l) => l.trim())
+  if (!printedGitDir) throw notARepo(dir, undefined, r.stderr)
+  // Git for Windows prints C:/x/y: keep the native form (as dialogs and the CLI give paths) so paths compare equal.
+  const gitDir = path.resolve(printedGitDir)
   let commonDir = gitDir
   try {
     const rel = (await fs.readFile(path.join(gitDir, 'commondir'), 'utf8')).trim()
@@ -151,7 +153,7 @@ export async function locateRepo(ctx: GitContext, dir: string): Promise<RepoLoca
   if (bare === 'true') return { root: gitDir, gitDir, commonDir, isBare: true }
 
   const top = await ctx.gitGlobal(['rev-parse', '--show-toplevel'], { cwd: dir, allowFailure: true, timeoutMs: 30_000 })
-  const root = top.code === 0 ? top.stdout.trim() : ''
+  const root = top.code === 0 && top.stdout.trim() ? path.resolve(top.stdout.trim()) : ''
   if (root) return { root, gitDir, commonDir, isBare: false }
   // Opened from inside the .git directory of a regular repository.
   if (path.basename(gitDir) === '.git') return { root: path.dirname(gitDir), gitDir, commonDir, isBare: false }

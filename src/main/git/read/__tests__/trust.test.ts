@@ -24,12 +24,15 @@ afterAll(async () => {
   cleanupTempDirs()
 })
 
+/** Path as sh sees it: Git for Windows runs these commands through its sh, which reads backslashes as escapes. */
+const shPath = (p: string) => (process.platform === 'win32' ? p.replace(/\\/g, '/') : p)
+
 /** Executable script that records each run in `marker`. */
 function markerScript(dir: string, marker: string): string {
   const script = path.join(dir, 'payload.sh')
-  writeFileSync(script, `#!/bin/sh\necho ran >> '${marker}'\nexit 1\n`)
+  writeFileSync(script, `#!/bin/sh\necho ran >> '${shPath(marker)}'\nexit 1\n`)
   chmodSync(script, 0o755)
-  return script
+  return shPath(script)
 }
 
 /** A repository as it arrives in an archive: its .git/config runs `payload.sh` on every `git status`. */
@@ -138,9 +141,11 @@ describe('openRepo trust gate', () => {
     writeFileSync(path.join(hooks, 'post-checkout'), '#!/bin/sh\nexit 0\n', { mode: 0o755 })
     writeFileSync(path.join(hooks, 'pre-commit.sample'), '#!/bin/sh\n', { mode: 0o755 })
     writeFileSync(path.join(hooks, 'notes.txt'), 'not executable\n', { mode: 0o644 })
+    // Windows has no executable bit: there every file in hooks/ but the samples counts.
+    const notes = process.platform === 'win32' ? [`hook: ${path.join('.git', 'hooks', 'notes.txt')}`] : []
     await expect(backend.openRepo(repo)).rejects.toMatchObject({
       code: 'UNTRUSTED_REPO',
-      details: ['filter.x.clean = touch /tmp/adar-should-not-run', `hook: ${path.join('.git', 'hooks', 'post-checkout')}`]
+      details: ['filter.x.clean = touch /tmp/adar-should-not-run', ...notes, `hook: ${path.join('.git', 'hooks', 'post-checkout')}`]
     })
   })
 

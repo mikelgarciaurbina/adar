@@ -296,7 +296,8 @@ describe('getFileContent', () => {
     await expect(backend.getFileContent(repo, '/etc/passwd', 'WORKTREE')).rejects.toMatchObject({ code: 'INVALID_ARGUMENT' })
   })
 
-  it('never follows worktree symlinks', async () => {
+  // Windows stores the link target with backslashes (and creating links needs a privilege).
+  it.skipIf(process.platform === 'win32')('never follows worktree symlinks', async () => {
     symlinkSync('/etc/hosts', `${repo}/link-out`)
     const c = await backend.getFileContent(repo, 'link-out', 'WORKTREE')
     expect(c).toMatchObject({ exists: true, binary: false, text: '/etc/hosts' })

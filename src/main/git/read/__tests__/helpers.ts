@@ -12,7 +12,7 @@ const created: string[] = []
 
 /** Point git at an empty global config and disable the system config (call at file top). */
 export function isolateGitConfig(): string {
-  const dir = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'adar-gitcfg-')))
+  const dir = realpathSync.native(mkdtempSync(path.join(os.tmpdir(), 'adar-gitcfg-')))
   created.push(dir)
   const cfg = path.join(dir, 'gitconfig')
   writeFileSync(cfg, '')
@@ -23,8 +23,9 @@ export function isolateGitConfig(): string {
   return cfg
 }
 
+/** A new temporary directory, by its real path as git reports it (native: also expands Windows 8.3 names such as RUNNER~1). */
 export function tempDir(prefix = 'adar-test-'): string {
-  const d = realpathSync(mkdtempSync(path.join(os.tmpdir(), prefix)))
+  const d = realpathSync.native(mkdtempSync(path.join(os.tmpdir(), prefix)))
   created.push(d)
   return d
 }

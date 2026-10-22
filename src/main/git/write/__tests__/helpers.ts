@@ -27,8 +27,9 @@ export function isolateGitConfig(): void {
 
 const roots: string[] = []
 
+/** A new temporary directory, by its real path as git reports it (native: also expands Windows 8.3 names such as RUNNER~1). */
 export function tmpDir(prefix = 'adar-wtest-'): string {
-  const d = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), prefix)))
+  const d = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), prefix)))
   roots.push(d)
   return d
 }

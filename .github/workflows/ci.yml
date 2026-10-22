@@ -10,7 +10,15 @@ permissions:
 
 jobs:
   test:
-    runs-on: macos-latest
+    strategy:
+      # Report every system's result, not only the first failure.
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
         with:

@@ -22,7 +22,8 @@ import type { GitContext } from '../../context'
 import type { SystemServices } from '../../../system'
 import { createAppOps, planDefaultOpen } from '../app'
 
-const root = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'adar-open-')))
+// Native: planDefaultOpen() reports real paths, also with Windows 8.3 names (RUNNER~1) expanded.
+const root = realpathSync.native(mkdtempSync(path.join(os.tmpdir(), 'adar-open-')))
 afterAll(() => rmSync(root, { recursive: true, force: true }))
 
 function file(rel: string, content = 'x\n', mode = 0o644): string {
@@ -59,8 +60,11 @@ const desktop = file('repo/run.desktop')
 const weird = file('repo/a&b %PATH% ^c.txt')
 const bat = file('repo/setup.bat')
 
+// The macOS and Linux plans depend on executable bits, which Windows file systems do not have.
+const noExecBits = process.platform === 'win32'
+
 describe('planDefaultOpen', () => {
-  it('macOS: files open in the text editor, decided on the symlink target', async () => {
+  it.skipIf(noExecBits)('macOS: files open in the text editor, decided on the symlink target', async () => {
     expect(await planDefaultOpen(docs, 'darwin')).toEqual({ kind: 'exec', command: 'open', args: ['-t', command] })
     expect(await planDefaultOpen(picture, 'darwin')).toEqual({ kind: 'exec', command: 'open', args: ['-t', command] })
     expect(await planDefaultOpen(command, 'darwin')).toEqual({ kind: 'exec', command: 'open', args: ['-t', command] })
@@ -86,7 +90,7 @@ describe('planDefaultOpen', () => {
     expect(await planDefaultOpen(plainDir, 'win32')).toEqual({ kind: 'reveal', path: plainDir })
   })
 
-  it('Linux: executables and launchers are refused', async () => {
+  it.skipIf(noExecBits)('Linux: executables and launchers are refused', async () => {
     expect(await planDefaultOpen(docs, 'linux')).toMatchObject({ kind: 'refuse' })
     expect(await planDefaultOpen(build, 'linux')).toMatchObject({ kind: 'refuse' })
     expect(await planDefaultOpen(desktop, 'linux')).toMatchObject({ kind: 'refuse', message: expect.stringMatching(/Editor command/) })

@@ -16,7 +16,8 @@ afterAll(() => {
   for (const d of tmp) rmSync(d, { recursive: true, force: true })
 })
 
-describe('planInstall', () => {
+// The adar command exists only in the macOS app: its install directories are POSIX paths.
+describe.skipIf(process.platform === 'win32')('planInstall', () => {
   const dir = (d: string, writable: boolean, existing: DirState['existing'] = { kind: 'none' }, exists = true): DirState => ({ dir: d, exists, writable, existing })
   it('prefers the first writable directory and reuses an existing install', () => {
     expect(planInstall([dir('/opt/homebrew/bin', true), dir('/usr/local/bin', true)], false)).toEqual({ dir: '/opt/homebrew/bin', needsAdmin: false })
@@ -33,7 +34,8 @@ describe('planInstall', () => {
   })
 })
 
-describe('install / uninstall (temporary directories)', () => {
+// macOS only: on other systems cliStatus() reports the command unavailable and installCli() refuses.
+describe.skipIf(process.platform !== 'darwin')('install / uninstall (temporary directories)', () => {
   let source: string
   let bin: string
   beforeEach(() => {
@@ -107,7 +109,8 @@ describe('install / uninstall (temporary directories)', () => {
   })
 })
 
-describe('adar script', () => {
+// A POSIX sh script, run here as a dry run (no macOS tools needed): tested wherever /bin/sh exists.
+describe.skipIf(process.platform === 'win32')('adar script', () => {
   const run = (args: string[], env: Record<string, string>, cwd?: string) =>
     spawnSync('/bin/sh', [SCRIPT, ...args], { env: { PATH: '/usr/bin:/bin', HOME: os.tmpdir(), ADAR_CLI_DRY_RUN: '1', ...env }, cwd, encoding: 'utf8' })
 

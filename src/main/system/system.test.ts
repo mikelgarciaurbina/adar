@@ -16,14 +16,15 @@ import { WatcherManager, classifyGitDirPath, classifyWorktreePath, looseRefsSign
 // Isolate from the user's git configuration (no git command should depend on it).
 const tmpRoots: string[] = []
 {
-  const cfgDir = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'adar-gitcfg-')))
+  const cfgDir = realpathSync.native(mkdtempSync(path.join(os.tmpdir(), 'adar-gitcfg-')))
   tmpRoots.push(cfgDir)
   writeFileSync(path.join(cfgDir, 'gitconfig'), '')
   process.env.GIT_CONFIG_GLOBAL = path.join(cfgDir, 'gitconfig')
   process.env.GIT_CONFIG_NOSYSTEM = '1'
 }
+/** Real path, as git reports it (native: also expands Windows 8.3 names such as RUNNER~1). */
 function tmp(prefix = 'adar-sys-'): string {
-  const d = realpathSync(mkdtempSync(path.join(os.tmpdir(), prefix)))
+  const d = realpathSync.native(mkdtempSync(path.join(os.tmpdir(), prefix)))
   tmpRoots.push(d)
   return d
 }
@@ -100,12 +101,14 @@ describe('askpass', () => {
       expect(env.GIT_ASKPASS).toBe(env.SSH_ASKPASS)
       expect(env.ADAR_ASKPASS_PORT).toMatch(/^\d+$/)
       expect(readdirSync(path.join(dir, 'askpass')).sort()).toEqual(['askpass.js', 'askpass.sh'])
-      const st = await fs.stat(env.GIT_ASKPASS)
-      expect(st.mode & 0o111).not.toBe(0)
+      // Windows has no executable bit: Git for Windows runs the helper through its sh (the shebang), and so does this test.
+      const windows = process.platform === 'win32'
+      if (!windows) expect((await fs.stat(env.GIT_ASKPASS)).mode & 0o111).not.toBe(0)
 
       const run = (prompt: string) =>
         new Promise<{ code: number; stdout: string }>((resolve) => {
-          execFile(env.GIT_ASKPASS, [prompt], { env: { ...process.env, ...env } }, (err, stdout) => {
+          const [file, args]: [string, string[]] = windows ? ['sh', [env.GIT_ASKPASS, prompt]] : [env.GIT_ASKPASS, [prompt]]
+          execFile(file, args, { env: { ...process.env, ...env } }, (err, stdout) => {
             resolve({ code: err ? ((err as { code?: number }).code ?? 1) : 0, stdout })
           })
         })
@@ -520,7 +523,8 @@ describe('watcher classification', () => {
   })
 })
 
-describe('private temp dir', () => {
+// POSIX owners and permission bits: on Windows ensurePrivateDir() relies on the per-user %TEMP% instead.
+describe.skipIf(process.platform === 'win32')('private temp dir', () => {
   it('creates an owner-only directory and tightens loose permissions', async () => {
     const dir = path.join(tmp(), 'adar-x')
     await ensurePrivateDir(dir)

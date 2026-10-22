@@ -166,7 +166,8 @@ export function createGitContext(platform: PlatformAdapter, emit: (e: AdarEvent)
       if (cached) return cached
       const res = await runGit(['rev-parse', '--absolute-git-dir'], { cwd: repo, allowFailure: true })
       if (res.code !== 0) throw new AdarError({ message: `${repo} is not a Git repository`, code: 'NOT_A_REPO', stderr: res.stderr })
-      const dir = res.stdout.trim()
+      // Native form (Git for Windows prints C:/x/y), as locateRepo() returns it.
+      const dir = path.resolve(res.stdout.trim())
       gitDirs.set(repo, dir)
       return dir
     },
