@@ -889,21 +889,27 @@ export async function push(
     setUpstream = true
   }
 
-  if (opts.force) {
-    const dest = remote ? `${remote}/${remoteBranch ?? branchName}` : branch?.upstream ?? `the remote ${branchName}`
+  const dest = remote ? `${remote}/${remoteBranch ?? branchName}` : branch?.upstream ?? `the remote ${branchName}`
+  let force = opts.force
+  // Behind its upstream, a plain push can only be rejected: offer the force push right away.
+  const behind = !force && !remote && branch?.upstream && !branch.upstreamGone ? (branch.behind ?? 0) : 0
+  if (force || behind) {
     const ok = await confirm({
       title: `Force push ${branchName}?`,
-      message: `${dest} will be overwritten with your local ${branchName}. Commits on the remote that you don't have locally will be removed for everyone.`,
+      message: behind
+        ? `${dest} has ${pluralize(behind, 'commit')} that ${branchName} does not have. Force pushing replaces ${dest} with your local ${branchName} and removes ${behind === 1 ? 'that commit' : 'those commits'} from the remote for everyone.`
+        : `${dest} will be overwritten with your local ${branchName}. Commits on the remote that you don't have locally will be removed for everyone.`,
       confirmLabel: 'Force push',
       danger: true
     })
     if (!ok) return
+    force ??= 'with-lease'
   }
 
-  const doPush = (force?: 'with-lease' | 'force') => {
+  const doPush = (mode = force) => {
     const opId = newOpId('push')
     return api
-      .push(repo, { branch: branchName, remote, remoteBranch, setUpstream, force: force ?? opts.force ?? false, opId })
+      .push(repo, { branch: branchName, remote, remoteBranch, setUpstream, force: mode ?? false, opId })
       .finally(() => store().setProgress(opId, null))
   }
 
@@ -930,21 +936,20 @@ export async function push(
   store().setBusy(`push:${repo}`, 'Pushing…')
   try {
     await doPush()
-    toast.success(`Pushed ${branchName}${remote ? ` to ${remote}` : branch?.upstream ? ` to ${branch.upstream}` : ''}`)
+    if (force) toast.success(`Force pushed ${branchName}`)
+    else toast.success(`Pushed ${branchName}${remote ? ` to ${remote}` : branch?.upstream ? ` to ${branch.upstream}` : ''}`)
   } catch (err) {
     const text = `${(err as AdarError).stderr ?? ''} ${describeError(err)}`
-    if (opts.force === 'with-lease' && leaseRefused(err)) await offerOverwrite()
-    else if (/rejected|non-fast-forward|fetch first|stale info/i.test(text) && !opts.force) {
-      const choice = await choose<'pull' | 'force'>({
+    if (force === 'with-lease' && leaseRefused(err)) await offerOverwrite()
+    else if (/rejected|non-fast-forward|fetch first|stale info/i.test(text) && !force) {
+      // The refs did not see it coming: someone pushed since the last fetch.
+      const ok = await confirm({
         title: 'Push rejected',
-        message: `The remote has commits that ${branchName} does not have.`,
-        options: [
-          { value: 'pull', label: 'Pull first', description: 'Integrate remote changes, then push again.' },
-          { value: 'force', label: 'Force push (with lease)', description: 'Overwrite the remote branch. Safe only if no one else pushed.', danger: true }
-        ]
+        message: `${dest} has commits that ${branchName} does not have. Force pushing replaces ${dest} with your local ${branchName} and removes them from the remote for everyone.`,
+        confirmLabel: 'Force push',
+        danger: true
       })
-      if (choice === 'pull') await pull(repo)
-      else if (choice === 'force') {
+      if (ok) {
         try {
           await doPush('with-lease')
           toast.success(`Force pushed ${branchName}`)
