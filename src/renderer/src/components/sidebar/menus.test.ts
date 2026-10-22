@@ -126,12 +126,12 @@ describe('helpers', () => {
 })
 
 describe('localBranchMenu', () => {
-  it('current branch: Pull, disabled Checkout/Delete, no merge/rebase', () => {
+  it('current branch: Pull, disabled Checkout, Delete enabled, no merge/rebase', () => {
     const m = localBranchMenu(ctx(), main)
     expect(find(m, 'Checkout')?.disabled).toBe(true)
     expect(labels(m)).toContain('Pull')
     expect(labels(m)).toContain('Push main')
-    expect(find(m, 'Delete…')?.disabled).toBe(true)
+    expect(find(m, 'Delete…')?.disabled).toBeFalsy()
     expect(labels(m).some((l) => l.startsWith('Merge') || l.startsWith('Rebase') || l.startsWith('Fast-forward'))).toBe(false)
   })
 

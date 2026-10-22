@@ -200,7 +200,7 @@ describe('getRefs', () => {
   it('lists remote branches including the symbolic origin/HEAD', async () => {
     const refs = await backend.getRefs(repo)
     expect(refs.remotes.map((r) => r.name)).toEqual(['origin/HEAD', 'origin/main'])
-    expect(refs.remotes[0]).toMatchObject({ remote: 'origin', isSymbolic: true })
+    expect(refs.remotes[0]).toMatchObject({ remote: 'origin', isSymbolic: true, target: 'origin/main' })
     expect(refs.remotes[1]).toMatchObject({ remote: 'origin', type: 'remote' })
     expect(refs.remotes[1].isSymbolic).toBeUndefined()
   })

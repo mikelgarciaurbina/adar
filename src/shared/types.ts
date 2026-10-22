@@ -64,6 +64,8 @@ export interface Ref {
   remote?: string
   /** Remote branches: true for "origin/HEAD" style symbolic refs. */
   isSymbolic?: boolean
+  /** Symbolic remote refs: the branch they point to, e.g. "origin/main" (the remote's default branch). */
+  target?: string
   /** Tags */
   annotated?: boolean
   tagMessage?: string

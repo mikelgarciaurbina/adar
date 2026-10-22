@@ -54,3 +54,23 @@ export function defaultRemote(refs: RefsResult | null, remoteNames: string[]): s
   if (remoteNames.includes('origin')) return 'origin'
   return remoteNames[0] ?? null
 }
+
+/**
+ * The repository's main local branch other than `exclude`: the one for the remote's default branch
+ * (origin/HEAD), else main, master, develop or trunk, else the first branch.
+ */
+export function mainBranch(refs: RefsResult | null, exclude?: string): Ref | undefined {
+  const branches = refs?.branches.filter((b) => b.name !== exclude) ?? []
+  const heads = refs?.remotes.filter((r) => r.isSymbolic && r.target) ?? []
+  const head = heads.find((r) => r.remote === 'origin') ?? heads[0]
+  const byName = (name: string) => branches.find((b) => b.name === name)
+  if (head?.target) {
+    const local = branches.find((b) => b.upstream === head.target) ?? byName(remoteBranchName({ ...head, name: head.target }))
+    if (local) return local
+  }
+  for (const name of ['main', 'master', 'develop', 'trunk']) {
+    const b = byName(name)
+    if (b) return b
+  }
+  return branches[0]
+}

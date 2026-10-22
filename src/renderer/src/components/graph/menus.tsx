@@ -108,7 +108,7 @@ export function refMenu(repo: string, pill: Pill): MenuItem[] {
     items.push(
       { label: `Set upstream for ${name}…`, icon: <Link2 size={I} />, onClick: () => git.setUpstreamDialog(repo, ref) },
       { label: `Rename ${name}…`, icon: <Pencil size={I} />, onClick: () => git.renameBranch(repo, ref) },
-      { label: `Delete ${name}…`, icon: <Trash size={I} />, danger: true, disabled: isCurrent, onClick: () => git.deleteBranch(repo, ref) }
+      { label: `Delete ${name}…`, icon: <Trash size={I} />, danger: true, onClick: () => git.deleteBranch(repo, ref) }
     )
   }
   const remoteRefs: Ref[] = pill.kind === 'remote' ? [ref] : pill.remotes

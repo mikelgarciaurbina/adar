@@ -120,7 +120,7 @@ export function localBranchMenu(ctx: SidebarMenuCtx, b: Ref): MenuItem[] {
     { label: 'Create branch here…', icon: icon(GitBranchPlus), onClick: () => git.createBranch(repo, b.name) },
     { label: 'Create tag here…', icon: icon(Tag), onClick: () => git.createTag(repo, b.sha) },
     { label: 'Rename…', icon: icon(Pencil), onClick: () => git.renameBranch(repo, b) },
-    { label: 'Delete…', icon: icon(Trash2), danger: true, disabled: isCur, onClick: () => git.deleteBranch(repo, b) },
+    { label: 'Delete…', icon: icon(Trash2), danger: true, onClick: () => git.deleteBranch(repo, b) },
     { label: b.upstream ? `Set upstream… (${b.upstream})` : 'Set upstream…', icon: icon(Link), onClick: () => git.setUpstreamDialog(repo, b) },
     SEP,
     { label: 'Copy branch name', icon: icon(Copy), onClick: () => git.copyText(b.name, 'Copied branch name') },

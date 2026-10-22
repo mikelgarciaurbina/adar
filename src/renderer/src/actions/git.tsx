@@ -12,7 +12,7 @@ import { pluralize, summarizeList } from '@renderer/lib/format'
 import { cleanMessage } from '@renderer/components/details/message'
 import { openFolderOfRepos, suggestGroup } from './groups'
 import { refDropActions } from '@renderer/lib/refDrop'
-import { currentBranch, defaultRemote, localForRemote, remoteBranchName } from '@renderer/lib/refs'
+import { currentBranch, defaultRemote, localForRemote, mainBranch, remoteBranchName } from '@renderer/lib/refs'
 import { StaleHistoryError, useApp, type RefreshScope, type RepoTab } from '@renderer/store/appStore'
 import { describeError, AdarError } from '@shared/errors'
 import type { DiffTarget, OperationResult, PullMode, Ref, ResetMode, RewordInfo } from '@shared/types'
@@ -396,17 +396,35 @@ export async function createBranch(repo: string, startPoint?: string, opts: { ch
 }
 
 export async function deleteBranch(repo: string, branch: Ref): Promise<void> {
+  const remoteNote = branch.upstream ? `The remote branch ${branch.upstream} is not deleted.` : undefined
   if (branch.isHead) {
-    toast.error('Cannot delete the checked-out branch. Checkout another branch first.')
-    return
+    // Git cannot delete the checked-out branch: ask which one to check out instead, then delete.
+    const refs = tabOf(repo)?.refs ?? null
+    const others = refs?.branches.filter((b) => b.name !== branch.name) ?? []
+    if (!others.length) {
+      toast.warning(`${branch.name} is the only local branch. Create another branch to delete it.`)
+      return
+    }
+    const res = await form({
+      title: `Delete branch ${branch.name}?`,
+      message: `${branch.name} is checked out, so Adar checks out another branch before deleting it.${remoteNote ? ` ${remoteNote}` : ''}`,
+      fields: [
+        {
+          type: 'select',
+          name: 'target',
+          label: 'Check out',
+          options: others.map((b) => ({ value: b.name, label: b.name })),
+          defaultValue: mainBranch(refs, branch.name)?.name
+        }
+      ],
+      confirmLabel: 'Check out and delete',
+      danger: true
+    })
+    if (!res || !(await checkout(repo, String(res.target), { silent: true }))) return
+  } else {
+    const ok = await confirm({ title: `Delete branch ${branch.name}?`, message: remoteNote, confirmLabel: 'Delete', danger: true })
+    if (!ok) return
   }
-  const ok = await confirm({
-    title: `Delete branch ${branch.name}?`,
-    message: branch.upstream ? `The remote branch ${branch.upstream} is not deleted.` : undefined,
-    confirmLabel: 'Delete',
-    danger: true
-  })
-  if (!ok) return
   const sha = branch.sha
   const upstream = branch.upstream
   const doDelete = async (force: boolean) => {

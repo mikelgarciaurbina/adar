@@ -255,7 +255,7 @@ describe('refs parsers', () => {
       { name: 'tracks-local', fullName: 'refs/heads/tracks-local', type: 'branch', sha: SHA_C, isHead: false, upstream: 'main', ahead: 0, behind: 3 }
     ])
     expect(refs.remotes).toEqual([
-      { name: 'origin/HEAD', fullName: 'refs/remotes/origin/HEAD', type: 'remote', sha: SHA_A, remote: 'origin', isSymbolic: true },
+      { name: 'origin/HEAD', fullName: 'refs/remotes/origin/HEAD', type: 'remote', sha: SHA_A, remote: 'origin', isSymbolic: true, target: 'origin/main' },
       { name: 'origin/main', fullName: 'refs/remotes/origin/main', type: 'remote', sha: SHA_A, remote: 'origin' },
       { name: 'team/a/dev', fullName: 'refs/remotes/team/a/dev', type: 'remote', sha: SHA_B, remote: 'team/a' }
     ])

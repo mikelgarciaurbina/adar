@@ -128,7 +128,10 @@ export function parseForEachRef(out: string, remoteNames: readonly string[] = []
       result.branches.push(ref)
     } else if (fullName.startsWith('refs/remotes/')) {
       const ref: Ref = { name, fullName, type: 'remote', sha: objectName, remote: remoteOf(name, remoteNames) }
-      if (symref) ref.isSymbolic = true
+      if (symref) {
+        ref.isSymbolic = true
+        ref.target = shortRefName(symref)
+      }
       result.remotes.push(ref)
     } else if (fullName.startsWith('refs/tags/')) {
       const annotated = objectType === 'tag'
