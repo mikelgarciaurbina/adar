@@ -22,7 +22,8 @@ fetch/pull/push with upstream handling · undo/redo of git actions · command pa
 dark/light themes · credential prompts for HTTPS tokens and SSH passphrases · in-app updates from GitHub Releases ·
 `adar` command-line tool (open the current repository from a terminal) · edit the message of existing commits in place ·
 tab groups (a project's repositories together, reopened in one click) · the Basoa look of adargit.com in the app (night
-and day themes, six lane colours, tab groups as trays) · Fetch All for a tab group.
+and day themes, six lane colours, tab groups as trays) · Fetch All for a tab group · branches keep their lane colour in
+the left panel · change markers on the diff's scrollbar · tabs shrink to share the bar.
 
 ---
 
@@ -69,8 +70,6 @@ and day themes, six lane colours, tab groups as trays) · Fetch All for a tab gr
 - [ ] Merge tool: line-level selection, optional base (ancestor) pane, syntax highlighting in the output editor.
 - [ ] External diff / merge tools (VS Code, Kaleidoscope, FileMerge, Beyond Compare).
 - [ ] Word-wrap toggle and keyboard line cursor for line staging. *(good first issue)*
-- [ ] Change markers on the diff's scrollbar: green where lines were added, red where they were removed (both on
-  modified lines), so the changes of a long file show at a glance; clicking a marker jumps to that change.
 - [ ] Image diff modes: swipe and onion skin.
 - [ ] Compare any two refs or files ("Compare with…"), and browse the repository tree at any commit.
 - [ ] Blame: honour `.git-blame-ignore-revs`, "blame previous revision", paging for very long file histories.
@@ -104,9 +103,6 @@ and day themes, six lane colours, tab groups as trays) · Fetch All for a tab gr
   and favourites. (Tab groups and Fetch All for a group are done.)
 - [ ] Tab groups: any colour for a group (colour picker or hex value) besides the eight Basoa colours, with the
   label's colour adjusted so it stays readable in both themes. *(good first issue)*
-- [ ] Left panel: give each branch the dot of its lane colour in the graph (as its ref label already has), so a branch
-  keeps one colour everywhere. The panel needs the graph's lane colour of every branch tip; branches outside the
-  loaded history keep a neutral dot.
 - [ ] App menu: once the `adar` command is installed, show **Uninstall Command Line Tool…** instead of *Install…*
   (rebuild the menu after installing or uninstalling, and check at startup). Today uninstalling is only in
   Settings → Integrations and the command palette. *(good first issue)*
