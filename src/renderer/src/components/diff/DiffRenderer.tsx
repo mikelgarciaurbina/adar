@@ -111,6 +111,7 @@ export function DiffRenderer({ diff, mode, fullFile = false, path, staging, hand
   const rowBlock = split ? model.splitBlock : model.unifiedBlock
   const scrollRef = useRef<HTMLDivElement>(null)
   const [viewportW, setViewportW] = useState(0)
+  const [viewportH, setViewportH] = useState(0)
   /** Change block whose action buttons are hovered (its lines are highlighted). */
   const [hotBlock, setHotBlock] = useState(-1)
   /** Change block under the mouse (its action buttons are shown at full strength). */
@@ -304,9 +305,13 @@ export function DiffRenderer({ diff, mode, fullFile = false, path, staging, hand
   useEffect(() => {
     const el = scrollRef.current
     if (!el) return
-    const ro = new ResizeObserver(() => setViewportW(el.clientWidth))
+    const measure = () => {
+      setViewportW(el.clientWidth)
+      setViewportH(el.clientHeight)
+    }
+    const ro = new ResizeObserver(measure)
     ro.observe(el)
-    setViewportW(el.clientWidth)
+    measure()
     return () => ro.disconnect()
   }, [])
 
@@ -316,20 +321,29 @@ export function DiffRenderer({ diff, mode, fullFile = false, path, staging, hand
     if (autoFocus && el && shouldTakeFocus(document.activeElement, el)) el.focus({ preventScroll: true })
   }, [autoFocus])
 
+  /** Scrolls change block `index` into view (with some context above) and flashes it. */
+  const jumpToBlock = useCallback(
+    (index: number) => {
+      const el = scrollRef.current
+      if (!el || index < 0 || index >= changeStarts.length) return
+      const offset = Math.max(0, offsetOfRow(changeStarts[index]) - ROW_H * LEAD_ROWS)
+      jumpedTo.current = Math.min(offset, Math.max(0, el.scrollHeight - el.clientHeight))
+      virtualizer.scrollToOffset(offset)
+      setCursor(index)
+      setFlashBlock(index)
+    },
+    [changeStarts, offsetOfRow, virtualizer, setCursor]
+  )
+
   useEffect(() => {
     if (!handle) return
     handle.current = {
       jumpChange(dir) {
-        const el = scrollRef.current
-        if (!el || !changeStarts.length) return
+        if (!changeStarts.length) return
         const from = cursor.current
         const next = from < 0 && dir < 0 ? -1 : Math.max(0, Math.min(changeStarts.length - 1, from + dir))
         if (next < 0 || next === from) return
-        const offset = Math.max(0, offsetOfRow(changeStarts[next]) - ROW_H * LEAD_ROWS)
-        jumpedTo.current = Math.min(offset, Math.max(0, el.scrollHeight - el.clientHeight))
-        virtualizer.scrollToOffset(offset)
-        setCursor(next)
-        setFlashBlock(next)
+        jumpToBlock(next)
       },
       focus() {
         scrollRef.current?.focus({ preventScroll: true })
@@ -338,7 +352,20 @@ export function DiffRenderer({ diff, mode, fullFile = false, path, staging, hand
     return () => {
       if (handle.current) handle.current = null
     }
-  }, [handle, changeStarts, virtualizer, offsetOfRow, setCursor])
+  }, [handle, changeStarts, jumpToBlock])
+
+  // ── Change markers on the scrollbar ───────────────────────────────────────
+  // Where the file's changes are, at a glance: added lines in green, removed ones in red (both for
+  // modified lines), along the scrollbar track; clicking a marker jumps to its change.
+  const totalSize = virtualizer.getTotalSize()
+  const marks = useMemo(() => {
+    if (!totalSize || totalSize <= viewportH + 1) return []
+    return model.blocks.map((b, i) => {
+      const lines = split ? Math.max(b.adds, b.dels) : b.adds + b.dels
+      const top = offsetOfRow(split ? b.splitRow : b.unifiedRow) / totalSize
+      return { index: i, top, height: (lines * ROW_H) / totalSize, adds: b.adds > 0, dels: b.dels > 0 }
+    })
+  }, [model.blocks, split, totalSize, viewportH, offsetOfRow])
 
   // ── Line selection ────────────────────────────────────────────────────────
   const stagingRef = useRef(staging)
@@ -475,105 +502,120 @@ export function DiffRenderer({ diff, mode, fullFile = false, path, staging, hand
     : { height: virtualizer.getTotalSize(), minWidth: `calc(${digits * 2}ch + ${72 + (lane ? LANE_W : 0)}px + ${model.maxCols}ch)` }
 
   return (
-    <div
-      ref={scrollRef}
-      className={`diff-scroll${split ? ' diff-split' : ' diff-unified'}${selectable ? ' diff-selectable' : ''}${fullFile ? ' diff-full' : ''}`}
-      style={rootStyle}
-      tabIndex={0}
-      onMouseDown={onMouseDown}
-      onMouseMove={onMouseMove}
-      onMouseLeave={blockActions ? () => trackHover(-1) : undefined}
-    >
-      <div className="diff-sizer" style={sizerStyle}>
-        {items.flatMap((v) => {
-          const row = rows[v.index]
-          const style: CSSProperties = { transform: `translateY(${v.start}px)` }
-          if (row.kind === 'hunk') {
-            return (
-              <div
-                key={v.key}
-                data-index={v.index}
-                ref={split ? virtualizer.measureElement : undefined}
-                className="diff-row diff-hunk-row"
-                style={{ ...style, height: split ? undefined : HUNK_H }}
-              >
-                <HunkHeader diff={diff} hunkIndex={row.hunkIndex} staging={staging ?? null} />
+    <div className="diff-scroll-frame">
+      <div
+        ref={scrollRef}
+        className={`diff-scroll${split ? ' diff-split' : ' diff-unified'}${selectable ? ' diff-selectable' : ''}${fullFile ? ' diff-full' : ''}`}
+        style={rootStyle}
+        tabIndex={0}
+        onMouseDown={onMouseDown}
+        onMouseMove={onMouseMove}
+        onMouseLeave={blockActions ? () => trackHover(-1) : undefined}
+      >
+        <div className="diff-sizer" style={sizerStyle}>
+          {items.flatMap((v) => {
+            const row = rows[v.index]
+            const style: CSSProperties = { transform: `translateY(${v.start}px)` }
+            if (row.kind === 'hunk') {
+              return (
+                <div
+                  key={v.key}
+                  data-index={v.index}
+                  ref={split ? virtualizer.measureElement : undefined}
+                  className="diff-row diff-hunk-row"
+                  style={{ ...style, height: split ? undefined : HUNK_H }}
+                >
+                  <HunkHeader diff={diff} hunkIndex={row.hunkIndex} staging={staging ?? null} />
+                </div>
+              )
+            }
+            const blockIndex = rowBlock[v.index] ?? -1
+            const isHot = blockIndex >= 0 && (blockIndex === hot || blockIndex === flashBlock)
+            const block = blockActions && blockIndex >= 0 ? model.blocks[blockIndex] : undefined
+            const actions =
+              block && (split ? block.splitRow : block.unifiedRow) === v.index ? (
+                <BlockActions
+                  key={`b:${blockIndex}`}
+                  top={v.start - blockBarLift(block, split, rows.length, staging!.kind === 'unstaged' ? 2 : 1) * ROW_H}
+                  model={model}
+                  block={block}
+                  index={blockIndex}
+                  staging={staging!}
+                  active={blockIndex === hoverBlock || blockIndex === hot}
+                  onHot={setHotBlock}
+                />
+              ) : null
+            if (row.kind === 'line') {
+              const line = diff.hunks[row.hunkIndex].lines[row.lineIndex]
+              const nums = model.hunks[row.hunkIndex].numbers[row.lineIndex]
+              const key = lineKey(row.hunkIndex, row.lineIndex)
+              const isSel = line.type !== 'context' && !!selected?.has(key)
+              const el = (
+                <UnifiedLine
+                  key={v.key}
+                  style={style}
+                  rowIndex={v.index}
+                  line={line}
+                  oldNo={nums.old}
+                  newNo={nums.new}
+                  tokens={tokensFor(row.hunkIndex, row.lineIndex, line)}
+                  ranges={wordsFor(row.hunkIndex, row.lineIndex, line)}
+                  eol={eolFor(row.hunkIndex, row.lineIndex, line)}
+                  selectable={selectable && line.type !== 'context'}
+                  selected={isSel}
+                  hot={isHot}
+                  lane={lane}
+                />
+              )
+              return actions ? [el, actions] : el
+            }
+            const hunk = diff.hunks[row.hunkIndex]
+            const hm = model.hunks[row.hunkIndex]
+            const left = row.left !== null ? hunk.lines[row.left] : null
+            const right = row.right !== null ? hunk.lines[row.right] : null
+            const cell = (side: 'left' | 'right', idx: number | null, line: DiffLine | null) => {
+              if (idx === null || !line) return <div className="diff-s-cell diff-s-empty" />
+              const no = side === 'left' ? hm.numbers[idx].old : hm.numbers[idx].new
+              const change = line.type !== 'context'
+              return (
+                <SplitCell
+                  side={side}
+                  rowIndex={v.index}
+                  line={line}
+                  no={no}
+                  tokens={tokensFor(row.hunkIndex, idx, line)}
+                  ranges={wordsFor(row.hunkIndex, idx, line)}
+                  eol={eolFor(row.hunkIndex, idx, line)}
+                  selectable={selectable && change}
+                  selected={change && !!selected?.has(lineKey(row.hunkIndex, idx))}
+                  hot={isHot && change}
+                />
+              )
+            }
+            const el = (
+              <div key={v.key} data-index={v.index} ref={virtualizer.measureElement} className="diff-row diff-s-row" style={style}>
+                {lane && <div className="diff-lane diff-s-lane" />}
+                {cell('left', row.left, left)}
+                {cell('right', row.right, right)}
               </div>
             )
-          }
-          const blockIndex = rowBlock[v.index] ?? -1
-          const isHot = blockIndex >= 0 && (blockIndex === hot || blockIndex === flashBlock)
-          const block = blockActions && blockIndex >= 0 ? model.blocks[blockIndex] : undefined
-          const actions =
-            block && (split ? block.splitRow : block.unifiedRow) === v.index ? (
-              <BlockActions
-                key={`b:${blockIndex}`}
-                top={v.start - blockBarLift(block, split, rows.length, staging!.kind === 'unstaged' ? 2 : 1) * ROW_H}
-                model={model}
-                block={block}
-                index={blockIndex}
-                staging={staging!}
-                active={blockIndex === hoverBlock || blockIndex === hot}
-                onHot={setHotBlock}
-              />
-            ) : null
-          if (row.kind === 'line') {
-            const line = diff.hunks[row.hunkIndex].lines[row.lineIndex]
-            const nums = model.hunks[row.hunkIndex].numbers[row.lineIndex]
-            const key = lineKey(row.hunkIndex, row.lineIndex)
-            const isSel = line.type !== 'context' && !!selected?.has(key)
-            const el = (
-              <UnifiedLine
-                key={v.key}
-                style={style}
-                rowIndex={v.index}
-                line={line}
-                oldNo={nums.old}
-                newNo={nums.new}
-                tokens={tokensFor(row.hunkIndex, row.lineIndex, line)}
-                ranges={wordsFor(row.hunkIndex, row.lineIndex, line)}
-                eol={eolFor(row.hunkIndex, row.lineIndex, line)}
-                selectable={selectable && line.type !== 'context'}
-                selected={isSel}
-                hot={isHot}
-                lane={lane}
-              />
-            )
             return actions ? [el, actions] : el
-          }
-          const hunk = diff.hunks[row.hunkIndex]
-          const hm = model.hunks[row.hunkIndex]
-          const left = row.left !== null ? hunk.lines[row.left] : null
-          const right = row.right !== null ? hunk.lines[row.right] : null
-          const cell = (side: 'left' | 'right', idx: number | null, line: DiffLine | null) => {
-            if (idx === null || !line) return <div className="diff-s-cell diff-s-empty" />
-            const no = side === 'left' ? hm.numbers[idx].old : hm.numbers[idx].new
-            const change = line.type !== 'context'
-            return (
-              <SplitCell
-                side={side}
-                rowIndex={v.index}
-                line={line}
-                no={no}
-                tokens={tokensFor(row.hunkIndex, idx, line)}
-                ranges={wordsFor(row.hunkIndex, idx, line)}
-                eol={eolFor(row.hunkIndex, idx, line)}
-                selectable={selectable && change}
-                selected={change && !!selected?.has(lineKey(row.hunkIndex, idx))}
-                hot={isHot && change}
-              />
-            )
-          }
-          const el = (
-            <div key={v.key} data-index={v.index} ref={virtualizer.measureElement} className="diff-row diff-s-row" style={style}>
-              {lane && <div className="diff-lane diff-s-lane" />}
-              {cell('left', row.left, left)}
-              {cell('right', row.right, right)}
-            </div>
-          )
-          return actions ? [el, actions] : el
-        })}
+          })}
+        </div>
       </div>
+      {marks.length > 0 && (
+        <div className="diff-marks" style={{ height: viewportH }} aria-hidden="true">
+          {marks.map((m) => (
+            <span
+              key={m.index}
+              className={`diff-mark${m.adds && m.dels ? ' diff-mark-both' : m.adds ? ' diff-mark-add' : ' diff-mark-del'}`}
+              style={{ top: `${m.top * 100}%`, height: `max(3px, ${m.height * 100}%)` }}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => jumpToBlock(m.index)}
+            />
+          ))}
+        </div>
+      )}
     </div>
   )
 }

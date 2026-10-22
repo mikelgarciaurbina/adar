@@ -45,11 +45,11 @@
   justify-content: center;
   width: 18px;
   height: 18px;
-  border: 1px solid;
   border-radius: var(--radius-sm);
+  background: color-mix(in srgb, currentColor 16%, transparent);
   font-family: var(--font-mono);
   font-size: 10.5px;
-  font-weight: 700;
+  font-weight: 600;
   line-height: 1;
 }
 
@@ -135,9 +135,9 @@
   container-name: diffhd;
 }
 
-/* The diff view's single bar: file, stats, navigation, view options and actions on one line.
-   The path and the target chip shrink first, then labels give way to icons (least important
-   first); only a very narrow window wraps it. */
+/* The diff view's single bar: file, stats, navigation, view options and actions on one line
+   (what the diff is of shows in the right panel). The path shrinks first, then labels give way to
+   icons (least important first); only a very narrow window wraps it. */
 .diff-bar {
   min-height: 44px;
   gap: 4px;
@@ -152,33 +152,23 @@
   font-family: var(--font-mono);
   font-size: 12.5px;
 }
-.diff-bar .diff-target {
-  flex: 0 3 auto;
-  max-width: 260px;
-}
 .diff-bar .diff-stats {
   margin-left: 2px;
 }
 
-@container diffbar (max-width: 1180px) {
+@container diffbar (max-width: 1000px) {
   .diff-tb-btn > span {
     display: none;
   }
 }
 
-@container diffbar (max-width: 1060px) {
-  .diff-target {
-    display: none;
-  }
-}
-
-@container diffbar (max-width: 980px) {
+@container diffbar (max-width: 900px) {
   .diff-toggle > span {
     display: none;
   }
 }
 
-@container diffbar (max-width: 880px) {
+@container diffbar (max-width: 840px) {
   .diff-seg-btn > span {
     display: none;
   }
@@ -454,6 +444,47 @@
 }
 
 /* ── Text diff renderer ────────────────────────────────────────────────── */
+
+/* The scroller plus its change markers, which sit over the scrollbar track. */
+.diff-scroll-frame {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+.diff-marks {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 10px;
+  z-index: 3;
+  pointer-events: none;
+}
+.diff-mark {
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  border-radius: 1px;
+  opacity: 0.9;
+  pointer-events: auto;
+  cursor: pointer;
+}
+.diff-mark:hover {
+  opacity: 1;
+  left: 1px;
+  right: 1px;
+}
+.diff-mark-add {
+  background: var(--c-added);
+}
+.diff-mark-del {
+  background: var(--c-deleted);
+}
+.diff-mark-both {
+  background: linear-gradient(90deg, var(--c-deleted) 50%, var(--c-added) 50%);
+}
 
 .diff-scroll {
   flex: 1;

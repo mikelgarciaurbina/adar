@@ -22,7 +22,7 @@ const STATUS_WORD: Record<FileStatusCode, string> = {
 
 export function StatusBadge({ status }: { status: FileStatusCode }) {
   return (
-    <span className="diff-status" style={{ color: statusColor(status), borderColor: statusColor(status) }} title={STATUS_WORD[status]}>
+    <span className="diff-status" style={{ color: statusColor(status) }} title={STATUS_WORD[status]}>
       {STATUS_LETTER[status]}
     </span>
   )

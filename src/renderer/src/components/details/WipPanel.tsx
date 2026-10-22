@@ -337,7 +337,7 @@ function Section({
           {collapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
           {tone === 'conflict' && <TriangleAlert size={12} className="det-conflict-icon" />}
           <span className="det-section-title">{title}</span>
-          <span className="det-section-count">({count})</span>
+          <span className="det-section-count">{count}</span>
         </button>
         <span className="det-spacer" />
         {action}
@@ -413,14 +413,14 @@ const WipSection = memo(function WipSection(props: WipSectionProps) {
   }
 
   const bulk = isUnstaged ? (
-    <button type="button" className="det-section-btn det-section-btn-stage" onClick={() => void props.stageAll()}>
+    <button type="button" className="det-section-btn det-section-btn-stage" title="Stage all changes" onClick={() => void props.stageAll()}>
       <Plus size={11} strokeWidth={3} />
-      Stage all changes
+      Stage all
     </button>
   ) : (
-    <button type="button" className="det-section-btn det-section-btn-unstage" onClick={() => void props.unstageAll()}>
+    <button type="button" className="det-section-btn det-section-btn-unstage" title="Unstage all changes" onClick={() => void props.unstageAll()}>
       <Minus size={11} strokeWidth={3} />
-      Unstage all changes
+      Unstage all
     </button>
   )
 

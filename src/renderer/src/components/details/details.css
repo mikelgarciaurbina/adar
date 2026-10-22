@@ -44,8 +44,19 @@
   color: var(--ref-stash);
 }
 .det-header-label {
-  color: var(--text-2);
-  font-weight: 500;
+  color: var(--text-3);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.det-commit-ring {
+  flex: none;
+  width: 11px;
+  height: 11px;
+  margin-right: 2px;
+  border: 2px solid var(--det-lane, var(--text-3));
+  border-radius: 50%;
 }
 .det-header-title {
   min-width: 0;
@@ -245,23 +256,23 @@
   gap: 4px;
 }
 .det-ref {
-  --det-ref-c: var(--ref-local);
+  --det-ref-c: var(--det-lane, var(--ref-local));
   display: inline-flex;
   align-items: center;
   gap: 4px;
   max-width: 100%;
   height: 20px;
-  padding: 0 7px 0 5px;
+  padding: 0 7px 0 6px;
   border-radius: var(--radius-sm);
-  border: 1px solid color-mix(in srgb, var(--det-ref-c) 55%, transparent);
-  background: color-mix(in srgb, var(--det-ref-c) 16%, transparent);
-  color: var(--text-0);
-  font-size: var(--fs-xs);
-  font-weight: 600;
+  border: 1px solid color-mix(in srgb, var(--det-ref-c) 40%, transparent);
+  background: color-mix(in srgb, var(--det-ref-c) 14%, transparent);
+  color: var(--det-lane-ink, var(--text-0));
+  font-size: 11.5px;
+  font-weight: 500;
 }
 .det-ref svg {
-  color: var(--det-ref-c);
   flex: none;
+  opacity: 0.85;
 }
 .det-ref-name {
   overflow: hidden;
@@ -269,13 +280,14 @@
   white-space: nowrap;
 }
 .det-ref-head {
-  --det-ref-c: var(--ref-head);
+  font-weight: 600;
 }
 .det-ref-remote {
-  --det-ref-c: var(--ref-remote);
+  background: color-mix(in srgb, var(--det-ref-c) 8%, transparent);
 }
 .det-ref-tag {
   --det-ref-c: var(--ref-tag);
+  color: var(--ref-tag);
 }
 
 /* ── Files block (read-only lists) ─────────────────────────────────────── */
@@ -434,8 +446,8 @@
   position: relative;
   display: flex;
   align-items: center;
-  gap: 6px;
-  height: 24px;
+  gap: 8px;
+  height: 28px;
   padding-right: 8px;
   font-size: var(--fs-md);
   color: var(--text-0);
@@ -454,11 +466,17 @@
   --det-row-bg: var(--bg-4);
   background: var(--det-row-bg);
 }
+/* The file whose diff is open: the accent wash with a line above and below, as in the graph. */
 .det-row-active,
 .det-row-active:hover {
-  --det-row-bg: color-mix(in srgb, var(--accent) 11%, var(--bg-1));
+  --det-row-bg: color-mix(in srgb, var(--accent) 10%, var(--bg-1));
   background: var(--det-row-bg);
-  border-left-color: var(--accent);
+  box-shadow:
+    inset 0 1px 0 var(--accent-line),
+    inset 0 -1px 0 var(--accent-line);
+}
+.det-row-active .det-row-name {
+  font-weight: 500;
 }
 /* Drawn above the hover-actions overlay so the ring is not cut where the buttons start. */
 .det-row-focus::after {
@@ -479,10 +497,14 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 14px;
-  height: 14px;
-  border: 1.5px solid currentColor;
-  border-radius: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  background: color-mix(in srgb, currentColor 16%, transparent);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
 }
 
 .det-row-chevron {
@@ -705,9 +727,10 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  height: 30px;
+  height: 34px;
   padding: 0 8px 0 6px;
-  background: var(--bg-2);
+  background: var(--bg-1);
+  border-top: 1px solid var(--border);
 }
 .det-section-toggle {
   display: inline-flex;
@@ -719,9 +742,11 @@
   border: none;
   border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--text-1);
-  font-size: var(--fs-sm);
+  color: var(--text-2);
+  font-size: var(--fs-xs);
   font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 .det-section-toggle:hover {
   color: var(--text-0);
@@ -736,8 +761,10 @@
   white-space: nowrap;
 }
 .det-section-count {
-  color: var(--text-2);
+  color: var(--text-3);
+  font-family: var(--font-mono);
   font-weight: 500;
+  letter-spacing: 0;
 }
 .det-section-conflict .det-section-head {
   background: color-mix(in srgb, var(--c-conflict) 12%, var(--bg-2));
@@ -908,7 +935,18 @@
 }
 .det-commit-btn {
   width: 100%;
-  height: 32px;
+  height: 36px;
+  border-radius: 10px;
+}
+.det-commit-kbd {
+  margin-left: 9px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: color-mix(in srgb, currentColor 12%, transparent);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  opacity: 0.8;
 }
 .det-commit-btn > span:last-child {
   overflow: hidden;

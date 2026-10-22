@@ -1,7 +1,7 @@
 // Small form controls shared by the modals (md- prefix).
 
-import { useId, useRef, type ReactNode } from 'react'
-import { FolderOpen } from 'lucide-react'
+import { useId, useRef, type ReactNode, type SelectHTMLAttributes } from 'react'
+import { ChevronDown, FolderOpen } from 'lucide-react'
 import { api } from '@renderer/api/client'
 import { Button } from '@renderer/components/common/Button'
 import { toast } from '@renderer/components/common/toast'
@@ -69,10 +69,47 @@ export function Switch({ checked, onChange, label, disabled }: { checked: boolea
   )
 }
 
-/** Settings row: label + description on the left, control on the right. */
-export function SettingRow({ label, description, children, htmlFor }: { label: ReactNode; description?: ReactNode; children: ReactNode; htmlFor?: string }) {
+/** A titled card of setting rows (Settings): rows are separated by hairlines. */
+export function SettingGroup({ title, description, children }: { title?: ReactNode; description?: ReactNode; children: ReactNode }) {
   return (
-    <div className="md-row">
+    <section className="md-group">
+      {(title || description) && (
+        <div className="md-group-head">
+          {title && <h3 className="md-group-title">{title}</h3>}
+          {description && <p className="md-group-desc">{description}</p>}
+        </div>
+      )}
+      <div className="md-group-card">{children}</div>
+    </section>
+  )
+}
+
+/** Native select drawn like the app's inputs, with its own chevron. */
+export function Select({ className, ...rest }: SelectHTMLAttributes<HTMLSelectElement>) {
+  return (
+    <span className="md-select-wrap">
+      <select className={`ui-input md-select${className ? ' ' + className : ''}`} {...rest} />
+      <ChevronDown size={13} className="md-select-caret" aria-hidden="true" />
+    </span>
+  )
+}
+
+/** Settings row: label + description on the left, control on the right (or below it when `stacked`). */
+export function SettingRow({
+  label,
+  description,
+  children,
+  htmlFor,
+  stacked
+}: {
+  label: ReactNode
+  description?: ReactNode
+  children: ReactNode
+  htmlFor?: string
+  stacked?: boolean
+}) {
+  return (
+    <div className={`md-row${stacked ? ' md-row-stacked' : ''}`}>
       <div className="md-row-text">
         {htmlFor ? (
           <label className="md-row-label" htmlFor={htmlFor}>

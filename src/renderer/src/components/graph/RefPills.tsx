@@ -22,8 +22,7 @@ function PillIcons({ pill }: { pill: Pill }) {
     default:
       return (
         <>
-          {pill.isHead && <Check size={ICON} strokeWidth={3} className="gr-pill-check" />}
-          <Monitor size={ICON} className="gr-pill-icon" />
+          {pill.isHead ? <Check size={ICON} strokeWidth={3} className="gr-pill-check" /> : <Monitor size={ICON} className="gr-pill-icon" />}
           {pill.remotes.length > 0 && <Cloud size={ICON} className="gr-pill-icon" />}
         </>
       )

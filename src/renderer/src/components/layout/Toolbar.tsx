@@ -11,7 +11,6 @@ import {
   ChevronDown,
   Code,
   FolderOpen,
-  GitBranch,
   GitBranchPlus,
   Network,
   Redo2,
@@ -32,6 +31,7 @@ import { shortcutLabel } from '@renderer/lib/keys'
 import { currentBranch } from '@renderer/lib/refs'
 import { useApp, type RepoTab } from '@renderer/store/appStore'
 import type { PullMode } from '@shared/types'
+import { BranchDot } from './BranchDot'
 import { BranchPicker } from './BranchPicker'
 import { badgeCount, distinctParents, isBusyFor } from './chrome'
 import { repoLifecycleItems } from './TabBar'
@@ -193,7 +193,7 @@ export function Toolbar({ tab }: { tab: RepoTab }) {
         >
           <span className="tb-dropdown-caption">branch</span>
           <span className="tb-dropdown-value">
-            <GitBranch size={13} className="tb-dropdown-icon" />
+            <BranchDot repo={tab.path} sha={head?.sha ?? null} />
             <span className={`tb-dropdown-text${head?.detached ? ' tb-detached' : ''}`}>{branchLabel}</span>
             <ChevronDown size={13} />
           </span>

@@ -104,6 +104,26 @@ export function distinctParents(entries: Array<{ path: string; name: string }>):
   return out
 }
 
+/**
+ * Hints for the tab bar. Inside a group the group's label already tells projects apart, so a grouped tab
+ * only gets a hint when another tab of its own group shares its name; every other tab is told apart from
+ * all the open tabs.
+ */
+export function tabHints(tabs: Array<{ path: string; name: string }>, groups: ReadonlyArray<{ repos: readonly string[] }>): Map<string, string> {
+  const groupIndex = new Map<string, number>()
+  groups.forEach((g, i) => g.repos.forEach((p) => groupIndex.set(p, i)))
+  const out = new Map<string, string>()
+  const all = distinctParents(tabs)
+  for (const t of tabs) {
+    const hint = all.get(t.path)
+    if (hint !== undefined && !groupIndex.has(t.path)) out.set(t.path, hint)
+  }
+  groups.forEach((_, i) => {
+    for (const [p, hint] of distinctParents(tabs.filter((t) => groupIndex.get(t.path) === i))) out.set(p, hint)
+  })
+  return out
+}
+
 /** Short label for a detached HEAD or branch. */
 export function headLabel(head: { branch: string | null; detached: boolean; sha: string | null; unborn?: boolean } | null | undefined): string {
   if (!head) return '…'

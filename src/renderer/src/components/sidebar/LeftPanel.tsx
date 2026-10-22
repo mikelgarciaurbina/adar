@@ -14,6 +14,7 @@ import { showContextMenu, type MenuItem } from '@renderer/components/common/Cont
 import { getRefDragData, hasRefDragData, setRefDragData, type DraggedRef } from '@renderer/lib/dnd'
 import { isEditableTarget, isMod } from '@renderer/lib/keys'
 import { useApp, type RepoTab } from '@renderer/store/appStore'
+import { useLanes } from '@renderer/store/laneStore'
 import type { Ref, RemoteInfo } from '@shared/types'
 import {
   folderMenu,
@@ -128,6 +129,7 @@ export function LeftPanel({ tab }: { tab: RepoTab }) {
   const dragSource = useRef<string | null>(null)
 
   const fetchAllBusy = useApp((s) => !!s.busy[`fetch:${repo}`])
+  const tipColors = useLanes((s) => s.tips[repo])
   const submodulesBusy = useApp((s) => !!s.busy[`submodules:${repo}`])
   const fetchingMap = useSidebarBusy((s) => s.fetching)
 
@@ -783,6 +785,7 @@ export function LeftPanel({ tab }: { tab: RepoTab }) {
               busy={busy}
               addDisabled={row.kind === 'section' && (row.id === 'tags' || row.id === 'local') && headUnborn}
               refs={refs}
+              lane={row.kind === 'ref' && row.node.ref.type !== 'tag' ? tipColors?.get(row.node.ref.sha) : undefined}
               q={q}
               h={handlers}
             />

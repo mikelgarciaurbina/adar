@@ -243,18 +243,19 @@
 .gr-row.gr-multi:hover {
   background: color-mix(in srgb, var(--accent) 18%, transparent);
 }
+/* The selected commit: the accent wash with a line above and below (its node keeps a halo in
+   its lane's colour). */
 .gr-row.gr-selected {
-  background: color-mix(in srgb, var(--gr-lane) 12%, transparent);
+  background: var(--accent-soft);
   box-shadow:
-    inset 2px 0 0 var(--gr-lane),
-    inset 0 1px 0 color-mix(in srgb, var(--gr-lane) 30%, transparent),
-    inset 0 -1px 0 color-mix(in srgb, var(--gr-lane) 30%, transparent);
+    inset 0 1px 0 var(--accent-line),
+    inset 0 -1px 0 var(--accent-line);
 }
 .gr-row.gr-selected:hover {
-  background: color-mix(in srgb, var(--gr-lane) 15%, transparent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 .gr-scroll:focus .gr-row.gr-selected {
-  background: color-mix(in srgb, var(--gr-lane) 17%, transparent);
+  background: color-mix(in srgb, var(--accent) 13%, transparent);
 }
 .gr-row.gr-multi.gr-selected,
 .gr-scroll:focus .gr-row.gr-multi.gr-selected {
@@ -407,6 +408,37 @@
 }
 .gr-row.gr-selected .gr-node-halo {
   opacity: 0.4;
+}
+/* A commit that just arrived grows into its lane (Basoa's ease-grow), and its row glows briefly. */
+.gr-row-fresh .gr-commit-node,
+.gr-row-fresh .gr-head-node,
+.gr-row-fresh .gr-merge-dot,
+.gr-row-fresh .gr-head-halo {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: gr-grow 0.52s var(--ease-grow) both;
+}
+.gr-row-fresh {
+  animation: gr-arrive 0.9s var(--ease) both;
+}
+@keyframes gr-grow {
+  from {
+    transform: scale(0);
+  }
+}
+@keyframes gr-arrive {
+  from {
+    background: var(--accent-soft);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gr-row-fresh,
+  .gr-row-fresh .gr-commit-node,
+  .gr-row-fresh .gr-head-node,
+  .gr-row-fresh .gr-merge-dot,
+  .gr-row-fresh .gr-head-halo {
+    animation: none;
+  }
 }
 .gr-merge-dot {
   stroke: var(--bg-0);

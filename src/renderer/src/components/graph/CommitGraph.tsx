@@ -16,6 +16,7 @@ import { runCommand } from '@renderer/commands'
 import { REF_DRAG_MIME } from '@renderer/lib/dnd'
 import { isEditableTarget, isMod } from '@renderer/lib/keys'
 import { useApp, useSettings, type RepoTab } from '@renderer/store/appStore'
+import { useLanes } from '@renderer/store/laneStore'
 import type { Commit, Stash } from '@shared/types'
 import { DEFAULT_WIDTHS, fitColumns, loadWidths, saveWidths, setWidth, type ColumnId, type ColumnWidths } from './columns'
 import {
@@ -35,6 +36,7 @@ import { computeGraph, type LayoutRow } from './layout'
 import { createCommitRevealer } from './reveal'
 import { commitMenu, headerMenu, multiCommitMenu, refMenu, stashMenu, wipMenu } from './menus'
 import {
+  branchTipColors,
   buildDisplayRows,
   buildPillMap,
   findSelectionIndex,
@@ -52,6 +54,9 @@ import {
 import type { GraphCtx, WipInfo } from './types'
 
 const NO_STASHES: Stash[] = []
+const NO_FRESH: ReadonlySet<string> = new Set()
+/** More new commits than this at once (a big pull, a branch switch) are not animated. */
+const MAX_FRESH = 20
 /** Load more commits when the viewport gets this close to the end of the loaded list. */
 const LOAD_MORE_THRESHOLD = 200
 const OVERSCAN = 12
@@ -153,6 +158,23 @@ export function CommitGraph({ tab }: { tab: RepoTab }) {
 
   // ── View model ──────────────────────────────────────────────────────────
   const commits = useStableCommits(tab.commits)
+
+  // Commits that appear on top of the graph (a commit, pull or fetch) grow into their lane for a moment.
+  const prevTop = useRef<{ path: string; sha: string | null }>({ path, sha: null })
+  const [fresh, setFresh] = useState<ReadonlySet<string>>(NO_FRESH)
+  useEffect(() => {
+    const top = commits[0]?.sha ?? null
+    const prev = prevTop.current
+    prevTop.current = { path, sha: top }
+    if (prev.path !== path || !prev.sha || !top || prev.sha === top) return
+    const at = commits.findIndex((c) => c.sha === prev.sha)
+    if (at > 0 && at <= MAX_FRESH) setFresh(new Set(commits.slice(0, at).map((c) => c.sha)))
+  }, [path, commits])
+  useEffect(() => {
+    if (!fresh.size) return
+    const t = setTimeout(() => setFresh(NO_FRESH), 900)
+    return () => clearTimeout(t)
+  }, [fresh])
   const layout = useMemo(() => computeGraph(commits), [commits])
   const rowCache = useMemo(() => new WeakMap<LayoutRow, CommitRow>(), [])
   const head = tab.refs?.head ?? tab.info?.head ?? null
@@ -165,6 +187,9 @@ export function CommitGraph({ tab }: { tab: RepoTab }) {
     () => buildDisplayRows({ commits, layout, headSha, showWip, stashes, cache: rowCache }),
     [commits, layout, headSha, showWip, stashes, rowCache]
   )
+  // Branch dots in the left panel take the colour of their tip's lane.
+  const tipColors = useMemo(() => branchTipColors(model.rows, tab.refs), [model.rows, tab.refs])
+  useEffect(() => useLanes.getState().setTips(path, tipColors), [path, tipColors])
   const hidden = useMemo(() => new Set(tab.hiddenRefs), [tab.hiddenRefs])
   const pillMap = useMemo(
     () => buildPillMap(tab.refs, { hidden, showRemotes: settings.graphShowRemotes, showTags: settings.graphShowTags }),
@@ -178,6 +203,12 @@ export function CommitGraph({ tab }: { tab: RepoTab }) {
 
   // ── Selection & search state ────────────────────────────────────────────
   const selIndex = findSelectionIndex(model, tab.selection)
+  const selRow = selIndex >= 0 ? model.rows[selIndex] : null
+  const selLane = selRow?.kind === 'commit' ? `${selRow.commit.sha}:${selRow.color}` : ''
+  useEffect(() => {
+    const [sha, color] = selLane.split(':')
+    useLanes.getState().setSelected(path, sha ? { sha, color: Number(color) } : null)
+  }, [path, selLane])
   const multiSet = useMemo(() => (tab.multiSelect.length > 1 ? new Set(tab.multiSelect) : null), [tab.multiSelect])
   const { results, index: resultIndex, query, mode, open: searchOpen } = tab.search
   const matchSet = useMemo(() => (results.length ? new Set(results) : null), [results])
@@ -619,6 +650,7 @@ export function CommitGraph({ tab }: { tab: RepoTab }) {
                   dateMode={settings.dateFormat}
                   now={now}
                   wip={row.kind === 'wip' ? wipInfo : undefined}
+                  fresh={!!sha && fresh.has(sha)}
                   ctx={ctx}
                 />
               )

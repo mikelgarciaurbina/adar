@@ -1,11 +1,12 @@
 // Bottom status bar: live git progress / busy operations on the left, fetch time,
 // branch tracking, zoom and versions on the right.
 
-import { ArrowDown, ArrowUp, CloudDownload, GitBranch, TriangleAlert } from 'lucide-react'
+import { ArrowDown, ArrowUp, CloudDownload, TriangleAlert } from 'lucide-react'
 import { runCommand } from '@renderer/commands'
 import { relativeTime } from '@renderer/lib/format'
 import { currentBranch } from '@renderer/lib/refs'
 import { useActiveTab, useApp } from '@renderer/store/appStore'
+import { BranchDot } from './BranchDot'
 import { busyLabelsFor, formatGitVersion, pickProgress, tildify } from './chrome'
 import { useNow } from './hooks'
 import { AdarLogo } from './Logo'
@@ -95,7 +96,7 @@ export function StatusBar() {
             className="tb-status-item"
             title={cur?.upstream ? `${cur.name} ↔ ${cur.upstream}${cur.upstreamGone ? ' (gone)' : ''}` : head.detached ? 'Detached HEAD' : 'No upstream'}
           >
-            <GitBranch size={11} />
+            <BranchDot repo={tab.path} sha={head.sha ?? null} size="sm" />
             <span className="tb-status-branch">{head.branch ?? (head.sha ? head.sha.slice(0, 7) : '—')}</span>
             {cur?.upstream && (
               <>

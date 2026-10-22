@@ -2,8 +2,8 @@
 // plus the loading skeleton. Behaviour lives in LeftPanel via RowHandlers.
 
 import { memo, type ReactNode } from 'react'
-import { Archive, Box, Check, ChevronRight, Cloud, Crosshair, Eye, EyeOff, Folder, FolderOpen, Laptop, Plus, RefreshCw, Tag, TriangleAlert } from 'lucide-react'
-import { badgeColorsFor } from '@renderer/lib/colors'
+import { Archive, Box, Check, ChevronRight, Cloud, Crosshair, Eye, EyeOff, Folder, FolderOpen, Plus, RefreshCw, Tag, TriangleAlert } from 'lucide-react'
+import { laneColor } from '@renderer/lib/colors'
 import { relativeTime, shortSha } from '@renderer/lib/format'
 import { localForRemote } from '@renderer/lib/refs'
 import type { Ref, RefsResult } from '@shared/types'
@@ -76,8 +76,19 @@ export interface RowViewProps {
   busy: boolean
   addDisabled: boolean
   refs: RefsResult
+  /** Branches: colour index of the graph lane their tip is drawn in (none when the tip is not in the graph). */
+  lane?: number
   q: string
   h: RowHandlers
+}
+
+/** "github.com" for a remote's web URL. */
+function hostOf(url: string): string | null {
+  try {
+    return new URL(url).host || null
+  } catch {
+    return null
+  }
 }
 
 const stop = (e: React.SyntheticEvent) => e.stopPropagation()
@@ -212,16 +223,18 @@ export const RowView = memo(function RowView(props: RowViewProps) {
     case 'remote': {
       const node = row.node
       const web = node.url ? remoteWebUrl(node.url) : null
+      const host = web ? hostOf(web) : null
       return (
         <div {...common} className={classes.join(' ')} aria-expanded={row.expanded} title={node.url ? `${node.name}\n${node.url}` : node.name}>
           <Chevron expanded={row.expanded} />
-          <span className="sb-remote-avatar" style={badgeColorsFor(web ?? node.name)} aria-hidden>
-            {node.name.charAt(0).toUpperCase()}
+          <span className="sb-icon sb-icon-remote" aria-hidden>
+            <Cloud size={14} />
           </span>
           <span className="sb-name">
             <Highlight text={node.label} q={q} />
           </span>
           <span className="sb-spacer" />
+          {host && <span className="sb-host">{host}</span>}
           <span className={`sb-actions${props.hidden === 'all' ? ' sb-actions-pinned' : ''}`}>
             {!props.busy && (
               <ActionButton label={`Fetch ${node.name}`} onClick={() => h.fetch(node.name)}>
@@ -244,16 +257,17 @@ export const RowView = memo(function RowView(props: RowViewProps) {
       const title = isLocal ? localTitle(ref) : ref.type === 'remote' ? remoteTitle(ref, props.refs) : tagTitle(ref)
       const ahead = isLocal && !ref.upstreamGone ? (ref.ahead ?? 0) : 0
       const behind = isLocal && !ref.upstreamGone ? (ref.behind ?? 0) : 0
+      // Branches show a dot in their lane's colour (filled for the checked-out one), tags a tag.
       const icon = props.pending ? (
         <span className="ui-spinner ui-spinner-sm" />
-      ) : isHead ? (
-        <Check size={14} strokeWidth={3} />
-      ) : isLocal ? (
-        <Laptop size={14} />
-      ) : ref.type === 'remote' ? (
-        <Cloud size={14} />
-      ) : (
+      ) : ref.type === 'tag' ? (
         <Tag size={13} />
+      ) : (
+        <span
+          className={`sb-lane${isHead ? ' sb-lane-head' : ''}${props.lane === undefined ? ' sb-lane-none' : ''}`}
+          style={props.lane === undefined ? undefined : ({ '--sb-lane': laneColor(props.lane) } as React.CSSProperties)}
+          aria-hidden
+        />
       )
       return (
         <div

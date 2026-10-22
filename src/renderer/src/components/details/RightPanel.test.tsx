@@ -213,7 +213,7 @@ describe('RightPanel smoke', () => {
 
   it('renders commit details from the list while files load', () => {
     const html = render(makeTab({ selection: { kind: 'commit', sha: c2.sha } }))
-    expect(html).toContain('commit:')
+    expect(html).toContain('>Commit<')
     expect(html).toContain('2222222')
     expect(html).toContain('Second')
     expect(html).toContain('https://example.com/x')

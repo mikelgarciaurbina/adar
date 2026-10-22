@@ -53,14 +53,14 @@ export function StashPanel({ tab, index, sha }: { tab: RepoTab; index: number; s
     <div className="det-panel">
       <div className="ui-panel-header det-header">
         <Archive size={14} className="det-header-icon det-stash-icon" />
-        <span className="det-header-label">stash:</span>
+        <span className="det-header-label">Stash</span>
         <span className="det-sha selectable" title={stash.sha}>
           {stash.ref}
         </span>
         <CopyButton text={stash.sha} label="Copy stash SHA" what="Stash SHA copied" />
         <span className="det-spacer" />
         <span className="det-parents">
-          <span className="det-header-label">base:</span>
+          <span className="det-header-label">Base</span>
           <button type="button" className="ui-link det-sha-link" title={`Go to base commit ${stash.baseSha}`} onClick={() => goToCommit(repo, stash.baseSha)}>
             {shortSha(stash.baseSha)}
           </button>

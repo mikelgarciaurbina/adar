@@ -48,9 +48,13 @@
 .tb-tab {
   -webkit-app-region: no-drag;
   position: relative;
-  flex: 0 1 200px;
-  min-width: 110px;
+  /* Tabs share the bar: they grow up to 220px and shrink down to a few letters of their name (every
+     tab has the same icon, so the name is what tells them apart); the active one keeps more room.
+     Only when even that does not fit does the strip scroll, and a list of all tabs appears. */
+  flex: 1 1 200px;
+  min-width: 64px;
   max-width: 220px;
+  container-type: inline-size;
   /* Tab labels line up with the macOS traffic lights (see trafficLightPosition). */
   height: calc(var(--tabbar-h) - 5px);
   display: flex;
@@ -89,6 +93,7 @@
 .tb-tab-active,
 .tb-tab-active:hover {
   z-index: 1;
+  min-width: 120px;
   background: var(--bg-2);
   color: var(--text-0);
   box-shadow: inset 0 1px 0 var(--border), inset 1px 0 0 var(--border), inset -1px 0 0 var(--border);
@@ -162,7 +167,7 @@
    label and its tabs, so the group reads as one piece. The label is a coloured name, not a sticker. */
 .tb-group {
   position: relative;
-  flex: none;
+  /* flex and max-width come inline: the tray takes the room its tabs would. */
   display: flex;
   align-items: flex-end;
   gap: 2px;
@@ -178,8 +183,21 @@
   box-shadow: inset 0 2px 0 var(--tb-group), inset 0 0 0 1px color-mix(in srgb, var(--tb-group) 50%, transparent);
 }
 .tb-group .tb-tab {
-  flex: none;
-  width: 180px;
+  flex: 1 1 0;
+  max-width: none;
+}
+/* Narrow tabs drop the folder hint, then the icon and the close button (⌘W, middle-click and the
+   tab's menu still close it), keeping as much of the name as fits. */
+@container (max-width: 120px) {
+  .tb-tab-hint {
+    display: none;
+  }
+}
+@container (max-width: 100px) {
+  .tb-tab-icon,
+  .tb-tab-close {
+    display: none;
+  }
 }
 .tb-group-chip {
   -webkit-app-region: no-drag;
@@ -244,6 +262,10 @@
 
 .tb-tab-add {
   -webkit-app-region: no-drag;
+  /* Stays in view at the end of the strip when the tabs overflow it. */
+  position: sticky;
+  right: 0;
+  z-index: 2;
   flex: none;
   align-self: center;
   width: 26px;
@@ -254,11 +276,31 @@
   justify-content: center;
   border: none;
   border-radius: var(--radius);
-  background: transparent;
+  background: var(--chrome);
+  box-shadow: -10px 0 8px -4px var(--chrome);
   color: var(--text-2);
 }
 .tb-tab-add:hover {
   background: var(--bg-3);
+  color: var(--text-0);
+}
+.tb-tab-list {
+  -webkit-app-region: no-drag;
+  flex: none;
+  align-self: center;
+  width: 28px;
+  height: 26px;
+  margin: 2px 4px 0 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--radius);
+  background: var(--bg-3);
+  color: var(--text-1);
+}
+.tb-tab-list:hover {
+  background: var(--bg-4);
   color: var(--text-0);
 }
 
@@ -356,8 +398,21 @@
   flex: none;
   color: var(--text-2);
 }
-.tb-dropdown-icon {
-  color: var(--accent) !important;
+.tb-branch-dot {
+  --tb-branch: var(--accent);
+  flex: none;
+  width: 8px;
+  height: 8px;
+  margin: 0 4px 0 2px;
+  border-radius: 50%;
+  background: var(--tb-branch);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--tb-branch) 24%, transparent);
+}
+.tb-branch-dot-sm {
+  width: 7px;
+  height: 7px;
+  margin: 0 1px;
+  box-shadow: none;
 }
 .tb-dropdown-text {
   min-width: 0;
@@ -741,7 +796,7 @@
   color: var(--text-3);
 }
 .tb-status-ab-on {
-  color: var(--text-0);
+  color: var(--accent);
 }
 .tb-status-logo {
   flex: none;
@@ -1030,7 +1085,7 @@
   align-items: center;
   justify-content: center;
   border-radius: var(--radius);
-  background: color-mix(in srgb, currentColor 14%, transparent);
+  background: color-mix(in srgb, var(--wl-tile, currentColor) 14%, transparent);
   color: var(--accent);
 }
 .wl-recent-text {

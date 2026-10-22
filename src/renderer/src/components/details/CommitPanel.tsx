@@ -2,7 +2,7 @@
 // committer, parents, refs, change stats and the changed files.
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { GitCommitHorizontal, Pencil } from 'lucide-react'
+import { Pencil } from 'lucide-react'
 import { api } from '@renderer/api/client'
 import { toast } from '@renderer/components/common/toast'
 import { useMessageEdit } from '@renderer/lib/messageEdit'
@@ -11,6 +11,8 @@ import { refsBySha } from '@renderer/lib/refs'
 import { shortSha } from '@renderer/lib/format'
 import { isAncestor } from '@renderer/components/graph/model'
 import { useApp, type RepoTab } from '@renderer/store/appStore'
+import { useCommitLane } from '@renderer/store/laneStore'
+import { laneColor } from '@renderer/lib/colors'
 import type { Commit, CommitDetails } from '@shared/types'
 import { useCached } from './cache'
 import { ChangesFileList } from './ChangesFileList'
@@ -19,6 +21,11 @@ import { splitMessage } from './message'
 import { CopyButton, DateText, ErrorBlock, LinkifiedText, LoadingBlock, RefChips } from './parts'
 
 /** Select a commit and page it into the graph if needed. */
+/** The commit as a ring in its graph lane's colour (neutral until the graph knows it). */
+function CommitRing({ lane }: { lane: number | undefined }) {
+  return <span className="det-commit-ring" style={lane === undefined ? undefined : ({ '--det-lane': laneColor(lane) } as React.CSSProperties)} aria-hidden="true" />
+}
+
 export function goToCommit(repo: string, sha: string): void {
   const st = useApp.getState()
   st.select(repo, { kind: 'commit', sha })
@@ -35,6 +42,7 @@ export function CommitPanel({ tab, sha }: { tab: RepoTab; sha: string }) {
   const details = useCached<CommitDetails>(commitDetailsKey(repo, sha), () => api.getCommitDetails(repo, sha))
   const commit: Commit | null = details.data?.commit ?? listCommit
   const refsMap = useMemo(() => refsBySha(tab.refs), [tab.refs])
+  const lane = useCommitLane(repo, sha)
   const [bodyExpanded, setBodyExpanded] = useState(false)
   const editing = useMessageEdit((s) => (s.open[repo]?.sha === sha ? s.open[repo]! : null))
   const editRequest = useMessageEdit((s) => s.request)
@@ -73,8 +81,8 @@ export function CommitPanel({ tab, sha }: { tab: RepoTab; sha: string }) {
     return (
       <div className="det-panel">
         <div className="ui-panel-header det-header">
-          <GitCommitHorizontal size={14} className="det-header-icon" />
-          <span className="det-header-label">commit:</span>
+          <CommitRing lane={lane} />
+          <span className="det-header-label">Commit</span>
           <span className="det-sha">{shortSha(sha)}</span>
         </div>
         {details.error ? <ErrorBlock message={details.error} onRetry={details.retry} /> : <LoadingBlock label="Loading commit…" />}
@@ -88,8 +96,8 @@ export function CommitPanel({ tab, sha }: { tab: RepoTab; sha: string }) {
   return (
     <div className="det-panel">
       <div className="ui-panel-header det-header">
-        <GitCommitHorizontal size={14} className="det-header-icon" />
-        <span className="det-header-label">commit:</span>
+        <CommitRing lane={lane} />
+        <span className="det-header-label">Commit</span>
         <span className="det-sha selectable" title={commit.sha}>
           {commit.shortSha || shortSha(commit.sha)}
         </span>
@@ -99,7 +107,6 @@ export function CommitPanel({ tab, sha }: { tab: RepoTab; sha: string }) {
       </div>
 
       <div className={`det-info${bodyExpanded ? ' det-info-expanded' : ''}`}>
-        <RefChips repo={repo} refs={refsMap.get(commit.sha)} />
         {editing ? (
           <CommitMessageEditor repo={repo} edit={editing} onDone={() => useMessageEdit.getState().setOpen(repo, null)} />
         ) : (
@@ -126,6 +133,7 @@ export function CommitPanel({ tab, sha }: { tab: RepoTab; sha: string }) {
             </div>
           </div>
         </div>
+        <RefChips repo={repo} refs={refsMap.get(commit.sha)} lane={lane} />
         {committerDiffers ? (
           <div className="det-committer">
             <Avatar name={commit.committerName} email={commit.committerEmail} size={18} />
@@ -162,7 +170,7 @@ function Parents({ repo, parents }: { repo: string; parents: string[] }) {
   if (!parents.length) return <span className="det-parents det-muted">root commit</span>
   return (
     <span className="det-parents">
-      <span className="det-header-label">{parents.length > 1 ? 'parents:' : 'parent:'}</span>
+      <span className="det-header-label">{parents.length > 1 ? 'Parents' : 'Parent'}</span>
       {parents.map((p) => (
         <button key={p} type="button" className="ui-link det-sha-link" title={`Go to parent ${p}`} onClick={() => goToCommit(repo, p)}>
           {shortSha(p)}

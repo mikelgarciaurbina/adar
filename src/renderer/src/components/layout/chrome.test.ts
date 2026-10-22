@@ -4,6 +4,7 @@ import {
   busyLabelsFor,
   clampConsoleHeight,
   distinctParents,
+  tabHints,
   formatGitVersion,
   headLabel,
   isBusyFor,
@@ -217,5 +218,31 @@ describe('pendingUpdateVersion', () => {
     expect(pendingUpdateVersion(undefined)).toBeNull()
     for (const s of ['idle', 'checking', 'not-available', 'downloading', 'error'] as const) expect(pendingUpdateVersion(st(s))).toBeNull()
     expect(pendingUpdateVersion(st('available', false))).toBeNull()
+  })
+})
+
+describe('tabHints', () => {
+  it('drops the folder hint inside a group unless two tabs of that group share a name', () => {
+    const tabs = [
+      { path: '/w/OBS/api', name: 'api' },
+      { path: '/w/Other/api', name: 'api' },
+      { path: '/w/OBS/app', name: 'app' },
+      { path: '/x/a/app', name: 'app' }
+    ]
+    const hints = tabHints(tabs, [{ repos: ['/w/OBS/api', '/w/OBS/app'] }])
+    expect(hints.has('/w/OBS/api')).toBe(false)
+    expect(hints.has('/w/OBS/app')).toBe(false)
+    expect(hints.get('/w/Other/api')).toBe('Other')
+    expect(hints.get('/x/a/app')).toBe('a')
+
+    const same = tabHints(
+      [
+        { path: '/p/one/demo', name: 'demo' },
+        { path: '/p/two/demo', name: 'demo' }
+      ],
+      [{ repos: ['/p/one/demo', '/p/two/demo'] }]
+    )
+    expect(same.get('/p/one/demo')).toBe('one')
+    expect(same.get('/p/two/demo')).toBe('two')
   })
 })

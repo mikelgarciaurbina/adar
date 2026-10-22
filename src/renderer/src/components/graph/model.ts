@@ -201,6 +201,20 @@ export function buildDisplayRows(input: DisplayInput): DisplayModel {
  * Lanes needed to draw rows `from`..`to` (inclusive, clamped): highest lane any of
  * them touches (node, lines, curve ends) + 1; 0 for an empty range.
  */
+/**
+ * Colour index of the commit each branch (local or remote) points at, for the branches whose tip is in
+ * the graph: the left panel draws its branch dots in these colours.
+ */
+export function branchTipColors(rows: readonly DisplayRow[], refs: RefsResult | null): Map<string, number> {
+  const out = new Map<string, number>()
+  if (!refs) return out
+  const tips = new Set<string>()
+  for (const r of refs.branches) tips.add(r.sha)
+  for (const r of refs.remotes) tips.add(r.sha)
+  for (const row of rows) if (row.kind === 'commit' && tips.has(row.commit.sha)) out.set(row.commit.sha, row.color)
+  return out
+}
+
 export function lanesInRange(rows: readonly DisplayRow[], from: number, to: number): number {
   let max = -1
   const end = Math.min(to, rows.length - 1)

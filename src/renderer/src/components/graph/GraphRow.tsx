@@ -36,6 +36,8 @@ export interface GraphRowProps {
   /** Minute tick so relative dates refresh. */
   now: number
   wip?: WipInfo
+  /** Just arrived on top of the graph: its node grows into the lane. */
+  fresh?: boolean
   ctx: GraphCtx
 }
 
@@ -94,7 +96,7 @@ function dateText(ts: number, mode: 'relative' | 'absolute', now: number): strin
 }
 
 export const GraphRow = memo(function GraphRow(props: GraphRowProps) {
-  const { row, index, start, h, graphWidth, pinWidth, pills, selected, multi, match, dim, hl, hlField, dateMode, now, wip, ctx } = props
+  const { row, index, start, h, graphWidth, pinWidth, pills, selected, multi, match, dim, hl, hlField, dateMode, now, wip, fresh, ctx } = props
   const color = colorOf(row.color)
   const head = row.kind === 'commit' && !!pills?.some((p) => p.isHead || p.kind === 'detached')
   const cls =
@@ -105,7 +107,8 @@ export const GraphRow = memo(function GraphRow(props: GraphRowProps) {
     (match === 2 ? ' gr-match gr-match-current' : match === 1 ? ' gr-match' : '') +
     (dim ? ' gr-dim' : '') +
     (row.kind === 'commit' && row.isMerge ? ' gr-row-merge' : '') +
-    (head ? ' gr-row-head' : '')
+    (head ? ' gr-row-head' : '') +
+    (fresh ? ' gr-row-fresh' : '')
 
   let message: ReactNode = null
   let author: ReactNode = null

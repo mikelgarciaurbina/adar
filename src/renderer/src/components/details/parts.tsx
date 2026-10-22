@@ -6,6 +6,7 @@ import { api } from '@renderer/api/client'
 import * as actions from '@renderer/actions/git'
 import { Button, IconButton, Spinner } from '@renderer/components/common/Button'
 import { toast } from '@renderer/components/common/toast'
+import { laneColor, laneInk } from '@renderer/lib/colors'
 import { absoluteTime, formatDate, pluralize, relativeTime } from '@renderer/lib/format'
 import type { RefsAtCommit } from '@renderer/lib/refs'
 import { useSettings } from '@renderer/store/appStore'
@@ -118,10 +119,12 @@ export function CopyButton({ text, label, what }: { text: string; label: string;
 }
 
 /** Branch / remote / tag chips for the refs pointing at a commit. */
-export function RefChips({ repo, refs }: { repo: string; refs: RefsAtCommit | undefined }) {
+/** Branch and tag chips of a commit; branches take the colour of the commit's lane when it is known. */
+export function RefChips({ repo, refs, lane }: { repo: string; refs: RefsAtCommit | undefined; lane?: number }) {
   if (!refs || refs.branches.length + refs.remotes.length + refs.tags.length === 0) return null
+  const style = lane === undefined ? undefined : ({ '--det-lane': laneColor(lane), '--det-lane-ink': laneInk(lane) } as React.CSSProperties)
   return (
-    <div className="det-refs">
+    <div className="det-refs" style={style}>
       {refs.branches.map((b) => (
         <span
           key={b.fullName}

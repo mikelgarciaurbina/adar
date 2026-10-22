@@ -9,7 +9,6 @@ import { api, isMac } from '@renderer/api/client'
 import * as git from '@renderer/actions/git'
 import { Button, EmptyState, IconButton, Spinner } from '@renderer/components/common/Button'
 import { isEditableTarget } from '@renderer/lib/keys'
-import { firstLine } from '@renderer/lib/format'
 import { useApp, type RepoTab } from '@renderer/store/appStore'
 import { describeError } from '@shared/errors'
 import { supportsPartialPatch, type HunkSelection, type PatchMode } from '@shared/patch'
@@ -21,7 +20,7 @@ import { remapKeys, selectionFromKeys, validKeys } from './diffModel'
 import { ChangeStats, DiffMoreButton, FullFileToggle, PathLabel, StatusBadge, ViewModeSwitch } from './parts'
 import { applyPartial, type PartialUnit } from './staging'
 import { setFullFile, toggleFullFile, useDiffPrefs } from './prefs'
-import { blameRev, describeTarget, modeChangeText, nextChangedSibling, sameTarget, stillChanged, viewShowsTarget } from './targets'
+import { blameRev, modeChangeText, nextChangedSibling, sameTarget, stillChanged, viewShowsTarget } from './targets'
 import './diff.css'
 
 const tabOf = (repo: string) => useApp.getState().tabs.find((t) => t.path === repo)
@@ -284,8 +283,6 @@ export function DiffView({ tab, target, siblings }: { tab: RepoTab; target: Diff
   const path = target.path
   const fileStatus: FileStatusCode = diff?.status ?? statusFileOf(tab.status, target) ?? 'modified'
   const oldPath = diff?.oldPath ?? ('oldPath' in target ? target.oldPath : undefined)
-  const commitSubject =
-    target.kind === 'commit' ? tab.commits.find((c) => c.sha === target.sha || c.sha.startsWith(target.sha))?.subject : undefined
   const conflicted = !!tab.status?.conflicted.some((c) => c.path === path)
   const exists = fileStatus !== 'deleted'
   /** Not in HEAD yet (untracked, or added in the index): nothing to blame. */
@@ -307,10 +304,6 @@ export function DiffView({ tab, target, siblings }: { tab: RepoTab; target: Diff
               ← {oldPath}
             </span>
           )}
-          <span className="diff-target">
-            {describeTarget(target)}
-            {commitSubject && <span className="diff-target-sub"> · {firstLine(commitSubject)}</span>}
-          </span>
           {loading && diff && <Spinner size="sm" />}
           {diff && !diff.binary && <ChangeStats additions={diff.additions} deletions={diff.deletions} />}
           <span className="diff-tb-sep" />

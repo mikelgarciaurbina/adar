@@ -219,9 +219,18 @@
   --tabbar-h: 40px;
   --toolbar-h: 52px;
   --statusbar-h: 26px;
-  --panel-header-h: 36px;
+  --panel-header-h: 40px;
   --ease: cubic-bezier(0.2, 0, 0, 1);
   --ease-grow: cubic-bezier(0.16, 1, 0.3, 1);
+  /* Fixed swatches of both themes, for previews that show a theme whichever one is active (Settings). */
+  --swatch-gaua-0: #0a0d0c;
+  --swatch-gaua-1: #131817;
+  --swatch-gaua-lane-1: #c5f56a;
+  --swatch-gaua-lane-2: #46e2b4;
+  --swatch-eguna-0: #fbfaf6;
+  --swatch-eguna-1: #ebe8de;
+  --swatch-eguna-lane-1: #5f9a12;
+  --swatch-eguna-lane-2: #12a07a;
   /* App-icon tile of the Adar logo: the same in every theme, like the Dock icon. */
   --logo-tile: #0a0d0c;
   --logo-tile-mark: #c5f56a;

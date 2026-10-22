@@ -129,7 +129,7 @@
   background: var(--bg-3);
 }
 .sb-row.sb-selected {
-  background: var(--accent-soft);
+  background: var(--bg-4);
   color: var(--text-0);
 }
 .sb-row.sb-menu-open {
@@ -207,10 +207,47 @@
   min-width: 4px;
 }
 
-/* Current branch */
+/* Current branch: tinted row, filled dot with a halo, bold name. */
+.sb-row.sb-head {
+  background: var(--accent-soft);
+}
+.sb-row.sb-head.sb-selected {
+  background: color-mix(in srgb, var(--accent) 18%, var(--bg-1));
+}
 .sb-row.sb-head .sb-name {
-  color: var(--accent);
+  color: var(--text-0);
   font-weight: 600;
+}
+
+/* Branch dots in the colour of their graph lane (rings; the checked-out branch filled). */
+.sb-lane {
+  width: 9px;
+  height: 9px;
+  border: 2px solid var(--sb-lane);
+  border-radius: 50%;
+}
+.sb-lane-none {
+  --sb-lane: var(--text-3);
+}
+.sb-lane-head {
+  border-color: transparent;
+  background: var(--sb-lane);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--sb-lane) 24%, transparent);
+}
+.sb-lane-head.sb-lane-none {
+  --sb-lane: var(--accent);
+}
+.sb-host {
+  flex: none;
+  max-width: 45%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+}
+.sb-row:hover .sb-host {
+  display: none;
 }
 
 /* Search matches */
@@ -284,20 +321,6 @@ mark.sb-match {
 }
 
 /* ── Remote nodes ──────────────────────────────────────────────────────── */
-
-.sb-remote-avatar {
-  flex: none;
-  width: 16px;
-  height: 16px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 4px;
-  color: var(--text-0);
-  font-size: 10px;
-  font-weight: 700;
-  line-height: 1;
-}
 .sb-row.sb-remote .sb-name {
   color: var(--text-0);
   font-weight: 500;
@@ -313,19 +336,15 @@ mark.sb-match {
   flex: none;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  height: 16px;
-  padding: 0 5px;
-  border-radius: 8px;
-  background: var(--bg-3);
-  color: var(--text-1);
-  font-size: 10px;
+  gap: 5px;
+  color: var(--text-2);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
-.sb-row:hover .sb-ab,
-.sb-row.sb-selected .sb-ab {
-  background: var(--bg-2);
+.sb-row.sb-head .sb-ab {
+  color: var(--accent);
 }
 
 .sb-warn {
@@ -406,7 +425,7 @@ mark.sb-match {
 
 .sb-row.sb-hidden .sb-name,
 .sb-row.sb-hidden .sb-icon,
-.sb-row.sb-hidden .sb-remote-avatar,
+.sb-row.sb-hidden .sb-host,
 .sb-row.sb-hidden .sb-ab {
   opacity: 0.42;
 }

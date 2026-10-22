@@ -146,13 +146,22 @@ export function useRefreshOnFocus(): void {
   }, [])
 }
 
+let swapTimer = 0
+
 export function useTheme(): void {
   const theme = useApp((s) => s.settings.theme)
   useEffect(() => {
     const apply = () => {
       const resolved =
         theme === 'system' ? (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark') : theme
-      document.documentElement.dataset.theme = resolved
+      const root = document.documentElement
+      // Switching themes cross-fades colours (240 ms, see base.css); the first paint does not.
+      if (root.dataset.theme && root.dataset.theme !== resolved) {
+        root.classList.add('theme-swap')
+        window.clearTimeout(swapTimer)
+        swapTimer = window.setTimeout(() => root.classList.remove('theme-swap'), 300)
+      }
+      root.dataset.theme = resolved
     }
     apply()
     if (theme !== 'system') return

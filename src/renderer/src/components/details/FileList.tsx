@@ -5,40 +5,16 @@
 
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useVirtualizer, type Virtualizer } from '@tanstack/react-virtual'
-import {
-  ArrowRight,
-  ChevronDown,
-  ChevronRight,
-  Copy,
-  Folder,
-  FolderOpen,
-  Minus,
-  Pencil,
-  Plus,
-  Replace,
-  TriangleAlert,
-  type LucideIcon
-} from 'lucide-react'
+import { ArrowRight, ChevronDown, ChevronRight, Folder, FolderOpen } from 'lucide-react'
 import { STATUS_LETTER, statusColor } from '@renderer/lib/format'
 import { isMod } from '@renderer/lib/keys'
 import type { FileChange, FileStatusCode } from '@shared/types'
 import { buildRows, fileBaseName, fileDirName, type FileRow, type FileViewMode } from './fileTree'
 
-export const ROW_HEIGHT = 24
+export const ROW_HEIGHT = 28
 export const VIRTUALIZE_THRESHOLD = 300
 /** How long after an arrow-key move the list takes its focus back from a diff view that grabbed it. */
 const KEY_NAV_FOCUS_MS = 2500
-
-const STATUS_ICON: Record<FileStatusCode, LucideIcon> = {
-  added: Plus,
-  untracked: Plus,
-  modified: Pencil,
-  deleted: Minus,
-  renamed: ArrowRight,
-  copied: Copy,
-  typechange: Replace,
-  conflicted: TriangleAlert
-}
 
 const STATUS_LABEL: Record<FileStatusCode, string> = {
   added: 'Added',
@@ -51,11 +27,11 @@ const STATUS_LABEL: Record<FileStatusCode, string> = {
   conflicted: 'Conflicted'
 }
 
+/** The status as a letter on a tint of its colour (M, A, D, R, U…), like the diff header. */
 export function StatusIcon({ status }: { status: FileStatusCode }) {
-  const Icon = STATUS_ICON[status] ?? Pencil
   return (
-    <span className="det-status" style={{ color: statusColor(status) }} title={`${STATUS_LABEL[status] ?? status} (${STATUS_LETTER[status] ?? '?'})`}>
-      <Icon size={10} strokeWidth={3} />
+    <span className="det-status" style={{ color: statusColor(status) }} title={STATUS_LABEL[status] ?? status}>
+      {STATUS_LETTER[status] ?? '?'}
     </span>
   )
 }

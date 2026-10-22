@@ -287,6 +287,7 @@ export function CommitComposer({ tab, staged, unstaged, conflicted, unavailable 
           onClick={() => void doCommit(true)}
         >
           {stageAllLabel}
+          <kbd className="det-commit-kbd">{shortcutLabel('Mod+Shift+Enter')}</kbd>
         </Button>
       ) : (
         <Button
@@ -299,6 +300,7 @@ export function CommitComposer({ tab, staged, unstaged, conflicted, unavailable 
           onClick={() => void doCommit(false)}
         >
           {primaryLabel}
+          <kbd className="det-commit-kbd">{shortcutLabel('Mod+Enter')}</kbd>
         </Button>
       )}
       {showStageAll && !stageAllPrimary && (

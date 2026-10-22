@@ -1,9 +1,9 @@
 // Top tab strip: one tab per open repository (GitKraken style). The bar doubles as
 // the window drag region; tabs and buttons opt out with no-drag.
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
-import { CircleArrowUp, Copy, Download, FolderGit2, FolderInput, FolderOpen, FolderPlus, Layers, Plus, RefreshCw, SquareTerminal, X } from 'lucide-react'
+import { ChevronDown, CircleArrowUp, Copy, Download, FolderGit2, FolderInput, FolderOpen, FolderPlus, Layers, Plus, RefreshCw, SquareTerminal, X } from 'lucide-react'
 import { isElectron, isMac } from '@renderer/api/client'
 import * as git from '@renderer/actions/git'
 import { closeGroup, fetchGroup, GROUP_COLOR_LABELS, newGroup, openGroup, renameGroup } from '@renderer/actions/groups'
@@ -14,11 +14,17 @@ import { isMod, shortcutLabel } from '@renderer/lib/keys'
 import { dropPlacement, groupOf, tabSegments } from '@renderer/lib/tabGroups'
 import { useApp } from '@renderer/store/appStore'
 import { TAB_GROUP_COLORS, type TabGroup } from '@shared/types'
-import { distinctParents, pendingUpdateVersion } from './chrome'
+import { pendingUpdateVersion, tabHints } from './chrome'
 import { useWindowFullscreen } from './hooks'
 import './layout.css'
 
 const TAB_MIME = 'application/x-adar-tab'
+/** Tabs share the bar: they start at this width, grow to TAB_MAX_W and shrink down to an icon. */
+const TAB_BASIS_W = 200
+const TAB_MAX_W = 220
+/** Room for a group's label (and its tray padding) when it shares the bar with its tabs. */
+const CHIP_BASIS_W = 96
+const CHIP_MAX_W = 176
 
 function shortcutOf(id: string): string | undefined {
   const spec = getCommand(id)?.shortcut
@@ -89,8 +95,8 @@ export function TabBar() {
         : [],
     [tabsKey]
   )
-  const hints = useMemo(() => distinctParents(tabs), [tabs])
   const groups = useApp((s) => s.settings.tabGroups)
+  const hints = useMemo(() => tabHints(tabs, groups), [tabs, groups])
   const segments = useMemo(() => tabSegments(tabs, groups), [tabs, groups])
   const busyRepos = useMemo(() => {
     const set = new Set<string>()
@@ -114,6 +120,19 @@ export function TabBar() {
     if (!activePath) return
     tabEls.current.get(activePath)?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
   }, [activePath, tabsKey])
+
+  // Tabs shrink to share the bar; only when even their smallest size does not fit does the strip scroll,
+  // and then a list of every open repository appears at the end of the bar.
+  const [overflow, setOverflow] = useState(false)
+  useLayoutEffect(() => {
+    const el = stripRef.current
+    if (!el || typeof ResizeObserver === 'undefined') return
+    const check = () => setOverflow(el.scrollWidth > el.clientWidth + 1)
+    check()
+    const ro = new ResizeObserver(check)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [tabsKey, groups, activePath])
 
   // Mod+1…9 switches tabs (9 = last), like browsers.
   useEffect(() => {
@@ -228,6 +247,29 @@ export function TabBar() {
     useApp.getState().moveTabTo(from, from <= last ? last : last + 1, group.id)
   }
 
+  const tabItem = (t: TabLite): MenuItem => ({
+    label: hints.has(t.path) ? `${t.name} — ${hints.get(t.path)}` : t.name,
+    icon: <FolderGit2 size={14} />,
+    checked: t.path === activePath,
+    onClick: () => useApp.getState().setActive(t.path)
+  })
+
+  /** Every open repository, in tab order and under its group's name. */
+  const tabListItems = (): MenuItem[] => {
+    const items: MenuItem[] = []
+    segments.forEach((seg, i) => {
+      if (seg.kind === 'tab') {
+        items.push(tabItem(seg.tab))
+        return
+      }
+      if (i > 0 && items.length) items.push({ type: 'separator' })
+      items.push({ type: 'header', label: seg.group.name || 'Unnamed group' })
+      for (const x of seg.tabs) items.push(tabItem(x.tab))
+      if (segments[i + 1]?.kind === 'tab') items.push({ type: 'separator' })
+    })
+    return items
+  }
+
   const onChipContextMenu = (e: React.MouseEvent, group: TabGroup) => {
     const st = useApp.getState()
     const openCount = tabs.filter((t) => group.repos.includes(t.path)).length
@@ -236,12 +278,17 @@ export function TabBar() {
       { label: 'Rename Group…', onClick: () => void renameGroup(group.id) },
       {
         label: 'Colour',
-        submenu: TAB_GROUP_COLORS.map((c) => ({
-          label: GROUP_COLOR_LABELS[c],
-          icon: <GroupDot group={{ color: c }} />,
-          checked: c === group.color,
-          onClick: () => st.updateGroup(group.id, { color: c })
-        }))
+        submenu: TAB_GROUP_COLORS.map((c) => {
+          const other = groups.find((g) => g.id !== group.id && g.color === c)
+          return {
+            label: GROUP_COLOR_LABELS[c],
+            icon: <GroupDot group={{ color: c }} />,
+            checked: c === group.color,
+            // Shows which other group already uses the colour.
+            shortcut: other ? other.name || 'Unnamed group' : undefined,
+            onClick: () => st.updateGroup(group.id, { color: c })
+          }
+        })
       },
       { label: group.collapsed ? 'Expand' : 'Collapse', onClick: () => st.updateGroup(group.id, { collapsed: !group.collapsed }) },
       ...(openCount < group.repos.length ? [{ label: 'Open All Repositories', onClick: () => void openGroup(group.id) }] : []),
@@ -358,7 +405,12 @@ export function TabBar() {
             <div
               key={`group:${group.id}`}
               className={`tb-group${group.collapsed ? ' tb-group-collapsed' : ''}${chipDrop === group.id ? ' tb-group-drop' : ''}${drop?.chip === group.id ? ' tb-drop-before' : ''}`}
-              style={groupStyle(group)}
+              style={{
+                ...groupStyle(group),
+                // The tray shares the bar like its tabs would on their own (its tabs split the tray).
+                flex: shown.length ? `${shown.length} 1 ${shown.length * TAB_BASIS_W + CHIP_BASIS_W}px` : 'none',
+                maxWidth: shown.length ? shown.length * TAB_MAX_W + CHIP_MAX_W : undefined
+              }}
             >
               <button
                 className="tb-group-chip"
@@ -394,6 +446,11 @@ export function TabBar() {
         </button>
         <div className="tb-tabs-fill" />
       </div>
+      {overflow && (
+        <button className="tb-tab-list" title="All open repositories" aria-label="All open repositories" onClick={(e) => showMenuBelow(e.currentTarget, tabListItems())}>
+          <ChevronDown size={15} />
+        </button>
+      )}
       {updateVersion && (
         <button
           className="tb-update-pill"
