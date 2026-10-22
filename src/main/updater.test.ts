@@ -195,6 +195,33 @@ describe('release configuration', () => {
     for (const os of ['win', 'linux']) expect(section(os)).not.toMatch(/target: (zip|dmg)\b/)
   })
 
+  it('signs and notarizes the macOS build, with the Apple secrets in that step only', () => {
+    expect(workflow).not.toContain('CSC_IDENTITY_AUTO_DISCOVERY')
+    const steps = workflow.split(/\n(?= {6}- )/)
+    const macBuild = steps.filter((s) => s.includes("if: runner.os == 'macOS'") && s.includes('npm run ${{ matrix.script }}'))
+    expect(macBuild).toHaveLength(1)
+    // Signed with one Developer ID certificate only (hardened runtime by default), never another one in the keychain;
+    // the release workflow checks that the signed app belongs to its team.
+    const identity = section('mac').match(/^\s+identity: (.+) \(([A-Z0-9]{10})\)$/m)
+    expect(identity?.[1]).toBe('Mikel Garcia')
+    expect(macBuild[0]).toContain(`grep -qx 'TeamIdentifier=${identity?.[2]}'`)
+    for (const secret of ['MAC_CERT_P12_BASE64', 'MAC_CERT_PASSWORD', 'APPLE_API_KEY_P8', 'APPLE_API_KEY_ID', 'APPLE_API_ISSUER']) {
+      expect(steps.filter((s) => s.includes(`secrets.${secret}`))).toEqual(macBuild)
+    }
+    // A missing secret fails the build; the app must be Developer ID signed, notarized and stapled before upload.
+    expect(macBuild[0]).toContain('::error::Missing secret for $v')
+    expect(macBuild[0]).toMatch(/grep -q '\^Authority=Developer ID Application:'/)
+    expect(macBuild[0]).toMatch(/spctl --assess --type execute/)
+    expect(macBuild[0]).toMatch(/xcrun stapler validate/)
+    // Windows and Linux build without any signing secret.
+    const otherBuild = steps.find((s) => s.includes("if: runner.os != 'macOS'"))
+    expect(otherBuild).toMatch(/run: npm run \$\{\{ matrix\.script \}\}/)
+    expect(otherBuild).not.toContain('secrets.')
+    // Every other secret is used by the publish job, which runs no project code.
+    const publish = workflow.slice(workflow.indexOf('\n  publish:'))
+    for (const step of steps.filter((s) => s.includes('secrets.') && !macBuild.includes(s))) expect(publish).toContain(step)
+  })
+
   it('serialises release runs and keeps the token away from checkout and tests', () => {
     expect(workflow).toMatch(/^concurrency:\s*\n\s+group: release\s*\n\s+cancel-in-progress: false/m)
     expect(workflow).toMatch(/^permissions:\s*\n\s+contents: read/m)

@@ -14,9 +14,12 @@ artifactName: ${productName}-${version}-${arch}.${ext}
 mac:
   category: public.app-category.developer-tools
   icon: build/icon.icns
-  # Unsigned build (no Apple Developer ID). The in-app updater (src/main/updater.ts) installs the
-  # .zip asset of a GitHub Release in place, so Squirrel.Mac / code signing are not required.
-  identity: null
+  # Signed with this Developer ID Application certificate only, never another one in the keychain: in the release
+  # workflow it comes from CSC_LINK (which then checks the team), locally from the login keychain; builds without it
+  # stay unsigned. electron-builder's defaults do the rest: hardened runtime, its default entitlements (allow-jit,
+  # which Electron needs on Apple Silicon) and notarization when the APPLE_API_KEY* variables are set. The in-app
+  # updater (src/main/updater.ts) still installs the .zip asset in place.
+  identity: Mikel Garcia (54RSVZ573J)
   extendInfo:
     # Lets `open -a Adar <folder>` (the adar CLI) and folders dropped on the Dock icon reach the app.
     # "Alternate" keeps Finder as the default app for folders.
@@ -38,8 +41,8 @@ mac:
       arch: [arm64]
 dmg:
   title: ${productName} ${version}
-# Windows and Linux: x64 only. Unsigned like macOS (SmartScreen warns on the first run of the installer); the in-app
-# updater sends these builds to the release page.
+# Windows and Linux: x64 only. Unsigned (SmartScreen warns on the first run of the installer); the in-app updater
+# sends these builds to the release page.
 win:
   icon: build/icon.png
   artifactName: ${productName}-${version}-win-${arch}.${ext}
