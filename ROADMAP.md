@@ -27,15 +27,13 @@ the left panel · change markers on the diff's scrollbar · tabs shrink to share
 (beta since 0.6.0: x64 installer, AppImage and .deb), with the tests run on macOS, Windows and Linux · the macOS app
 signed with an Apple Developer ID and notarized (since 0.6.1) · the antlers in the macOS menu bar: a panel with one
 project's branch and latest commits on their lanes, Pull and Push, and a project switcher · notifications when a fetch
-brings new commits to the checked-out branch.
+brings new commits to the checked-out branch · a "What's new" panel with the release notes after each update.
 
 ---
 
 ## Next (0.2 – 0.4)
 
 ### Distribution
-- [ ] **Homebrew cask** — `brew install --cask adar`.
-- [ ] **Update channels** (stable / beta) and a "What's new" panel after updating.
 - [ ] Delta updates (smaller downloads).
 - [ ] The updater checks that a downloaded macOS update is signed with Adar's Developer ID (the same team as the
       running app) before replacing it.
