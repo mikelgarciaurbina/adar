@@ -20,6 +20,7 @@ vi.mock('@renderer/components/common/Modal', () => ({
 const { ModalHost } = await import('./ModalHost')
 const { CredentialDialog } = await import('./CredentialDialog')
 const { useUpdates } = await import('@renderer/components/update/updateStore')
+const { ReleaseNotes } = await import('@renderer/components/update/ReleaseNotes')
 
 function seedUpdates(patch: Partial<ReturnType<typeof useUpdates.getState>>) {
   useUpdates.setState(patch)
@@ -102,6 +103,25 @@ describe('ModalHost', () => {
     expect(about).toContain('github.com/mikelgarciaurbina/adar<')
     expect(about).toContain('MIT License')
     expect(about).toContain('Check for Updates…')
+  })
+
+  it("renders What's new: the running version and its notes, without the Install section", () => {
+    const html = render({ kind: 'whats-new', from: '0.0.9' })
+    expect(html).toContain('Adar 0.1.0')
+    expect(html).toContain('Updated from 0.0.9')
+    expect(html).toContain('<h4>')
+    expect(html).not.toContain('<h4>Install</h4>')
+    expect(html).toContain('All releases')
+    expect(render({ kind: 'whats-new', from: '' })).toContain('Just updated')
+    expect(render({ kind: 'whats-new' })).toContain('The version you are running')
+  })
+
+  it('renders release notes like GitHub: a wrapped bullet stays one item, with bold, italic and code', () => {
+    const md = '### New\n- **Menu bar.** Antlers in the\n  menu bar, see *Settings*.\nlazy line\n- Two\n\nA paragraph with `code`\nand a * star.'
+    expect(renderToStaticMarkup(<ReleaseNotes markdown={md} />)).toBe(
+      '<div class="up-notes selectable"><h4>New</h4><ul><li><strong>Menu bar.</strong> Antlers in the menu bar, see <em>Settings</em>. lazy line</li>' +
+        '<li>Two</li></ul><p>A paragraph with <code>code</code> and a * star.</p></div>'
+    )
   })
 
   it('explains ~ expansion, offers Browse… and submits on Enter in the open modal', () => {

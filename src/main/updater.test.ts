@@ -17,7 +17,7 @@ vi.mock('electron', () => ({
   shell: { openExternal, openPath: async () => '', showItemInFolder: () => undefined }
 }))
 
-import type { UpdateStatus } from '@shared/update'
+import { withoutInstallSection, type UpdateStatus } from '@shared/update'
 import { Updater } from './updater'
 
 const payload = Buffer.from('PK\u0003\u0004 pretend this is Adar.app zipped\n'.repeat(1000))
@@ -159,6 +159,16 @@ describe('release configuration', () => {
 
   /** A top-level block of electron-builder.yml (its indented lines). */
   const section = (key: string) => builder.match(new RegExp(`^${key}:\\n((?:[ \\t].*\\n|\\n)*)`, 'm'))?.[1] ?? ''
+
+  it("has the notes of this version in build/release-notes.md (the release body, bundled for What's new)", () => {
+    const { version } = JSON.parse(read('package.json')) as { version: string }
+    const notes = read('build/release-notes.md')
+    expect(notes, `build/release-notes.md should be the notes of ${version} (its Install section names Adar-${version}-…)`).toContain(`Adar-${version}-`)
+    expect(workflow).toContain('-f body="$(cat build/release-notes.md)"')
+    const shown = withoutInstallSection(notes)
+    expect(shown).toMatch(/^#{1,6} \S/)
+    expect(shown).not.toMatch(/^#{1,6}\s+Install/im)
+  })
 
   it('publishes a single fresh draft only after every asset is verified', () => {
     // A published release is what /releases/latest (the updater) returns, so assets must be complete first.

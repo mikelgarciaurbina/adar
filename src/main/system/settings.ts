@@ -6,6 +6,7 @@ import { randomBytes } from 'node:crypto'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { DEFAULT_SETTINGS, LEGACY_GROUP_COLORS, TAB_GROUP_COLORS, type AppSettings, type RecentRepo, type TabGroup, type TabGroupColor } from '@shared/types'
+import { UNRECORDED_VERSION } from '@shared/update'
 
 export const MAX_RECENTS = 30
 export const MAX_TAB_GROUPS = 100
@@ -178,6 +179,9 @@ export class SettingsStore {
       this.loading = (async () => {
         const [s, r, t] = await Promise.all([readJson(this.settingsFile), readJson(this.recentsFile), readJson(this.trustedFile)])
         this.settings = sanitizeSettings(DEFAULT_SETTINGS, s)
+        // Saved by an Adar that did not record lastRunVersion yet (Adar writes every setting, unlike hand-written seeds
+        // such as the e2e ones): this run follows an update, so What's new shows once.
+        if (isPlainObject(s) && !('lastRunVersion' in s) && 'skippedUpdateVersion' in s) this.settings.lastRunVersion = UNRECORDED_VERSION
         this.recents = sanitizeRecents(r)
         const firstRun = t === undefined && !(await fs.stat(this.trustedFile).then(() => true, () => false))
         if (firstRun) {

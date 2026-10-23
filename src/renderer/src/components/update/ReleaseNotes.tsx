@@ -1,10 +1,11 @@
-// Minimal, safe Markdown renderer for GitHub release notes: headings, bullet lists,
-// paragraphs, **bold**, `code` and links (opened in the browser). Never injects HTML.
+// Minimal, safe Markdown renderer for GitHub release notes: headings, bullet lists (items may
+// wrap onto following lines), paragraphs, **bold**, *italic*, `code` and links (opened in the
+// browser). Never injects HTML.
 
 import { Fragment, type ReactNode } from 'react'
 import { api } from '@renderer/api/client'
 
-const INLINE = /(\*\*[^*]+\*\*|`[^`]+`|\[[^\]]+\]\((https?:\/\/[^)\s]+)\)|https?:\/\/[^\s)]+)/g
+const INLINE = /(\*\*[^*]+\*\*|\*[^*\s](?:[^*]*[^*\s])?\*|`[^`]+`|\[[^\]]+\]\((https?:\/\/[^)\s]+)\)|https?:\/\/[^\s)]+)/g
 
 function inline(text: string): ReactNode[] {
   const out: ReactNode[] = []
@@ -13,6 +14,7 @@ function inline(text: string): ReactNode[] {
     const tok = m[0]
     if (m.index! > last) out.push(text.slice(last, m.index))
     if (tok.startsWith('**')) out.push(<strong key={out.length}>{tok.slice(2, -2)}</strong>)
+    else if (tok.startsWith('*')) out.push(<em key={out.length}>{tok.slice(1, -1)}</em>)
     else if (tok.startsWith('`')) out.push(<code key={out.length}>{tok.slice(1, -1)}</code>)
     else {
       const label = tok.startsWith('[') ? tok.slice(1, tok.indexOf('](')) : tok.replace(/^https?:\/\/(www\.)?github\.com\//, '')
@@ -57,10 +59,9 @@ export function ReleaseNotes({ markdown }: { markdown: string }) {
       if (para.length) flush()
       list.push(bullet[1])
     } else if (!line.trim()) flush()
-    else {
-      if (list.length) flush()
-      para.push(line.trim())
-    }
+    // A line right after a bullet continues it (indented or not), as on GitHub.
+    else if (list.length) list[list.length - 1] += ` ${line.trim()}`
+    else para.push(line.trim())
   }
   flush()
   return <div className="up-notes selectable">{blocks.length ? blocks.map((b, i) => <Fragment key={i}>{b}</Fragment>) : 'No release notes.'}</div>

@@ -304,6 +304,7 @@ function buildMenu(): void {
             submenu: [
               item('About Adar', 'about'),
               { label: 'Check for Updates…', click: () => void updater?.updateCheck(true) },
+              item("What's New in Adar", 'whats-new'),
               item('Install Command Line Tool…', 'install-cli'),
               { type: 'separator' },
               item('Settings…', 'settings', 'CmdOrCtrl+,'),

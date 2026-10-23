@@ -22,6 +22,7 @@ import { CommandPalette } from '@renderer/components/palette/CommandPalette'
 import { GitConsole } from '@renderer/components/palette/GitConsole'
 import { RebaseView } from '@renderer/components/rebase/RebaseView'
 import { UpdateNotice } from '@renderer/components/update/UpdateNotice'
+import { showWhatsNewAfterUpdate } from '@renderer/components/update/WhatsNew'
 import { LeftPanel } from '@renderer/components/sidebar/LeftPanel'
 import { useAutoFetch, useBackendEvents, useGlobalShortcuts, useOpenRequests, useRefreshOnFocus, useTheme } from '@renderer/hooks/useAppEffects'
 import { useActiveTab, useApp, type RepoTab } from '@renderer/store/appStore'
@@ -95,6 +96,9 @@ export function App() {
   useEffect(() => {
     void useApp.getState().init()
   }, [])
+  useEffect(() => {
+    if (ready) showWhatsNewAfterUpdate()
+  }, [ready])
   useBackendEvents()
   useGlobalShortcuts()
   useAutoFetch()

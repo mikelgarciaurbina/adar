@@ -57,6 +57,7 @@ export const COMMANDS: Command[] = [
   { id: 'settings', label: 'Settings…', group: 'App', shortcut: 'Mod+,', run: () => useApp.getState().openModal({ kind: 'settings' }) },
   { id: 'about', label: 'About Adar', group: 'App', run: () => useApp.getState().openModal({ kind: 'about' }) },
   { id: 'check-for-updates', label: 'Check for Updates…', group: 'App', run: () => checkForUpdatesNow() },
+  { id: 'whats-new', label: "What's New in Adar", group: 'App', run: () => useApp.getState().openModal({ kind: 'whats-new' }) },
   { id: 'install-cli', label: "Install 'adar' Command in PATH…", group: 'App', when: () => isElectron, run: () => void installCliCommand() },
   { id: 'uninstall-cli', label: "Uninstall 'adar' Command", group: 'App', when: () => isElectron, run: () => void uninstallCliCommand() },
   { id: 'command-palette', label: 'Command Palette', group: 'App', shortcut: 'Mod+P', run: () => useApp.getState().setPaletteOpen(true) },

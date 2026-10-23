@@ -110,3 +110,23 @@
 .up-restart-list li {
   margin: 2px 0;
 }
+
+/* What's new after an update: the running version over its release notes. */
+.up-wn-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 14px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+.up-wn-version {
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  color: var(--text-0);
+}
+.up-wn-sub {
+  margin-top: 2px;
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+}

@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest'
-import { bundleMismatch, compareVersions, isAllowedDownloadUrl, parseAssetDigest, pickAssets, releasePageUrl, updatesFromReleasePage } from './update'
+import {
+  UNRECORDED_VERSION,
+  bundleMismatch,
+  compareVersions,
+  isAllowedDownloadUrl,
+  parseAssetDigest,
+  pickAssets,
+  releasePageUrl,
+  updatedFrom,
+  updatesFromReleasePage,
+  withoutInstallSection
+} from './update'
 
 describe('compareVersions', () => {
   it('orders numerically', () => {
@@ -128,5 +139,25 @@ describe('update verification helpers', () => {
     // A feed advertising an older version as "latest" cannot downgrade the app.
     expect(bundleMismatch({ id: 'dev.adar.gitclient', version: '0.1.0' }, { ...expected, version: '0.1.0' })).toMatch(/not newer/)
     expect(bundleMismatch({ id: 'dev.adar.gitclient', version: '0.2.0' }, { ...expected, version: '0.2.0' })).toMatch(/not newer/)
+  })
+})
+
+describe("What's new", () => {
+  it('shows once, on the first run after an update', () => {
+    expect(updatedFrom('0.7.0', '0.8.0')).toBe('0.7.0')
+    expect(updatedFrom('0.7.0', '0.7.1')).toBe('0.7.0')
+    // Settings saved by an Adar that did not record its version.
+    expect(updatedFrom(UNRECORDED_VERSION, '0.8.0')).toBe('')
+    // A new install, the same version again and a downgrade.
+    expect(updatedFrom('', '0.8.0')).toBeNull()
+    expect(updatedFrom('0.8.0', '0.8.0')).toBeNull()
+    expect(updatedFrom('0.9.0', '0.8.0')).toBeNull()
+  })
+
+  it('leaves the Install section out of the release notes', () => {
+    const notes = '### New\n- **Thing.** Text\n\n### Install\n**macOS**: download it\n#### Details\nmore\n\n### Fixed\n- Bug\n'
+    expect(withoutInstallSection(notes)).toBe('### New\n- **Thing.** Text\n\n### Fixed\n- Bug')
+    expect(withoutInstallSection('## Installation\r\nsteps\r\n')).toBe('')
+    expect(withoutInstallSection('### Installer\n- A smaller installer')).toBe('### Installer\n- A smaller installer')
   })
 })

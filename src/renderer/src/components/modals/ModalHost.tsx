@@ -1,5 +1,6 @@
 // Renders the application modal stored in store.modal.
 
+import { WhatsNewModal } from '@renderer/components/update/WhatsNew'
 import { useApp } from '@renderer/store/appStore'
 import { AboutModal } from './AboutModal'
 import { IdentityModal } from './IdentityModal'
@@ -26,6 +27,8 @@ export function ModalHost() {
       return <RemotesModal key={modal.repo} repo={modal.repo} />
     case 'about':
       return <AboutModal />
+    case 'whats-new':
+      return <WhatsNewModal from={modal.from} />
     default:
       return null
   }

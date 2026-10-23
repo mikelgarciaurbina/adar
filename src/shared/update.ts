@@ -94,6 +94,35 @@ export function compareVersions(a: string, b: string): number {
   return pa.pre.localeCompare(pb.pre, undefined, { numeric: true }) > 0 ? 1 : -1
 }
 
+/**
+ * settings.lastRunVersion of settings saved by an Adar that did not record it (0.7.0 and older). It is older than any
+ * release, so the first version that records it shows What's new.
+ */
+export const UNRECORDED_VERSION = '0'
+
+/**
+ * The version Adar was updated from when `current` runs for the first time after an update ('' when it is not known),
+ * or null: a new install (nothing recorded), the same version again or a downgrade.
+ */
+export function updatedFrom(lastRunVersion: string, current: string): string | null {
+  if (!lastRunVersion || compareVersions(current, lastRunVersion) <= 0) return null
+  return lastRunVersion === UNRECORDED_VERSION ? '' : lastRunVersion
+}
+
+/** Release notes as What's new shows them: without the "Install" section, which is about downloading the release. */
+export function withoutInstallSection(markdown: string): string {
+  const out: string[] = []
+  let skipping = 0
+  for (const line of markdown.replace(/\r\n?/g, '\n').split('\n')) {
+    const heading = /^(#{1,6})\s+(.*)$/.exec(line)
+    if (heading && (!skipping || heading[1].length <= skipping)) {
+      skipping = /^install(ing|ation)?\b/i.test(heading[2].trim()) ? heading[1].length : 0
+    }
+    if (!skipping) out.push(line)
+  }
+  return out.join('\n').trim()
+}
+
 /** Hex SHA-256 from an asset digest ("sha256:<64 hex>"), or null when absent / another algorithm. */
 export function parseAssetDigest(digest: unknown): string | null {
   if (typeof digest !== 'string') return null

@@ -107,3 +107,7 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
   and Linux on their own runners, uploads everything to a draft release, verifies the assets and publishes it. Installed
   apps pick it up through the in-app updater. macOS assets keep their arch-only names (`Adar-<v>-arm64.zip`), which
   installed apps look for; Windows/Linux assets name their system and are never .zip/.dmg.
+- Release notes: write `build/release-notes.md` in the release commit, together with the version bump. It is the GitHub
+  release body and is also bundled into the app, whose What's new panel (`components/update/WhatsNew.tsx`) shows it,
+  without its Install section, the first time a newer version runs (`settings.lastRunVersion`). A test checks that it
+  names the version's assets (`Adar-<v>-…`).

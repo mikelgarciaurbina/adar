@@ -5,6 +5,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import { DEFAULT_SETTINGS, type AdarEvent } from '@shared/types'
+import { UNRECORDED_VERSION } from '@shared/update'
 import { ASKPASS_TOKEN_HEADER, AskpassService, askpassShellScript, classifyPrompt, shDoubleQuote } from './askpass'
 import { ignoredPaths, parseGitVersion, worktreeSignature } from './index'
 import { createGitContext, ensurePrivateDir } from '../git/context'
@@ -292,6 +293,20 @@ describe('settings', () => {
     expect(files.some((f) => f.endsWith('.tmp'))).toBe(false)
     const again = await new SettingsStore(dir).getSettings()
     expect(again).toEqual(merged)
+  })
+
+  it("treats settings saved by an Adar without lastRunVersion as an update (What's new shows once)", async () => {
+    const write = async (data: unknown) => {
+      const dir = tmp()
+      await fs.writeFile(path.join(dir, 'settings.json'), JSON.stringify(data))
+      return (await new SettingsStore(dir).getSettings()).lastRunVersion
+    }
+    // Adar writes every setting; 0.7.0 and older did not know lastRunVersion.
+    expect(await write({ theme: 'light', checkForUpdates: true, skippedUpdateVersion: '' })).toBe(UNRECORDED_VERSION)
+    expect(await write({ skippedUpdateVersion: '', lastRunVersion: '0.7.0' })).toBe('0.7.0')
+    // A hand-written seed (scripts/e2e.sh) and a new install have nothing to compare with.
+    expect(await write({ openTabs: ['/r'], activeTab: '/r', autoFetchMinutes: 0 })).toBe('')
+    expect((await new SettingsStore(tmp()).getSettings()).lastRunVersion).toBe('')
   })
 
   it('ignores a corrupt settings file', async () => {

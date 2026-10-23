@@ -470,6 +470,8 @@ export interface AppSettings {
   notifyNewCommits: boolean
   /** Version the user chose to skip ('' = none). */
   skippedUpdateVersion: string
+  /** Adar version that last ran with these settings ('' = none recorded): a newer one shows What's new once. */
+  lastRunVersion: string
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -500,7 +502,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   checkForUpdates: true,
   menuBarIcon: true,
   notifyNewCommits: true,
-  skippedUpdateVersion: ''
+  skippedUpdateVersion: '',
+  lastRunVersion: ''
 }
 
 export interface AppInfo {
@@ -631,7 +634,8 @@ export const MENU_COMMANDS = [
   'open-repo-path',
   'stage-all',
   'commit',
-  'about'
+  'about',
+  'whats-new'
 ] as const
 
 export type MenuCommand = (typeof MENU_COMMANDS)[number]

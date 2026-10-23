@@ -118,6 +118,8 @@ export type ModalState =
   | { kind: 'identity'; repo: string | null }
   | { kind: 'remotes'; repo: string }
   | { kind: 'about' }
+  /** from: the version Adar was just updated from ('' when unknown); absent when opened from a command. */
+  | { kind: 'whats-new'; from?: string }
 
 export interface CredentialRequest {
   id: string
