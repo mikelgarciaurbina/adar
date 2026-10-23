@@ -37,7 +37,8 @@ vi.mock('electron', () => {
     app: { quit: () => undefined },
     BrowserWindow: class {},
     Menu: { buildFromTemplate: () => ({ popup: () => undefined }) },
-    nativeImage: { createFromPath: (p: string) => ({ name: p.split('/').pop()!.replace('.png', ''), setTemplateImage: () => undefined }) },
+    // The file name without the folder (path.join uses backslashes on Windows).
+    nativeImage: { createFromPath: (p: string) => ({ name: p.split(/[\\/]/).pop()!.replace('.png', ''), setTemplateImage: () => undefined }) },
     Notification,
     screen: {},
     Tray
