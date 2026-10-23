@@ -1,8 +1,9 @@
 import { copyFileSync, existsSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { app, BrowserWindow, dialog, ipcMain, Menu, shell, type MenuItemConstructorOptions } from 'electron'
-import { IPC_EVENT_CHANNEL, IPC_INVOKE_CHANNEL } from '@shared/api'
-import type { MenuCommand, AdarEvent } from '@shared/types'
+import { IPC_EVENT_CHANNEL, IPC_INVOKE_CHANNEL, type InvokeResponse } from '@shared/api'
+import { MENUBAR_METHODS, PANEL_API_METHODS, type MenuBarMethod } from '@shared/menubar'
+import type { AppSettings, MenuCommand, AdarEvent, RepoInfo } from '@shared/types'
 import { UPDATE_METHODS, type UpdateMethod } from '@shared/update'
 import { CLI_METHODS, parseOpenRepoArgs, type CliMethod } from '@shared/cli'
 import { toErrorPayload } from '@shared/errors'
@@ -11,6 +12,7 @@ import { dispatch } from './dispatch'
 import type { PlatformAdapter } from './platform'
 import { bundledCliPath } from './cliPath'
 import { cliStatus, installCli, uninstallCli } from './cli'
+import { MenuBar } from './menuBar'
 import { pauseOpenRequests, requestOpen, takeOpenRequests } from './openRequests'
 import { bypassQuitGuard, isQuitGuardBypassed } from './quitGuard'
 import { Updater } from './updater'
@@ -45,8 +47,17 @@ migrateLegacyUserData()
 let mainWindow: BrowserWindow | null = null
 let backend: Backend | null = null
 let updater: Updater | null = null
+let menuBar: MenuBar | null = null
 const UPDATE_METHOD_SET: ReadonlySet<string> = new Set(UPDATE_METHODS)
 const CLI_METHOD_SET: ReadonlySet<string> = new Set(CLI_METHODS)
+const MENUBAR_METHOD_SET: ReadonlySet<string> = new Set(MENUBAR_METHODS)
+const PANEL_API_SET: ReadonlySet<string> = new Set(PANEL_API_METHODS)
+/** Backend calls that talk to a remote: the menu bar icon animates while they run. */
+const NETWORK_METHODS: ReadonlySet<string> = new Set(['fetch', 'pull', 'push'])
+/** Calls that open a repository (past the trust check): the menu bar panel may then read it. */
+const REPO_OPENING_METHODS: ReadonlySet<string> = new Set(['openRepo', 'initRepo', 'cloneRepo'])
+/** Events that arrived with no window to show them (a credential prompt for a pull started from the menu bar). */
+const heldEvents: AdarEvent[] = []
 
 /** Bring the window to the front (or reopen it on macOS) after an external open request. */
 function focusMainWindow(): void {
@@ -71,8 +82,64 @@ app.on('open-file', (e, file) => {
 for (const p of parseOpenRepoArgs(process.argv)) requestOpen(p)
 
 function emit(event: AdarEvent): void {
+  // A credential prompt for an operation started from the menu bar panel is answered in Adar's window.
+  if (event.type === 'credential-request' && menuBar?.panelOperationRunning) {
+    menuBar.hidePanel()
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      heldEvents.push(event)
+      focusMainWindow()
+      return
+    }
+    focusMainWindow()
+  }
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send(IPC_EVENT_CHANNEL, event)
+  }
+  if (event.type === 'repo-changed') menuBar?.sendToPanel(event)
+}
+
+/** The renderer is listening again (it asked for the open requests): deliver what waited for it. */
+function releaseHeldEvents(): void {
+  const events = heldEvents.splice(0)
+  if (events.length) setTimeout(() => events.forEach(emit), 300)
+}
+
+/**
+ * Run a backend call, tracking network operations for the menu bar: the icon animates while they run, and a
+ * fetch is compared before and after to notice new commits on the checked-out branch's upstream.
+ */
+async function invokeBackend(method: unknown, args: unknown, fromPanel: boolean): Promise<InvokeResponse> {
+  const repo = Array.isArray(args) && typeof args[0] === 'string' ? args[0] : null
+  const mb = menuBar
+  if (!mb || !repo || typeof method !== 'string' || !NETWORK_METHODS.has(method)) {
+    const res = await dispatch(backend!, method, args)
+    if (res.ok && method === 'updateSettings') mb?.apply(res.value as AppSettings)
+    if (res.ok && REPO_OPENING_METHODS.has(method as string)) mb?.admit((res.value as RepoInfo).path)
+    return res
+  }
+  if (method === 'fetch') await mb.beforeFetch(repo)
+  mb.networkStarted(fromPanel)
+  try {
+    const res = await dispatch(backend!, method, args)
+    if (res.ok && method === 'fetch') void mb.afterFetch(repo)
+    return res
+  } finally {
+    mb.networkEnded(fromPanel)
+  }
+}
+
+/** Show Adar's window and, with a path, switch to that repository (from the menu bar or a notification). */
+function openInAdar(repo: string | null): void {
+  if (repo) requestOpen(repo)
+  focusMainWindow()
+}
+
+/** Load a renderer page (the app or the menu bar panel) from the dev server or the build. */
+function loadRendererPage(win: BrowserWindow, page: 'index' | 'menubar'): void {
+  if (!app.isPackaged && process.env['ELECTRON_RENDERER_URL']) {
+    void win.loadURL(page === 'index' ? process.env['ELECTRON_RENDERER_URL'] : `${process.env['ELECTRON_RENDERER_URL']}/${page}.html`)
+  } else {
+    void win.loadFile(join(__dirname, `../renderer/${page}.html`))
   }
 }
 
@@ -136,11 +203,7 @@ function createWindow(): void {
     e.preventDefault()
   })
 
-  if (!app.isPackaged && process.env['ELECTRON_RENDERER_URL']) {
-    void mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
-  } else {
-    void mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
-  }
+  loadRendererPage(mainWindow, 'index')
 
   // Open requests arriving while the page (re)loads are queued until the renderer asks for them.
   mainWindow.webContents.on('did-start-loading', () => pauseOpenRequests())
@@ -163,7 +226,7 @@ function createWindow(): void {
 async function runCaptureSteps(file: string): Promise<void> {
   const fs = await import('node:fs/promises')
   const outDir = process.env['ADAR_CAPTURE_DIR'] || process.cwd()
-  type Step = { wait?: number; js?: string; jsFile?: string; shot?: string; size?: [number, number] }
+  type Step = { wait?: number; js?: string; jsFile?: string; shot?: string; size?: [number, number]; panel?: boolean; panelJs?: string; panelShot?: string }
   try {
     const list = JSON.parse(await fs.readFile(file, 'utf8')) as Step[]
     for (const step of list) {
@@ -178,6 +241,31 @@ async function runCaptureSteps(file: string): Promise<void> {
           console.log(`[capture] js → ${JSON.stringify(res)?.slice(0, 2000)}`)
         } catch (err) {
           console.log(`[capture] js error: ${String(err)}`)
+        }
+      }
+      // The menu bar panel: {"panel": true} opens it, {"panelJs"} runs in it, {"panelShot"} captures it.
+      if (step.panel && menuBar) {
+        menuBar.stayOpen = true
+        menuBar.showPanel()
+      }
+      const panel = menuBar?.panelWindow()
+      if (step.panelJs && panel) {
+        try {
+          const res = await panel.webContents.executeJavaScript(step.panelJs, true)
+          console.log(`[capture] panel js → ${JSON.stringify(res)?.slice(0, 2000)}`)
+        } catch (err) {
+          console.log(`[capture] panel js error: ${String(err)}`)
+        }
+      }
+      if (step.panelShot && panel) {
+        try {
+          const timeout = new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timed out')), 8000))
+          const img = await Promise.race([panel.webContents.capturePage(), timeout])
+          const path = join(outDir, `${step.panelShot}.png`)
+          await fs.writeFile(path, img.toPNG())
+          console.log(`[capture] saved ${path}`)
+        } catch (err) {
+          console.log(`[capture] panel shot error: ${String(err)}`)
         }
       }
       if (step.shot) {
@@ -335,8 +423,34 @@ app.whenReady().then(() => {
     updateSettings: (patch) => b.updateSettings(patch)
   })
 
+  menuBar = new MenuBar({
+    backend: b,
+    // Dev: resources/ next to out/ (npm run dev), or in the working directory for builds elsewhere (scripts/e2e.sh).
+    iconDir: app.isPackaged ? join(process.resourcesPath, 'tray') : [join(__dirname, '../../resources/tray'), join(process.cwd(), 'resources/tray')].find((d) => existsSync(d)) ?? '',
+    preload: join(__dirname, '../preload/index.js'),
+    loadPanel: (win) => loadRendererPage(win, 'menubar'),
+    openInAdar,
+    sendMenu,
+    emit
+  })
+  void b.getSettings().then((s) => menuBar?.apply(s), () => undefined)
+
   ipcMain.handle(IPC_INVOKE_CHANNEL, (event, method: unknown, args: unknown) => {
-    // Only accept calls from our own main frame.
+    // The menu bar panel may read a repository and fetch, pull or push, and drive its own window; nothing else.
+    if (menuBar?.isPanel(event.sender)) {
+      const a = Array.isArray(args) ? args : []
+      if (typeof method === 'string' && MENUBAR_METHOD_SET.has(method)) {
+        return menuBar.handle(method as MenuBarMethod, a).then((value) => ({ ok: true, value: value ?? null }), (err) => ({ ok: false, error: toErrorPayload(err) }))
+      }
+      if (typeof method === 'string' && PANEL_API_SET.has(method)) {
+        if (method !== 'getSettings' && method !== 'getRecentRepos' && !menuBar.isAdmitted(a[0])) {
+          return { ok: false, error: { message: 'Adar has not opened this repository', code: 'INVALID_ARGUMENT' } }
+        }
+        return invokeBackend(method, args, true)
+      }
+      return { ok: false, error: { message: 'Not available in the menu bar panel', code: 'INVALID_ARGUMENT' } }
+    }
+    // Otherwise only accept calls from our own main frame.
     if (!mainWindow || event.sender !== mainWindow.webContents) {
       return { ok: false, error: { message: 'Untrusted sender', code: 'INVALID_ARGUMENT' } }
     }
@@ -346,6 +460,7 @@ app.whenReady().then(() => {
       const run = async (): Promise<unknown> => {
         switch (method as CliMethod) {
           case 'cliTakeOpenRequests':
+            releaseHeldEvents()
             return takeOpenRequests((p) => emit({ type: 'open-repo-request', path: p }))
           case 'cliStatus':
             return cliStatus(source)
@@ -363,7 +478,7 @@ app.whenReady().then(() => {
         .apply(updater, Array.isArray(args) ? args : [])
         .then((value) => ({ ok: true, value: value ?? null }), (err) => ({ ok: false, error: toErrorPayload(err) }))
     }
-    return dispatch(backend!, method, args)
+    return invokeBackend(method, args, false)
   })
 
   buildMenu()
@@ -399,5 +514,6 @@ app.on('before-quit', (e) => {
     return
   }
   updater?.stop()
+  menuBar?.dispose()
   void backend?.dispose()
 })

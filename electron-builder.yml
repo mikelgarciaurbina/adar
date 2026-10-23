@@ -33,6 +33,9 @@ mac:
     # `adar` command-line tool (Adar → Install Command Line Tool… links it into PATH).
     - from: resources/bin/adar
       to: bin/adar
+    # Menu bar icon images (template images: the antlers, the new-commits dot, the fetch animation frames).
+    - from: resources/tray
+      to: tray
   # Apple Silicon only (Intel Macs are not supported).
   target:
     - target: dmg

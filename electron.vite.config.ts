@@ -22,6 +22,12 @@ export default defineConfig({
         '@renderer': resolve(__dirname, 'src/renderer/src')
       }
     },
+    // The app window and the macOS menu bar panel (src/main/menuBar.ts).
+    build: {
+      rollupOptions: {
+        input: { index: resolve(__dirname, 'src/renderer/index.html'), menubar: resolve(__dirname, 'src/renderer/menubar.html') }
+      }
+    },
     plugins: [react()]
   }
 })

@@ -44,6 +44,9 @@ no contiene código, recursos ni marca de GitKraken y no tiene relación con Git
 - **Grupos de pestañas**: mantén juntos los repositorios de un proyecto (por ejemplo api, app y landing) bajo una
   etiqueta con nombre y color; pliégalos y vuelve a abrir el grupo entero con un clic desde la pantalla de inicio, el
   menú **+** o la paleta.
+- **Icono en la barra de menús** (macOS): la cornamenta se ilumina mientras Adar hace fetch y muestra un punto cuando
+  llegan commits nuevos; al pulsarla, la rama y los últimos commits del proyecto activo en sus carriles, con Pull, Push
+  y un selector de proyecto. Notificaciones opcionales cuando un fetch trae commits nuevos a la rama actual.
 - **Paleta de comandos** (⌘P), **consola git** integrada (⌃\`), pestañas para varios repos, temas oscuro y claro, atajos.
 - **Actualizaciones** desde GitHub Releases (*Adar → Check for Updates…*).
 - **Seguro por defecto**: las acciones destructivas piden confirmación y se pueden deshacer, y los repositorios cuya

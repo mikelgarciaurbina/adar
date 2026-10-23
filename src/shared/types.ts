@@ -464,6 +464,10 @@ export interface AppSettings {
   confirmDangerous: boolean
   /** Check GitHub Releases for new Adar versions in the background. */
   checkForUpdates: boolean
+  /** macOS: the antlers in the menu bar, with a panel for the active project. */
+  menuBarIcon: boolean
+  /** A system notification when a fetch brings new commits to the checked-out branch's upstream. */
+  notifyNewCommits: boolean
   /** Version the user chose to skip ('' = none). */
   skippedUpdateVersion: string
 }
@@ -494,6 +498,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   graphColumns: { author: true, date: true, sha: true },
   confirmDangerous: true,
   checkForUpdates: true,
+  menuBarIcon: true,
+  notifyNewCommits: true,
   skippedUpdateVersion: ''
 }
 
@@ -580,6 +586,15 @@ export type AdarEvent =
       /** Open this folder in a tab (from the `adar` CLI, the Dock or a second instance). */
       type: 'open-repo-request'
       path: string
+    }
+  | {
+      /** The main process changed settings (e.g. from the menu bar panel's menu): merge them into the UI's copy. */
+      type: 'settings-changed'
+      patch: Partial<AppSettings>
+    }
+  | {
+      /** Sent to the menu bar panel each time it opens, so it reloads its project. */
+      type: 'menubar-shown'
     }
 
 export const MENU_COMMANDS = [

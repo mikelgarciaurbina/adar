@@ -169,6 +169,8 @@ function ThemePicker({ value }: { value: ThemeSetting }) {
 
 function GeneralSection() {
   const s = useSettings()
+  const appInfo = useApp((st) => st.appInfo)
+  const desktop = appInfo?.isElectron ?? isElectron
   const fetchId = useId()
   const pullId = useId()
   return (
@@ -225,6 +227,16 @@ function GeneralSection() {
         <SettingRow label="Gravatar avatars" description="Load author pictures from gravatar.com (sends a hash of the email). Initials are used otherwise.">
           <Switch label="Gravatar avatars" checked={s.gravatar} onChange={(gravatar) => update({ gravatar })} />
         </SettingRow>
+        {desktop && appInfo?.platform === 'darwin' && (
+          <SettingRow label="Menu bar icon" description="The antlers in the menu bar: the active project's branch and latest commits, with Pull and Push.">
+            <Switch label="Menu bar icon" checked={s.menuBarIcon} onChange={(menuBarIcon) => update({ menuBarIcon })} />
+          </SettingRow>
+        )}
+        {desktop && (
+          <SettingRow label="Notify about new commits" description="A notification when a fetch, auto-fetch included, brings new commits to the checked-out branch's upstream.">
+            <Switch label="Notify about new commits" checked={s.notifyNewCommits} onChange={(notifyNewCommits) => update({ notifyNewCommits })} />
+          </SettingRow>
+        )}
       </SettingGroup>
       <UpdateSettings />
     </>

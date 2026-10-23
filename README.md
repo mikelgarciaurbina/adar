@@ -49,6 +49,9 @@ branding and is not affiliated with GitKraken or Axosoft.
 - **Undo / redo** for git actions (checkout, commits, branches, tags, resets, stashes…).
 - **Tab groups**: keep a project's repositories (say api, app and landing) together under a named, coloured chip;
   collapse them, and reopen the whole group in one click from the welcome screen, the **+** menu or the palette.
+- **Menu bar icon** (macOS): the antlers light up while Adar fetches and show a dot when new commits arrive; click them
+  for the active project's branch and latest commits on their lanes, with Pull and Push and a project switcher. Optional
+  notifications when a fetch brings new commits to the checked-out branch.
 - **Command palette** (⌘P), built-in **git console** (⌃\`), tabs for several repositories, dark and light themes,
   keyboard shortcuts.
 - **In-app updates** from GitHub Releases (*Adar → Check for Updates…*).

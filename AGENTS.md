@@ -10,7 +10,7 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
 ## Layout
 - `src/shared/` — the contract: `types.ts` (domain types, settings), `api.ts` (`AdarApi`, the ONLY renderer↔backend
   API, plus `API_METHODS`), `errors.ts` (`AdarError`, `describeError`, `errorDetail`), `update.ts` (updater types and
-  pure helpers), `patch.ts` (partial-staging patch builder).
+  pure helpers), `patch.ts` (partial-staging patch builder), `menubar.ts` (the menu bar panel's calls and limits).
 - `src/main/` — Electron main process.
   - `index.ts` window, native menu, IPC (`dispatch.ts`), dev/e2e hooks; `quitGuard.ts` asks the renderer before quitting.
   - `backend.ts` composes the read side (`git/read/*`, parsers in `git/parsers/*`) and the write side (`git/write/*`).
@@ -18,6 +18,11 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
     `gitNetwork`, `exclusive`, `gitDir`, `operationState`); `git/ops.ts` (read/write split).
   - `system/` — settings/recents/trusted repos store, askpass bridge (credential prompts → UI), file watcher with
     polling fallback, login-shell `PATH` fix.
+  - `menuBar.ts` — macOS menu bar extra: the tray icon (template images in `resources/tray`, drawn by
+    `scripts/render-tray-icons.cjs`: at rest, a dot for new commits, four fetch-animation frames), the panel window
+    (`src/renderer/menubar.html`) and new-commit notifications after a fetch (every platform). The panel's window may
+    only call `MENUBAR_METHODS` and `PANEL_API_METHODS` (`src/shared/menubar.ts`), and only on repositories Adar opened
+    (`openRepo` and its trust check, or the panel's `menuBarUseRepo`).
   - `updater.ts` — in-app updates from GitHub Releases (check → download → verify → replace bundle → relaunch) on
     macOS; Windows and Linux builds only check, and "Download" opens the release page.
   - `cli.ts` / `cliPath.ts` — install/uninstall the `adar` command (symlink to `resources/bin/adar`, shipped in the
@@ -34,6 +39,8 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
   - `actions/groups.tsx` — tab groups (open/close a group, group a folder's repositories, the grouping suggestion);
     groups are saved in `settings.tabGroups`, pure helpers in `lib/tabGroups.ts`.
   - `commands.ts` — command registry shared by the native menu, shortcuts and the command palette.
+  - `menubar/` — the menu bar panel (its own entry, `menubar.html`): `MenuBarPanel.tsx` (project switcher, branch with
+    Pull/Push, mini graph reusing `components/graph`), pure helpers in `model.ts`.
   - `components/` — `common` (Modal, Button, dialogs, ContextMenu, toast, Avatar, Resizer, ErrorBoundary), `layout`
     (tabs, toolbar, status bar, welcome, logo), `graph`, `sidebar`, `details` (commit details, staging, composer),
     `diff` (diff, blame, history), `conflicts`, `rebase`, `modals`, `palette` (palette + git console), `update`.
@@ -63,7 +70,7 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
 ## Conventions
 - CSS class prefixes per module: `app-` shell, `ui-` common, `tb-`/`wl-` toolbar, tabs, status bar, welcome, `sb-` left
   panel, `gr-` graph, `det-` right panel, `diff-` diff/blame/history, `cf-` conflicts, `rb-` rebase, `md-` modals,
-  `pal-` palette/console, `up-` updates. Each module imports its own `.css` file.
+  `pal-` palette/console, `up-` updates, `mb-` menu bar panel. Each module imports its own `.css` file.
 - Icons: `lucide-react`. Virtualised lists: `@tanstack/react-virtual`. Syntax highlighting: `highlight.js`.
 - Do not add npm dependencies without discussing it first.
 
@@ -83,7 +90,8 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
   has unit and server-side render tests).
 - Real app, scripted: `scripts/e2e.sh <workdir> <steps.json> [--no-build]` builds into `<workdir>/out` (parallel-safe),
   launches Electron with `<workdir>/ud` as user data and saves screenshots to `<workdir>/shots`. Steps: `{"size":[w,h]}`,
-  `{"wait":ms}`, `{"js":"expr"}`, `{"jsFile":"/abs/file.js"}`, `{"shot":"name"}`. Load `scripts/e2e-helpers.js` first for
+  `{"wait":ms}`, `{"js":"expr"}`, `{"jsFile":"/abs/file.js"}`, `{"shot":"name"}`; the menu bar panel: `{"panel":true}` opens
+  it, `{"panelJs":"expr"}` runs in it, `{"panelShot":"name"}` captures it. Load `scripts/e2e-helpers.js` first for
   `window.e2e` (click/type/key/drag/contextMenu/menuItem/waitFor/state/errors). `window.__adar = { store, api, updates }`.
   Seed `<workdir>/ud/settings.json` with `{"openTabs":["/abs/repo"],"activeTab":"/abs/repo","autoFetchMinutes":0}`.
 - Fixtures: `scripts/make-fixture-repo.sh <dir> [--conflict]` (demo repo + bare origin),

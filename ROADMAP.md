@@ -25,7 +25,9 @@ tab groups (a project's repositories together, reopened in one click) · the Bas
 and day themes, six lane colours, tab groups as trays) · Fetch All for a tab group · branches keep their lane colour in
 the left panel · change markers on the diff's scrollbar · tabs shrink to share the bar · Windows and Linux builds
 (beta since 0.6.0: x64 installer, AppImage and .deb), with the tests run on macOS, Windows and Linux · the macOS app
-signed with an Apple Developer ID and notarized (since 0.6.1).
+signed with an Apple Developer ID and notarized (since 0.6.1) · the antlers in the macOS menu bar: a panel with one
+project's branch and latest commits on their lanes, Pull and Push, and a project switcher · notifications when a fetch
+brings new commits to the checked-out branch.
 
 ---
 
@@ -114,7 +116,8 @@ Windows and Linux builds shipped in 0.6.0 as a beta. Still to do:
 - [ ] App menu: once the `adar` command is installed, show **Uninstall Command Line Tool…** instead of *Install…*
   (rebuild the menu after installing or uninstalling, and check at startup). Today uninstalling is only in
   Settings → Integrations and the command palette. *(good first issue)*
-- [ ] Optional system notifications when a fetch brings new commits to branches you track.
+- [ ] New-commit notifications for every branch with an upstream, not only the checked-out one (today's notifications
+  and the menu bar dot follow the checked-out branch).
 - [ ] Accessibility pass: screen-reader labels, full keyboard navigation, reduced motion.
 - [ ] First-run tour.
 

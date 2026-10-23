@@ -7,6 +7,7 @@ import { AdarError } from '@shared/errors'
 import type { AdarEvent } from '@shared/types'
 import type { UpdateApi } from '@shared/update'
 import type { CliApi } from '@shared/cli'
+import type { MenuBarApi } from '@shared/menubar'
 
 type Transport = (method: string, args: unknown[]) => Promise<InvokeResponse>
 
@@ -154,6 +155,14 @@ export const updates: UpdateApi = new Proxy({} as UpdateApi, {
 
 /** `adar` command-line tool + external open requests (Electron only; see src/shared/cli.ts). */
 export const cli: CliApi = new Proxy({} as CliApi, {
+  get(_t, prop) {
+    if (typeof prop !== 'string') return undefined
+    return (...args: unknown[]) => invoke(prop, args)
+  }
+})
+
+/** The macOS menu bar panel's own calls (only from its window; see src/shared/menubar.ts). */
+export const menuBar: MenuBarApi = new Proxy({} as MenuBarApi, {
   get(_t, prop) {
     if (typeof prop !== 'string') return undefined
     return (...args: unknown[]) => invoke(prop, args)

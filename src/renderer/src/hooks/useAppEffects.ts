@@ -55,6 +55,10 @@ export function useBackendEvents(): void {
           case 'menu':
             runCommand(ev.command)
             break
+          case 'settings-changed':
+            // Changed outside this window (the menu bar panel's menu): already saved.
+            useApp.setState((st) => ({ settings: { ...st.settings, ...ev.patch } }))
+            break
         }
       }),
     []
