@@ -5,6 +5,7 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react'
 import { MousePointerClick } from 'lucide-react'
 import { EmptyState } from '@renderer/components/common/Button'
+import { PullPanel } from '@renderer/components/pulls/PullPanel'
 import type { RepoTab } from '@renderer/store/appStore'
 import { CommitPanel } from './CommitPanel'
 import { ComparePanel } from './ComparePanel'
@@ -27,6 +28,8 @@ function PanelContent({ tab }: { tab: RepoTab }) {
     }
     case 'stash':
       return <StashPanel key={sel.sha} tab={tab} index={sel.index} sha={sel.sha} />
+    case 'pull':
+      return <PullPanel tab={tab} number={sel.number} />
     default:
       if (wantsWipPanel(tab)) return <WipPanel tab={tab} />
       return (
@@ -67,7 +70,7 @@ class PanelErrorBoundary extends Component<{ resetKey: string; children: ReactNo
 
 function selectionKey(tab: RepoTab): string {
   const s = tab.selection
-  return `${tab.path}\u0000${s.kind}\u0000${'sha' in s ? s.sha : ''}\u0000${tab.multiSelect.join(',')}`
+  return `${tab.path}\u0000${s.kind}\u0000${'sha' in s ? s.sha : 'number' in s ? s.number : ''}\u0000${tab.multiSelect.join(',')}`
 }
 
 export function RightPanel({ tab }: { tab: RepoTab }) {

@@ -23,6 +23,7 @@ import { GitConsole } from '@renderer/components/palette/GitConsole'
 import { RebaseView } from '@renderer/components/rebase/RebaseView'
 import { UpdateNotice } from '@renderer/components/update/UpdateNotice'
 import { showWhatsNewAfterUpdate } from '@renderer/components/update/WhatsNew'
+import { usePullRequestSync } from '@renderer/components/pulls/pullStore'
 import { LeftPanel } from '@renderer/components/sidebar/LeftPanel'
 import { useAutoFetch, useBackendEvents, useGlobalShortcuts, useOpenRequests, useRefreshOnFocus, useTheme } from '@renderer/hooks/useAppEffects'
 import { useActiveTab, useApp, type RepoTab } from '@renderer/store/appStore'
@@ -105,6 +106,7 @@ export function App() {
   useRefreshOnFocus()
   useOpenRequests()
   useTheme()
+  usePullRequestSync()
 
   return (
     <div className="app">

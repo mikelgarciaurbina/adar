@@ -34,6 +34,8 @@ export type Selection =
   | { kind: 'wip' }
   | { kind: 'commit'; sha: string }
   | { kind: 'stash'; index: number; sha: string }
+  /** A GitHub pull request (left panel, branch label chip or toolbar). */
+  | { kind: 'pull'; number: number }
 
 export type CenterView =
   | { kind: 'graph' }
@@ -120,6 +122,9 @@ export type ModalState =
   | { kind: 'about' }
   /** from: the version Adar was just updated from ('' when unknown); absent when opened from a command. */
   | { kind: 'whats-new'; from?: string }
+  /** Turn GitHub pull requests on; `next` runs once signed in. */
+  | { kind: 'github-connect'; next?: () => void }
+  | { kind: 'create-pull'; repo: string; head?: string; base?: string }
 
 export interface CredentialRequest {
   id: string

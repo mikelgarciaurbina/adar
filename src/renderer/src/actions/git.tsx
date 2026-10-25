@@ -13,6 +13,7 @@ import { cleanMessage } from '@renderer/components/details/message'
 import { openFolderOfRepos, suggestGroup } from './groups'
 import { refDropActions } from '@renderer/lib/refDrop'
 import { currentBranch, defaultRemote, localForRemote, mainBranch, remoteBranchName } from '@renderer/lib/refs'
+import { pullRequestForDrop, shouldOfferPullRequest, usePulls } from '@renderer/components/pulls/pullStore'
 import { StaleHistoryError, useApp, type RefreshScope, type RepoTab } from '@renderer/store/appStore'
 import { describeError, AdarError } from '@shared/errors'
 import type { DiffTarget, OperationResult, PullMode, Ref, ResetMode, RewordInfo } from '@shared/types'
@@ -675,6 +676,13 @@ export function handleRefDrop(repo: string, source: DraggedRef, target: DraggedR
         break
     }
   }
+  const pr = pullRequestForDrop(repo, source, target)
+  if (pr) {
+    items.push(
+      { type: 'separator' },
+      { label: `Create pull request into ${pr.base}…`, onClick: () => void import('./pulls').then((m) => m.startPullRequest(repo, pr)) }
+    )
+  }
   showContextMenu(at, items)
 }
 
@@ -955,7 +963,14 @@ export async function push(
   try {
     await doPush()
     if (force) toast.success(`Force pushed ${branchName}`)
-    else toast.success(`Pushed ${branchName}${remote ? ` to ${remote}` : branch?.upstream ? ` to ${branch.upstream}` : ''}`)
+    else {
+      const msg = `Pushed ${branchName}${remote ? ` to ${remote}` : branch?.upstream ? ` to ${branch.upstream}` : ''}`
+      if (shouldOfferPullRequest(repo, branchName)) {
+        const create = () => void import('./pulls').then((m) => m.startPullRequest(repo, { head: branchName }))
+        toast.success(msg, { actions: [{ label: 'Create pull request', onClick: create }] })
+      } else toast.success(msg)
+    }
+    void usePulls.getState().load(repo, { force: true })
   } catch (err) {
     const text = `${(err as AdarError).stderr ?? ''} ${describeError(err)}`
     if (force === 'with-lease' && leaseRefused(err)) await offerOverwrite()

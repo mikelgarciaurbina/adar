@@ -23,13 +23,14 @@ const failed = new Set<string>()
 
 export interface AvatarProps {
   name: string
-  email: string
+  /** Without one (a GitHub user), the initials stay and no Gravatar is asked for. */
+  email?: string
   size?: number
   className?: string
 }
 
 /** Initials avatar coloured by author; upgrades to Gravatar when enabled in settings. */
-export const Avatar = memo(function Avatar({ name, email, size = 24, className }: AvatarProps) {
+export const Avatar = memo(function Avatar({ name, email = '', size = 24, className }: AvatarProps) {
   const { gravatar } = useSettings()
   const [src, setSrc] = useState<string | null>(null)
 
@@ -49,7 +50,7 @@ export const Avatar = memo(function Avatar({ name, email, size = 24, className }
     <span
       className={`ui-avatar${className ? ' ' + className : ''}`}
       style={{ width: size, height: size, fontSize: Math.max(8, Math.round(size * 0.4)), ...colors }}
-      title={`${name} <${email}>`}
+      title={email ? `${name} <${email}>` : name}
     >
       {src ? (
         <img

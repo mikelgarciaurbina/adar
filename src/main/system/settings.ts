@@ -19,7 +19,8 @@ const ENUMS: Partial<Record<keyof AppSettings, readonly string[]>> = {
   theme: ['dark', 'light', 'system'],
   defaultPullMode: ['ff-only', 'merge', 'rebase'],
   dateFormat: ['relative', 'absolute'],
-  diffViewMode: ['unified', 'split']
+  diffViewMode: ['unified', 'split'],
+  githubAuth: ['', 'gh', 'token']
 }
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {

@@ -121,6 +121,16 @@ export function remoteWebUrl(raw: string): string | null {
   return `${parsed.scheme}://${host}${portPart}${path ? '/' + path : ''}`
 }
 
+/** owner/name of a github.com remote (aliases such as "github.com-work" included), or null for anything else. */
+export function githubRepoOf(raw: string): { owner: string; name: string } | null {
+  const parsed = parseRemoteUrl(raw)
+  if (!parsed || unalias(parsed.host.toLowerCase()) !== 'github.com') return null
+  if (!parsed.sshLike && parsed.port && parsed.port !== '443') return null
+  const m = /^([A-Za-z0-9](?:[A-Za-z0-9-]{0,38}))\/([A-Za-z0-9._-]{1,100})$/.exec(cleanPath(parsed.path))
+  if (!m || m[2] === '.' || m[2] === '..') return null
+  return { owner: m[1], name: m[2] }
+}
+
 /** Short provider label for menus ("GitHub", "GitLab"...), or null for unknown hosts. */
 export function remoteProvider(raw: string): string | null {
   const parsed = parseRemoteUrl(raw)

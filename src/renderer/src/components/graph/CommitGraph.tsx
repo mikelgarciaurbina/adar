@@ -473,6 +473,10 @@ export function CommitGraph({ tab }: { tab: RepoTab }) {
           showContextMenu(e, wipMenu(t.path))
         }
       },
+      onPullClick(number) {
+        if (st().rightCollapsed) st().toggleRight()
+        st().select(repo(), { kind: 'pull', number })
+      },
       onPillDoubleClick(pill: Pill) {
         if (pill.kind === 'detached' || pill.isHead) return
         void git.checkoutRef(repo(), pill.ref)

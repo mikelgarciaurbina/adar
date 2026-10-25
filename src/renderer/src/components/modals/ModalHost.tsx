@@ -1,5 +1,7 @@
 // Renders the application modal stored in store.modal.
 
+import { ConnectDialog } from '@renderer/components/pulls/ConnectDialog'
+import { CreatePullDialog } from '@renderer/components/pulls/CreatePullDialog'
 import { WhatsNewModal } from '@renderer/components/update/WhatsNew'
 import { useApp } from '@renderer/store/appStore'
 import { AboutModal } from './AboutModal'
@@ -29,6 +31,10 @@ export function ModalHost() {
       return <AboutModal />
     case 'whats-new':
       return <WhatsNewModal from={modal.from} />
+    case 'github-connect':
+      return <ConnectDialog next={modal.next} />
+    case 'create-pull':
+      return <CreatePullDialog key={`${modal.repo}\0${modal.head ?? ''}`} repo={modal.repo} head={modal.head} base={modal.base} />
     default:
       return null
   }

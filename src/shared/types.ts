@@ -472,6 +472,8 @@ export interface AppSettings {
   skippedUpdateVersion: string
   /** Adar version that last ran with these settings ('' = none recorded): a newer one shows What's new once. */
   lastRunVersion: string
+  /** GitHub pull requests: off (''), with the GitHub CLI's sign-in ('gh') or a stored personal access token. */
+  githubAuth: '' | 'gh' | 'token'
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -503,7 +505,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   menuBarIcon: true,
   notifyNewCommits: true,
   skippedUpdateVersion: '',
-  lastRunVersion: ''
+  lastRunVersion: '',
+  githubAuth: ''
 }
 
 export interface AppInfo {

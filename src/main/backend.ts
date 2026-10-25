@@ -8,9 +8,10 @@ import { API_METHODS, type AdarApi } from '@shared/api'
 import { AdarError } from '@shared/errors'
 import type { AdarEvent } from '@shared/types'
 import { createGitContext, repoFolderNotFound, type GitContext } from './git/context'
-import { WRITE_METHODS, type ReadOps, type WriteMethod } from './git/ops'
+import { HOSTING_METHODS, WRITE_METHODS, type HostingMethod, type ReadOps, type WriteMethod } from './git/ops'
 import { createReadOps } from './git/read'
 import { createWriteOps } from './git/write'
+import { createHostingOps } from './hosting'
 import type { PlatformAdapter } from './platform'
 import { createSystemServices, type SystemOptions } from './system'
 
@@ -23,10 +24,10 @@ export interface BackendDeps {
 
 export type Backend = AdarApi & { dispose(): Promise<void> }
 
-type ReadMethod = Exclude<keyof AdarApi, WriteMethod>
+type ReadMethod = Exclude<keyof AdarApi, WriteMethod | HostingMethod>
 
-const WRITE_SET: ReadonlySet<string> = new Set(WRITE_METHODS)
-const READ_METHODS = API_METHODS.filter((m) => !WRITE_SET.has(m)) as ReadMethod[]
+const NOT_READ: ReadonlySet<string> = new Set([...WRITE_METHODS, ...HOSTING_METHODS])
+const READ_METHODS = API_METHODS.filter((m) => !NOT_READ.has(m)) as ReadMethod[]
 
 /**
  * Wait for the startup services (PATH fix, askpass) before spawning git, so the very first
@@ -69,7 +70,10 @@ const NON_REPO_METHODS: ReadonlySet<string> = new Set([
   'trustRepo',
   'closeRepo',
   'initRepo',
-  'cloneRepo'
+  'cloneRepo',
+  'getGithubConnection',
+  'connectGithub',
+  'disconnectGithub'
 ])
 
 /**
@@ -106,11 +110,13 @@ export function createBackend(deps: BackendDeps): Backend {
 
   const read: ReadOps = createReadOps(ctx, services)
   const write = createWriteOps(ctx)
+  const hosting = createHostingOps(ctx, services)
 
   let disposed: Promise<void> | null = null
   const backend: Backend = {
     ...bindMethods(read, READ_METHODS),
     ...bindMethods(write, WRITE_METHODS),
+    ...bindMethods(hosting, HOSTING_METHODS),
     dispose() {
       if (!disposed) disposed = services.dispose()
       return disposed

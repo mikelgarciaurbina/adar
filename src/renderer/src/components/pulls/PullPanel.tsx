@@ -1,0 +1,323 @@
+// Right panel for a pull request: what it is, where it stands (checks, review, conflicts)
+// and the one next step that fits: merge, bring the base branch in, check it out, review it
+// on GitHub, or clean up once it is merged.
+
+import { useState } from 'react'
+import {
+  ArrowRight,
+  ChevronDown,
+  ChevronRight,
+  CircleCheck,
+  CircleDashed,
+  CircleX,
+  Clock,
+  ExternalLink,
+  Eye,
+  GitMerge,
+  MessageSquareWarning,
+  TriangleAlert,
+  UserCheck
+} from 'lucide-react'
+import { bringBaseIn, checkoutPull, cleanUpAfterMerge, MERGE_LABELS, mergePull, openOnGithub, preferredMergeMethod } from '@renderer/actions/pulls'
+import { Avatar } from '@renderer/components/common/Avatar'
+import { Button } from '@renderer/components/common/Button'
+import { showMenuBelow } from '@renderer/components/common/ContextMenu'
+import { goToCommit } from '@renderer/components/details/CommitPanel'
+import { CopyButton, ErrorBlock, LoadingBlock } from '@renderer/components/details/parts'
+import { ReleaseNotes } from '@renderer/components/update/ReleaseNotes'
+import { pluralize, relativeTime } from '@renderer/lib/format'
+import { checksLabel, localBranchFor, mergeBlocker, reviewLabel, stateLabel } from '@renderer/lib/pulls'
+import { useApp, type RepoTab } from '@renderer/store/appStore'
+import type { MergeMethod, PullRequest, RepoPullRequests } from '@shared/hosting'
+import { PullStateIcon } from './PullChip'
+import { usePullIndex, usePulls } from './pullStore'
+import './pulls.css'
+
+/** Merged pull requests whose Clean up the user turned down (this session). */
+const keptBranches = new Set<string>()
+
+const ago = (iso: string | null) => (iso ? relativeTime(Math.floor(Date.parse(iso) / 1000)) : '')
+
+export function PullPanel({ tab, number }: { tab: RepoTab; number: number }) {
+  const { data, state } = usePullIndex(tab)
+  const pr = data?.pulls.find((p) => p.number === number)
+  if (!pr || !data) {
+    if (!state || state.loading) return <div className="det-panel"><LoadingBlock label="Loading pull request…" /></div>
+    return (
+      <div className="det-panel">
+        <ErrorBlock
+          message={state.error ?? `Pull request #${number} is not among this repository's recent pull requests.`}
+          onRetry={() => void usePulls.getState().load(tab.path, { force: true })}
+        />
+      </div>
+    )
+  }
+  return <PullDetails key={pr.number} tab={tab} pr={pr} data={data} />
+}
+
+function PullDetails({ tab, pr, data }: { tab: RepoTab; pr: PullRequest; data: RepoPullRequests }) {
+  const repo = tab.path
+  const open = pr.state === 'open' || pr.state === 'draft'
+  const local = localBranchFor(pr, tab.refs, data.remote)
+  const fork = pr.headFork ? `${pr.headFork.split('/')[0]}:` : ''
+  return (
+    <div className="det-panel pr-panel">
+      <div className="ui-panel-header det-header">
+        <PullStateIcon state={pr.state} size={14} />
+        <span className="det-header-label">Pull request</span>
+        <span className="det-sha selectable">#{pr.number}</span>
+        <CopyButton text={pr.url} label="Copy link to the pull request" what={`Copied the link to #${pr.number}`} />
+        <span className="det-spacer" />
+        <button type="button" className="ui-link pr-open-link" onClick={() => openOnGithub(pr.url)}>
+          Open on GitHub <ExternalLink size={12} />
+        </button>
+      </div>
+
+      <div className="pr-body">
+        <h2 className="pr-title selectable">{pr.title}</h2>
+        <div className="pr-branches">
+          <span className={`pr-state pr-state-${pr.state}`}>
+            <PullStateIcon state={pr.state} size={11} />
+            {stateLabel(pr)}
+          </span>
+          <span className="pr-branch" title={`${fork}${pr.headRef}`}>
+            {fork}
+            {pr.headRef}
+          </span>
+          <ArrowRight size={13} className="pr-arrow" aria-label="into" />
+          <span className="pr-branch">{pr.baseRef}</span>
+        </div>
+        <div className="det-person">
+          <Avatar name={pr.authorName ?? pr.author} size={28} />
+          <div className="det-person-text">
+            <div className="det-person-line">
+              <span className="det-person-name selectable">{pr.authorName ?? pr.author}</span>
+              {pr.authorName && <span className="det-person-email selectable">{pr.author}</span>}
+            </div>
+            <div className="det-person-meta">
+              opened {ago(pr.createdAt)}
+              {pr.updatedAt && pr.updatedAt !== pr.createdAt ? ` · updated ${ago(pr.updatedAt)}` : ''}
+            </div>
+          </div>
+        </div>
+
+        {open ? (
+          <PullStatus pr={pr} />
+        ) : (
+          <div className="pr-note">
+            {pr.state === 'merged' ? `Merged into ${pr.baseRef} ${ago(pr.closedAt)}` : `Closed without merging ${ago(pr.closedAt)}`}
+          </div>
+        )}
+
+        {pr.body.trim() && (
+          <div className="pr-desc">
+            <ReleaseNotes markdown={pr.body} />
+          </div>
+        )}
+
+        <div className="pr-stats">
+          <span>{pluralize(pr.commitCount || 1, 'commit')}</span>
+          {(pr.additions > 0 || pr.deletions > 0) && (
+            <span className="pr-diffstat">
+              <span className="pr-add">+{pr.additions}</span> <span className="pr-del">−{pr.deletions}</span>
+            </span>
+          )}
+          <span className="det-spacer" />
+          {pr.headSha && (
+            <button type="button" className="ui-link" onClick={() => goToCommit(repo, pr.headSha)} title="Select the pull request's last commit in the graph">
+              Show in graph
+            </button>
+          )}
+        </div>
+      </div>
+
+      {open && <PullActions tab={tab} pr={pr} data={data} hasLocal={!!local} localName={local?.name ?? null} isCheckedOut={!!local?.isHead} />}
+      {pr.state === 'merged' && local && !keptBranches.has(`${repo}\0${local.name}`) && <CleanUpBox repo={repo} pr={pr} data={data} branch={local.name} />}
+    </div>
+  )
+}
+
+function PullStatus({ pr }: { pr: PullRequest }) {
+  const [showChecks, setShowChecks] = useState(pr.checks === 'failed')
+  const checks = checksLabel(pr)
+  const review = pr.reviewRequested ? 'Your review is requested' : reviewLabel(pr)
+  const checksIcon =
+    pr.checks === 'passed' ? (
+      <CircleCheck size={16} className="pr-ok" />
+    ) : pr.checks === 'failed' ? (
+      <CircleX size={16} className="pr-bad" />
+    ) : (
+      <Clock size={16} className="pr-wait" />
+    )
+  const reviewIcon = pr.reviewRequested ? (
+    <Eye size={16} className="pr-wait" />
+  ) : pr.changesRequestedBy.length ? (
+    <MessageSquareWarning size={16} className="pr-bad" />
+  ) : pr.review === 'approved' ? (
+    <UserCheck size={16} className="pr-ok" />
+  ) : (
+    <Clock size={16} className="pr-wait" />
+  )
+  return (
+    <div className="pr-status">
+      {checks && (
+        <>
+          <button type="button" className="pr-status-row pr-status-button" aria-expanded={showChecks} onClick={() => setShowChecks((v) => !v)}>
+            {checksIcon}
+            <span className="pr-status-text">{checks}</span>
+            {showChecks ? <ChevronDown size={13} className="pr-muted" /> : <ChevronRight size={13} className="pr-muted" />}
+          </button>
+          {showChecks && (
+            <ul className="pr-checklist">
+              {pr.checkRuns.map((c, i) => (
+                <li key={`${c.name}:${i}`}>
+                  {c.state === 'passed' ? (
+                    <CircleCheck size={13} className="pr-ok" />
+                  ) : c.state === 'failed' ? (
+                    <CircleX size={13} className="pr-bad" />
+                  ) : c.state === 'running' ? (
+                    <Clock size={13} className="pr-wait" />
+                  ) : (
+                    <CircleDashed size={13} className="pr-muted" />
+                  )}
+                  <span className="pr-check-name" title={c.name}>
+                    {c.name}
+                  </span>
+                  {c.url && (
+                    <button type="button" className="ui-link" onClick={() => openOnGithub(c.url!)}>
+                      Details
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+      {review && (
+        <div className="pr-status-row">
+          {reviewIcon}
+          <span className="pr-status-text">{review}</span>
+        </div>
+      )}
+      <div className="pr-status-row">
+        {pr.mergeable === 'conflicts' ? (
+          <TriangleAlert size={16} className="pr-wait" />
+        ) : pr.mergeable === 'clean' ? (
+          <GitMerge size={16} className="pr-ok" />
+        ) : (
+          <CircleDashed size={16} className="pr-muted" />
+        )}
+        <span className="pr-status-text">
+          {pr.mergeable === 'conflicts' ? `Conflicts with ${pr.baseRef}` : pr.mergeable === 'clean' ? `No conflicts with ${pr.baseRef}` : 'Checking for conflicts…'}
+        </span>
+      </div>
+    </div>
+  )
+}
+
+function PullActions(props: { tab: RepoTab; pr: PullRequest; data: RepoPullRequests; hasLocal: boolean; localName: string | null; isCheckedOut: boolean }) {
+  const { tab, pr, data } = props
+  const repo = tab.path
+  const [method, setMethod] = useState<MergeMethod>(() => preferredMergeMethod(data))
+  const [cleanUp, setCleanUp] = useState(true)
+  const merging = useApp((s) => !!s.busy[`merge-pr:${repo}`])
+  const blocker = mergeBlocker(pr, data)
+  const canMerge = data.canMerge && pr.state === 'open'
+  const label = MERGE_LABELS[method]
+
+  const secondary = [
+    !props.isCheckedOut && (
+      <Button key="checkout" onClick={() => void checkoutPull(repo, pr)}>
+        Check out
+      </Button>
+    ),
+    pr.mergeable === 'conflicts' && (
+      <Button key="bring" title={`Merge ${pr.baseRef} into ${pr.headRef} here and resolve the conflicts, then Push`} onClick={() => void bringBaseIn(repo, pr, data)}>
+        Bring {pr.baseRef} in…
+      </Button>
+    ),
+    !pr.viewerIsAuthor && (
+      <Button key="review" icon={<ExternalLink size={13} />} onClick={() => openOnGithub(`${pr.url}/files`)}>
+        Review on GitHub
+      </Button>
+    )
+  ].filter(Boolean)
+
+  return (
+    <div className="pr-actions">
+      {canMerge && (
+        <>
+          <div className="pr-merge">
+            <Button
+              variant="primary"
+              className="pr-merge-main"
+              icon={<GitMerge size={14} />}
+              disabled={!!blocker}
+              loading={merging}
+              onClick={() => void mergePull(repo, pr, data, method, cleanUp && props.hasLocal)}
+            >
+              {label.button}
+            </Button>
+            {data.mergeMethods.length > 1 && (
+              <Button
+                variant="primary"
+                className="pr-merge-more"
+                aria-label="Other ways to merge"
+                disabled={!!blocker || merging}
+                onClick={(e) =>
+                  showMenuBelow(
+                    e.currentTarget,
+                    data.mergeMethods.map((m) => ({ label: `${MERGE_LABELS[m].menu} · ${MERGE_LABELS[m].hint(pr)}`, checked: m === method, onClick: () => setMethod(m) }))
+                  )
+                }
+              >
+                <ChevronDown size={14} />
+              </Button>
+            )}
+          </div>
+          {blocker ? (
+            <div className="pr-hint">{blocker}</div>
+          ) : (
+            props.hasLocal && (
+              <label className="pr-check">
+                <input type="checkbox" checked={cleanUp} onChange={(e) => setCleanUp(e.target.checked)} />
+                Then switch to {pr.baseRef}, pull, and delete {props.localName}
+              </label>
+            )
+          )}
+        </>
+      )}
+      {secondary.length > 0 && <div className="pr-secondary">{secondary}</div>}
+    </div>
+  )
+}
+
+function CleanUpBox({ repo, pr, data, branch }: { repo: string; pr: PullRequest; data: RepoPullRequests; branch: string }) {
+  const [hidden, setHidden] = useState(false)
+  const busy = useApp((s) => !!s.busy[`cleanup:${repo}`])
+  if (hidden) return null
+  return (
+    <div className="pr-actions">
+      <div className="pr-cleanup">
+        <span>
+          Switch to <strong>{pr.baseRef}</strong>, pull, and delete <strong>{branch}</strong> here{!pr.headFork && !data.deleteBranchOnMerge ? ` and on ${data.remote}` : ''}.
+        </span>
+        <div className="pr-secondary">
+          <Button variant="primary" loading={busy} onClick={() => void cleanUpAfterMerge(repo, pr, data)}>
+            Clean up
+          </Button>
+          <Button
+            variant="ghost"
+            onClick={() => {
+              keptBranches.add(`${repo}\0${branch}`)
+              setHidden(true)
+            }}
+          >
+            Keep branch
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}

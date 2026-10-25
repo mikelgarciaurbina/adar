@@ -17,6 +17,7 @@ import {
   FolderOpen,
   GitBranchPlus,
   GitMerge,
+  GitPullRequest,
   GitPullRequestArrow,
   Link,
   Pencil,
@@ -28,9 +29,13 @@ import {
   Upload
 } from 'lucide-react'
 import * as git from '@renderer/actions/git'
+import { checkoutPull, copyPullLink, openOnGithub, startPullRequest } from '@renderer/actions/pulls'
 import type { MenuItem } from '@renderer/components/common/ContextMenu'
+import { branchPullItems } from '@renderer/components/pulls/menus'
+import { usePulls } from '@renderer/components/pulls/pullStore'
 import { currentBranch, localForRemote } from '@renderer/lib/refs'
 import { useApp } from '@renderer/store/appStore'
+import type { PullRequest } from '@shared/hosting'
 import type { Ref, RefsResult, RemoteInfo, Stash, Submodule } from '@shared/types'
 import {
   editRemoteUrl,
@@ -43,7 +48,7 @@ import {
   toggleSolo,
   updateSubmodules
 } from './ops'
-import { remoteProvider, remoteWebUrl } from './remoteUrl'
+import { remoteProvider, remoteWebUrl } from '@shared/remoteUrl'
 import type { SectionId } from './tree'
 
 export interface SidebarMenuCtx {
@@ -125,6 +130,7 @@ export function localBranchMenu(ctx: SidebarMenuCtx, b: Ref): MenuItem[] {
     SEP,
     { label: 'Copy branch name', icon: icon(Copy), onClick: () => git.copyText(b.name, 'Copied branch name') },
     shaItem(b.sha),
+    ...branchPullItems(repo, [b], ctx.refs),
     SEP,
     ...visibilityItems(ctx, b)
   )
@@ -153,6 +159,7 @@ export function remoteBranchMenu(ctx: SidebarMenuCtx, r: Ref): MenuItem[] {
     SEP,
     { label: 'Copy branch name', icon: icon(Copy), onClick: () => git.copyText(r.name, 'Copied branch name') },
     shaItem(r.sha),
+    ...branchPullItems(repo, [r], ctx.refs),
     SEP,
     ...visibilityItems(ctx, r)
   )
@@ -321,7 +328,26 @@ export function sectionMenu(ctx: SidebarMenuCtx, id: SectionId, state: Container
       return [{ label: 'Stash changes…', icon: icon(Archive), onClick: () => git.stash(repo, { askMessage: true }) }]
     case 'submodules':
       return [{ label: 'Update submodules', icon: icon(RefreshCw), onClick: () => updateSubmodules(repo) }]
+    case 'pulls':
+      return [
+        { label: 'Create pull request…', icon: icon(GitPullRequest), onClick: () => void startPullRequest(repo) },
+        { label: 'Refresh', icon: icon(RefreshCw), onClick: () => void usePulls.getState().load(repo, { force: true }) }
+      ]
   }
+}
+
+// ── Pull requests ──────────────────────────────────────────────────────────
+
+export function pullMenu(ctx: SidebarMenuCtx, pr: PullRequest): MenuItem[] {
+  const { repo } = ctx
+  return [
+    { type: 'header', label: `#${pr.number} ${pr.title}` },
+    { label: 'Check out', icon: icon(Check), onClick: () => void checkoutPull(repo, pr) },
+    { label: 'Open on GitHub', icon: icon(ExternalLink), onClick: () => openOnGithub(pr.url) },
+    SEP,
+    { label: 'Copy link', icon: icon(Copy), onClick: () => copyPullLink(pr) },
+    { label: 'Copy branch name', icon: icon(Copy), onClick: () => git.copyText(pr.headRef, 'Copied branch name') }
+  ]
 }
 
 export function folderMenu(ctx: SidebarMenuCtx, label: string, expanded: boolean, toggle: () => void, state: ContainerMenuState): MenuItem[] {

@@ -40,6 +40,7 @@ import type {
   RewordResult,
   WorkingStatus
 } from './types'
+import type { CreatePullOptions, GithubAuthMethod, GithubConnection, MergeMethod, PullRequest, RepoPullRequests } from './hosting'
 
 export interface AdarApi {
   // ── App / system ────────────────────────────────────────────────────────
@@ -225,6 +226,28 @@ export interface AdarApi {
   // ── Submodules ──────────────────────────────────────────────────────────
   updateSubmodules(repo: string, opts?: { init?: boolean; recursive?: boolean }): Promise<void>
 
+  // ── GitHub pull requests (opt-in, see hosting.ts) ───────────────────────
+  /**
+   * How Adar signs in to GitHub. Talks to GitHub only when pull requests are on; asks gh whether it is signed in only
+   * with detectGh (the sign-in dialog) or when gh is the sign-in.
+   */
+  getGithubConnection(opts?: { detectGh?: boolean }): Promise<GithubConnection>
+  /** Turn pull requests on with gh's sign-in or a personal access token (checked first, then kept encrypted). */
+  connectGithub(method: GithubAuthMethod, token?: string): Promise<GithubConnection>
+  /** Turn pull requests off and forget a stored token. */
+  disconnectGithub(): Promise<GithubConnection>
+  /** Pull requests of the repository's GitHub remote; null when it has none or pull requests are off. */
+  getPullRequests(repo: string): Promise<RepoPullRequests | null>
+  /** Open a pull request on the repository's GitHub remote (the head branch must be pushed there already). */
+  createPullRequest(repo: string, opts: CreatePullOptions): Promise<PullRequest>
+  /** Merge a pull request on GitHub; refused when its head is no longer `headSha`. */
+  mergePullRequest(repo: string, number: number, opts: { method: MergeMethod; headSha: string }): Promise<void>
+  /**
+   * Make the local branch for a pull request, without checking it out: its own branch tracking the remote,
+   * or pr/<number> for a pull request from a fork (created or fast-forwarded). Resolves to the branch name.
+   */
+  pullRequestBranch(repo: string, number: number): Promise<string>
+
   // ── Escape hatch ────────────────────────────────────────────────────────
   /** Run an arbitrary git command (used by the Git console). args exclude the leading "git". */
   runGit(repo: string, args: string[]): Promise<GitCommandResult>
@@ -313,6 +336,13 @@ export const API_METHODS = [
   'getIdentity',
   'setIdentity',
   'updateSubmodules',
+  'getGithubConnection',
+  'connectGithub',
+  'disconnectGithub',
+  'getPullRequests',
+  'createPullRequest',
+  'mergePullRequest',
+  'pullRequestBranch',
   'runGit'
 ] as const satisfies readonly AdarApiMethod[]
 

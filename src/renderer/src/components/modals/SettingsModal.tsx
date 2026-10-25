@@ -5,6 +5,8 @@ import { useEffect, useId, useRef, useState } from 'react'
 import { Download, FileDiff, GitBranch, GitGraph, Plug, RefreshCw, Settings, SlidersHorizontal } from 'lucide-react'
 import { api, cli, isElectron } from '@renderer/api/client'
 import { installCliCommand, uninstallCliCommand } from '@renderer/actions/cli'
+import { openConnect, turnOffPullRequests } from '@renderer/actions/pulls'
+import { usePulls } from '@renderer/components/pulls/pullStore'
 import type { CliStatus } from '@shared/cli'
 import { Button, Spinner } from '@renderer/components/common/Button'
 import { Modal } from '@renderer/components/common/Modal'
@@ -415,6 +417,45 @@ function DiffSection() {
   )
 }
 
+function GithubSetting() {
+  const connection = usePulls((st) => st.connection)
+  useEffect(() => {
+    void usePulls.getState().loadConnection()
+  }, [])
+  const on = !!connection?.method
+  const reopen = () => useApp.getState().openModal({ kind: 'settings', section: 'integrations' })
+  const how = connection?.method === 'gh' ? 'Through the GitHub CLI' : 'With a personal access token'
+  const description = !connection
+    ? 'Checking…'
+    : !on
+      ? 'Show pull requests on their branches, and create, check out and merge them. Adar talks to GitHub only while this is on.'
+      : connection.error
+        ? connection.error
+        : `${how}${connection.login ? ` as ${connection.login}` : ''}. Checked when Adar fetches.`
+  return (
+    <SettingGroup title="GitHub">
+      <SettingRow label="Pull requests" description={<span className={connection?.error ? 'md-update-status md-update-error' : undefined}>{description}</span>}>
+        {on ? (
+          <div className="md-row-buttons">
+            {connection?.error && (
+              <Button size="sm" onClick={() => openConnect(reopen)}>
+                Sign in again…
+              </Button>
+            )}
+            <Button size="sm" onClick={() => void turnOffPullRequests()}>
+              Turn off
+            </Button>
+          </div>
+        ) : (
+          <Button size="sm" variant="primary" disabled={!connection} onClick={() => openConnect(reopen)}>
+            Turn on…
+          </Button>
+        )}
+      </SettingRow>
+    </SettingGroup>
+  )
+}
+
 function IntegrationsSection() {
   const s = useSettings()
   const platform = useApp((st) => st.appInfo?.platform)
@@ -424,6 +465,7 @@ function IntegrationsSection() {
   const terminals = TERMINALS.includes(s.terminalApp) || !s.terminalApp ? TERMINALS : [...TERMINALS, s.terminalApp]
   return (
     <>
+      <GithubSetting />
       <SettingGroup title="Open in…">
         <SettingRow
           label="Editor"

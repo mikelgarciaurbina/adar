@@ -27,7 +27,9 @@ the left panel · change markers on the diff's scrollbar · tabs shrink to share
 (beta since 0.6.0: x64 installer, AppImage and .deb), with the tests run on macOS, Windows and Linux · the macOS app
 signed with an Apple Developer ID and notarized (since 0.6.1) · the antlers in the macOS menu bar: a panel with one
 project's branch and latest commits on their lanes, Pull and Push, and a project switcher · notifications when a fetch
-brings new commits to the checked-out branch · a "What's new" panel with the release notes after each update.
+brings new commits to the checked-out branch · a "What's new" panel with the release notes after each update · GitHub
+pull requests (opt-in, signed in through the GitHub CLI or a token): on branch labels and in the left panel with their
+checks and reviews, created from a branch (pushed first), checked out (forks too), merged and cleaned up.
 
 ---
 
@@ -43,9 +45,9 @@ brings new commits to the checked-out branch · a "What's new" panel with the re
 - [ ] Contributor guide for adding a language through a pull request.
 
 ### Hosting integrations (opt-in)
-- [ ] **Pull/merge requests** for GitHub, GitLab, Bitbucket and Azure DevOps: list, open, check out, create from a
-      branch and show PR badges on branch labels in the graph. Reuse existing auth (`gh` / `glab` CLIs, credential
-      helper tokens) before asking for anything.
+- [ ] **Merge requests and pull requests beyond GitHub**: GitLab, Bitbucket and Azure DevOps in the same panel and
+      labels as GitHub's (reuse `glab` and credential helper tokens before asking for anything).
+- [ ] GitHub: sign in from the browser (device flow, needs an OAuth app for Adar), and GitHub Enterprise hosts.
 - [ ] **CI status** dots on commits and branches (GitHub Actions, GitLab pipelines).
 - [ ] "Open on GitHub/GitLab…" for commits, files and line ranges; clickable `#123` issue references.
 - [ ] Provider avatars when Gravatar has none.

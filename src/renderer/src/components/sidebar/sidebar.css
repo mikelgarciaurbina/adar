@@ -550,3 +550,35 @@ mark.sb-match {
     transition: none;
   }
 }
+
+/* ── Pull requests ─────────────────────────────────────────────────────── */
+
+.sb-row.sb-pull {
+  gap: 6px;
+}
+.sb-pull-draft .sb-name {
+  color: var(--text-2);
+}
+.sb-pull .pr-checks {
+  margin: 0 1px;
+}
+.sb-review {
+  flex: none;
+  height: 16px;
+  padding: 0 5px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--lane-6) 16%, transparent);
+  color: var(--lane-6-ink);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 16px;
+}
+.sb-pull-prompt-text {
+  color: var(--accent);
+}
+.sb-row.sb-pull-prompt:hover .sb-pull-prompt-text {
+  text-decoration: underline;
+}
+.sb-row.sb-pull-prompt .sb-icon-pull {
+  color: var(--accent);
+}

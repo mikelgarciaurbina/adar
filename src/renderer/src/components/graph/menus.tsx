@@ -30,6 +30,7 @@ import {
   Upload
 } from 'lucide-react'
 import * as git from '@renderer/actions/git'
+import { branchPullItems } from '@renderer/components/pulls/menus'
 import type { MenuItem } from '@renderer/components/common/ContextMenu'
 import { useMessageEdit } from '@renderer/lib/messageEdit'
 import { currentBranch } from '@renderer/lib/refs'
@@ -102,6 +103,8 @@ export function refMenu(repo: string, pill: Pill): MenuItem[] {
   } else if (isLocal && hasRemotes(tab)) {
     items.push({ type: 'separator' }, { label: `Push ${name}`, icon: <Upload size={I} />, onClick: () => git.push(repo, { branch: name }) })
   }
+
+  if (pill.kind === 'branch' || pill.kind === 'remote') items.push(...branchPullItems(repo, [ref, ...pill.remotes], refs))
 
   items.push({ type: 'separator' })
   if (isLocal) {

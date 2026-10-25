@@ -13,6 +13,8 @@ export interface GraphCtx {
   onPillDoubleClick(pill: Pill): void
   onPillContextMenu(e: React.MouseEvent, pill: Pill): void
   onRefDrop(source: DraggedRef, target: Pill, at: { clientX: number; clientY: number }): void
+  /** A pull request chip next to a branch label. */
+  onPullClick(number: number): void
 }
 
 export interface WipInfo {

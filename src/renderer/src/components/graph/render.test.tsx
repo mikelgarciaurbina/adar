@@ -51,7 +51,8 @@ const ctx: GraphCtx = {
   onRowContextMenu: noop,
   onPillDoubleClick: noop,
   onPillContextMenu: noop,
-  onRefDrop: noop
+  onRefDrop: noop,
+  onPullClick: noop
 }
 
 describe('GraphRow rendering', () => {

@@ -8,6 +8,8 @@ import { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, use
 import { defaultRangeExtractor, useVirtualizer, type Range } from '@tanstack/react-virtual'
 import { Search, TriangleAlert, X } from 'lucide-react'
 import * as git from '@renderer/actions/git'
+import { checkoutPull, openConnect, selectPull, startPullRequest } from '@renderer/actions/pulls'
+import { isGithubRepo, pullIndexOf, usePulls } from '@renderer/components/pulls/pullStore'
 import { isMac } from '@renderer/api/client'
 import { Button } from '@renderer/components/common/Button'
 import { showContextMenu, type MenuItem } from '@renderer/components/common/ContextMenu'
@@ -20,6 +22,7 @@ import {
   folderMenu,
   headMenu,
   localBranchMenu,
+  pullMenu,
   remoteBranchMenu,
   remoteMenu,
   sectionMenu,
@@ -56,6 +59,7 @@ import {
   stepIndex,
   withExpanded,
   type ContainerNode,
+  type PullsInput,
   type Row,
   type Section,
   type SectionId
@@ -140,7 +144,20 @@ export function LeftPanel({ tab }: { tab: RepoTab }) {
 
   // ── Model ────────────────────────────────────────────────────────────────
 
-  const sections = useMemo(() => (refs ? buildTree(refs, remotes) : null), [refs, remotes])
+  // Pull requests: a section for GitHub repositories once Adar knows whether they are on.
+  const github = isGithubRepo(tab)
+  const connection = usePulls((s) => s.connection)
+  const pullsOn = !!connection?.method
+  const pullsState = usePulls((s) => s.repos[repo] ?? null)
+  const pulls = useMemo<PullsInput | undefined>(() => {
+    if (!github || !connection) return undefined
+    if (!pullsOn) return { state: 'off' }
+    if (pullsState?.data) return { state: 'on', pulls: pullIndexOf(pullsState.data, refs).open }
+    if (pullsState?.error) return { state: 'error', message: pullsState.error }
+    return { state: 'loading' }
+  }, [github, connection, pullsOn, pullsState, refs])
+
+  const sections = useMemo(() => (refs ? buildTree(refs, remotes, pulls) : null), [refs, remotes, pulls])
   const rows = useMemo(
     () => (sections ? flattenTree(sections, { filter: query, collapsedSections, toggled, filterCollapsed }) : []),
     [sections, query, collapsedSections, toggled, filterCollapsed]
@@ -354,6 +371,8 @@ export function LeftPanel({ tab }: { tab: RepoTab }) {
         return stashMenu(ctx, row.node.stash)
       case 'submodule':
         return submoduleMenu(ctx, row.node.submodule)
+      case 'pull':
+        return pullMenu(ctx, row.node.pull)
       default:
         return []
     }
@@ -383,6 +402,13 @@ export function LeftPanel({ tab }: { tab: RepoTab }) {
         setSelectedKey(row.key)
         selectStash(repo, row.node.stash)
         break
+      case 'pull':
+        setSelectedKey(row.key)
+        selectPull(repo, row.node.pull.number)
+        break
+      case 'pull-prompt':
+        openConnect()
+        break
     }
   }
 
@@ -402,6 +428,15 @@ export function LeftPanel({ tab }: { tab: RepoTab }) {
         break
       case 'submodule':
         if (row.node.submodule.status !== 'uninitialized') void openSubmodule(repo, row.node.submodule.path)
+        break
+      case 'pull': {
+        const key = row.key
+        setPendingKey(key)
+        void checkoutPull(repo, row.node.pull).finally(() => setPendingKey((k) => (k === key ? null : k)))
+        break
+      }
+      case 'pull-prompt':
+        openConnect()
         break
       case 'section':
         toggleSection(row.id)
@@ -432,6 +467,7 @@ export function LeftPanel({ tab }: { tab: RepoTab }) {
     else if (id === 'remote') useApp.getState().openModal({ kind: 'remotes', repo })
     else if (id === 'tags' && headSha) void git.createTag(repo, headSha)
     else if (id === 'submodules') void updateSubmodules(repo)
+    else if (id === 'pulls') void startPullRequest(repo)
   }
 
   const openMenuAtRow = (idx: number) => {
@@ -783,7 +819,7 @@ export function LeftPanel({ tab }: { tab: RepoTab }) {
               hidden={hiddenState}
               solo={solo}
               busy={busy}
-              addDisabled={row.kind === 'section' && (row.id === 'tags' || row.id === 'local') && headUnborn}
+              addDisabled={row.kind === 'section' && (((row.id === 'tags' || row.id === 'local') && headUnborn) || (row.id === 'pulls' && !pullsOn))}
               refs={refs}
               lane={row.kind === 'ref' && row.node.ref.type !== 'tag' ? tipColors?.get(row.node.ref.sha) : undefined}
               q={q}

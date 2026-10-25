@@ -24,6 +24,9 @@ import {
 } from 'lucide-react'
 import { isMac } from '@renderer/api/client'
 import * as git from '@renderer/actions/git'
+import { selectPull } from '@renderer/actions/pulls'
+import { PullChip } from '@renderer/components/pulls/PullChip'
+import { usePullForRefs } from '@renderer/components/pulls/pullStore'
 import { Spinner } from '@renderer/components/common/Button'
 import { showMenuBelow, type MenuItem } from '@renderer/components/common/ContextMenu'
 import { getCommand, runCommand } from '@renderer/commands'
@@ -94,6 +97,7 @@ export function Toolbar({ tab }: { tab: RepoTab }) {
 
   const head = tab.refs?.head ?? tab.info?.head ?? null
   const cur = currentBranch(tab.refs)
+  const pull = usePullForRefs(cur ? [cur] : [])
   const ahead = cur?.ahead ?? 0
   const behind = cur?.behind ?? 0
   const stashCount = tab.refs?.stashes.length ?? 0
@@ -198,6 +202,7 @@ export function Toolbar({ tab }: { tab: RepoTab }) {
             <ChevronDown size={13} />
           </span>
         </button>
+        {pull && <PullChip pr={pull} hash onClick={() => selectPull(repo, pull.number)} />}
         {branchAnchor && <BranchPicker tab={tab} anchor={branchAnchor} onClose={() => setBranchAnchor(null)} />}
       </div>
 

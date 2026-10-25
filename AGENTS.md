@@ -10,10 +10,13 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
 ## Layout
 - `src/shared/` — the contract: `types.ts` (domain types, settings), `api.ts` (`AdarApi`, the ONLY renderer↔backend
   API, plus `API_METHODS`), `errors.ts` (`AdarError`, `describeError`, `errorDetail`), `update.ts` (updater types and
-  pure helpers), `patch.ts` (partial-staging patch builder), `menubar.ts` (the menu bar panel's calls and limits).
+  pure helpers), `patch.ts` (partial-staging patch builder), `menubar.ts` (the menu bar panel's calls and limits),
+  `hosting.ts` (GitHub pull request types, the GraphQL query and the pure mapping of its answer), `remoteUrl.ts`
+  (remote URL → web page, provider, GitHub owner/name).
 - `src/main/` — Electron main process.
   - `index.ts` window, native menu, IPC (`dispatch.ts`), dev/e2e hooks; `quitGuard.ts` asks the renderer before quitting.
-  - `backend.ts` composes the read side (`git/read/*`, parsers in `git/parsers/*`) and the write side (`git/write/*`).
+  - `backend.ts` composes the read side (`git/read/*`, parsers in `git/parsers/*`), the write side (`git/write/*`) and
+    `hosting/` (GitHub pull requests).
   - `git/runner.ts` spawns git (argument arrays only, deterministic env); `git/context.ts` (`GitContext`: `git`,
     `gitNetwork`, `exclusive`, `gitDir`, `operationState`); `git/ops.ts` (read/write split).
   - `system/` — settings/recents/trusted repos store, askpass bridge (credential prompts → UI), file watcher with
@@ -25,6 +28,12 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
     (`openRepo` and its trust check, or the panel's `menuBarUseRepo`).
   - `updater.ts` — in-app updates from GitHub Releases (check → download → verify → replace bundle → relaunch) on
     macOS; Windows and Linux builds only check, and "Download" opens the release page.
+  - `hosting/` — GitHub pull requests, opt-in (`settings.githubAuth`): `auth.ts` signs in with the GitHub CLI (asks
+    `gh auth token` each time, never stored) or a personal access token encrypted with Electron `safeStorage`
+    (`PlatformAdapter.secrets`); `github.ts` is the api.github.com client (GraphQL to read, REST to create and merge);
+    `index.ts` finds the repository's GitHub remote and makes the local branch for checking a pull request out
+    (`pr/<n>` for forks, from `refs/pull/<n>/head`). Nothing talks to GitHub while pull requests are off, and tokens
+    never reach the renderer or the logs.
   - `cli.ts` / `cliPath.ts` — install/uninstall the `adar` command (symlink to `resources/bin/adar`, shipped in the
     bundle as `Contents/Resources/bin/adar`); `openRequests.ts` queues folders to open from the CLI/Dock
     (`open-file`), `--open-repo=<path>` launch args and second instances until the renderer takes them.
@@ -38,6 +47,9 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
     these instead of `api` for anything that mutates a repository.
   - `actions/groups.tsx` — tab groups (open/close a group, group a folder's repositories, the grouping suggestion);
     groups are saved in `settings.tabGroups`, pure helpers in `lib/tabGroups.ts`.
+  - `actions/pulls.tsx` — pull request actions (turn on, create after pushing, check out, merge, clean up, bring the base
+    branch in); `components/pulls/` — the store and its sync (`pullStore.ts`: after each fetch, on focus, at most once a
+    minute otherwise), the chip on branch labels, the details panel and the dialogs; pure helpers in `lib/pulls.ts`.
   - `commands.ts` — command registry shared by the native menu, shortcuts and the command palette.
   - `menubar/` — the menu bar panel (its own entry, `menubar.html`): `MenuBarPanel.tsx` (project switcher, branch with
     Pull/Push, mini graph reusing `components/graph`), pure helpers in `model.ts`.
@@ -70,7 +82,8 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
 ## Conventions
 - CSS class prefixes per module: `app-` shell, `ui-` common, `tb-`/`wl-` toolbar, tabs, status bar, welcome, `sb-` left
   panel, `gr-` graph, `det-` right panel, `diff-` diff/blame/history, `cf-` conflicts, `rb-` rebase, `md-` modals,
-  `pal-` palette/console, `up-` updates, `mb-` menu bar panel. Each module imports its own `.css` file.
+  `pal-` palette/console, `up-` updates, `mb-` menu bar panel, `pr-` pull requests. Each module imports its own `.css`
+  file.
 - Icons: `lucide-react`. Virtualised lists: `@tanstack/react-virtual`. Syntax highlighting: `highlight.js`.
 - Do not add npm dependencies without discussing it first.
 
@@ -98,6 +111,10 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
   `node scripts/make-big-repo.mjs <dir> [commits] [branches]` (performance).
 - Website: `cd site && npm install && npm run dev` (http://localhost:4321/), or `npm run build && npm run preview`
   to check the static output. Add `?capture` to a URL to keep WebGL frames readable by screenshot tools.
+- Pull requests without touching GitHub: unpackaged builds send API calls to `ADAR_GITHUB_API=http://127.0.0.1:<port>`
+  when set (a fake API server); put a fake `gh` first on `PATH` (it must print a token for `gh auth token`), point
+  `GH_CONFIG_DIR` at a `hosts.yml` with `user:`, and serve a `git@github.com:<owner>/<repo>.git` origin from a local bare
+  repository through `GIT_SSH_COMMAND` (`url.<x>.insteadOf` would change what `git remote -v` shows).
 - Updater end to end with packaged builds: `scripts/test-updater.sh <workdir>` (must print `UPDATER TEST PASSED`).
 
 ## Commands

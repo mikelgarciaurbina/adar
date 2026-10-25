@@ -58,5 +58,19 @@ export const WRITE_METHODS = [
 ] as const satisfies readonly (keyof AdarApi)[]
 
 export type WriteMethod = (typeof WRITE_METHODS)[number]
+
+/** GitHub pull requests (src/main/hosting): network calls to GitHub, plus the branch for a pull request. */
+export const HOSTING_METHODS = [
+  'getGithubConnection',
+  'connectGithub',
+  'disconnectGithub',
+  'getPullRequests',
+  'createPullRequest',
+  'mergePullRequest',
+  'pullRequestBranch'
+] as const satisfies readonly (keyof AdarApi)[]
+
+export type HostingMethod = (typeof HOSTING_METHODS)[number]
 export type WriteOps = Pick<AdarApi, WriteMethod>
-export type ReadOps = Omit<AdarApi, WriteMethod>
+export type HostingOps = Pick<AdarApi, HostingMethod>
+export type ReadOps = Omit<AdarApi, WriteMethod | HostingMethod>

@@ -4,6 +4,9 @@
 
 import * as git from '@renderer/actions/git'
 import { installCliCommand, uninstallCliCommand } from '@renderer/actions/cli'
+import { openConnect, selectPull, startPullRequest, turnOffPullRequests } from '@renderer/actions/pulls'
+import { isGithubRepo, pullIndexOf, usePulls } from '@renderer/components/pulls/pullStore'
+import { currentBranch } from '@renderer/lib/refs'
 import { isElectron } from '@renderer/api/client'
 import { FOCUS_FILTER_EVENT } from '@renderer/components/sidebar/LeftPanel'
 import { checkForUpdatesNow } from '@renderer/components/update/UpdateNotice'
@@ -27,6 +30,17 @@ const repoPath = () => getActiveTab()?.path ?? ''
 const withRepo = (fn: (repo: string) => unknown) => () => {
   const repo = repoPath()
   if (repo) void fn(repo)
+}
+
+const hasGithub = () => isGithubRepo(getActiveTab())
+const pullsOn = () => !!usePulls.getState().connection?.method
+/** The open pull request of the checked-out branch, if any. */
+const currentPull = () => {
+  const tab = getActiveTab()
+  const cur = currentBranch(tab?.refs ?? null)
+  if (!tab || !cur) return undefined
+  const pr = pullIndexOf(usePulls.getState().repos[tab.path]?.data, tab.refs).byLocal.get(cur.name)
+  return pr && (pr.state === 'open' || pr.state === 'draft') ? pr : undefined
 }
 
 const ZOOM_STEPS = [0.67, 0.75, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2]
@@ -79,6 +93,19 @@ export const COMMANDS: Command[] = [
   { id: 'pull-rebase', label: 'Pull (rebase)', group: 'Remote', when: hasRepo, run: withRepo((r) => git.pull(r, 'rebase')) },
   { id: 'push', label: 'Push', group: 'Remote', shortcut: 'Mod+Shift+Up', when: hasRepo, run: withRepo((r) => git.push(r)) },
   { id: 'force-push', label: 'Force Push (with lease)', group: 'Remote', when: hasRepo, run: withRepo((r) => git.push(r, { force: 'with-lease' })) },
+  { id: 'create-pull-request', label: 'Create Pull Request…', group: 'Remote', when: hasGithub, run: withRepo((r) => startPullRequest(r)) },
+  {
+    id: 'show-pull-request',
+    label: 'Show Pull Request of the Current Branch',
+    group: 'Remote',
+    when: () => !!currentPull(),
+    run: withRepo((r) => {
+      const pr = currentPull()
+      if (pr) selectPull(r, pr.number)
+    })
+  },
+  { id: 'github-pulls-on', label: 'Turn On GitHub Pull Requests…', group: 'App', when: () => !pullsOn(), run: () => openConnect() },
+  { id: 'github-pulls-off', label: 'Turn Off GitHub Pull Requests', group: 'App', when: pullsOn, run: () => turnOffPullRequests() },
   { id: 'manage-remotes', label: 'Manage Remotes…', group: 'Remote', when: hasRepo, run: withRepo((r) => useApp.getState().openModal({ kind: 'remotes', repo: r })) },
   { id: 'create-branch', label: 'Create Branch…', group: 'Branch', shortcut: 'Mod+B', when: hasRepo, run: withRepo((r) => git.createBranch(r)) },
   { id: 'stash', label: 'Stash Changes', group: 'Stash', shortcut: 'Mod+Shift+S', when: hasRepo, run: withRepo((r) => git.stash(r)) },

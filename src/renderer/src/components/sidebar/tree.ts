@@ -3,15 +3,17 @@
 // the virtualised list renders, applying the filter and expand/collapse state.
 // No React / DOM here so it can be unit-tested and memoised cheaply.
 
+import type { PullRequest } from '@shared/hosting'
 import type { Ref, RefsResult, RemoteInfo, Stash, Submodule } from '@shared/types'
 
-export type SectionId = 'local' | 'remote' | 'tags' | 'stashes' | 'submodules'
+export type SectionId = 'local' | 'remote' | 'pulls' | 'tags' | 'stashes' | 'submodules'
 
-export const SECTION_ORDER: readonly SectionId[] = ['local', 'remote', 'tags', 'stashes', 'submodules']
+export const SECTION_ORDER: readonly SectionId[] = ['local', 'remote', 'pulls', 'tags', 'stashes', 'submodules']
 
 export const SECTION_TITLES: Record<SectionId, string> = {
   local: 'Local',
   remote: 'Remote',
+  pulls: 'Pull requests',
   tags: 'Tags',
   stashes: 'Stashes',
   submodules: 'Submodules'
@@ -20,6 +22,7 @@ export const SECTION_TITLES: Record<SectionId, string> = {
 export const EMPTY_HINTS: Record<SectionId, string> = {
   local: 'No local branches',
   remote: 'No remotes',
+  pulls: 'No open pull requests',
   tags: 'No tags',
   stashes: 'No stashes',
   submodules: 'No submodules'
@@ -64,6 +67,26 @@ export interface SubmoduleLeaf {
   search: string
 }
 
+/** An open pull request (GitHub). */
+export interface PullLeaf {
+  kind: 'pull'
+  key: string
+  label: string
+  pull: PullRequest
+  search: string
+}
+
+/** The row that turns pull requests on (shown while they are off). */
+export interface PullPromptLeaf {
+  kind: 'pull-prompt'
+  key: string
+  label: string
+  search: string
+}
+
+/** What the Pull requests section shows: absent for repositories without a GitHub remote. */
+export type PullsInput = { state: 'off' } | { state: 'loading' } | { state: 'error'; message: string } | { state: 'on'; pulls: PullRequest[] }
+
 export interface FolderNode {
   kind: 'folder'
   key: string
@@ -89,7 +112,7 @@ export interface RemoteNode {
   leafCount: number
 }
 
-export type LeafNode = RefLeaf | HeadLeaf | StashLeaf | SubmoduleLeaf
+export type LeafNode = RefLeaf | HeadLeaf | StashLeaf | SubmoduleLeaf | PullLeaf | PullPromptLeaf
 export type ContainerNode = FolderNode | RemoteNode
 export type TreeNode = LeafNode | ContainerNode
 
@@ -100,6 +123,8 @@ export interface Section {
   children: TreeNode[]
   /** Count shown in the header (branches, remote branches, tags...). */
   total: number
+  /** Text shown when the section is empty (default: EMPTY_HINTS). */
+  hint?: string
 }
 
 export const sectionKey = (id: SectionId): string => `s:${id}`
@@ -201,7 +226,29 @@ function compareRemoteNames(a: string, b: string): number {
   return naturalCompare(a, b)
 }
 
-export function buildTree(refs: RefsResult, remotes: readonly RemoteInfo[] = []): Section[] {
+function pullsSection(input: PullsInput): Section {
+  const base = { id: 'pulls' as const, key: sectionKey('pulls'), title: SECTION_TITLES.pulls }
+  switch (input.state) {
+    case 'off':
+      return { ...base, children: [{ kind: 'pull-prompt', key: 'pull-prompt', label: 'Show pull requests from GitHub…', search: '' }], total: 0 }
+    case 'loading':
+      return { ...base, children: [], total: 0, hint: 'Loading…' }
+    case 'error':
+      return { ...base, children: [], total: 0, hint: input.message }
+    case 'on': {
+      const children: PullLeaf[] = input.pulls.map((pr) => ({
+        kind: 'pull',
+        key: `pull:${pr.number}`,
+        label: pr.title,
+        pull: pr,
+        search: `#${pr.number} ${pr.title} ${pr.headRef} ${pr.author} ${pr.authorName ?? ''}`.toLowerCase()
+      }))
+      return { ...base, children, total: children.length }
+    }
+  }
+}
+
+export function buildTree(refs: RefsResult, remotes: readonly RemoteInfo[] = [], pulls?: PullsInput): Section[] {
   const sections: Section[] = []
 
   // LOCAL
@@ -258,6 +305,9 @@ export function buildTree(refs: RefsResult, remotes: readonly RemoteInfo[] = [])
   })
   sections.push({ id: 'remote', key: sectionKey('remote'), title: SECTION_TITLES.remote, children: remoteNodes, total: remoteTotal })
 
+  // PULL REQUESTS — open ones, as GitHub lists them (GitHub remotes only).
+  if (pulls) sections.push(pullsSection(pulls))
+
   // TAGS — flat, natural order.
   const tags: RefLeaf[] = refs.tags
     .map((t) => ({ kind: 'ref' as const, key: t.fullName, label: t.name, ref: t, search: t.name.toLowerCase() }))
@@ -297,6 +347,8 @@ export type Row =
   | { kind: 'head'; key: string; node: HeadLeaf; depth: number }
   | { kind: 'stash'; key: string; node: StashLeaf; depth: number }
   | { kind: 'submodule'; key: string; node: SubmoduleLeaf; depth: number }
+  | { kind: 'pull'; key: string; node: PullLeaf; depth: number }
+  | { kind: 'pull-prompt'; key: string; node: PullPromptLeaf; depth: number }
   | { kind: 'hint'; key: string; text: string; depth: number }
 
 export interface FlattenOptions {
@@ -378,6 +430,15 @@ function emit(nodes: TreeNode[], depth: number, ctx: Ctx, out: Row[]): number {
         out.push({ kind: 'submodule', key: node.key, node, depth })
         count += 1
         break
+      case 'pull':
+        if (ctx.q && !node.search.includes(ctx.q)) break
+        out.push({ kind: 'pull', key: node.key, node, depth })
+        count += 1
+        break
+      case 'pull-prompt':
+        if (ctx.q) break
+        out.push({ kind: 'pull-prompt', key: node.key, node, depth })
+        break
     }
   }
   return count
@@ -411,7 +472,7 @@ export function flattenTree(sections: readonly Section[], opts: FlattenOptions =
       rows.push({ kind: 'section', key: s.key, id: s.id, title: s.title, count: s.total, expanded, depth: 0 })
       if (!expanded) continue
       if (s.children.length) emit(s.children, 1, ctx, rows)
-      else rows.push({ kind: 'hint', key: `hint:${s.key}`, text: EMPTY_HINTS[s.id], depth: 1 })
+      else rows.push({ kind: 'hint', key: `hint:${s.key}`, text: s.hint ?? EMPTY_HINTS[s.id], depth: 1 })
     }
   }
   return rows

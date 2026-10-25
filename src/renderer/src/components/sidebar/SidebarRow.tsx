@@ -2,12 +2,14 @@
 // plus the loading skeleton. Behaviour lives in LeftPanel via RowHandlers.
 
 import { memo, type ReactNode } from 'react'
-import { Archive, Box, Check, ChevronRight, Cloud, Crosshair, Eye, EyeOff, Folder, FolderOpen, Plus, RefreshCw, Tag, TriangleAlert } from 'lucide-react'
+import { Archive, Box, Check, ChevronRight, Cloud, Crosshair, Eye, EyeOff, Folder, FolderOpen, GitPullRequest, Plus, RefreshCw, Tag, TriangleAlert } from 'lucide-react'
+import { ChecksGlyph, PullStateIcon } from '@renderer/components/pulls/PullChip'
+import { pullTitle } from '@renderer/lib/pulls'
 import { laneColor } from '@renderer/lib/colors'
 import { relativeTime, shortSha } from '@renderer/lib/format'
 import { localForRemote } from '@renderer/lib/refs'
 import type { Ref, RefsResult } from '@shared/types'
-import { remoteWebUrl } from './remoteUrl'
+import { remoteWebUrl } from '@shared/remoteUrl'
 import { splitMatch, type Row, type SectionId } from './tree'
 
 export type HiddenState = 'none' | 'some' | 'all'
@@ -180,8 +182,8 @@ export const RowView = memo(function RowView(props: RowViewProps) {
 
   switch (row.kind) {
     case 'section': {
-      const canAdd = row.id === 'local' || row.id === 'remote' || row.id === 'tags'
-      const addLabel = row.id === 'local' ? 'Create branch' : row.id === 'remote' ? 'Add remote' : 'Create tag at HEAD'
+      const canAdd = row.id === 'local' || row.id === 'remote' || row.id === 'tags' || row.id === 'pulls'
+      const addLabel = row.id === 'local' ? 'Create branch' : row.id === 'remote' ? 'Add remote' : row.id === 'pulls' ? 'Create pull request' : 'Create tag at HEAD'
       return (
         <div {...common} className={classes.join(' ')} aria-expanded={row.expanded}>
           <Chevron expanded={row.expanded} />
@@ -200,7 +202,7 @@ export const RowView = memo(function RowView(props: RowViewProps) {
             )}
           </span>
           {props.busy && <span className="ui-spinner ui-spinner-sm sb-busy" />}
-          <span className="sb-count">{row.count}</span>
+          {!(row.id === 'pulls' && props.addDisabled) && <span className="sb-count">{row.count}</span>}
         </div>
       )
     }
@@ -355,6 +357,34 @@ export const RowView = memo(function RowView(props: RowViewProps) {
         </div>
       )
     }
+
+    case 'pull': {
+      const pr = row.node.pull
+      return (
+        <div {...common} className={`${classes.join(' ')} sb-pull-${pr.state}`} title={pullTitle(pr)}>
+          <span className="sb-chevron-space" />
+          <span className="sb-icon sb-icon-pull">{props.pending ? <span className="ui-spinner ui-spinner-sm" /> : <PullStateIcon state={pr.state} size={13} />}</span>
+          <span className="sb-name">
+            <Highlight text={row.node.label} q={q} />
+          </span>
+          <span className="sb-spacer" />
+          {pr.reviewRequested && <span className="sb-review">Review</span>}
+          <ChecksGlyph pr={pr} />
+          <span className="sb-count sb-count-dim">{pr.number}</span>
+        </div>
+      )
+    }
+
+    case 'pull-prompt':
+      return (
+        <div {...common} className={classes.join(' ')}>
+          <span className="sb-chevron-space" />
+          <span className="sb-icon sb-icon-pull">
+            <GitPullRequest size={13} />
+          </span>
+          <span className="sb-name sb-pull-prompt-text">{row.node.label}</span>
+        </div>
+      )
 
     case 'hint':
       return (

@@ -900,3 +900,7 @@
 .md-update-error {
   color: var(--danger);
 }
+.md-row-buttons {
+  display: flex;
+  gap: 6px;
+}

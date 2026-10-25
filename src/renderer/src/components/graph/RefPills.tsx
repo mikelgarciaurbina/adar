@@ -5,6 +5,8 @@
 import { memo, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
 import { Check, CircleDot, Cloud, Monitor, Tag } from 'lucide-react'
+import { PullChip } from '@renderer/components/pulls/PullChip'
+import { usePullForRefs } from '@renderer/components/pulls/pullStore'
 import { getRefDragData, hasRefDragData, setRefDragData } from '@renderer/lib/dnd'
 import { pillTitle, type Pill } from './model'
 import type { GraphCtx } from './types'
@@ -222,12 +224,24 @@ export interface RefPillsProps {
   color: string
 }
 
+const NO_PILLS: readonly Pill[] = []
+
+/** Branch refs of a row's pills, checked for a pull request (local branches first). */
+function branchRefs(pills: readonly Pill[]) {
+  const out = []
+  for (const p of pills) if (p.kind === 'branch') out.push(p.ref, ...p.remotes)
+  for (const p of pills) if (p.kind === 'remote') out.push(p.ref)
+  return out
+}
+
 export const RefPills = memo(function RefPills({ pills, ctx, color }: RefPillsProps) {
+  const pr = usePullForRefs(branchRefs(pills ?? NO_PILLS))
   if (!pills || pills.length === 0) return null
   const [first, ...rest] = pills
   return (
     <div className="gr-refs">
       <PillView pill={first} ctx={ctx} />
+      {pr && <PullChip pr={pr} onClick={() => ctx.onPullClick(pr.number)} />}
       {rest.length > 0 && <MoreBadge pills={rest} ctx={ctx} color={color} />}
       <span className="gr-refs-line" />
     </div>

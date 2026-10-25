@@ -1,0 +1,552 @@
+/* GitHub pull requests (pr- prefix): chips on branch labels, the details panel and the dialogs. */
+
+/* State colours: open in fern, draft and closed in grey, merged in heather. */
+.pr-icon-open {
+  color: var(--accent);
+}
+.pr-icon-draft,
+.pr-icon-closed {
+  color: var(--text-3);
+}
+.pr-icon-merged {
+  color: var(--lane-4-ink);
+}
+
+.pr-checks {
+  flex: none;
+}
+.pr-checks-passed {
+  color: var(--c-added);
+}
+.pr-checks-failed {
+  color: var(--c-deleted);
+}
+.pr-checks-running {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--warning);
+}
+
+/* ── Chip next to a branch label ─────────────────────────────────────────── */
+
+.pr-chip {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  padding: 0 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg-2);
+  color: var(--text-1);
+  font: 500 11px var(--font-mono);
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+.pr-chip:hover {
+  background: var(--bg-3);
+  color: var(--text-0);
+}
+.pr-chip:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+.pr-chip-draft,
+.pr-chip-closed {
+  background: transparent;
+  color: var(--text-2);
+}
+.pr-chip-closed .pr-chip-num {
+  text-decoration: line-through;
+}
+.pr-chip-merged {
+  border-color: color-mix(in srgb, var(--lane-4) 40%, transparent);
+  background: color-mix(in srgb, var(--lane-4) 14%, var(--bg-0));
+  color: var(--lane-4-ink);
+}
+
+/* ── Details panel ───────────────────────────────────────────────────────── */
+
+.pr-open-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+}
+.pr-open-link:hover {
+  color: var(--text-0);
+}
+.pr-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 14px 16px;
+}
+.pr-title {
+  margin: 0;
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+  color: var(--text-0);
+}
+.pr-branches {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.pr-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.pr-state .pr-icon {
+  color: inherit;
+}
+.pr-state-open {
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px var(--accent-line);
+  color: var(--accent);
+}
+.pr-state-draft,
+.pr-state-closed {
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+  color: var(--text-2);
+}
+.pr-state-merged {
+  background: color-mix(in srgb, var(--lane-4) 14%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--lane-4) 40%, transparent);
+  color: var(--lane-4-ink);
+}
+.pr-branch {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-2);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+  color: var(--text-1);
+  font: 500 11.5px/20px var(--font-mono);
+}
+.pr-arrow {
+  flex: none;
+  color: var(--text-3);
+}
+.pr-note {
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+}
+
+.pr-status {
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius-lg);
+  background: var(--bg-2);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+.pr-status-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+  padding: 0 12px;
+  border-top: 1px solid var(--border);
+  color: var(--text-0);
+  font-size: var(--fs-md);
+  text-align: left;
+}
+.pr-status > .pr-status-row:first-child {
+  border-top: none;
+}
+.pr-status-button {
+  width: 100%;
+  border-left: none;
+  border-right: none;
+  border-bottom: none;
+  background: transparent;
+  cursor: pointer;
+}
+.pr-status > .pr-status-button:first-child {
+  border-top: none;
+}
+.pr-status-button:hover {
+  background: var(--bg-3);
+}
+.pr-status-row > svg {
+  flex: none;
+}
+.pr-status-text {
+  flex: 1;
+  min-width: 0;
+}
+.pr-ok {
+  color: var(--c-added);
+}
+.pr-bad {
+  color: var(--c-deleted);
+}
+.pr-wait {
+  color: var(--warning);
+}
+.pr-muted {
+  color: var(--text-3);
+}
+.pr-checklist {
+  margin: 0;
+  padding: 2px 12px 8px 38px;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: var(--fs-sm);
+  color: var(--text-1);
+}
+.pr-checklist li {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+.pr-checklist li > svg {
+  flex: none;
+}
+.pr-check-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pr-desc .up-notes {
+  max-height: none;
+  overflow: visible;
+  font-size: var(--fs-md);
+  color: var(--text-2);
+}
+.pr-stats {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+}
+.pr-diffstat {
+  font: 500 11.5px var(--font-mono);
+}
+.pr-add {
+  color: var(--c-added);
+}
+.pr-del {
+  color: var(--c-deleted);
+}
+
+.pr-actions {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border-top: 1px solid var(--border);
+}
+.pr-merge {
+  display: flex;
+}
+.pr-merge-main {
+  flex: 1;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+.pr-merge-more {
+  flex: none;
+  width: 34px;
+  padding: 0;
+  justify-content: center;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  border-left: 1px solid color-mix(in srgb, var(--accent-text) 25%, transparent);
+}
+.pr-merge-main:only-child {
+  border-radius: var(--radius);
+}
+.pr-secondary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.pr-secondary > * {
+  flex: 1 1 auto;
+}
+.pr-hint {
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+}
+.pr-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--fs-sm);
+  color: var(--text-1);
+}
+.pr-check input {
+  margin: 0;
+  accent-color: var(--accent);
+}
+.pr-cleanup {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border-radius: var(--radius-lg);
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px var(--accent-line);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  color: var(--text-1);
+}
+.pr-cleanup strong {
+  color: var(--text-0);
+}
+
+/* ── Dialogs ─────────────────────────────────────────────────────────────── */
+
+.pr-connect-body,
+.pr-create-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.pr-lead {
+  margin: 0;
+  font-size: var(--fs-md);
+  line-height: 1.55;
+  color: var(--text-2);
+}
+.pr-lead strong {
+  color: var(--text-0);
+  font-weight: 600;
+}
+.pr-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  min-width: 0;
+}
+.pr-legend {
+  margin-bottom: 8px;
+  padding: 0;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+.pr-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: var(--radius-lg);
+  background: var(--bg-2);
+  box-shadow: inset 0 0 0 1px var(--border);
+  cursor: pointer;
+}
+.pr-option input {
+  margin: 2px 0 0;
+  accent-color: var(--accent);
+}
+.pr-option-on {
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px var(--accent-line);
+}
+.pr-option-off {
+  cursor: default;
+  opacity: 0.7;
+}
+.pr-option-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.pr-option-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  color: var(--text-0);
+}
+.pr-option-title svg {
+  color: var(--text-2);
+}
+.pr-option-desc {
+  font-size: var(--fs-sm);
+  line-height: 1.45;
+  color: var(--text-2);
+}
+.pr-option-desc strong,
+.pr-notice strong {
+  color: var(--text-0);
+  font-weight: 600;
+}
+.pr-option-desc code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.pr-found {
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 5px;
+  background: var(--accent-fill);
+  color: var(--accent-text);
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 18px;
+}
+.pr-token {
+  margin-left: 2px;
+}
+.pr-privacy,
+.pr-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  background: var(--bg-2);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  color: var(--text-2);
+}
+.pr-privacy svg,
+.pr-notice svg {
+  flex: none;
+  margin-top: 1px;
+}
+.pr-notice {
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px var(--accent-line);
+  color: var(--text-1);
+}
+.pr-notice svg {
+  color: var(--accent);
+}
+.pr-error {
+  padding: 9px 12px;
+  border-radius: var(--radius);
+  background: var(--danger-soft);
+  color: var(--text-0);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--danger) 45%, transparent);
+  font-size: var(--fs-sm);
+  line-height: 1.45;
+}
+
+.pr-fromto {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+}
+.pr-fromto > .ui-field {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.pr-fromto-arrow {
+  margin-bottom: 9px;
+}
+.pr-label-note {
+  margin-left: 6px;
+  font-weight: 400;
+  color: var(--text-3);
+}
+.pr-textarea {
+  min-height: 120px;
+  resize: vertical;
+  line-height: 1.5;
+}
+.pr-commits-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text-2);
+  font-size: var(--fs-sm);
+  cursor: pointer;
+}
+.pr-commits-toggle:hover {
+  color: var(--text-0);
+}
+.pr-commit-list {
+  margin: 6px 0 0;
+  padding: 0 0 0 19px;
+  max-height: 140px;
+  overflow: auto;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: var(--fs-sm);
+}
+.pr-commit-list li {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+.pr-sha {
+  flex: none;
+  font: 500 11.5px var(--font-mono);
+  color: var(--text-3);
+}
+.pr-commit-subject {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-1);
+}
+.pr-footer-where {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 400 11.5px var(--font-mono);
+  color: var(--text-3);
+}
+
+/* Toolbar: the checked-out branch's pull request, next to the branch dropdown. */
+.tb-toolbar-left > .pr-chip {
+  height: 24px;
+  margin-left: 2px;
+  padding: 0 8px;
+  font-size: 11.5px;
+}
+.pr-fromto .md-select-wrap {
+  display: flex;
+  width: 100%;
+}
+.pr-fromto .md-select-wrap .md-select {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+}

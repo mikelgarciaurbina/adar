@@ -9,7 +9,7 @@ import { prompt, validateRefName } from '@renderer/components/common/dialogs'
 import { toast } from '@renderer/components/common/toast'
 import { useApp, type RepoTab } from '@renderer/store/appStore'
 import type { Ref, Stash } from '@shared/types'
-import { remoteWebUrl } from './remoteUrl'
+import { remoteWebUrl } from '@shared/remoteUrl'
 
 const store = () => useApp.getState()
 const tabOf = (repo: string): RepoTab | undefined => store().tabs.find((t) => t.path === repo)

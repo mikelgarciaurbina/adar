@@ -1,6 +1,6 @@
 import { copyFileSync, existsSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
-import { app, BrowserWindow, dialog, ipcMain, Menu, shell, type MenuItemConstructorOptions } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, net, safeStorage, shell, type MenuItemConstructorOptions } from 'electron'
 import { IPC_EVENT_CHANNEL, IPC_INVOKE_CHANNEL, type InvokeResponse } from '@shared/api'
 import { MENUBAR_METHODS, PANEL_API_METHODS, type MenuBarMethod } from '@shared/menubar'
 import type { AppSettings, MenuCommand, AdarEvent, RepoInfo } from '@shared/types'
@@ -166,6 +166,16 @@ const platform: PlatformAdapter = {
   },
   async showInFolder(path) {
     shell.showItemInFolder(path)
+  },
+  fetch: (input, init) => net.fetch(input, init),
+  // Development only (scripted e2e runs): a fake GitHub API on this machine.
+  githubApi: !app.isPackaged && /^http:\/\/127\.0\.0\.1:\d+$/.test(process.env['ADAR_GITHUB_API'] ?? '') ? process.env['ADAR_GITHUB_API'] : undefined,
+  secrets: {
+    // Linux without a keyring would fall back to a hard-coded key: no better than clear text.
+    available: () =>
+      app.isReady() && safeStorage.isEncryptionAvailable() && (process.platform !== 'linux' || safeStorage.getSelectedStorageBackend() !== 'basic_text'),
+    encrypt: (text) => safeStorage.encryptString(text),
+    decrypt: (data) => safeStorage.decryptString(data)
   }
 }
 
