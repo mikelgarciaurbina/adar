@@ -65,6 +65,7 @@ export const HOSTING_METHODS = [
   'connectGithub',
   'disconnectGithub',
   'getPullRequests',
+  'getPullRequestCommits',
   'createPullRequest',
   'mergePullRequest',
   'pullRequestBranch'

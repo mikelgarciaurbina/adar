@@ -40,7 +40,7 @@ import type {
   RewordResult,
   WorkingStatus
 } from './types'
-import type { CreatePullOptions, GithubAuthMethod, GithubConnection, MergeMethod, PullRequest, RepoPullRequests } from './hosting'
+import type { CreatePullOptions, GithubAuthMethod, GithubConnection, MergeMethod, PullCommit, PullRequest, RepoPullRequests } from './hosting'
 
 export interface AdarApi {
   // ── App / system ────────────────────────────────────────────────────────
@@ -238,6 +238,8 @@ export interface AdarApi {
   disconnectGithub(): Promise<GithubConnection>
   /** Pull requests of the repository's GitHub remote; null when it has none or pull requests are off. */
   getPullRequests(repo: string): Promise<RepoPullRequests | null>
+  /** A pull request's commits as GitHub has them (at most 100, newest first). */
+  getPullRequestCommits(repo: string, number: number): Promise<PullCommit[]>
   /** Open a pull request on the repository's GitHub remote (the head branch must be pushed there already). */
   createPullRequest(repo: string, opts: CreatePullOptions): Promise<PullRequest>
   /** Merge a pull request on GitHub; refused when its head is no longer `headSha`. */
@@ -340,6 +342,7 @@ export const API_METHODS = [
   'connectGithub',
   'disconnectGithub',
   'getPullRequests',
+  'getPullRequestCommits',
   'createPullRequest',
   'mergePullRequest',
   'pullRequestBranch',

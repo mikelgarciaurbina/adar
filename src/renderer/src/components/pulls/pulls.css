@@ -240,12 +240,55 @@
   font-size: var(--fs-md);
   color: var(--text-2);
 }
-.pr-stats {
+.pr-commits-section {
+  display: flex;
+  flex-direction: column;
+}
+.pr-commits-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 28px;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+.pr-commits-head .pr-diffstat {
+  letter-spacing: 0;
+  text-transform: none;
+}
+.pr-commit-row {
   display: flex;
   align-items: center;
   gap: 10px;
+  height: 28px;
+  margin: 0 -6px;
+  padding: 0 6px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-1);
+  font-size: var(--fs-md);
+  text-align: left;
+  cursor: pointer;
+}
+.pr-commit-row:hover {
+  background: var(--bg-2);
+}
+.pr-commit-row .pr-commit-subject {
+  flex: 1;
+}
+.pr-commits-note {
+  padding: 4px 0;
   font-size: var(--fs-sm);
-  color: var(--text-2);
+  color: var(--text-3);
+}
+.pr-commits-more {
+  align-self: flex-start;
+  margin-top: 4px;
+  font-size: var(--fs-sm);
 }
 .pr-diffstat {
   font: 500 11.5px var(--font-mono);
@@ -268,22 +311,29 @@
 .pr-merge {
   display: flex;
 }
-.pr-merge-main {
-  flex: 1;
-  border-top-right-radius: 0;
-  border-bottom-right-radius: 0;
+/* One split button: the action and its arrow share a single 36px fill, split by a hairline. */
+.pr-merge > .ui-btn {
+  height: 36px;
+  border-radius: 0;
+  box-shadow: none;
 }
-.pr-merge-more {
+.pr-merge > .ui-btn:first-child {
+  border-top-left-radius: var(--radius);
+  border-bottom-left-radius: var(--radius);
+}
+.pr-merge > .ui-btn:last-child {
+  border-top-right-radius: var(--radius);
+  border-bottom-right-radius: var(--radius);
+}
+.pr-merge > .pr-merge-main {
+  flex: 1;
+  min-width: 0;
+}
+.pr-merge > .pr-merge-more {
   flex: none;
   width: 34px;
   padding: 0;
-  justify-content: center;
-  border-top-left-radius: 0;
-  border-bottom-left-radius: 0;
-  border-left: 1px solid color-mix(in srgb, var(--accent-text) 25%, transparent);
-}
-.pr-merge-main:only-child {
-  border-radius: var(--radius);
+  border-left-color: color-mix(in srgb, var(--accent-text) 25%, transparent);
 }
 .pr-secondary {
   display: flex;
@@ -526,6 +576,7 @@
   color: var(--text-1);
 }
 .pr-footer-where {
+  align-self: center;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;

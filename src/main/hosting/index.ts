@@ -8,6 +8,7 @@ import {
   MAX_TITLE,
   PULLS_QUERY,
   isSafeBranchName,
+  pullCommitsFromRest,
   pullFromRest,
   pullsFromQuery,
   type CreatePullOptions,
@@ -183,6 +184,14 @@ export function createHostingOps(ctx: GitContext, services: Pick<SystemServices,
       const result = pullsFromQuery(data, at)
       if (!result) throw new AdarError({ message: `GitHub: ${at.owner}/${at.name} was not found, or this sign-in has no access to it`, code: 'NOT_FOUND' })
       return result
+    },
+
+    async getPullRequestCommits(repo, number) {
+      await assertRepo(ctx, repo)
+      if (!Number.isSafeInteger(number) || number <= 0) throw invalid('Invalid pull request number')
+      const at = await requireRemote(repo)
+      const c = await requireClient()
+      return pullCommitsFromRest(await c.rest('GET', `${repoPath(at)}/pulls/${number}/commits?per_page=100`))
     },
 
     async createPullRequest(repo, opts: CreatePullOptions): Promise<PullRequest> {

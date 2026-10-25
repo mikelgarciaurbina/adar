@@ -57,6 +57,13 @@ export interface PullRequest {
   viewerIsAuthor: boolean
 }
 
+/** A commit of a pull request, as GitHub lists it. */
+export interface PullCommit {
+  sha: string
+  subject: string
+  author: string
+}
+
 export interface RepoPullRequests {
   owner: string
   name: string
@@ -345,6 +352,19 @@ export function pullFromRest(v: unknown, viewer: string): PullRequest | null {
     },
     viewer
   )
+}
+
+/** GET /pulls/{n}/commits (oldest first) as PullCommits, newest first like git log. */
+export function pullCommitsFromRest(v: unknown): PullCommit[] {
+  if (!Array.isArray(v)) return []
+  const out: PullCommit[] = []
+  for (const c of v) {
+    if (!isObj(c) || !/^[0-9a-f]{40}$/i.test(str(c.sha))) continue
+    const commit = isObj(c.commit) ? c.commit : {}
+    const author = isObj(commit.author) ? str(commit.author.name) : ''
+    out.push({ sha: str(c.sha).toLowerCase(), subject: str(commit.message).split('\n')[0].slice(0, 300), author })
+  }
+  return out.reverse()
 }
 
 /** "GitHub: <message>" from an error answer ({ message, errors: [{ message }] }). */

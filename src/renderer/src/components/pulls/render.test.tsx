@@ -126,6 +126,8 @@ describe('pull request panel', () => {
     expect(html).toContain('<strong>dashboard</strong>')
     expect(html).toContain('Squash and merge')
     expect(html).toContain('Then switch to main, pull, and delete feat/x')
+    expect(html).toContain('3 commits')
+    expect(html).toContain('Loading commits…')
     expect(html).not.toContain('>Check out<')
   })
 

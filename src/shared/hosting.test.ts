@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { checksOf, githubErrorMessage, httpsUrl, isSafeBranchName, pullFromNode, pullFromRest, pullsFromQuery } from './hosting'
+import { checksOf, githubErrorMessage, httpsUrl, isSafeBranchName, pullCommitsFromRest, pullFromNode, pullFromRest, pullsFromQuery } from './hosting'
 import { githubRepoOf } from './remoteUrl'
 
 const sha = 'a'.repeat(40)
@@ -134,6 +134,17 @@ describe('pull request mapping', () => {
     expect(pr).toMatchObject({ number: 7, state: 'open', headRef: 'fix', headFork: 'ane/widgets', author: 'ane' })
     expect(githubErrorMessage({ message: 'Validation Failed', errors: [{ message: 'A pull request already exists for acme:feat.' }] }, 'x')).toBe('A pull request already exists for acme:feat.')
     expect(githubErrorMessage({ message: 'Not Found' }, 'x')).toBe('Not Found')
+    // Commits come oldest first from GitHub and are listed newest first, like git log.
+    const commits = pullCommitsFromRest([
+      { sha: 'A'.repeat(40), commit: { message: 'First\n\nbody', author: { name: 'Ana' } } },
+      { sha: 'nope', commit: { message: 'Broken' } },
+      { sha: 'b'.repeat(40), commit: { message: 'Second' } }
+    ])
+    expect(commits).toEqual([
+      { sha: 'b'.repeat(40), subject: 'Second', author: '' },
+      { sha: 'a'.repeat(40), subject: 'First', author: 'Ana' }
+    ])
+    expect(pullCommitsFromRest({ message: 'Not Found' })).toEqual([])
     expect(githubErrorMessage('<html>', '502 Bad Gateway')).toBe('502 Bad Gateway')
   })
 })

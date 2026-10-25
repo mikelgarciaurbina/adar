@@ -216,6 +216,7 @@ describe('GitHub pull requests', () => {
     const { ops, calls } = setup({
       ...userRoute,
       'POST /repos/acme/widgets/pulls': () => ({ status: 201, json: created }),
+      'GET /repos/acme/widgets/pulls/43/commits?per_page=100': () => ({ json: [{ sha: 'c'.repeat(40), commit: { message: 'Dashboard\n\nMore', author: { name: 'Ana' } } }] }),
       'PUT /repos/acme/widgets/pulls/43/merge': (body) =>
         (body as { sha: string }).sha === 'c'.repeat(40) ? { json: { merged: true } } : { status: 409, json: { message: 'Head branch was modified. Review and try the merge again.' } }
     })
@@ -229,6 +230,7 @@ describe('GitHub pull requests', () => {
     expect(calls.at(-1)).toMatchObject({ method: 'POST', body: { title: 'Dashboard', head: 'feat/dash', base: 'main', body: 'Body', draft: true } })
     expect(pr).toMatchObject({ number: 43, state: 'draft', headRef: 'feat/dash', headFork: null })
 
+    expect(await ops.getPullRequestCommits(repo, 43)).toEqual([{ sha: 'c'.repeat(40), subject: 'Dashboard', author: 'Ana' }])
     await ops.mergePullRequest(repo, 43, { method: 'squash', headSha: 'c'.repeat(40) })
     expect(calls.at(-1)).toMatchObject({ method: 'PUT', body: { merge_method: 'squash', sha: 'c'.repeat(40) } })
     await expect(ops.mergePullRequest(repo, 43, { method: 'squash', headSha: 'd'.repeat(40) })).rejects.toThrow(/changed on GitHub/)

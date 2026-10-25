@@ -2,7 +2,7 @@
 // and the one next step that fits: merge, bring the base branch in, check it out, review it
 // on GitHub, or clean up once it is merged.
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   ArrowRight,
   ChevronDown,
@@ -19,6 +19,7 @@ import {
   UserCheck
 } from 'lucide-react'
 import { bringBaseIn, checkoutPull, cleanUpAfterMerge, MERGE_LABELS, mergePull, openOnGithub, preferredMergeMethod } from '@renderer/actions/pulls'
+import { api } from '@renderer/api/client'
 import { Avatar } from '@renderer/components/common/Avatar'
 import { Button } from '@renderer/components/common/Button'
 import { showMenuBelow } from '@renderer/components/common/ContextMenu'
@@ -28,7 +29,7 @@ import { ReleaseNotes } from '@renderer/components/update/ReleaseNotes'
 import { pluralize, relativeTime } from '@renderer/lib/format'
 import { checksLabel, localBranchFor, mergeBlocker, reviewLabel, stateLabel } from '@renderer/lib/pulls'
 import { useApp, type RepoTab } from '@renderer/store/appStore'
-import type { MergeMethod, PullRequest, RepoPullRequests } from '@shared/hosting'
+import type { MergeMethod, PullCommit, PullRequest, RepoPullRequests } from '@shared/hosting'
 import { PullStateIcon } from './PullChip'
 import { usePullIndex, usePulls } from './pullStore'
 import './pulls.css'
@@ -115,24 +116,97 @@ function PullDetails({ tab, pr, data }: { tab: RepoTab; pr: PullRequest; data: R
           </div>
         )}
 
-        <div className="pr-stats">
-          <span>{pluralize(pr.commitCount || 1, 'commit')}</span>
-          {(pr.additions > 0 || pr.deletions > 0) && (
-            <span className="pr-diffstat">
-              <span className="pr-add">+{pr.additions}</span> <span className="pr-del">−{pr.deletions}</span>
-            </span>
-          )}
-          <span className="det-spacer" />
-          {pr.headSha && (
-            <button type="button" className="ui-link" onClick={() => goToCommit(repo, pr.headSha)} title="Select the pull request's last commit in the graph">
-              Show in graph
-            </button>
-          )}
-        </div>
+        <PullCommits repo={repo} pr={pr} remote={data.remote} />
       </div>
 
       {open && <PullActions tab={tab} pr={pr} data={data} hasLocal={!!local} localName={local?.name ?? null} isCheckedOut={!!local?.isHead} />}
       {pr.state === 'merged' && local && !keptBranches.has(`${repo}\0${local.name}`) && <CleanUpBox repo={repo} pr={pr} data={data} branch={local.name} />}
+    </div>
+  )
+}
+
+/** Commits shown at most; the rest are on GitHub. */
+const MAX_COMMITS = 20
+
+interface CommitList {
+  commits: PullCommit[]
+  /** In this repository (a click selects the commit in the graph), else only on GitHub (a click opens it there). */
+  local: boolean
+}
+
+// Per pull request and head: switching between pull requests does not ask again.
+const commitCache = new Map<string, CommitList>()
+
+/** The pull request's commits: from this repository when its head is here, else from GitHub. */
+function usePullCommits(repo: string, pr: PullRequest, remote: string): CommitList | 'loading' | 'failed' {
+  const key = `${repo}\0${pr.number}\0${pr.headSha}`
+  const [list, setList] = useState<CommitList | 'loading' | 'failed'>(() => commitCache.get(key) ?? 'loading')
+  useEffect(() => {
+    const cached = commitCache.get(key)
+    if (cached) {
+      setList(cached)
+      return
+    }
+    let alive = true
+    setList('loading')
+    const here: Promise<CommitList | null> = pr.headSha
+      ? api
+          .getLog(repo, { revisions: [pr.headSha, `^${remote}/${pr.baseRef}`], maxCount: 100 })
+          .then((page) => (page.commits.length ? { commits: page.commits.map((c) => ({ sha: c.sha, subject: c.subject, author: c.authorName })), local: true } : null))
+          .catch(() => null)
+      : Promise.resolve(null)
+    here
+      .then((found) => found ?? api.getPullRequestCommits(repo, pr.number).then((commits) => ({ commits, local: false })))
+      .then((found) => {
+        commitCache.set(key, found)
+        if (alive) setList(found)
+      })
+      .catch(() => alive && setList('failed'))
+    return () => {
+      alive = false
+    }
+  }, [key, repo, pr.number, pr.headSha, pr.baseRef, remote])
+  return list
+}
+
+function PullCommits({ repo, pr, remote }: { repo: string; pr: PullRequest; remote: string }) {
+  const list = usePullCommits(repo, pr, remote)
+  const commits = typeof list === 'object' ? list.commits : []
+  const count = pr.commitCount || commits.length
+  const open = (c: PullCommit) => {
+    if (typeof list === 'object' && list.local) goToCommit(repo, c.sha)
+    else openOnGithub(`${pr.url}/commits/${c.sha}`)
+  }
+  return (
+    <div className="pr-commits-section">
+      <div className="pr-commits-head">
+        <span>{count ? pluralize(count, 'commit') : 'Commits'}</span>
+        <span className="det-spacer" />
+        {(pr.additions > 0 || pr.deletions > 0) && (
+          <span className="pr-diffstat">
+            <span className="pr-add">+{pr.additions}</span> <span className="pr-del">−{pr.deletions}</span>
+          </span>
+        )}
+      </div>
+      {list === 'loading' && <div className="pr-commits-note">Loading commits…</div>}
+      {list === 'failed' && <div className="pr-commits-note">The commits could not be read.</div>}
+      {commits.slice(0, MAX_COMMITS).map((c) => (
+        <button
+          key={c.sha}
+          type="button"
+          className="pr-commit-row"
+          title={typeof list === 'object' && list.local ? `${c.subject}\nSelect it in the graph` : `${c.subject}\nOpen it on GitHub`}
+          onClick={() => open(c)}
+        >
+          <span className="pr-sha">{c.sha.slice(0, 7)}</span>
+          <span className="pr-commit-subject">{c.subject}</span>
+        </button>
+      ))}
+      {commits.length > MAX_COMMITS && (
+        <button type="button" className="ui-link pr-commits-more" onClick={() => openOnGithub(`${pr.url}/commits`)}>
+          {pluralize(commits.length - MAX_COMMITS, 'more commit')} on GitHub
+        </button>
+      )}
     </div>
   )
 }
