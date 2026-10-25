@@ -1,6 +1,6 @@
-// How Adar signs in to GitHub: the GitHub CLI's own sign-in (asked for each time, never stored
-// by Adar) or a personal access token kept encrypted with the system keychain (Electron
-// safeStorage). Tokens are never logged, sent to the renderer or written in clear.
+// How Adar signs in to GitHub and Bitbucket: the GitHub CLI's own sign-in (asked for each time,
+// never stored by Adar) or tokens kept encrypted with the system keychain (Electron safeStorage).
+// Tokens are never logged, sent to the renderer or written in clear.
 
 import { execFile } from 'node:child_process'
 import { promises as fs } from 'node:fs'
@@ -89,15 +89,16 @@ export class GhCli {
   }
 }
 
-/** A personal access token, encrypted at rest in <userData>/github-token.json. */
+/** A token, encrypted at rest in <userData>/<fileName> (github-token.json, bitbucket-token.json…). */
 export class TokenStore {
   private readonly file: string
 
   constructor(
     userDataDir: string,
-    private readonly box: SecretBox | undefined
+    private readonly box: SecretBox | undefined,
+    fileName = 'github-token.json'
   ) {
-    this.file = path.join(userDataDir, 'github-token.json')
+    this.file = path.join(userDataDir, fileName)
   }
 
   available(): boolean {

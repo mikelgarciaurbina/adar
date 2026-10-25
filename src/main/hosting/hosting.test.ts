@@ -9,9 +9,11 @@ import { AdarError } from '@shared/errors'
 import type { PlatformAdapter } from '../platform'
 import { createGitContext } from '../git/context'
 import { cleanupTmp, commitFile, git, head, initRepo, isolateGitConfig, tmpDir } from '../git/write/__tests__/helpers'
-import { SettingsStore } from '../system/settings'
+import { SettingsStore, normalizeServerUrl, sanitizeBitbucketServers } from '../system/settings'
 import { ghConfigDir, ghUserFromHosts, isPlausibleToken, TokenStore, type SecretBox } from './auth'
-import { createHostingOps, pickGithubRemote } from './index'
+import { cloudForkUrl } from './bitbucketCloud'
+import { pickHostingRemote } from '@shared/remoteUrl'
+import { createHostingOps, parseRemoteUrls } from './index'
 
 const TOKEN = 'ghp_' + 'a'.repeat(36)
 const GH_TOKEN = 'gho_' + 'b'.repeat(36)
@@ -103,12 +105,13 @@ describe('GitHub sign-in helpers', () => {
   })
 
   it('picks the remote pull requests live on', () => {
+    const pick = (lines: string, preferred?: string) => pickHostingRemote(parseRemoteUrls(lines), [], preferred)
     const lines = 'remote.fork.url git@github.com:me/widgets.git\nremote.origin.url https://github.com/acme/widgets.git\nremote.lab.url git@gitlab.com:x/y.git'
-    expect(pickGithubRemote(lines)).toEqual({ remote: 'origin', owner: 'acme', name: 'widgets' })
-    expect(pickGithubRemote(lines, 'remote.fork.gh-resolved base')).toEqual({ remote: 'fork', owner: 'me', name: 'widgets' })
-    expect(pickGithubRemote('remote.up.stream.url git@github.com-work:acme/widgets')).toEqual({ remote: 'up.stream', owner: 'acme', name: 'widgets' })
-    expect(pickGithubRemote('remote.origin.url git@gitlab.com:x/y.git')).toBeNull()
-    expect(pickGithubRemote('remote.-x.url git@github.com:a/b.git')).toBeNull()
+    expect(pick(lines)).toMatchObject({ remote: 'origin', provider: 'github', owner: 'acme', name: 'widgets' })
+    expect(pick(lines, 'fork')).toMatchObject({ remote: 'fork', owner: 'me', name: 'widgets' })
+    expect(pick('remote.up.stream.url git@github.com-work:acme/widgets')).toMatchObject({ remote: 'up.stream', owner: 'acme', name: 'widgets' })
+    expect(pick('remote.origin.url git@gitlab.com:x/y.git')).toBeNull()
+    expect(pick('remote.-x.url git@github.com:a/b.git')).toBeNull()
   })
 })
 
@@ -294,5 +297,215 @@ describe('GitHub pull requests', () => {
     git(repo, ['commit', '-q', '--allow-empty', '-m', 'mine'])
     git(repo, ['checkout', '-q', 'main'])
     await expect(ops.pullRequestBranch(repo, 7)).rejects.toThrow(AdarError)
+  })
+})
+
+// ── Bitbucket ──────────────────────────────────────────────────────────────
+
+type Route = (body: unknown) => { status?: number; json?: unknown; text?: string; headers?: Record<string, string> }
+
+function fakeHttp(routes: Record<string, Route>) {
+  const calls: Call[] = []
+  const fetchFn = async (url: string, init?: RequestInit) => {
+    const method = init?.method ?? 'GET'
+    const body = init?.body ? JSON.parse(String(init.body)) : undefined
+    calls.push({ method, url, auth: new Headers(init?.headers).get('authorization'), body })
+    const route = routes[`${method} ${url}`]
+    if (!route) return new Response(JSON.stringify({ errors: [{ message: `No route for ${method} ${url}` }] }), { status: 404 })
+    const { status = 200, json, text, headers } = route(body)
+    return new Response(text ?? JSON.stringify(json ?? null), { status, headers })
+  }
+  return { calls, fetchFn }
+}
+
+function setupBitbucket(routes: Record<string, Route>) {
+  const userData = tmpDir('adar-bb-ud-')
+  const http = fakeHttp(routes)
+  const platform: PlatformAdapter = {
+    isElectron: false,
+    appVersion: 'test',
+    userDataDir: userData,
+    pickDirectory: async () => null,
+    openExternal: async () => undefined,
+    showInFolder: async () => undefined,
+    fetch: http.fetchFn,
+    secrets: box
+  }
+  const ctx = createGitContext(platform, () => undefined)
+  const settings = new SettingsStore(userData)
+  const ghCli = { token: async () => null, login: async () => null, forget: () => undefined }
+  return { ops: createHostingOps(ctx, { ready: Promise.resolve(), settings }, { gh: ghCli }), calls: http.calls, settings, userData }
+}
+
+const API = 'https://api.bitbucket.org/2.0'
+const REPO_API = `${API}/repositories/acme/widgets`
+const BB_TOKEN = 'ATATT' + 'x'.repeat(60)
+const sha40 = (c: string) => c.repeat(40)
+
+describe('Bitbucket server addresses', () => {
+  it('keeps https addresses without credentials, and well-formed servers only', () => {
+    expect(normalizeServerUrl('https://Bitbucket.Example.com/context/')).toBe('https://bitbucket.example.com/context')
+    expect(normalizeServerUrl('http://bitbucket.example.com')).toBeNull()
+    expect(normalizeServerUrl('https://user:pw@bitbucket.example.com')).toBeNull()
+    expect(normalizeServerUrl('https://bitbucket.example.com/?x=1')).toBeNull()
+    expect(normalizeServerUrl('http://127.0.0.1:7990')).toBeNull()
+    expect(normalizeServerUrl('http://127.0.0.1:7990', true)).toBe('http://127.0.0.1:7990')
+    expect(
+      sanitizeBitbucketServers([
+        { url: 'https://a.example.com/', hosts: ['A.example.com', 'ssh.example.com:7999', 'bad host'] },
+        { url: 'https://a.example.com' },
+        { url: 'ftp://b.example.com', hosts: [] },
+        'junk'
+      ])
+    ).toEqual([{ url: 'https://a.example.com', hosts: ['a.example.com', 'ssh.example.com:7999'] }])
+    expect(cloudForkUrl('git@bitbucket.org:acme/widgets.git', 'ane/widgets')).toBe('git@bitbucket.org:ane/widgets.git')
+    expect(cloudForkUrl('https://bitbucket.org/acme/widgets.git', 'ane/widgets')).toBe('https://bitbucket.org/ane/widgets.git')
+    expect(cloudForkUrl('https://bitbucket.org/acme/widgets.git', '../x')).toBeNull()
+  })
+})
+
+describe('Bitbucket Cloud pull requests', () => {
+  const prJson = (state = 'OPEN', hash = 'abcdef123456') => ({
+    id: 128,
+    title: 'Saved cards',
+    state,
+    author: { display_name: 'Ane', uuid: '{ane}' },
+    source: { branch: { name: 'feat/cards' }, commit: { hash }, repository: { full_name: 'acme/widgets' } },
+    destination: { branch: { name: 'main', merge_strategies: ['merge_commit', 'squash'], default_merge_strategy: 'merge_commit' }, repository: { full_name: 'acme/widgets' } },
+    links: { html: { href: 'https://bitbucket.org/acme/widgets/pull-requests/128' } },
+    updated_on: '2026-10-25T10:00:00Z',
+    task_count: 1,
+    participants: [{ user: { display_name: 'Jon', uuid: '{jon}' }, approved: true, state: 'approved' }],
+    reviewers: [{ display_name: 'Jon', uuid: '{jon}' }]
+  })
+  let merges = 0
+  const routes: Record<string, Route> = {
+    [`GET ${API}/user`]: () => ({ json: { display_name: 'Mikel Garcia', uuid: '{me}', account_id: 'acc-me' } }),
+    [`GET ${REPO_API}`]: () => ({ json: { mainbranch: { name: 'main' } } }),
+    [`GET ${REPO_API}/pullrequests?state=OPEN&pagelen=50`]: () => ({ json: { values: [{ ...prJson(), participants: undefined, reviewers: undefined }] } }),
+    [`GET ${REPO_API}/pullrequests?state=MERGED&state=DECLINED&state=SUPERSEDED&sort=-updated_on&pagelen=30`]: () => ({ json: { values: [{ ...prJson('DECLINED'), id: 120 }] } }),
+    [`GET ${API}/user/permissions/repositories?q=${encodeURIComponent('repository.full_name="acme/widgets"')}`]: () => ({ json: { values: [{ permission: 'write' }] } }),
+    [`GET ${REPO_API}/pullrequests/128`]: () => ({ json: prJson() }),
+    [`GET ${REPO_API}/pullrequests/128/statuses?pagelen=50`]: () => ({ json: { values: [{ name: 'test', state: 'SUCCESSFUL' }] } }),
+    [`GET ${REPO_API}/pullrequests/128/commits?pagelen=100`]: () => ({ json: { values: [{ hash: sha40('c'), message: 'Saved cards' }] } }),
+    [`POST ${REPO_API}/pullrequests`]: () => ({ status: 201, json: { ...prJson(), id: 129, title: 'Search' } }),
+    [`POST ${REPO_API}/pullrequests/128/merge`]: () => {
+      merges++
+      return { status: 202, json: {}, headers: { location: `${REPO_API}/pullrequests/128/merge/task-status/t1` } }
+    },
+    [`GET ${REPO_API}/pullrequests/128/merge/task-status/t1`]: () => ({ json: { task_status: 'SUCCESS' } })
+  }
+
+  it('signs in with the email and an API token, then reads, creates and merges', async () => {
+    const { ops, calls, settings, userData } = setupBitbucket(routes)
+    const repo = githubRepo('git@bitbucket.org:acme/widgets.git')
+    expect(await ops.getPullRequests(repo)).toBeNull()
+    expect(calls).toEqual([])
+    await expect(ops.connectBitbucket({ kind: 'cloud', email: 'nope', token: BB_TOKEN })).rejects.toThrow(/email/)
+    const conn = await ops.connectBitbucket({ kind: 'cloud', email: 'mikel@example.com', token: BB_TOKEN })
+    expect(conn.cloud).toEqual({ email: 'mikel@example.com', login: 'Mikel Garcia', error: null })
+    expect(calls.at(-1)?.auth).toBe(`Basic ${Buffer.from(`mikel@example.com:${BB_TOKEN}`).toString('base64')}`)
+    expect((await settings.getSettings()).bitbucketAuth).toBe('token')
+    expect(fs.readFileSync(path.join(userData, 'bitbucket-token.json'), 'utf8')).not.toContain(BB_TOKEN)
+
+    const res = await ops.getPullRequests(repo)
+    expect(res).toMatchObject({ provider: 'bitbucket-cloud', host: 'bitbucket.org', defaultBranch: 'main', canMerge: true, reportsConflicts: false, mergeMethods: ['merge', 'squash'] })
+    expect(res?.pulls.map((p) => [p.number, p.state, p.checks, p.openTasks, p.approvedBy.join()])).toEqual([
+      [128, 'open', 'passed', 1, 'Jon'],
+      [120, 'closed', 'none', 1, 'Jon']
+    ])
+    expect(await ops.getPullRequestCommits(repo, 128)).toEqual([{ sha: sha40('c'), subject: 'Saved cards', author: '' }])
+    expect(await ops.getPullRequestMergeChecks(repo, 128)).toBeNull()
+
+    const created = await ops.createPullRequest(repo, { head: 'feat/search', base: 'main', title: 'Search', body: 'B', draft: true })
+    expect(created.number).toBe(129)
+    expect(calls.find((c) => c.method === 'POST' && c.url === `${REPO_API}/pullrequests`)?.body).toEqual({
+      title: 'Search',
+      description: 'B',
+      source: { branch: { name: 'feat/search' } },
+      destination: { branch: { name: 'main' } },
+      draft: true,
+      close_source_branch: false
+    })
+
+    // The full sha of the abbreviated head is accepted; another commit is refused before merging.
+    await expect(ops.mergePullRequest(repo, 128, { method: 'squash', headSha: sha40('9') })).rejects.toThrow(/changed on Bitbucket/)
+    await expect(ops.mergePullRequest(repo, 128, { method: 'rebase', headSha: 'abcdef123456' + '0'.repeat(28) })).rejects.toThrow(/does not allow/)
+    await ops.mergePullRequest(repo, 128, { method: 'squash', headSha: 'abcdef123456' + '0'.repeat(28) })
+    expect(merges).toBe(1)
+    expect(calls.find((c) => c.url.endsWith('/pullrequests/128/merge'))?.body).toEqual({ merge_strategy: 'squash', close_source_branch: false })
+
+    expect((await ops.disconnectBitbucket({ kind: 'cloud' })).cloud).toBeNull()
+    expect(await ops.getPullRequests(repo)).toBeNull()
+  })
+})
+
+describe('Bitbucket Data Center pull requests', () => {
+  const SERVER = 'https://bitbucket.example.com'
+  const R = `${SERVER}/rest/api/1.0/projects/WEB/repos/widgets`
+  const pr = (id: number, from: string, project = 'WEB', state = 'OPEN') => ({
+    id,
+    version: 4,
+    title: `PR ${id}`,
+    state,
+    fromRef: { displayId: id === 57 ? 'fix/rounding' : 'fix', latestCommit: from, repository: { slug: 'widgets', project: { key: project } } },
+    toRef: { displayId: 'main', latestCommit: sha40('b'), repository: { slug: 'widgets', project: { key: 'WEB' } } },
+    author: { user: { name: 'ane', displayName: 'Ane' } },
+    reviewers: [{ user: { name: 'mikel', displayName: 'Mikel' }, status: 'UNAPPROVED' }],
+    properties: { openTaskCount: 1, mergeResult: { outcome: 'CLEAN' } }
+  })
+
+  it('signs in with an HTTP access token, reads, checks and merges, and checks out a fork’s pull request', async () => {
+    // "The server": a bare repository with the pull request refs Bitbucket keeps.
+    const work = initRepo()
+    const base = commitFile(work, 'a.txt', 'a\n', 'first')
+    git(work, ['checkout', '-q', '-b', 'fork'])
+    const forkSha = commitFile(work, 'f.txt', 'f\n', 'from a fork')
+    const bare = path.join(tmpDir('adar-bb-server-'), 'widgets.git')
+    git(work, ['init', '-q', '--bare', bare])
+    git(work, ['push', '-q', bare, `${base}:refs/heads/main`, `${forkSha}:refs/pull-requests/58/from`])
+    const repo = tmpDir('adar-bb-clone-')
+    git(repo, ['clone', '-q', bare, '.'])
+    git(repo, ['remote', 'set-url', 'origin', `${SERVER}/scm/web/widgets.git`])
+    git(repo, ['config', `url.${bare}.insteadOf`, `${SERVER}/scm/web/widgets.git`])
+
+    let version = 4
+    const { ops, calls, settings } = setupBitbucket({
+      [`GET ${SERVER}/rest/api/1.0/application-properties`]: () => ({ json: { version: '8.19.0' }, headers: { 'x-ausername': 'mikel' } }),
+      [`GET ${R}/pull-requests?state=OPEN&limit=50`]: () => ({ json: { values: [pr(57, sha40('a')), pr(58, forkSha, '~ANE')] } }),
+      [`GET ${R}/pull-requests?state=MERGED&order=NEWEST&limit=20`]: () => ({ json: { values: [] } }),
+      [`GET ${R}/pull-requests?state=DECLINED&order=NEWEST&limit=10`]: () => ({ json: { values: [] } }),
+      [`GET ${R}/settings/pull-requests`]: () => ({ json: { mergeConfig: { defaultStrategy: { id: 'no-ff' }, strategies: [{ id: 'no-ff' }, { id: 'squash' }] } } }),
+      [`GET ${R}/default-branch`]: () => ({ json: { displayId: 'main' } }),
+      [`GET ${SERVER}/rest/build-status/1.0/commits/${sha40('a')}`]: () => ({ json: { values: [{ name: 'ci', state: 'FAILED' }] } }),
+      [`GET ${SERVER}/rest/build-status/1.0/commits/${forkSha}`]: () => ({ json: { values: [] } }),
+      [`GET ${R}/pull-requests/57/merge`]: () => ({ json: { canMerge: false, conflicted: false, vetoes: [{ summaryMessage: 'Requires 2 approvals' }] } }),
+      [`GET ${R}/pull-requests/57`]: () => ({ json: { ...pr(57, sha40('a')), version } }),
+      [`POST ${R}/pull-requests/57/merge?version=4`]: () => ({ json: { state: 'MERGED' } }),
+      [`GET ${R}/pull-requests/58`]: () => ({ json: pr(58, forkSha, '~ANE') })
+    })
+    await expect(ops.connectBitbucket({ kind: 'server', url: 'http://bitbucket.example.com', token: BB_TOKEN })).rejects.toThrow(/https/)
+    const conn = await ops.connectBitbucket({ kind: 'server', url: `${SERVER}/`, token: BB_TOKEN, remoteHost: 'bitbucket.example.com' })
+    expect(conn.servers).toEqual([{ url: SERVER, host: 'bitbucket.example.com', login: 'mikel', error: null }])
+    expect(calls.at(-1)?.auth).toBe(`Bearer ${BB_TOKEN}`)
+    expect((await settings.getSettings()).bitbucketServers).toEqual([{ url: SERVER, hosts: ['bitbucket.example.com'] }])
+
+    const res = await ops.getPullRequests(repo)
+    expect(res).toMatchObject({ provider: 'bitbucket-server', host: 'bitbucket.example.com', viewer: 'mikel', mergeMethods: ['merge', 'squash'], mergeChecks: true, reportsConflicts: true })
+    expect(res?.pulls.map((p) => [p.number, p.checks, p.reviewRequested, p.headFork, p.url])).toEqual([
+      [57, 'failed', true, null, `${SERVER}/projects/WEB/repos/widgets/pull-requests/57`],
+      [58, 'none', true, '~ane/widgets', `${SERVER}/projects/WEB/repos/widgets/pull-requests/58`]
+    ])
+    expect(await ops.getPullRequestMergeChecks(repo, 57)).toEqual({ blocked: true, reasons: ['Requires 2 approvals'], conflicts: false })
+
+    await ops.mergePullRequest(repo, 57, { method: 'merge', headSha: sha40('a') })
+    expect(calls.at(-1)).toMatchObject({ method: 'POST', url: `${R}/pull-requests/57/merge?version=4`, body: { strategyId: 'no-ff' } })
+    await expect(ops.mergePullRequest(repo, 57, { method: 'merge', headSha: sha40('e') })).rejects.toThrow(/changed on Bitbucket/)
+
+    expect(await ops.pullRequestBranch(repo, 58)).toBe('pr/58')
+    expect(head(repo, 'pr/58')).toBe(forkSha)
+
+    expect((await ops.disconnectBitbucket({ kind: 'server', url: SERVER })).servers).toEqual([])
+    expect(await ops.getPullRequests(repo)).toBeNull()
   })
 })

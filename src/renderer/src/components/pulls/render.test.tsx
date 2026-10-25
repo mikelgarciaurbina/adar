@@ -45,6 +45,7 @@ const refs: RefsResult = {
 
 function pr(p: Partial<PullRequest>): PullRequest {
   return {
+    provider: 'github',
     number: 42,
     title: 'Workspaces: a dashboard for each tab group',
     body: 'Each tab group gets a **dashboard**.',
@@ -72,11 +73,14 @@ function pr(p: Partial<PullRequest>): PullRequest {
     mergeable: 'clean',
     mergeBlocked: false,
     viewerIsAuthor: true,
+    openTasks: 0,
     ...p
   }
 }
 
 const data = (pulls: PullRequest[], patch: Partial<RepoPullRequests> = {}): RepoPullRequests => ({
+  provider: 'github',
+  host: 'github.com',
   owner: 'acme',
   name: 'widgets',
   remote: 'origin',
@@ -86,6 +90,8 @@ const data = (pulls: PullRequest[], patch: Partial<RepoPullRequests> = {}): Repo
   mergeMethods: ['squash', 'merge'],
   deleteBranchOnMerge: false,
   canMerge: true,
+  reportsConflicts: true,
+  mergeChecks: false,
   pulls,
   ...patch
 })
@@ -160,15 +166,73 @@ describe('pull request panel', () => {
   })
 })
 
+describe('Bitbucket pull requests', () => {
+  const cloud = (p: Partial<PullRequest> = {}) =>
+    pr({ provider: 'bitbucket-cloud', url: 'https://bitbucket.org/acme/widgets/pull-requests/42', checks: 'running', checkRuns: [{ name: 'pipeline', state: 'running', url: null }], openTasks: 1, mergeable: 'unknown', ...p })
+  const cloudData = (pulls: PullRequest[], patch: Partial<RepoPullRequests> = {}) =>
+    data(pulls, { provider: 'bitbucket-cloud', host: 'bitbucket.org', webUrl: 'https://bitbucket.org/acme/widgets', mergeMethods: ['merge', 'squash', 'fast-forward'], reportsConflicts: false, ...patch })
+
+  it('shows builds and tasks, and leaves out the conflicts Bitbucket Cloud does not report', () => {
+    seed(cloudData([cloud()]))
+    const html = renderToStaticMarkup(<PullPanel tab={tab} number={42} />)
+    expect(html).toContain('Open on Bitbucket')
+    expect(html).toContain('1 of 1 build running')
+    expect(html).toContain('1 open task')
+    expect(html).not.toContain('conflicts')
+    expect(html).not.toContain('Checking for conflicts')
+    expect(html).toContain('>Merge<')
+  })
+
+  it('names Data Center reviews and offers to review on Bitbucket', () => {
+    seed(
+      data([pr({ provider: 'bitbucket-server', viewerIsAuthor: false, review: 'changes-requested', changesRequestedBy: ['Ane Etxeberria'], mergeable: 'conflicts' })], {
+        provider: 'bitbucket-server',
+        host: 'bitbucket.example.com',
+        mergeChecks: true
+      })
+    )
+    const html = renderToStaticMarkup(<PullPanel tab={tab} number={42} />)
+    expect(html).toContain('Ane Etxeberria marked it as needing work')
+    expect(html).toContain('Conflicts with main')
+    expect(html).toContain('Review on Bitbucket')
+  })
+
+  it('says Declined and offers to delete the branch here', () => {
+    seed(cloudData([cloud({ state: 'closed', closedAt: '2026-10-25T11:00:00Z' })]))
+    const html = renderToStaticMarkup(<PullPanel tab={tab} number={42} />)
+    expect(html).toContain('Declined')
+    expect(html).not.toContain('Closed without merging')
+    expect(html).toContain('Delete <strong>feat/x</strong> here?')
+    expect(html).toContain('Keep it')
+  })
+
+  it('asks for an Atlassian API token, or a Data Center address and HTTP access token', () => {
+    const c = renderToStaticMarkup(<ConnectDialog provider="bitbucket-cloud" />)
+    expect(c).toContain('Atlassian account email')
+    expect(c).toContain('API token')
+    expect(c).toContain('write:pullrequest:bitbucket')
+    const s = renderToStaticMarkup(<ConnectDialog provider="bitbucket-server" server="https://bitbucket.example.com" />)
+    expect(s).toContain('Bitbucket address')
+    expect(s).toContain('value="https://bitbucket.example.com"')
+    expect(s).toContain('HTTP access token')
+    expect(s).toContain('Repository write')
+  })
+
+  it('creates into the Bitbucket repository', () => {
+    seed(cloudData([]))
+    expect(renderToStaticMarkup(<CreatePullDialog repo={REPO} head="feat/new" />)).toContain('bitbucket.org/acme/widgets')
+  })
+})
+
 describe('pull request dialogs', () => {
   it('offers gh when it is signed in, and the token otherwise', () => {
     seed(null, { ...connection, method: null, login: null })
-    const html = renderToStaticMarkup(<ConnectDialog />)
+    const html = renderToStaticMarkup(<ConnectDialog provider="github" />)
     expect(html).toContain('Found on this')
     expect(html).toContain('Signed in as <strong>mikel</strong>')
     expect(html).toContain('only talks to api.github.com')
     seed(null, { ...connection, method: null, login: null, ghLogin: null })
-    const noGh = renderToStaticMarkup(<ConnectDialog />)
+    const noGh = renderToStaticMarkup(<ConnectDialog provider="github" />)
     expect(noGh).toContain('Looking for the GitHub CLI…')
     expect(noGh).toContain('Personal access token')
   })

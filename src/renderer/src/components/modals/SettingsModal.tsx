@@ -5,7 +5,7 @@ import { useEffect, useId, useRef, useState } from 'react'
 import { Download, FileDiff, GitBranch, GitGraph, Plug, RefreshCw, Settings, SlidersHorizontal } from 'lucide-react'
 import { api, cli, isElectron } from '@renderer/api/client'
 import { installCliCommand, uninstallCliCommand } from '@renderer/actions/cli'
-import { openConnect, turnOffPullRequests } from '@renderer/actions/pulls'
+import { openConnect, turnOffBitbucket, turnOffPullRequests } from '@renderer/actions/pulls'
 import { usePulls } from '@renderer/components/pulls/pullStore'
 import type { CliStatus } from '@shared/cli'
 import { Button, Spinner } from '@renderer/components/common/Button'
@@ -417,28 +417,40 @@ function DiffSection() {
   )
 }
 
-function GithubSetting() {
+/** Settings → Integrations: one row per place pull requests come from. */
+function PullRequestSettings() {
   const connection = usePulls((st) => st.connection)
+  const bitbucket = usePulls((st) => st.bitbucket)
   useEffect(() => {
     void usePulls.getState().loadConnection()
+    void usePulls.getState().loadBitbucket()
   }, [])
-  const on = !!connection?.method
   const reopen = () => useApp.getState().openModal({ kind: 'settings', section: 'integrations' })
+  const status = (text: string, error?: boolean) => <span className={error ? 'md-update-status md-update-error' : undefined}>{text}</span>
+
+  const githubOn = !!connection?.method
   const how = connection?.method === 'gh' ? 'Through the GitHub CLI' : 'With a personal access token'
-  const description = !connection
+  const githubText = !connection
     ? 'Checking…'
-    : !on
+    : !githubOn
       ? 'Show pull requests on their branches, and create, check out and merge them. Adar talks to GitHub only while this is on.'
-      : connection.error
-        ? connection.error
-        : `${how}${connection.login ? ` as ${connection.login}` : ''}. Checked when Adar fetches.`
+      : (connection.error ?? `${how}${connection.login ? ` as ${connection.login}` : ''}. Checked when Adar fetches.`)
+
+  const cloud = bitbucket?.cloud ?? null
+  const cloudTarget = { provider: 'bitbucket-cloud' as const, host: 'bitbucket.org' }
+  const cloudText = !bitbucket
+    ? 'Checking…'
+    : !cloud
+      ? 'The same for repositories on bitbucket.org, with an API token. Adar talks to Bitbucket only while this is on.'
+      : (cloud.error ?? `As ${cloud.login ?? cloud.email}${cloud.login ? ` (${cloud.email})` : ''}, with an API token.`)
+
   return (
-    <SettingGroup title="GitHub">
-      <SettingRow label="Pull requests" description={<span className={connection?.error ? 'md-update-status md-update-error' : undefined}>{description}</span>}>
-        {on ? (
+    <SettingGroup title="Pull requests" description="Bitbucket Data Center servers are turned on from one of their repositories.">
+      <SettingRow label="GitHub" description={status(githubText, !!connection?.error)}>
+        {githubOn ? (
           <div className="md-row-buttons">
             {connection?.error && (
-              <Button size="sm" onClick={() => openConnect(reopen)}>
+              <Button size="sm" onClick={() => openConnect(null, reopen)}>
                 Sign in again…
               </Button>
             )}
@@ -447,11 +459,47 @@ function GithubSetting() {
             </Button>
           </div>
         ) : (
-          <Button size="sm" variant="primary" disabled={!connection} onClick={() => openConnect(reopen)}>
+          <Button size="sm" variant="primary" disabled={!connection} onClick={() => openConnect(null, reopen)}>
             Turn on…
           </Button>
         )}
       </SettingRow>
+      <SettingRow label="Bitbucket Cloud" description={status(cloudText, !!cloud?.error)}>
+        {cloud ? (
+          <div className="md-row-buttons">
+            {cloud.error && (
+              <Button size="sm" onClick={() => openConnect(cloudTarget, reopen)}>
+                Sign in again…
+              </Button>
+            )}
+            <Button size="sm" onClick={() => void turnOffBitbucket({ kind: 'cloud' })}>
+              Turn off
+            </Button>
+          </div>
+        ) : (
+          <Button size="sm" variant="primary" disabled={!bitbucket} onClick={() => openConnect(cloudTarget, reopen)}>
+            Turn on…
+          </Button>
+        )}
+      </SettingRow>
+      {bitbucket?.servers.map((server) => (
+        <SettingRow
+          key={server.url}
+          label={server.host}
+          description={status(server.error ?? `Bitbucket Data Center${server.login ? `, as ${server.login}` : ''}, with an HTTP access token.`, !!server.error)}
+        >
+          <div className="md-row-buttons">
+            {server.error && (
+              <Button size="sm" onClick={() => openConnect({ provider: 'bitbucket-server', server: server.url, host: server.host }, reopen)}>
+                Sign in again…
+              </Button>
+            )}
+            <Button size="sm" onClick={() => void turnOffBitbucket({ kind: 'server', url: server.url })}>
+              Turn off
+            </Button>
+          </div>
+        </SettingRow>
+      ))}
     </SettingGroup>
   )
 }
@@ -465,7 +513,7 @@ function IntegrationsSection() {
   const terminals = TERMINALS.includes(s.terminalApp) || !s.terminalApp ? TERMINALS : [...TERMINALS, s.terminalApp]
   return (
     <>
-      <GithubSetting />
+      <PullRequestSettings />
       <SettingGroup title="Open in…">
         <SettingRow
           label="Editor"

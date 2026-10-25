@@ -1,15 +1,23 @@
-// GitHub pull requests (opt-in): types shared by the backend (src/main/hosting) and the
-// renderer (components/pulls), the GraphQL query and the pure mapping of its answer.
-// Only github.com for now; GitLab, Bitbucket and Azure DevOps would reuse the same types.
+// Pull requests (opt-in) from GitHub, Bitbucket Cloud and Bitbucket Data Center: types shared by
+// the backend (src/main/hosting) and the renderer (components/pulls), GitHub's GraphQL query and the
+// pure mapping of its answer. Bitbucket's answers are mapped in bitbucket.ts.
 
 export const GITHUB_API = 'https://api.github.com'
+export const BITBUCKET_API = 'https://api.bitbucket.org/2.0'
+
+/** Where a repository's pull requests live. */
+export type HostingProvider = 'github' | 'bitbucket-cloud' | 'bitbucket-server'
+
+/** The name people know each provider by. */
+export const PROVIDER_NAMES: Record<HostingProvider, string> = { github: 'GitHub', 'bitbucket-cloud': 'Bitbucket', 'bitbucket-server': 'Bitbucket' }
 
 export type GithubAuthMethod = 'gh' | 'token'
 export type PullState = 'open' | 'draft' | 'merged' | 'closed'
 /** Combined state of a pull request's checks (GitHub Actions, status checks). */
 export type ChecksState = 'passed' | 'failed' | 'running' | 'none'
 export type ReviewState = 'approved' | 'changes-requested' | 'review-required' | 'none'
-export type MergeMethod = 'squash' | 'merge' | 'rebase'
+/** Ways of merging, whatever each provider calls them (Bitbucket: merge commit, squash, fast-forward…). */
+export type MergeMethod = 'squash' | 'merge' | 'rebase' | 'fast-forward'
 
 export interface PullCheck {
   name: string
@@ -19,6 +27,7 @@ export interface PullCheck {
 }
 
 export interface PullRequest {
+  provider: HostingProvider
   number: number
   title: string
   /** Markdown description, cut to MAX_BODY characters ('' for merged and closed ones). */
@@ -29,6 +38,7 @@ export interface PullRequest {
   authorName: string | null
   /** Branch in the head repository. */
   headRef: string
+  /** Last commit: the full sha, or Bitbucket Cloud's 12-character one (compare with sameCommit). '' when unknown. */
   headSha: string
   /** owner/name of the head repository when it is a fork, else null. */
   headFork: string | null
@@ -55,9 +65,11 @@ export interface PullRequest {
   /** Branch protection does not allow merging yet (required checks or reviews missing). */
   mergeBlocked: boolean
   viewerIsAuthor: boolean
+  /** Open tasks (Bitbucket); 0 elsewhere. */
+  openTasks: number
 }
 
-/** A commit of a pull request, as GitHub lists it. */
+/** A commit of a pull request, as the provider lists it. */
 export interface PullCommit {
   sha: string
   subject: string
@@ -65,6 +77,10 @@ export interface PullCommit {
 }
 
 export interface RepoPullRequests {
+  provider: HostingProvider
+  /** github.com, bitbucket.org or the Bitbucket server's host. */
+  host: string
+  /** Owner, Bitbucket workspace or Data Center project key. */
   owner: string
   name: string
   /** Git remote the repository was found through ("origin"). */
@@ -73,14 +89,44 @@ export interface RepoPullRequests {
   /** Signed-in user. */
   viewer: string
   defaultBranch: string
-  /** Ways of merging the repository allows, in the order GitHub offers them. */
+  /** Ways of merging the repository allows, the provider's default first (GitHub: in its order). */
   mergeMethods: MergeMethod[]
-  /** GitHub deletes head branches after a merge. */
+  /** The provider deletes head branches after a merge. */
   deleteBranchOnMerge: boolean
   /** The signed-in user can merge (write access or more). */
   canMerge: boolean
+  /** The provider says whether a pull request conflicts (Bitbucket Cloud does not). */
+  reportsConflicts: boolean
+  /** Ask getPullRequestMergeChecks before merging (Bitbucket Data Center's merge checks). */
+  mergeChecks: boolean
   /** Open and draft pull requests (most recently updated first), then recently merged and closed ones. */
   pulls: PullRequest[]
+}
+
+/** What stands between a pull request and merging it, as the provider says (Bitbucket Data Center). */
+export interface MergeChecks {
+  /** The provider would refuse to merge now. */
+  blocked: boolean
+  /** Its reasons, in its words ("Requires 2 approvals"). */
+  reasons: string[]
+  /** It conflicts with the base branch (null: not said). */
+  conflicts: boolean | null
+}
+
+/** A Bitbucket Data Center server pull requests are on for (settings.bitbucketServers). */
+export interface BitbucketServer {
+  /** Web address, https://host[:port][/context], without a trailing slash. */
+  url: string
+  /** Hosts of remotes that live on it (the SSH host may differ from the web one). */
+  hosts: string[]
+}
+
+export interface BitbucketConnections {
+  /** Bitbucket Cloud, when on: the Atlassian account's email and who it is. */
+  cloud: { email: string; login: string | null; error: string | null } | null
+  servers: Array<{ url: string; host: string; login: string | null; error: string | null }>
+  /** Tokens can be kept encrypted on this computer. */
+  canStoreToken: boolean
 }
 
 export interface GithubConnection {
@@ -156,6 +202,14 @@ const str = (v: unknown): string => (typeof v === 'string' ? v : '')
 const num = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0)
 const nodes = (v: unknown): Obj[] => (isObj(v) && Array.isArray(v.nodes) ? v.nodes.filter(isObj) : [])
 
+/** Two commit ids for the same commit (one may be abbreviated, as Bitbucket Cloud's are). */
+export function sameCommit(a: string | null | undefined, b: string | null | undefined): boolean {
+  if (!a || !b || a.length < 7 || b.length < 7) return false
+  const x = a.toLowerCase()
+  const y = b.toLowerCase()
+  return x.startsWith(y) || y.startsWith(x)
+}
+
 /** https links only (check and pull request pages); anything else is dropped. */
 export function httpsUrl(v: unknown): string | null {
   if (typeof v !== 'string') return null
@@ -200,6 +254,16 @@ function statusContextState(state: string): PullCheck['state'] {
   return 'failed' // ERROR, FAILURE
 }
 
+/** The combined state of some checks (failed beats running beats passed), failed ones first. */
+export function summarizeChecks(list: PullCheck[], overall = ''): { checks: ChecksState; runs: PullCheck[] } {
+  const runs = [...list].sort((a, b) => CHECK_ORDER[a.state] - CHECK_ORDER[b.state] || a.name.localeCompare(b.name))
+  let checks: ChecksState = 'none'
+  if (runs.some((r) => r.state === 'failed') || overall === 'FAILURE' || overall === 'ERROR') checks = 'failed'
+  else if (runs.some((r) => r.state === 'running') || overall === 'PENDING' || overall === 'EXPECTED') checks = 'running'
+  else if (runs.length || overall === 'SUCCESS') checks = 'passed'
+  return { checks, runs: runs.slice(0, MAX_CHECKS) }
+}
+
 /** Checks of a pull request's last commit (its statusCheckRollup). */
 export function checksOf(rollup: unknown): { checks: ChecksState; runs: PullCheck[] } {
   if (!isObj(rollup)) return { checks: 'none', runs: [] }
@@ -208,13 +272,7 @@ export function checksOf(rollup: unknown): { checks: ChecksState; runs: PullChec
     if (c.__typename === 'CheckRun') runs.push({ name: str(c.name), state: checkRunState(str(c.status), str(c.conclusion)), url: httpsUrl(c.detailsUrl) })
     else if (c.__typename === 'StatusContext') runs.push({ name: str(c.context), state: statusContextState(str(c.state)), url: httpsUrl(c.targetUrl) })
   }
-  runs.sort((a, b) => CHECK_ORDER[a.state] - CHECK_ORDER[b.state] || a.name.localeCompare(b.name))
-  const state = str(rollup.state)
-  let checks: ChecksState = 'none'
-  if (runs.some((r) => r.state === 'failed') || state === 'FAILURE' || state === 'ERROR') checks = 'failed'
-  else if (runs.some((r) => r.state === 'running') || state === 'PENDING' || state === 'EXPECTED') checks = 'running'
-  else if (runs.length || state === 'SUCCESS') checks = 'passed'
-  return { checks, runs: runs.slice(0, MAX_CHECKS) }
+  return summarizeChecks(runs, str(rollup.state))
 }
 
 function reviewOf(decision: string): ReviewState {
@@ -257,6 +315,7 @@ export function pullFromNode(node: unknown, viewer: string): PullRequest | null 
   const open = state === 'open' || state === 'draft'
   const mergeable = str(node.mergeable)
   return {
+    provider: 'github',
     number,
     title: str(node.title).slice(0, MAX_TITLE * 4),
     body: open ? str(node.body).slice(0, MAX_BODY) : '',
@@ -283,7 +342,8 @@ export function pullFromNode(node: unknown, viewer: string): PullRequest | null 
     reviewRequested: !!viewer && requests.some((r) => r.__typename === 'User' && str(r.login).toLowerCase() === viewer.toLowerCase()),
     mergeable: mergeable === 'MERGEABLE' ? 'clean' : mergeable === 'CONFLICTING' ? 'conflicts' : 'unknown',
     mergeBlocked: str(node.mergeStateStatus) === 'BLOCKED',
-    viewerIsAuthor: node.viewerDidAuthor === true || (!!viewer && str(author.login).toLowerCase() === viewer.toLowerCase())
+    viewerIsAuthor: node.viewerDidAuthor === true || (!!viewer && str(author.login).toLowerCase() === viewer.toLowerCase()),
+    openTasks: 0
   }
 }
 
@@ -307,6 +367,8 @@ export function pullsFromQuery(data: unknown, at: { owner: string; name: string;
   if (repo.rebaseMergeAllowed === true) methods.push('rebase')
   const permission = str(repo.viewerPermission)
   return {
+    provider: 'github',
+    host: 'github.com',
     owner: at.owner,
     name: at.name,
     remote: at.remote,
@@ -316,6 +378,8 @@ export function pullsFromQuery(data: unknown, at: { owner: string; name: string;
     mergeMethods: methods.length ? methods : ['merge'],
     deleteBranchOnMerge: repo.deleteBranchOnMerge === true,
     canMerge: permission === 'ADMIN' || permission === 'MAINTAIN' || permission === 'WRITE',
+    reportsConflicts: true,
+    mergeChecks: false,
     pulls
   }
 }

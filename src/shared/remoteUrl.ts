@@ -121,6 +121,79 @@ export function remoteWebUrl(raw: string): string | null {
   return `${parsed.scheme}://${host}${portPart}${path ? '/' + path : ''}`
 }
 
+/** Where a remote's pull requests live: its provider, host and owner/name (Data Center: project key/repo). */
+export interface RemoteHosting {
+  provider: 'github' | 'bitbucket-cloud' | 'bitbucket-server'
+  host: string
+  owner: string
+  name: string
+  /** Bitbucket Data Center: the server's web address (a known server's, else a guess from the remote). */
+  server?: string
+}
+
+const SLUG = /^[A-Za-z0-9._-]{1,100}$/
+const isSlug = (s: string | undefined): s is string => !!s && SLUG.test(s) && s !== '.' && s !== '..'
+
+function urlHost(url: string): string {
+  try {
+    return new URL(url).host.toLowerCase()
+  } catch {
+    return ''
+  }
+}
+
+/**
+ * The hosting of a remote URL: github.com, bitbucket.org, or a Bitbucket Data Center server (an https remote under
+ * /scm/, an ssh remote on port 7999, or any remote on a server in `servers`). Null for anything else.
+ */
+export function hostingOf(raw: string, servers: ReadonlyArray<{ url: string; hosts: readonly string[] }> = []): RemoteHosting | null {
+  const gh = githubRepoOf(raw)
+  if (gh) return { provider: 'github', host: 'github.com', ...gh }
+  const parsed = parseRemoteUrl(raw)
+  if (!parsed) return null
+  const host = unalias(parsed.host.toLowerCase())
+  const path = cleanPath(parsed.path)
+  if (host === 'bitbucket.org') {
+    const [owner, name, ...rest] = path.split('/')
+    return isSlug(owner) && isSlug(name) && !rest.length ? { provider: 'bitbucket-cloud', host, owner, name } : null
+  }
+  const hostPort = parsed.port && !parsed.sshLike ? `${host}:${parsed.port}` : host
+  const known = servers.find((s) => s.hosts.includes(host) || s.hosts.includes(hostPort) || urlHost(s.url) === hostPort)
+  const scm = /^(?:(.+)\/)?scm\/([^/]+)\/([^/]+)$/.exec(path)
+  let project: string | undefined
+  let name: string | undefined
+  let context = ''
+  if (scm) {
+    context = scm[1] ?? ''
+    project = scm[2]
+    name = scm[3]
+  } else if (parsed.sshLike && (known || parsed.port === '7999')) {
+    const parts = path.split('/')
+    if (parts.length === 2) [project, name] = parts
+  }
+  if (!isSlug(project?.replace(/^~/, '')) || !isSlug(name) || /[^A-Za-z0-9/._-]/.test(context)) return null
+  const server = known?.url ?? (parsed.sshLike ? `https://${host}` : `${parsed.scheme}://${hostPort}${context ? `/${context}` : ''}`)
+  return { provider: 'bitbucket-server', host, owner: project!, name, server }
+}
+
+/**
+ * The remote pull requests are read from: the one gh was told to use (`preferred`), else origin, else the first
+ * remote with a supported hosting.
+ */
+export function pickHostingRemote(
+  remotes: ReadonlyArray<{ name: string; url: string }>,
+  servers: ReadonlyArray<{ url: string; hosts: readonly string[] }> = [],
+  preferred?: string | null
+): (RemoteHosting & { remote: string }) | null {
+  const found: Array<RemoteHosting & { remote: string }> = []
+  for (const r of remotes) {
+    if (!r.name || r.name.startsWith('-') || found.some((f) => f.remote === r.name)) continue
+    const h = hostingOf(r.url, servers)
+    if (h) found.push({ ...h, remote: r.name })
+  }
+  return found.find((f) => f.remote === preferred) ?? found.find((f) => f.remote === 'origin') ?? found[0] ?? null
+}
+
 /** owner/name of a github.com remote (aliases such as "github.com-work" included), or null for anything else. */
 export function githubRepoOf(raw: string): { owner: string; name: string } | null {
   const parsed = parseRemoteUrl(raw)

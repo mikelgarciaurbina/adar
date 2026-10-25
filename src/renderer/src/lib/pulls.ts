@@ -1,7 +1,7 @@
 // Pure helpers for pull requests in the UI: which pull request belongs to which branch label,
 // and the short texts the chips, the left panel and the details panel show.
 
-import type { PullRequest, RepoPullRequests } from '@shared/hosting'
+import { PROVIDER_NAMES, sameCommit, type PullRequest, type RepoPullRequests } from '@shared/hosting'
 import type { Ref, RefsResult } from '@shared/types'
 import { pluralize } from './format'
 
@@ -28,7 +28,7 @@ export function indexPulls(data: RepoPullRequests | null | undefined, refs: Refs
   for (const pr of data.pulls) {
     const open = isOpen(pr)
     if (open) index.open.push(pr)
-    const fits = (ref: Ref | undefined) => !!ref && (open || (!!pr.headSha && ref.sha === pr.headSha))
+    const fits = (ref: Ref | undefined) => !!ref && (open || sameCommit(ref.sha, pr.headSha))
     if (pr.headFork) {
       const local = locals.find((b) => b.name === `pr/${pr.number}`)
       if (fits(local) && !index.byLocal.has(local!.name)) index.byLocal.set(local!.name, pr)
@@ -52,21 +52,28 @@ export function pullForRef(index: PullIndex, ref: Pick<Ref, 'name' | 'type'>): P
   return undefined
 }
 
+/** "GitHub" or "Bitbucket". */
+export const providerName = (pr: Pick<PullRequest, 'provider'>) => PROVIDER_NAMES[pr.provider]
+
 export function stateLabel(pr: PullRequest): string {
+  if (pr.state === 'closed' && pr.provider !== 'github') return 'Declined'
   return { open: 'Open', draft: 'Draft', merged: 'Merged', closed: 'Closed' }[pr.state]
 }
 
 export function checksLabel(pr: PullRequest): string | null {
+  // Bitbucket calls them builds.
+  const word = pr.provider === 'github' ? 'check' : 'build'
+  const Word = word[0].toUpperCase() + word.slice(1)
   const failed = pr.checkRuns.filter((c) => c.state === 'failed').length
   const total = pr.checkRuns.length
   switch (pr.checks) {
     case 'passed':
-      return total ? (total === 1 ? 'The check passed' : `All ${total} checks passed`) : 'Checks passed'
+      return total ? (total === 1 ? `The ${word} passed` : `All ${total} ${word}s passed`) : `${Word}s passed`
     case 'failed':
-      return total ? `${failed} of ${pluralize(total, 'check')} failed` : 'Checks failed'
+      return total ? `${failed} of ${pluralize(total, word)} failed` : `${Word}s failed`
     case 'running': {
       const running = pr.checkRuns.filter((c) => c.state === 'running').length
-      return running ? `${pluralize(running, 'check')} running` : 'Checks running'
+      return running ? `${running} of ${pluralize(total, word)} running` : `${Word}s running`
     }
     default:
       return null
@@ -75,6 +82,7 @@ export function checksLabel(pr: PullRequest): string | null {
 
 export function reviewLabel(pr: PullRequest): string | null {
   const names = (list: string[]) => (list.length > 2 ? `${list.slice(0, 2).join(', ')} and ${list.length - 2} more` : list.join(' and '))
+  if (pr.changesRequestedBy.length && pr.provider === 'bitbucket-server') return `${names(pr.changesRequestedBy)} marked it as needing work`
   if (pr.changesRequestedBy.length) return `Changes requested by ${names(pr.changesRequestedBy)}`
   if (pr.review === 'approved') return pr.approvedBy.length ? `Approved by ${names(pr.approvedBy)}` : 'Approved'
   if (pr.reviewRequests.length) return `Waiting for review from ${names(pr.reviewRequests)}`
@@ -97,11 +105,23 @@ export function pullTitle(pr: PullRequest): string {
 /** What stands between this pull request and merging it, or null when it can be merged. */
 export function mergeBlocker(pr: PullRequest, data: Pick<RepoPullRequests, 'canMerge'>): string | null {
   if (!data.canMerge) return 'You do not have permission to merge in this repository.'
-  if (pr.state === 'draft') return 'It is a draft. Mark it ready for review on GitHub first.'
+  if (pr.state === 'draft') return `It is a draft. Mark it ready for review on ${providerName(pr)} first.`
   if (pr.mergeable === 'conflicts') return `It conflicts with ${pr.baseRef}.`
   if (pr.checks === 'failed' && pr.mergeBlocked) return `${pr.baseRef} needs passing checks.`
   if (pr.mergeBlocked) return `${pr.baseRef} needs ${pr.checks === 'running' ? 'the checks to finish' : 'an approving review'} first.`
   return null
+}
+
+/** Bitbucket Data Center's merge checks as one sentence: "Bitbucket says: it conflicts with main, and …". */
+export function mergeChecksText(reasons: string[]): string {
+  const parts = reasons
+    .map((r) => r.trim().replace(/[.\s]+$/, ''))
+    .filter(Boolean)
+    // Lower-case the first word unless it is an acronym ("PR", "CI").
+    .map((r) => (/^[A-Z][^A-Z]/.test(r) ? r[0].toLowerCase() + r.slice(1) : r))
+  if (!parts.length) return 'Bitbucket says it cannot be merged yet.'
+  const list = parts.length === 1 ? parts[0] : `${parts.slice(0, -1).join(', ')}, and ${parts[parts.length - 1]}`
+  return `Bitbucket says: ${list}.`
 }
 
 /** A title for a new pull request: the only commit's subject, else the branch name in words. */

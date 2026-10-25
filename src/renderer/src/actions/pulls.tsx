@@ -1,45 +1,54 @@
-// User-level pull request actions (GitHub): turning them on, creating one (pushing the branch
-// first), checking one out, merging it and cleaning up afterwards, bringing the base branch in.
+// User-level pull request actions (GitHub and Bitbucket): turning them on, creating one (pushing the
+// branch first), checking one out, merging it and cleaning up afterwards, bringing the base branch in.
 // Everything that touches the repository goes through actions/git so it behaves like the rest.
 
 import { api } from '@renderer/api/client'
 import { confirm } from '@renderer/components/common/dialogs'
 import { toast } from '@renderer/components/common/toast'
-import { isGithubRepo, pullIndexOf, usePulls } from '@renderer/components/pulls/pullStore'
+import { hostingOn, pullIndexOf, repoHosting, usePulls, type RepoHosting } from '@renderer/components/pulls/pullStore'
 import { localBranchFor, pushPlan } from '@renderer/lib/pulls'
 import { currentBranch } from '@renderer/lib/refs'
 import { pluralize } from '@renderer/lib/format'
 import { useApp, type RepoTab } from '@renderer/store/appStore'
 import { describeError } from '@shared/errors'
-import type { CreatePullOptions, MergeMethod, PullRequest, RepoPullRequests } from '@shared/hosting'
+import { sameCommit, type CreatePullOptions, type HostingProvider, type MergeMethod, type PullRequest, type RepoPullRequests } from '@shared/hosting'
 import * as git from './git'
 
 const store = () => useApp.getState()
 const tabOf = (repo: string): RepoTab | undefined => store().tabs.find((t) => t.path === repo)
 const pulls = () => usePulls.getState()
 
+const commits = (pr: PullRequest) => (pr.commitCount ? pluralize(pr.commitCount, 'commit') : 'commits')
+
 export const MERGE_LABELS: Record<MergeMethod, { button: string; menu: string; hint: (pr: PullRequest) => string }> = {
   squash: { button: 'Squash and merge', menu: 'Squash and merge', hint: (pr) => `One commit on ${pr.baseRef}` },
-  merge: { button: 'Merge', menu: 'Merge commit', hint: (pr) => `The ${pluralize(pr.commitCount || 1, 'commit')} plus a merge commit` },
-  rebase: { button: 'Rebase and merge', menu: 'Rebase and merge', hint: (pr) => `The ${pluralize(pr.commitCount || 1, 'commit')}, rebased onto ${pr.baseRef}` }
+  merge: { button: 'Merge', menu: 'Merge commit', hint: (pr) => `The ${commits(pr)} plus a merge commit` },
+  rebase: { button: 'Rebase and merge', menu: 'Rebase and merge', hint: (pr) => `The ${commits(pr)}, rebased onto ${pr.baseRef}` },
+  'fast-forward': { button: 'Fast-forward', menu: 'Fast-forward', hint: (pr) => `The ${commits(pr)} as they are, only if ${pr.baseRef} has not moved` }
 }
 
-const METHOD_KEY = 'adar.pullMergeMethod'
+/** The merge menu's label: Bitbucket's own names for its strategies. */
+export function mergeMenuLabel(method: MergeMethod, provider: HostingProvider): string {
+  if (provider === 'github') return MERGE_LABELS[method].menu
+  return { merge: 'Merge commit', squash: 'Squash', rebase: 'Rebase', 'fast-forward': 'Fast-forward' }[method]
+}
 
-/** The way of merging used last time, when the repository allows it, else the first one it allows. */
-export function preferredMergeMethod(data: Pick<RepoPullRequests, 'mergeMethods'>): MergeMethod {
+const methodKey = (provider: HostingProvider) => `adar.pullMergeMethod.${provider}`
+
+/** The way of merging used last time with this provider, when the repository allows it, else its first (default) one. */
+export function preferredMergeMethod(data: Pick<RepoPullRequests, 'mergeMethods' | 'provider'>): MergeMethod {
   let last: string | null = null
   try {
-    last = localStorage.getItem(METHOD_KEY)
+    last = localStorage.getItem(methodKey(data.provider))
   } catch {
     /* storage unavailable */
   }
   return data.mergeMethods.find((m) => m === last) ?? data.mergeMethods[0] ?? 'merge'
 }
 
-function rememberMergeMethod(method: MergeMethod): void {
+function rememberMergeMethod(method: MergeMethod, provider: HostingProvider): void {
   try {
-    localStorage.setItem(METHOD_KEY, method)
+    localStorage.setItem(methodKey(provider), method)
   } catch {
     /* storage unavailable */
   }
@@ -50,21 +59,43 @@ export function selectPull(repo: string, number: number): void {
   store().select(repo, { kind: 'pull', number })
 }
 
-/** Turn pull requests on (the sign-in dialog), then run `next`. */
-export function openConnect(next?: () => void): void {
-  store().openModal({ kind: 'github-connect', next })
+/** Turn pull requests on for a repository's hosting, or for GitHub (the sign-in dialog), then run `next`. */
+export function openConnect(hosting: Pick<RepoHosting, 'provider' | 'server' | 'host'> | null = null, next?: () => void): void {
+  store().openModal({
+    kind: 'pulls-connect',
+    provider: hosting?.provider ?? 'github',
+    server: hosting?.server,
+    remoteHost: hosting?.provider === 'bitbucket-server' ? hosting.host : undefined,
+    next
+  })
 }
 
 export async function turnOffPullRequests(): Promise<void> {
   try {
     pulls().setConnection(await api.disconnectGithub())
-    toast.success('Pull requests are off')
+    toast.success('GitHub pull requests are off')
   } catch (err) {
     toast.error(err)
   }
 }
 
-export function openOnGithub(url: string): void {
+/** Take the Bitbucket settings the backend changed (servers decide which remotes count as Bitbucket). */
+export async function syncHostingSettings(): Promise<void> {
+  const s = await api.getSettings()
+  useApp.setState((st) => ({ settings: { ...st.settings, bitbucketAuth: s.bitbucketAuth, bitbucketEmail: s.bitbucketEmail, bitbucketServers: s.bitbucketServers } }))
+}
+
+export async function turnOffBitbucket(target: { kind: 'cloud' } | { kind: 'server'; url: string }): Promise<void> {
+  try {
+    pulls().setBitbucket(await api.disconnectBitbucket(target))
+    await syncHostingSettings()
+    toast.success(target.kind === 'cloud' ? 'Bitbucket pull requests are off' : `Pull requests from ${new URL(target.url).host} are off`)
+  } catch (err) {
+    toast.error(err)
+  }
+}
+
+export function openWebPage(url: string): void {
   api.openExternal(url).catch((err) => toast.error(err))
 }
 
@@ -74,13 +105,14 @@ export function copyPullLink(pr: PullRequest): void {
 
 /** Open the create dialog for `head` (default: the checked-out branch), or show its pull request when it has one. */
 export async function startPullRequest(repo: string, opts: { head?: string; base?: string } = {}): Promise<void> {
-  if (!pulls().connection?.method) {
-    openConnect(() => void startPullRequest(repo, opts))
+  const tab = tabOf(repo)
+  const hosting = repoHosting(tab)
+  if (!hosting) {
+    toast.warning('This repository has no GitHub or Bitbucket remote')
     return
   }
-  const tab = tabOf(repo)
-  if (!isGithubRepo(tab)) {
-    toast.warning('This repository has no GitHub remote')
+  if (!hostingOn(hosting)) {
+    openConnect(hosting, () => void startPullRequest(repo, opts))
     return
   }
   const head = opts.head ?? currentBranch(tab?.refs ?? null)?.name
@@ -115,7 +147,7 @@ export async function createPullRequest(repo: string, data: RepoPullRequests, op
     else if (plan.kind === 'push') await api.push(repo, { branch: opts.head })
     store().setBusy(`push:${repo}`, 'Creating pull request…')
     const pr = await api.createPullRequest(repo, { ...opts, head: plan.head })
-    toast.success(`Created pull request #${pr.number}`, { actions: [{ label: 'Open on GitHub', onClick: () => openOnGithub(pr.url) }] })
+    toast.success(`Created pull request #${pr.number}`, { actions: [{ label: 'Open on GitHub', onClick: () => openWebPage(pr.url) }] })
     await pulls().load(repo, { force: true })
     selectPull(repo, pr.number)
     return pr
@@ -156,15 +188,16 @@ export async function bringBaseIn(repo: string, pr: PullRequest, data: RepoPullR
   await git.merge(repo, `${data.remote}/${pr.baseRef}`)
 }
 
-/** Merge on GitHub (after one confirmation), then optionally clean up here. */
+/** Merge on the provider (after one confirmation), then optionally clean up here. */
 export async function mergePull(repo: string, pr: PullRequest, data: RepoPullRequests, method: MergeMethod, cleanUp: boolean): Promise<boolean> {
   const local = localBranchFor(pr, tabOf(repo)?.refs ?? null, data.remote)
-  const what =
-    method === 'squash'
-      ? `${pr.baseRef} gets one commit, “${pr.title} (#${pr.number})”.`
-      : method === 'rebase'
-        ? `The ${pluralize(pr.commitCount || 1, 'commit')} ${pr.commitCount === 1 ? 'is' : 'are'} added to ${pr.baseRef} one by one.`
-        : `${pr.baseRef} gets the ${pluralize(pr.commitCount || 1, 'commit')} and a merge commit.`
+  const what = {
+    // Bitbucket writes its own message for the squashed commit.
+    squash: pr.provider === 'github' ? `${pr.baseRef} gets one commit, “${pr.title} (#${pr.number})”.` : `${pr.baseRef} gets one commit with the changes of the ${commits(pr)}.`,
+    rebase: `The ${commits(pr)} ${pr.commitCount === 1 ? 'is' : 'are'} added to ${pr.baseRef} one by one.`,
+    merge: `${pr.baseRef} gets the ${commits(pr)} and a merge commit.`,
+    'fast-forward': `${pr.baseRef} moves forward to the ${commits(pr)} as they are.`
+  }[method]
   const after = cleanUp && local ? ` Then Adar switches to ${pr.baseRef}, pulls, and deletes ${local.name}.` : ''
   const ok = await confirm({
     title: `${MERGE_LABELS[method].button} #${pr.number} into ${pr.baseRef}?`,
@@ -182,7 +215,7 @@ export async function mergePull(repo: string, pr: PullRequest, data: RepoPullReq
   } finally {
     store().setBusy(`merge-pr:${repo}`, null)
   }
-  rememberMergeMethod(method)
+  rememberMergeMethod(method, data.provider)
   toast.success(`Merged #${pr.number} into ${pr.baseRef}`)
   if (cleanUp && local) await cleanUpAfterMerge(repo, { ...pr, state: 'merged' }, data)
   else {
@@ -216,7 +249,7 @@ export async function cleanUpAfterMerge(repo: string, pr: PullRequest, data: Rep
     }
     const branch = local ? refs?.branches.find((b) => b.name === local.name) : undefined
     if (branch) {
-      if (branch.sha === pr.headSha) {
+      if (sameCommit(branch.sha, pr.headSha)) {
         // Exactly what GitHub merged (a squash or rebase merge leaves it "unmerged" for git): safe to delete.
         await api.deleteBranch(repo, branch.name, { force: true })
         store().pushHistory(repo, {
@@ -243,4 +276,10 @@ export async function cleanUpAfterMerge(repo: string, pr: PullRequest, data: Rep
     store().setBusy(`cleanup:${repo}`, null)
     void git.refresh(repo)
   }
+}
+
+/** Delete the local branch of a pull request that was closed (declined) without merging. */
+export async function deleteClosedBranch(repo: string, pr: PullRequest, data: RepoPullRequests): Promise<void> {
+  const branch = localBranchFor(pr, tabOf(repo)?.refs ?? null, data.remote)
+  if (branch) await git.deleteBranch(repo, branch)
 }

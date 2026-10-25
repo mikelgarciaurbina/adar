@@ -5,6 +5,7 @@
 import { randomBytes } from 'node:crypto'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
+import type { BitbucketServer } from '@shared/hosting'
 import { DEFAULT_SETTINGS, LEGACY_GROUP_COLORS, TAB_GROUP_COLORS, type AppSettings, type RecentRepo, type TabGroup, type TabGroupColor } from '@shared/types'
 import { UNRECORDED_VERSION } from '@shared/update'
 
@@ -20,7 +21,8 @@ const ENUMS: Partial<Record<keyof AppSettings, readonly string[]>> = {
   defaultPullMode: ['ff-only', 'merge', 'rebase'],
   dateFormat: ['relative', 'absolute'],
   diffViewMode: ['unified', 'split'],
-  githubAuth: ['', 'gh', 'token']
+  githubAuth: ['', 'gh', 'token'],
+  bitbucketAuth: ['', 'token']
 }
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
@@ -59,6 +61,35 @@ export function sanitizeTabGroups(raw: unknown): TabGroup[] | null {
   return out
 }
 
+/** A Bitbucket server's web address: https (no credentials, query or fragment), without a trailing slash; null if not one. */
+export function normalizeServerUrl(raw: unknown, allowLoopbackHttp = false): string | null {
+  if (typeof raw !== 'string') return null
+  let u: URL
+  try {
+    u = new URL(raw.trim())
+  } catch {
+    return null
+  }
+  const loopback = allowLoopbackHttp && u.protocol === 'http:' && u.hostname === '127.0.0.1'
+  if ((u.protocol !== 'https:' && !loopback) || u.username || u.password || u.search || u.hash) return null
+  return `${u.protocol}//${u.host.toLowerCase()}${u.pathname.replace(/\/+$/, '')}`
+}
+
+/** Well-formed Bitbucket servers: a valid address, lower-case hosts, no duplicates. */
+export function sanitizeBitbucketServers(raw: unknown): BitbucketServer[] | null {
+  if (!Array.isArray(raw)) return null
+  const out: BitbucketServer[] = []
+  for (const s of raw) {
+    if (!isPlainObject(s)) continue
+    const url = normalizeServerUrl(s.url, true)
+    if (!url || out.some((x) => x.url === url)) continue
+    const hosts = Array.isArray(s.hosts) ? s.hosts.filter((h): h is string => typeof h === 'string' && /^[a-z0-9.-]+(:\d+)?$/i.test(h)).map((h) => h.toLowerCase()) : []
+    out.push({ url, hosts: [...new Set(hosts)].slice(0, 20) })
+    if (out.length >= 50) break
+  }
+  return out
+}
+
 /**
  * Keep only known keys whose value has the same shape as the default.
  * Unknown keys and wrongly-typed values are ignored (the default/current value wins).
@@ -86,6 +117,11 @@ export function sanitizeSettings(base: AppSettings, rawPatch: unknown): AppSetti
     if (key === 'tabGroups') {
       const groups = sanitizeTabGroups(value)
       if (groups) target[key] = groups
+      continue
+    }
+    if (key === 'bitbucketServers') {
+      const servers = sanitizeBitbucketServers(value)
+      if (servers) target[key] = servers
       continue
     }
     if (Array.isArray(def)) {

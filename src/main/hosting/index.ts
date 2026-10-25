@@ -1,16 +1,16 @@
-// GitHub pull requests (opt-in): sign-in state, the pull requests of a repository's GitHub
-// remote, creating and merging them, and the local branch for checking one out.
-// Nothing talks to GitHub while settings.githubAuth is off.
+// Pull requests (opt-in) from GitHub, Bitbucket Cloud and Bitbucket Data Center: the sign-ins,
+// then each repository's pull requests through the provider its remote lives on (provider.ts),
+// and the local branch for checking one out. Nothing talks to a provider the user has not turned on.
 
+import { createHash } from 'node:crypto'
 import { AdarError } from '@shared/errors'
+import { bitbucketErrorMessage, cloudViewer, type CloudViewer } from '@shared/bitbucket'
 import {
+  BITBUCKET_API,
   MAX_BODY,
   MAX_TITLE,
-  PULLS_QUERY,
   isSafeBranchName,
-  pullCommitsFromRest,
-  pullFromRest,
-  pullsFromQuery,
+  type BitbucketConnections,
   type CreatePullOptions,
   type GithubAuthMethod,
   type GithubConnection,
@@ -18,58 +18,62 @@ import {
   type PullRequest,
   type RepoPullRequests
 } from '@shared/hosting'
-import { githubRepoOf } from '@shared/remoteUrl'
+import { pickHostingRemote } from '@shared/remoteUrl'
+import type { AppSettings } from '@shared/types'
 import type { GitContext } from '../git/context'
 import type { HostingOps } from '../git/ops'
 import { assertRepo } from '../git/read/common'
 import type { SystemServices } from '../system'
+import { normalizeServerUrl } from '../system/settings'
 import { GhCli, TokenStore, isPlausibleToken } from './auth'
+import { bitbucketCloudProvider, newCloudCaches } from './bitbucketCloud'
+import { bitbucketServerProvider, newServerCaches, serverWhoAmI } from './bitbucketServer'
 import { GithubClient } from './github'
-
-export interface GithubRemote {
-  remote: string
-  owner: string
-  name: string
-}
-
-const invalid = (message: string) => new AdarError({ message, code: 'INVALID_ARGUMENT' })
-
-/**
- * The remote pull requests live on, from `git config --get-regexp ^remote\..*\.url$` output: the one gh
- * was told to use (remote.<name>.gh-resolved = base), else origin, else the first github.com remote.
- */
-export function pickGithubRemote(urlLines: string, resolvedLines = ''): GithubRemote | null {
-  const found: GithubRemote[] = []
-  for (const line of urlLines.split('\n')) {
-    const m = /^remote\.(.+)\.url (.+)$/.exec(line.trim())
-    if (!m || m[1].startsWith('-')) continue
-    const repo = githubRepoOf(m[2])
-    if (repo && !found.some((f) => f.remote === m[1])) found.push({ remote: m[1], ...repo })
-  }
-  const base = /^remote\.(.+)\.gh-resolved base$/m.exec(resolvedLines)?.[1]
-  return found.find((f) => f.remote === base) ?? found.find((f) => f.remote === 'origin') ?? found[0] ?? null
-}
+import { githubProvider } from './githubProvider'
+import { ApiClient } from './http'
+import { invalid, type HostingRemote, type PullProvider } from './provider'
 
 export interface HostingOptions {
   /** The GitHub CLI (tests pass a fake so they never read the developer's own sign-in). */
   gh?: Pick<GhCli, 'token' | 'login' | 'forget'>
 }
 
-export function createHostingOps(ctx: GitContext, services: Pick<SystemServices, 'ready' | 'settings'>, options: HostingOptions = {}): HostingOps {
-  const gh = options.gh ?? new GhCli(services.ready)
-  const tokens = new TokenStore(ctx.platform.userDataDir, ctx.platform.secrets)
-  const fetchFn = ctx.platform.fetch ?? ((input: string, init?: RequestInit) => fetch(input, init))
-  const userAgent = `Adar/${ctx.platform.appVersion}`
-  /** Signed-in user per auth method, once GitHub confirmed it (cleared on a 401 or a change). */
-  let known: { method: GithubAuthMethod; login: string } | null = null
-
-  const method = async (): Promise<GithubAuthMethod | null> => {
-    const s = await services.settings.getSettings()
-    return s.githubAuth || null
+/** Remotes from `git config --get-regexp ^remote\..*\.url$` output. */
+export function parseRemoteUrls(lines: string): Array<{ name: string; url: string }> {
+  const out: Array<{ name: string; url: string }> = []
+  for (const line of lines.split('\n')) {
+    const m = /^remote\.(.+)\.url (.+)$/.exec(line.trim())
+    if (m) out.push({ name: m[1], url: m[2] })
   }
+  return out
+}
 
-  const tokenFor = async (m: GithubAuthMethod): Promise<string> => {
-    const token = m === 'gh' ? await gh.token() : await tokens.read()
+const MERGE_METHODS: readonly MergeMethod[] = ['squash', 'merge', 'rebase', 'fast-forward']
+const EMAIL = /^[^\s@]{1,100}@[^\s@]{1,200}$/
+const HOST = /^[a-z0-9.-]{1,200}(:\d{1,5})?$/
+
+export function createHostingOps(ctx: GitContext, services: Pick<SystemServices, 'ready' | 'settings'>, options: HostingOptions = {}): HostingOps {
+  const { platform } = ctx
+  const gh = options.gh ?? new GhCli(services.ready)
+  const githubTokens = new TokenStore(platform.userDataDir, platform.secrets)
+  const cloudTokens = new TokenStore(platform.userDataDir, platform.secrets, 'bitbucket-token.json')
+  const serverTokens = (url: string) =>
+    new TokenStore(platform.userDataDir, platform.secrets, `bitbucket-server-${createHash('sha256').update(url).digest('hex').slice(0, 16)}.json`)
+  const fetchFn = platform.fetch ?? ((input: string, init?: RequestInit) => fetch(input, init))
+  const userAgent = `Adar/${platform.appVersion}`
+  const caches = { cloud: newCloudCaches(), server: newServerCaches() }
+
+  /** Who each sign-in is, once the provider confirmed it (cleared on a 401 or a change). */
+  let githubKnown: { method: GithubAuthMethod; login: string } | null = null
+  let cloudKnown: (CloudViewer & { email: string }) | null = null
+  const serverKnown = new Map<string, string>()
+
+  const settings = () => services.settings.getSettings()
+
+  // ── GitHub ──────────────────────────────────────────────────────────────
+
+  const githubTokenFor = async (m: GithubAuthMethod): Promise<string> => {
+    const token = m === 'gh' ? await gh.token() : await githubTokens.read()
     if (token) return token
     throw new AdarError({
       message: m === 'gh' ? 'The GitHub CLI is not signed in to github.com. Run “gh auth login”, or sign in again in Adar.' : 'No GitHub token is stored on this computer. Sign in again.',
@@ -77,70 +81,148 @@ export function createHostingOps(ctx: GitContext, services: Pick<SystemServices,
     })
   }
 
-  const clientWith = (token: string) =>
+  const githubClient = (token: string) =>
     new GithubClient(
       fetchFn,
       token,
       userAgent,
       () => {
-        known = null
+        githubKnown = null
         gh.forget()
       },
-      ctx.platform.githubApi
+      platform.githubApi
     )
 
-  /** Client for the configured sign-in; AUTH_FAILED when pull requests are on but the sign-in is gone. */
-  const client = async (): Promise<GithubClient | null> => {
-    const m = await method()
-    return m ? clientWith(await tokenFor(m)) : null
-  }
-
-  const loginWith = async (c: GithubClient): Promise<string> => {
+  const githubLogin = async (c: GithubClient): Promise<string> => {
     const user = (await c.rest('GET', '/user')) as { login?: unknown } | null
     if (typeof user?.login !== 'string' || !user.login) throw new AdarError({ message: 'GitHub did not say who is signed in', code: 'AUTH_FAILED' })
     return user.login
   }
 
-  const githubRemote = async (repo: string): Promise<GithubRemote | null> => {
-    const [urls, resolved] = await Promise.all([
-      ctx.git(repo, ['config', '--get-regexp', '^remote\\..*\\.url$'], { allowFailure: true }),
-      ctx.git(repo, ['config', '--get-regexp', '^remote\\..*\\.gh-resolved$'], { allowFailure: true })
-    ])
-    return pickGithubRemote(urls.code === 0 ? urls.stdout : '', resolved.code === 0 ? resolved.stdout : '')
-  }
-
-  const requireRemote = async (repo: string): Promise<GithubRemote> => {
-    const at = await githubRemote(repo)
-    if (!at) throw invalid('This repository has no GitHub remote')
-    return at
-  }
-
-  const requireClient = async (): Promise<GithubClient> => {
-    const c = await client()
-    if (!c) throw invalid('Pull requests are off. Turn them on in Settings → Integrations.')
-    return c
-  }
-
-  const repoPath = (at: GithubRemote) => `/repos/${encodeURIComponent(at.owner)}/${encodeURIComponent(at.name)}`
-
   const getGithubConnection = async (opts?: { detectGh?: boolean }): Promise<GithubConnection> => {
-    const m = await method()
+    const m = (await settings()).githubAuth || null
     const ghLogin = opts?.detectGh === true || m === 'gh' ? await gh.login() : null
-    const canStoreToken = tokens.available()
     let login: string | null = null
     let error: string | null = null
     if (m) {
-      if (known?.method === m) login = known.login
+      if (githubKnown?.method === m) login = githubKnown.login
       else {
         try {
-          login = await loginWith(clientWith(await tokenFor(m)))
-          known = { method: m, login }
+          login = await githubLogin(githubClient(await githubTokenFor(m)))
+          githubKnown = { method: m, login }
         } catch (err) {
           error = err instanceof Error ? err.message : String(err)
         }
       }
     }
-    return { method: m, login, error, ghLogin, canStoreToken }
+    return { method: m, login, error, ghLogin, canStoreToken: githubTokens.available() }
+  }
+
+  // ── Bitbucket ───────────────────────────────────────────────────────────
+
+  const bitbucketClient = (base: string, auth: string, onUnauthorized: () => void) =>
+    new ApiClient({ fetch: fetchFn, base, auth, userAgent, service: 'Bitbucket', errorMessage: bitbucketErrorMessage, onUnauthorized })
+
+  const cloudClient = (email: string, token: string) =>
+    bitbucketClient(platform.bitbucketApi ?? BITBUCKET_API, `Basic ${Buffer.from(`${email}:${token}`).toString('base64')}`, () => (cloudKnown = null))
+
+  const serverClient = (url: string, token: string) => bitbucketClient(url, `Bearer ${token}`, () => serverKnown.delete(url))
+
+  const cloudToken = async () => {
+    const token = await cloudTokens.read()
+    if (token) return token
+    throw new AdarError({ message: 'No Bitbucket token is stored on this computer. Sign in again.', code: 'AUTH_FAILED' })
+  }
+
+  const serverToken = async (url: string) => {
+    const token = await serverTokens(url).read()
+    if (token) return token
+    throw new AdarError({ message: `No token for ${new URL(url).host} is stored on this computer. Sign in again.`, code: 'AUTH_FAILED' })
+  }
+
+  const cloudWho = async (api: ApiClient, email: string): Promise<CloudViewer> => {
+    if (cloudKnown?.email === email) return cloudKnown
+    const viewer = cloudViewer(await api.json('GET', '/user'))
+    if (!viewer) throw new AdarError({ message: 'Bitbucket did not say who is signed in', code: 'AUTH_FAILED' })
+    cloudKnown = { ...viewer, email }
+    return viewer
+  }
+
+  const serverWho = async (api: ApiClient, url: string): Promise<string> => {
+    const cached = serverKnown.get(url)
+    if (cached) return cached
+    const name = await serverWhoAmI(api)
+    serverKnown.set(url, name)
+    return name
+  }
+
+  const getBitbucketConnections = async (): Promise<BitbucketConnections> => {
+    const s = await settings()
+    const message = (err: unknown) => (err instanceof Error ? err.message : String(err))
+    let cloud: BitbucketConnections['cloud'] = null
+    if (s.bitbucketAuth) {
+      try {
+        const viewer = await cloudWho(cloudClient(s.bitbucketEmail, await cloudToken()), s.bitbucketEmail)
+        cloud = { email: s.bitbucketEmail, login: viewer.name, error: null }
+      } catch (err) {
+        cloud = { email: s.bitbucketEmail, login: null, error: message(err) }
+      }
+    }
+    const servers = await Promise.all(
+      s.bitbucketServers.map(async ({ url }) => {
+        const host = new URL(url).host
+        try {
+          return { url, host, login: await serverWho(serverClient(url, await serverToken(url)), url), error: null }
+        } catch (err) {
+          return { url, host, login: null, error: message(err) }
+        }
+      })
+    )
+    return { cloud, servers, canStoreToken: cloudTokens.available() }
+  }
+
+  // ── Repositories ────────────────────────────────────────────────────────
+
+  const remoteOf = async (repo: string, s: AppSettings): Promise<HostingRemote | null> => {
+    const [urls, resolved] = await Promise.all([
+      ctx.git(repo, ['config', '--get-regexp', '^remote\\..*\\.url$'], { allowFailure: true }),
+      ctx.git(repo, ['config', '--get-regexp', '^remote\\..*\\.gh-resolved$'], { allowFailure: true })
+    ])
+    const remotes = urls.code === 0 ? parseRemoteUrls(urls.stdout) : []
+    const preferred = resolved.code === 0 ? /^remote\.(.+)\.gh-resolved base$/m.exec(resolved.stdout)?.[1] : null
+    const at = pickHostingRemote(remotes, s.bitbucketServers, preferred)
+    return at ? { ...at, url: remotes.find((r) => r.name === at.remote)?.url ?? '' } : null
+  }
+
+  /** The provider for a repository's remote, when the user turned it on; null otherwise. */
+  const providerFor = async (repo: string): Promise<{ at: HostingRemote | null; provider: PullProvider | null }> => {
+    const s = await settings()
+    const at = await remoteOf(repo, s)
+    if (!at) return { at, provider: null }
+    if (at.provider === 'github') {
+      const m = s.githubAuth || null
+      return { at, provider: m ? githubProvider(githubClient(await githubTokenFor(m)), at, () => githubKnown?.login ?? '') : null }
+    }
+    if (at.provider === 'bitbucket-cloud') {
+      if (!s.bitbucketAuth) return { at, provider: null }
+      const api = cloudClient(s.bitbucketEmail, await cloudToken())
+      return { at, provider: bitbucketCloudProvider(api, at, () => cloudWho(api, s.bitbucketEmail).catch(() => null), caches.cloud) }
+    }
+    const server = s.bitbucketServers.find((x) => x.url === at.server)
+    if (!server) return { at, provider: null }
+    const api = serverClient(server.url, await serverToken(server.url))
+    return { at, provider: bitbucketServerProvider(api, at, server.url, () => serverWho(api, server.url).catch(() => ''), caches.server) }
+  }
+
+  const requireProvider = async (repo: string): Promise<{ at: HostingRemote; provider: PullProvider }> => {
+    const { at, provider } = await providerFor(repo)
+    if (!at) throw invalid('This repository has no GitHub or Bitbucket remote')
+    if (!provider) throw invalid('Pull requests are off for this repository. Turn them on in Settings → Integrations.')
+    return { at, provider }
+  }
+
+  const checkNumber = (number: unknown) => {
+    if (typeof number !== 'number' || !Number.isSafeInteger(number) || number <= 0) throw invalid('Invalid pull request number')
   }
 
   return {
@@ -151,47 +233,85 @@ export function createHostingOps(ctx: GitContext, services: Pick<SystemServices,
       let secret: string
       if (m === 'gh') {
         gh.forget()
-        secret = await tokenFor('gh')
+        secret = await githubTokenFor('gh')
       } else {
         const t = typeof token === 'string' ? token.trim() : ''
         if (!isPlausibleToken(t)) throw invalid('That does not look like a GitHub token')
-        if (!tokens.available()) throw invalid('This computer offers no protected storage for a token. Use the GitHub CLI instead.')
+        if (!githubTokens.available()) throw invalid('This computer offers no protected storage for a token. Use the GitHub CLI instead.')
         secret = t
       }
-      const login = await loginWith(clientWith(secret))
-      if (m === 'token') await tokens.write(secret)
-      else await tokens.clear()
+      const login = await githubLogin(githubClient(secret))
+      if (m === 'token') await githubTokens.write(secret)
+      else await githubTokens.clear()
       await services.settings.updateSettings({ githubAuth: m })
-      known = { method: m, login }
+      githubKnown = { method: m, login }
       return getGithubConnection()
     },
 
     async disconnectGithub() {
-      known = null
+      githubKnown = null
       gh.forget()
-      await tokens.clear()
+      await githubTokens.clear()
       await services.settings.updateSettings({ githubAuth: '' })
       return getGithubConnection()
     },
 
+    getBitbucketConnections,
+
+    async connectBitbucket(opts) {
+      const token = typeof opts?.token === 'string' ? opts.token.trim() : ''
+      if (!isPlausibleToken(token)) throw invalid('That does not look like a Bitbucket token')
+      if (!cloudTokens.available()) throw invalid('This computer offers no protected storage for a token.')
+      if (opts.kind === 'cloud') {
+        const email = typeof opts.email === 'string' ? opts.email.trim() : ''
+        if (!EMAIL.test(email)) throw invalid('Enter the email of your Atlassian account')
+        cloudKnown = null
+        await cloudWho(cloudClient(email, token), email)
+        await cloudTokens.write(token)
+        await services.settings.updateSettings({ bitbucketAuth: 'token', bitbucketEmail: email })
+      } else if (opts.kind === 'server') {
+        const url = normalizeServerUrl(opts.url, !!platform.allowLoopbackServers)
+        if (!url) throw invalid('Use the https address of your Bitbucket server, such as https://bitbucket.example.com')
+        serverKnown.delete(url)
+        await serverWho(serverClient(url, token), url)
+        await serverTokens(url).write(token)
+        const hosts = [new URL(url).host, typeof opts.remoteHost === 'string' ? opts.remoteHost.toLowerCase() : ''].filter((h) => HOST.test(h))
+        const others = (await settings()).bitbucketServers.filter((x) => x.url !== url)
+        await services.settings.updateSettings({ bitbucketServers: [...others, { url, hosts: [...new Set(hosts)] }] })
+      } else throw invalid('Unknown Bitbucket')
+      return getBitbucketConnections()
+    },
+
+    async disconnectBitbucket(target) {
+      if (target?.kind === 'cloud') {
+        cloudKnown = null
+        await cloudTokens.clear()
+        await services.settings.updateSettings({ bitbucketAuth: '' })
+      } else if (target?.kind === 'server' && typeof target.url === 'string') {
+        serverKnown.delete(target.url)
+        await serverTokens(target.url).clear()
+        const servers = (await settings()).bitbucketServers.filter((x) => x.url !== target.url)
+        await services.settings.updateSettings({ bitbucketServers: servers })
+      } else throw invalid('Unknown Bitbucket')
+      return getBitbucketConnections()
+    },
+
     async getPullRequests(repo): Promise<RepoPullRequests | null> {
       await assertRepo(ctx, repo)
-      if (!(await method())) return null
-      const at = await githubRemote(repo)
-      if (!at) return null
-      const c = await requireClient()
-      const data = await c.graphql(PULLS_QUERY, { owner: at.owner, name: at.name })
-      const result = pullsFromQuery(data, at)
-      if (!result) throw new AdarError({ message: `GitHub: ${at.owner}/${at.name} was not found, or this sign-in has no access to it`, code: 'NOT_FOUND' })
-      return result
+      const { provider } = await providerFor(repo)
+      return provider ? provider.list() : null
     },
 
     async getPullRequestCommits(repo, number) {
       await assertRepo(ctx, repo)
-      if (!Number.isSafeInteger(number) || number <= 0) throw invalid('Invalid pull request number')
-      const at = await requireRemote(repo)
-      const c = await requireClient()
-      return pullCommitsFromRest(await c.rest('GET', `${repoPath(at)}/pulls/${number}/commits?per_page=100`))
+      checkNumber(number)
+      return (await requireProvider(repo)).provider.commits(number)
+    },
+
+    async getPullRequestMergeChecks(repo, number) {
+      await assertRepo(ctx, repo)
+      checkNumber(number)
+      return (await requireProvider(repo)).provider.mergeChecks(number)
     },
 
     async createPullRequest(repo, opts: CreatePullOptions): Promise<PullRequest> {
@@ -203,61 +323,49 @@ export function createHostingOps(ctx: GitContext, services: Pick<SystemServices,
       if (body.length > MAX_BODY * 3) throw invalid('The description is too long')
       if (!isSafeBranchName(opts.head) || !isSafeBranchName(opts.base)) throw invalid('Invalid branch name')
       if (opts.head === opts.base) throw invalid('Choose two different branches')
-      const at = await requireRemote(repo)
-      const c = await requireClient()
-      const created = await c.rest('POST', `${repoPath(at)}/pulls`, { title, body, head: opts.head, base: opts.base, draft: opts.draft === true })
-      const pr = pullFromRest(created, known?.login ?? '')
-      if (!pr) throw new AdarError({ message: 'GitHub created the pull request but its answer could not be read', code: 'UNKNOWN' })
-      return pr
+      const { provider } = await requireProvider(repo)
+      return provider.create({ head: opts.head, base: opts.base, title, body, draft: opts.draft === true })
     },
 
     async mergePullRequest(repo, number, opts): Promise<void> {
       await assertRepo(ctx, repo)
-      const m: MergeMethod | undefined = opts?.method
-      if (!Number.isSafeInteger(number) || number <= 0) throw invalid('Invalid pull request number')
-      if (m !== 'squash' && m !== 'merge' && m !== 'rebase') throw invalid('Unknown merge method')
-      if (typeof opts.headSha !== 'string' || !/^[0-9a-f]{40}$/i.test(opts.headSha)) throw invalid('Invalid commit')
-      const at = await requireRemote(repo)
-      const c = await requireClient()
-      try {
-        await c.rest('PUT', `${repoPath(at)}/pulls/${number}/merge`, { merge_method: m, sha: opts.headSha.toLowerCase() })
-      } catch (err) {
-        if (err instanceof AdarError && /head branch was modified|sha/i.test(err.message)) {
-          throw invalid('The pull request changed on GitHub since Adar last looked. Check it again before merging.')
-        }
-        throw err
-      }
+      checkNumber(number)
+      if (!MERGE_METHODS.includes(opts?.method)) throw invalid('Unknown merge method')
+      if (typeof opts.headSha !== 'string' || !/^[0-9a-f]{7,40}$/i.test(opts.headSha)) throw invalid('Invalid commit')
+      const { provider } = await requireProvider(repo)
+      await provider.merge(number, opts.method, opts.headSha.toLowerCase())
     },
 
     async pullRequestBranch(repo, number): Promise<string> {
       await assertRepo(ctx, repo)
-      if (!Number.isSafeInteger(number) || number <= 0) throw invalid('Invalid pull request number')
-      const at = await requireRemote(repo)
-      const c = await requireClient()
-      const pr = pullFromRest(await c.rest('GET', `${repoPath(at)}/pulls/${number}`), '')
-      if (!pr) throw new AdarError({ message: `Pull request #${number} could not be read`, code: 'UNKNOWN' })
+      checkNumber(number)
+      const { at, provider } = await requireProvider(repo)
+      const src = await provider.source(number)
+      if (!isSafeBranchName(src.headRef)) throw invalid('The pull request has an unusable branch name')
       const exists = async (branch: string) =>
         (await ctx.git(repo, ['show-ref', '--verify', '--quiet', `refs/heads/${branch}`], { allowFailure: true })).code === 0
 
       return ctx.exclusive(repo, async () => {
-        if (!pr.headFork) {
-          const branch = pr.headRef
+        if (!src.fork) {
+          const branch = src.headRef
           if (await exists(branch)) return branch
           const tracking = `refs/remotes/${at.remote}/${branch}`
           await ctx.gitNetwork(repo, ['fetch', at.remote, `+refs/heads/${branch}:${tracking}`])
           await ctx.git(repo, ['branch', '--track', branch, tracking])
           return branch
         }
-        // From a fork: GitHub keeps every pull request's head at refs/pull/<n>/head on the base repository.
+        // From a fork: fetched into pr/<n> (fast-forwarded when it is checked out), never overwriting local commits.
+        const { from, ref } = src.fork
+        if (from.startsWith('-')) throw invalid('Invalid fork address')
         const branch = `pr/${number}`
         const head = await ctx.git(repo, ['symbolic-ref', '--quiet', '--short', 'HEAD'], { allowFailure: true })
         if (head.code === 0 && head.stdout.trim() === branch) {
-          await ctx.gitNetwork(repo, ['fetch', at.remote, `refs/pull/${number}/head`])
+          await ctx.gitNetwork(repo, ['fetch', from, ref])
           await ctx.git(repo, ['merge', '--ff-only', 'FETCH_HEAD'])
           return branch
         }
         try {
-          await ctx.gitNetwork(repo, ['fetch', at.remote, `refs/pull/${number}/head:refs/heads/${branch}`])
+          await ctx.gitNetwork(repo, ['fetch', from, `${ref}:refs/heads/${branch}`])
         } catch (err) {
           if (err instanceof AdarError && /non-fast-forward|rejected/i.test(`${err.stderr ?? ''} ${err.message}`)) {
             throw invalid(`${branch} has commits that are not in the pull request. Rename or delete ${branch} to check it out again.`)

@@ -170,6 +170,8 @@ const platform: PlatformAdapter = {
   fetch: (input, init) => net.fetch(input, init),
   // Development only (scripted e2e runs): a fake GitHub API on this machine.
   githubApi: !app.isPackaged && /^http:\/\/127\.0\.0\.1:\d+$/.test(process.env['ADAR_GITHUB_API'] ?? '') ? process.env['ADAR_GITHUB_API'] : undefined,
+  bitbucketApi: !app.isPackaged && /^http:\/\/127\.0\.0\.1:\d+$/.test(process.env['ADAR_BITBUCKET_API'] ?? '') ? process.env['ADAR_BITBUCKET_API'] : undefined,
+  allowLoopbackServers: !app.isPackaged && process.env['ADAR_HOSTING_LOOPBACK'] === '1',
   secrets: {
     // Linux without a keyring would fall back to a hard-coded key: no better than clear text.
     available: () =>

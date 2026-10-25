@@ -1,28 +1,48 @@
-// "Pull requests in Adar": turning GitHub pull requests on. The GitHub CLI's sign-in is
-// offered first when it is there (nothing to type, nothing stored); a personal access token
-// is the fallback, kept encrypted by the operating system.
+// "Pull requests in Adar": turning pull requests on, for the provider of the repository that asked.
+// GitHub: the GitHub CLI's sign-in first when it is there (nothing to type, nothing stored), else a
+// personal access token. Bitbucket Cloud: the Atlassian account email and an API token. Bitbucket
+// Data Center: the server's address and an HTTP access token. Tokens are kept encrypted by the system.
 
 import { useEffect, useId, useState } from 'react'
 import { GitPullRequest, KeyRound, ShieldCheck, SquareTerminal } from 'lucide-react'
 import { api, isMac } from '@renderer/api/client'
-import { openOnGithub } from '@renderer/actions/pulls'
+import { openWebPage, syncHostingSettings } from '@renderer/actions/pulls'
 import { Button } from '@renderer/components/common/Button'
 import { Modal } from '@renderer/components/common/Modal'
 import { closeIfTopmost } from '@renderer/components/modals/controls'
 import { useApp } from '@renderer/store/appStore'
 import { describeError } from '@shared/errors'
-import type { GithubAuthMethod } from '@shared/hosting'
-import { isGithubRepo, usePulls } from './pullStore'
+import type { GithubAuthMethod, HostingProvider } from '@shared/hosting'
+import { repoHosting, usePulls } from './pullStore'
 import './pulls.css'
 
 const NEW_TOKEN_URL = 'https://github.com/settings/personal-access-tokens/new'
+const ATLASSIAN_TOKENS_URL = 'https://id.atlassian.com/manage-profile/security/api-tokens'
 
-export function ConnectDialog({ next }: { next?: () => void }) {
-  const connection = usePulls((s) => s.connection)
-  const repoName = useApp((s) => {
-    const tab = s.tabs.find((t) => t.path === s.activePath)
-    return tab && isGithubRepo(tab) ? tab.name : null
+export interface ConnectProps {
+  provider: HostingProvider
+  /** Bitbucket Data Center: the server's address, as found from the remote. */
+  server?: string
+  /** Bitbucket Data Center: the host of the remote that asked (its SSH host may differ from the web one). */
+  remoteHost?: string
+  next?: () => void
+}
+
+/** The active repository's owner/name when it lives on `provider`, for the dialog's first line. */
+function useRepoLabel(provider: HostingProvider): string | null {
+  return useApp((s) => {
+    const h = repoHosting(s.tabs.find((t) => t.path === s.activePath), s.settings.bitbucketServers)
+    return h && h.provider === provider ? `${h.owner}/${h.name}` : null
   })
+}
+
+export function ConnectDialog(props: ConnectProps) {
+  return props.provider === 'github' ? <GithubConnect next={props.next} /> : <BitbucketConnect {...props} />
+}
+
+function GithubConnect({ next }: { next?: () => void }) {
+  const connection = usePulls((s) => s.connection)
+  const repoName = useRepoLabel('github')
   const [method, setMethod] = useState<GithubAuthMethod | null>(null)
   const [token, setToken] = useState('')
   const [busy, setBusy] = useState(false)
@@ -127,7 +147,7 @@ export function ConnectDialog({ next }: { next?: () => void }) {
                 {canToken ? (
                   <>
                     A fine-grained token with <strong>Pull requests: Read and write</strong> (and Contents: Read).{' '}
-                    <button type="button" className="ui-link" onClick={() => openOnGithub(NEW_TOKEN_URL)}>
+                    <button type="button" className="ui-link" onClick={() => openWebPage(NEW_TOKEN_URL)}>
                       Create one on GitHub
                     </button>
                     . Kept encrypted on this computer.
@@ -168,6 +188,165 @@ export function ConnectDialog({ next }: { next?: () => void }) {
         <div className="pr-privacy">
           <ShieldCheck size={15} />
           <span>Adar only talks to api.github.com, only for repositories on GitHub, and only while this is on. Turn it off in Settings → Integrations.</span>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+function BitbucketConnect({ provider, server, remoteHost, next }: ConnectProps) {
+  const cloud = provider === 'bitbucket-cloud'
+  const canStore = usePulls((s) => s.bitbucket?.canStoreToken ?? true)
+  const repoName = useRepoLabel(provider)
+  const [email, setEmail] = useState(() => usePulls.getState().bitbucket?.cloud?.email ?? useApp.getState().settings.bitbucketEmail)
+  const [url, setUrl] = useState(server ?? '')
+  const [token, setToken] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const ids = { email: useId(), url: useId(), token: useId() }
+  const close = () => closeIfTopmost('pr-connect')
+
+  useEffect(() => {
+    void usePulls.getState().loadBitbucket()
+    // Cloud: start from the repository's Git email, the one people usually sign in to Atlassian with.
+    const repo = useApp.getState().activePath
+    if (cloud && !email && repo) {
+      api
+        .getIdentity(repo)
+        .then((id) => setEmail((e) => e || id.email || ''))
+        .catch(() => undefined)
+    }
+    // Run once, when the dialog opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  let host = ''
+  try {
+    host = new URL(url).host
+  } catch {
+    host = ''
+  }
+  const ready = !!token.trim() && (cloud ? !!email.trim() : !!host)
+
+  const turnOn = async () => {
+    if (!ready) return
+    setBusy(true)
+    setError(null)
+    try {
+      const c = await api.connectBitbucket(cloud ? { kind: 'cloud', email: email.trim(), token: token.trim() } : { kind: 'server', url: url.trim(), token: token.trim(), remoteHost })
+      usePulls.getState().setBitbucket(c)
+      // A newly known server can change which remotes count as Bitbucket.
+      await syncHostingSettings()
+      const active = useApp.getState().activePath
+      if (active) void usePulls.getState().load(active, { force: true })
+      useApp.getState().closeModal()
+      next?.()
+    } catch (err) {
+      setError(describeError(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+  const onEnter = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && ready) void turnOn()
+  }
+
+  return (
+    <Modal
+      title={
+        <span className="md-title">
+          <GitPullRequest size={16} /> Pull requests in Adar
+        </span>
+      }
+      className="md-modal pr-connect"
+      width={540}
+      onClose={close}
+      footer={
+        <>
+          <Button variant="ghost" onClick={close}>
+            Not now
+          </Button>
+          <Button variant="primary" loading={busy} disabled={!ready || !canStore} onClick={() => void turnOn()}>
+            Turn on
+          </Button>
+        </>
+      }
+    >
+      <div className="pr-connect-body">
+        <p className="pr-lead">
+          Adar shows the pull requests of {repoName ? <strong>{repoName}</strong> : 'your repositories'} on {cloud ? 'Bitbucket' : 'your Bitbucket server'} on their
+          branches, and creates, checks out and merges them for you. It asks {cloud ? 'Bitbucket' : 'the server'} with {cloud ? 'an API token' : 'an HTTP access token'} of
+          yours.
+        </p>
+        {cloud ? (
+          <div className="ui-field">
+            <label className="ui-label" htmlFor={ids.email}>
+              Atlassian account email
+            </label>
+            <input id={ids.email} className="ui-input" type="email" value={email} autoComplete="off" spellCheck={false} onChange={(e) => setEmail(e.target.value)} onKeyDown={onEnter} />
+            <span className="ui-hint">Filled in from your Git email.</span>
+          </div>
+        ) : (
+          <div className="ui-field">
+            <label className="ui-label" htmlFor={ids.url}>
+              Bitbucket address
+            </label>
+            <input id={ids.url} className="ui-input ui-mono" type="url" value={url} autoComplete="off" spellCheck={false} onChange={(e) => setUrl(e.target.value)} onKeyDown={onEnter} />
+            <span className="ui-hint">From the remote. Change it if Bitbucket's web address is a different one.</span>
+          </div>
+        )}
+        <div className="ui-field">
+          <label className="ui-label" htmlFor={ids.token}>
+            {cloud ? 'API token' : 'HTTP access token'}
+          </label>
+          <input
+            id={ids.token}
+            className="ui-input ui-mono"
+            type="password"
+            value={token}
+            autoComplete="off"
+            spellCheck={false}
+            autoFocus
+            onChange={(e) => setToken(e.target.value)}
+            onKeyDown={onEnter}
+          />
+          {cloud ? (
+            <span className="ui-hint">
+              <button type="button" className="ui-link" onClick={() => openWebPage(ATLASSIAN_TOKENS_URL)}>
+                Create an API token
+              </button>{' '}
+              for Bitbucket with the scopes <code>read:user:bitbucket</code>, <code>read:repository:bitbucket</code>, <code>read:pullrequest:bitbucket</code> and{' '}
+              <code>write:pullrequest:bitbucket</code>.
+            </span>
+          ) : (
+            <span className="ui-hint">
+              {host ? (
+                <button type="button" className="ui-link" onClick={() => openWebPage(`${url.replace(/\/+$/, '')}/plugins/servlet/access-tokens/manage`)}>
+                  Create one in Bitbucket
+                </button>
+              ) : (
+                'Create one in Bitbucket'
+              )}{' '}
+              (Manage account → HTTP access tokens) with <strong>Repository write</strong> permission.
+            </span>
+          )}
+        </div>
+        {!canStore && (
+          <div className="pr-error" role="alert">
+            This computer offers no protected storage for a token.
+          </div>
+        )}
+        {error && (
+          <div className="pr-error" role="alert">
+            {error}
+          </div>
+        )}
+        <div className="pr-privacy">
+          <ShieldCheck size={15} />
+          <span>
+            Adar only talks to {cloud ? 'api.bitbucket.org' : host || 'your Bitbucket server'}, only for {cloud ? 'repositories on Bitbucket Cloud' : 'its repositories'}, and only while this is
+            on. The token is kept encrypted on this computer.
+          </span>
         </div>
       </div>
     </Modal>

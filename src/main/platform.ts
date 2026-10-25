@@ -17,4 +17,8 @@ export interface PlatformAdapter {
   secrets?: SecretBox
   /** Development only: a stand-in for https://api.github.com on 127.0.0.1 (ADAR_GITHUB_API, unpackaged builds). */
   githubApi?: string
+  /** Development only: a stand-in for https://api.bitbucket.org/2.0 on 127.0.0.1 (ADAR_BITBUCKET_API). */
+  bitbucketApi?: string
+  /** Development only: accept http://127.0.0.1 Bitbucket servers (ADAR_HOSTING_LOOPBACK=1, unpackaged builds). */
+  allowLoopbackServers?: boolean
 }

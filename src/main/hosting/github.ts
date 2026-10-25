@@ -3,76 +3,46 @@
 
 import { AdarError } from '@shared/errors'
 import { GITHUB_API, githubErrorMessage } from '@shared/hosting'
+import { ApiClient, type FetchFn } from './http'
 
-export type FetchFn = (input: string, init?: RequestInit) => Promise<Response>
-
-const TIMEOUT_MS = 20_000
+export type { FetchFn } from './http'
 
 export class GithubClient {
+  private readonly api: ApiClient
+
   constructor(
-    private readonly fetchFn: FetchFn,
-    private readonly token: string,
-    private readonly userAgent: string,
+    fetchFn: FetchFn,
+    token: string,
+    userAgent: string,
     /** Called when GitHub rejects the credentials (revoked token, gh signed out). */
-    private readonly onUnauthorized: () => void = () => undefined,
-    private readonly base: string = GITHUB_API
-  ) {}
+    onUnauthorized: () => void = () => undefined,
+    base: string = GITHUB_API
+  ) {
+    this.api = new ApiClient({
+      fetch: fetchFn,
+      base,
+      auth: `Bearer ${token}`,
+      userAgent,
+      service: 'GitHub',
+      errorMessage: githubErrorMessage,
+      onUnauthorized,
+      accept: 'application/vnd.github+json',
+      headers: { 'X-GitHub-Api-Version': '2022-11-28' }
+    })
+  }
 
   /** REST call; `apiPath` starts with "/" and is built from validated parts only. */
   async rest(method: 'GET' | 'POST' | 'PUT', apiPath: string, body?: unknown): Promise<unknown> {
-    return this.request(method, `${this.base}${apiPath}`, body)
+    return this.api.json(method, apiPath, body)
   }
 
   async graphql(query: string, variables: Record<string, unknown>): Promise<unknown> {
-    const res = (await this.request('POST', `${this.base}/graphql`, { query, variables })) as { data?: unknown; errors?: unknown }
+    const res = (await this.api.json('POST', '/graphql', { query, variables })) as { data?: unknown; errors?: unknown }
     if (Array.isArray(res?.errors) && res.errors.length) {
       const message = githubErrorMessage({ errors: res.errors }, 'GitHub could not answer')
       const notFound = res.errors.some((e) => typeof e === 'object' && e !== null && (e as { type?: unknown }).type === 'NOT_FOUND')
       if (!res.data || notFound) throw new AdarError({ message: `GitHub: ${message}`, code: notFound ? 'NOT_FOUND' : 'UNKNOWN' })
     }
     return res?.data ?? null
-  }
-
-  private async request(method: string, url: string, body?: unknown): Promise<unknown> {
-    let res: Response
-    try {
-      res = await this.fetchFn(url, {
-        method,
-        headers: {
-          Accept: 'application/vnd.github+json',
-          Authorization: `Bearer ${this.token}`,
-          'User-Agent': this.userAgent,
-          'X-GitHub-Api-Version': '2022-11-28',
-          ...(body === undefined ? {} : { 'Content-Type': 'application/json' })
-        },
-        body: body === undefined ? undefined : JSON.stringify(body),
-        signal: AbortSignal.timeout(TIMEOUT_MS)
-      })
-    } catch {
-      throw new AdarError({ message: 'Could not reach GitHub. Check your connection and try again.', code: 'NETWORK' })
-    }
-    const text = await res.text().catch(() => '')
-    let json: unknown = null
-    try {
-      json = text ? JSON.parse(text) : null
-    } catch {
-      json = null
-    }
-    if (res.ok) return json
-    const detail = githubErrorMessage(json, `${res.status} ${res.statusText}`.trim())
-    if (res.status === 401) {
-      this.onUnauthorized()
-      throw new AdarError({ message: `GitHub did not accept the sign-in: ${detail}`, code: 'AUTH_FAILED' })
-    }
-    if (res.status === 403 && /saml|sso/i.test(detail)) {
-      throw new AdarError({ message: `GitHub: ${detail} Authorize the token for this organization on github.com.`, code: 'AUTH_FAILED' })
-    }
-    if (res.status === 403 && res.headers.get('x-ratelimit-remaining') === '0') {
-      throw new AdarError({ message: 'GitHub rate limit reached. Try again in a few minutes.', code: 'NETWORK' })
-    }
-    if (res.status === 404) {
-      throw new AdarError({ message: `GitHub: not found, or this sign-in has no access to it (${detail})`, code: 'NOT_FOUND' })
-    }
-    throw new AdarError({ message: `GitHub: ${detail}`, code: res.status >= 500 ? 'NETWORK' : 'INVALID_ARGUMENT' })
   }
 }

@@ -1,6 +1,8 @@
 // Domain types shared by the main process (git backend), the dev HTTP bridge
 // and the renderer. Everything here must be JSON-serialisable.
 
+import type { BitbucketServer } from './hosting'
+
 /** Unix timestamp in seconds (as git reports it). */
 export type UnixSeconds = number
 
@@ -474,6 +476,12 @@ export interface AppSettings {
   lastRunVersion: string
   /** GitHub pull requests: off (''), with the GitHub CLI's sign-in ('gh') or a stored personal access token. */
   githubAuth: '' | 'gh' | 'token'
+  /** Bitbucket Cloud pull requests: off ('') or on with an API token stored encrypted ('token'). */
+  bitbucketAuth: '' | 'token'
+  /** The Atlassian account email Bitbucket Cloud's API token goes with. */
+  bitbucketEmail: string
+  /** Bitbucket Data Center servers pull requests are on for (their HTTP access tokens are stored encrypted). */
+  bitbucketServers: BitbucketServer[]
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -506,7 +514,10 @@ export const DEFAULT_SETTINGS: AppSettings = {
   notifyNewCommits: true,
   skippedUpdateVersion: '',
   lastRunVersion: '',
-  githubAuth: ''
+  githubAuth: '',
+  bitbucketAuth: '',
+  bitbucketEmail: '',
+  bitbucketServers: []
 }
 
 export interface AppInfo {

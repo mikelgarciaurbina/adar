@@ -59,13 +59,17 @@ export const WRITE_METHODS = [
 
 export type WriteMethod = (typeof WRITE_METHODS)[number]
 
-/** GitHub pull requests (src/main/hosting): network calls to GitHub, plus the branch for a pull request. */
+/** Pull requests (src/main/hosting): calls to GitHub and Bitbucket, plus the branch for a pull request. */
 export const HOSTING_METHODS = [
   'getGithubConnection',
   'connectGithub',
   'disconnectGithub',
+  'getBitbucketConnections',
+  'connectBitbucket',
+  'disconnectBitbucket',
   'getPullRequests',
   'getPullRequestCommits',
+  'getPullRequestMergeChecks',
   'createPullRequest',
   'mergePullRequest',
   'pullRequestBranch'

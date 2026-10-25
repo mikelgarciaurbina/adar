@@ -29,7 +29,7 @@ import {
   Upload
 } from 'lucide-react'
 import * as git from '@renderer/actions/git'
-import { checkoutPull, copyPullLink, openOnGithub, startPullRequest } from '@renderer/actions/pulls'
+import { checkoutPull, copyPullLink, openWebPage, startPullRequest } from '@renderer/actions/pulls'
 import type { MenuItem } from '@renderer/components/common/ContextMenu'
 import { branchPullItems } from '@renderer/components/pulls/menus'
 import { usePulls } from '@renderer/components/pulls/pullStore'
@@ -343,7 +343,7 @@ export function pullMenu(ctx: SidebarMenuCtx, pr: PullRequest): MenuItem[] {
   return [
     { type: 'header', label: `#${pr.number} ${pr.title}` },
     { label: 'Check out', icon: icon(Check), onClick: () => void checkoutPull(repo, pr) },
-    { label: 'Open on GitHub', icon: icon(ExternalLink), onClick: () => openOnGithub(pr.url) },
+    { label: 'Open on GitHub', icon: icon(ExternalLink), onClick: () => openWebPage(pr.url) },
     SEP,
     { label: 'Copy link', icon: icon(Copy), onClick: () => copyPullLink(pr) },
     { label: 'Copy branch name', icon: icon(Copy), onClick: () => git.copyText(pr.headRef, 'Copied branch name') }

@@ -14,11 +14,22 @@ import {
   ExternalLink,
   Eye,
   GitMerge,
+  ListTodo,
   MessageSquareWarning,
   TriangleAlert,
   UserCheck
 } from 'lucide-react'
-import { bringBaseIn, checkoutPull, cleanUpAfterMerge, MERGE_LABELS, mergePull, openOnGithub, preferredMergeMethod } from '@renderer/actions/pulls'
+import {
+  bringBaseIn,
+  checkoutPull,
+  cleanUpAfterMerge,
+  deleteClosedBranch,
+  MERGE_LABELS,
+  mergeMenuLabel,
+  mergePull,
+  openWebPage,
+  preferredMergeMethod
+} from '@renderer/actions/pulls'
 import { api } from '@renderer/api/client'
 import { Avatar } from '@renderer/components/common/Avatar'
 import { Button } from '@renderer/components/common/Button'
@@ -27,9 +38,9 @@ import { goToCommit } from '@renderer/components/details/CommitPanel'
 import { CopyButton, ErrorBlock, LoadingBlock } from '@renderer/components/details/parts'
 import { ReleaseNotes } from '@renderer/components/update/ReleaseNotes'
 import { pluralize, relativeTime } from '@renderer/lib/format'
-import { checksLabel, localBranchFor, mergeBlocker, reviewLabel, stateLabel } from '@renderer/lib/pulls'
+import { checksLabel, localBranchFor, mergeBlocker, mergeChecksText, providerName, reviewLabel, stateLabel } from '@renderer/lib/pulls'
 import { useApp, type RepoTab } from '@renderer/store/appStore'
-import type { MergeMethod, PullCommit, PullRequest, RepoPullRequests } from '@shared/hosting'
+import type { MergeChecks, MergeMethod, PullCommit, PullRequest, RepoPullRequests } from '@shared/hosting'
 import { PullStateIcon } from './PullChip'
 import { usePullIndex, usePulls } from './pullStore'
 import './pulls.css'
@@ -69,8 +80,8 @@ function PullDetails({ tab, pr, data }: { tab: RepoTab; pr: PullRequest; data: R
         <span className="det-sha selectable">#{pr.number}</span>
         <CopyButton text={pr.url} label="Copy link to the pull request" what={`Copied the link to #${pr.number}`} />
         <span className="det-spacer" />
-        <button type="button" className="ui-link pr-open-link" onClick={() => openOnGithub(pr.url)}>
-          Open on GitHub <ExternalLink size={12} />
+        <button type="button" className="ui-link pr-open-link" onClick={() => openWebPage(pr.url)}>
+          Open on {providerName(pr)} <ExternalLink size={12} />
         </button>
       </div>
 
@@ -103,10 +114,14 @@ function PullDetails({ tab, pr, data }: { tab: RepoTab; pr: PullRequest; data: R
         </div>
 
         {open ? (
-          <PullStatus pr={pr} />
+          <PullStatus pr={pr} data={data} />
         ) : (
           <div className="pr-note">
-            {pr.state === 'merged' ? `Merged into ${pr.baseRef} ${ago(pr.closedAt)}` : `Closed without merging ${ago(pr.closedAt)}`}
+            {pr.state === 'merged'
+              ? `Merged into ${pr.baseRef} ${ago(pr.closedAt)}`
+              : pr.provider === 'github'
+                ? `Closed without merging ${ago(pr.closedAt)}`
+                : `Declined ${ago(pr.closedAt)}`}
           </div>
         )}
 
@@ -121,6 +136,7 @@ function PullDetails({ tab, pr, data }: { tab: RepoTab; pr: PullRequest; data: R
 
       {open && <PullActions tab={tab} pr={pr} data={data} hasLocal={!!local} localName={local?.name ?? null} isCheckedOut={!!local?.isHead} />}
       {pr.state === 'merged' && local && !keptBranches.has(`${repo}\0${local.name}`) && <CleanUpBox repo={repo} pr={pr} data={data} branch={local.name} />}
+      {pr.state === 'closed' && local && !keptBranches.has(`${repo}\0${local.name}`) && <DeleteBranchBox repo={repo} pr={pr} data={data} branch={local.name} />}
     </div>
   )
 }
@@ -175,7 +191,7 @@ function PullCommits({ repo, pr, remote }: { repo: string; pr: PullRequest; remo
   const count = pr.commitCount || commits.length
   const open = (c: PullCommit) => {
     if (typeof list === 'object' && list.local) goToCommit(repo, c.sha)
-    else openOnGithub(`${pr.url}/commits/${c.sha}`)
+    else openWebPage(`${pr.url}/commits/${c.sha}`)
   }
   return (
     <div className="pr-commits-section">
@@ -203,7 +219,7 @@ function PullCommits({ repo, pr, remote }: { repo: string; pr: PullRequest; remo
         </button>
       ))}
       {commits.length > MAX_COMMITS && (
-        <button type="button" className="ui-link pr-commits-more" onClick={() => openOnGithub(`${pr.url}/commits`)}>
+        <button type="button" className="ui-link pr-commits-more" onClick={() => openWebPage(`${pr.url}/commits`)}>
           {pluralize(commits.length - MAX_COMMITS, 'more commit')} on GitHub
         </button>
       )}
@@ -211,7 +227,7 @@ function PullCommits({ repo, pr, remote }: { repo: string; pr: PullRequest; remo
   )
 }
 
-function PullStatus({ pr }: { pr: PullRequest }) {
+function PullStatus({ pr, data }: { pr: PullRequest; data: RepoPullRequests }) {
   const [showChecks, setShowChecks] = useState(pr.checks === 'failed')
   const checks = checksLabel(pr)
   const review = pr.reviewRequested ? 'Your review is requested' : reviewLabel(pr)
@@ -258,7 +274,7 @@ function PullStatus({ pr }: { pr: PullRequest }) {
                     {c.name}
                   </span>
                   {c.url && (
-                    <button type="button" className="ui-link" onClick={() => openOnGithub(c.url!)}>
+                    <button type="button" className="ui-link" onClick={() => openWebPage(c.url!)}>
                       Details
                     </button>
                   )}
@@ -274,20 +290,48 @@ function PullStatus({ pr }: { pr: PullRequest }) {
           <span className="pr-status-text">{review}</span>
         </div>
       )}
-      <div className="pr-status-row">
-        {pr.mergeable === 'conflicts' ? (
-          <TriangleAlert size={16} className="pr-wait" />
-        ) : pr.mergeable === 'clean' ? (
-          <GitMerge size={16} className="pr-ok" />
-        ) : (
-          <CircleDashed size={16} className="pr-muted" />
-        )}
-        <span className="pr-status-text">
-          {pr.mergeable === 'conflicts' ? `Conflicts with ${pr.baseRef}` : pr.mergeable === 'clean' ? `No conflicts with ${pr.baseRef}` : 'Checking for conflicts…'}
-        </span>
-      </div>
+      {pr.openTasks > 0 && (
+        <div className="pr-status-row">
+          <ListTodo size={16} className="pr-wait" />
+          <span className="pr-status-text">{pluralize(pr.openTasks, 'open task')}</span>
+        </div>
+      )}
+      {/* Bitbucket Cloud does not say whether a pull request conflicts. */}
+      {data.reportsConflicts && (
+        <div className="pr-status-row">
+          {pr.mergeable === 'conflicts' ? (
+            <TriangleAlert size={16} className="pr-wait" />
+          ) : pr.mergeable === 'clean' ? (
+            <GitMerge size={16} className="pr-ok" />
+          ) : (
+            <CircleDashed size={16} className="pr-muted" />
+          )}
+          <span className="pr-status-text">
+            {pr.mergeable === 'conflicts' ? `Conflicts with ${pr.baseRef}` : pr.mergeable === 'clean' ? `No conflicts with ${pr.baseRef}` : 'Checking for conflicts…'}
+          </span>
+        </div>
+      )}
     </div>
   )
+}
+
+/** Bitbucket Data Center's merge checks for an open pull request, asked when it is shown. */
+function useMergeChecks(repo: string, pr: PullRequest, data: RepoPullRequests): MergeChecks | null {
+  const [checks, setChecks] = useState<MergeChecks | null>(null)
+  const ask = data.mergeChecks && pr.state === 'open'
+  useEffect(() => {
+    setChecks(null)
+    if (!ask) return
+    let alive = true
+    api
+      .getPullRequestMergeChecks(repo, pr.number)
+      .then((c) => alive && setChecks(c))
+      .catch(() => undefined)
+    return () => {
+      alive = false
+    }
+  }, [repo, pr.number, pr.headSha, pr.updatedAt, ask])
+  return checks
 }
 
 function PullActions(props: { tab: RepoTab; pr: PullRequest; data: RepoPullRequests; hasLocal: boolean; localName: string | null; isCheckedOut: boolean }) {
@@ -296,7 +340,9 @@ function PullActions(props: { tab: RepoTab; pr: PullRequest; data: RepoPullReque
   const [method, setMethod] = useState<MergeMethod>(() => preferredMergeMethod(data))
   const [cleanUp, setCleanUp] = useState(true)
   const merging = useApp((s) => !!s.busy[`merge-pr:${repo}`])
-  const blocker = mergeBlocker(pr, data)
+  const checks = useMergeChecks(repo, pr, data)
+  // Bitbucket's own merge checks say it best when it answered (permission, approvals, tasks, conflicts).
+  const blocker = (checks?.blocked ? mergeChecksText(checks.reasons) : null) ?? mergeBlocker(pr, data)
   const canMerge = data.canMerge && pr.state === 'open'
   const label = MERGE_LABELS[method]
 
@@ -312,8 +358,8 @@ function PullActions(props: { tab: RepoTab; pr: PullRequest; data: RepoPullReque
       </Button>
     ),
     !pr.viewerIsAuthor && (
-      <Button key="review" icon={<ExternalLink size={13} />} onClick={() => openOnGithub(`${pr.url}/files`)}>
-        Review on GitHub
+      <Button key="review" icon={<ExternalLink size={13} />} onClick={() => openWebPage(pr.provider === 'github' ? `${pr.url}/files` : `${pr.url}/diff`)}>
+        Review on {providerName(pr)}
       </Button>
     )
   ].filter(Boolean)
@@ -343,7 +389,12 @@ function PullActions(props: { tab: RepoTab; pr: PullRequest; data: RepoPullReque
                 onClick={(e) =>
                   showMenuBelow(
                     e.currentTarget,
-                    data.mergeMethods.map((m) => ({ label: `${MERGE_LABELS[m].menu} · ${MERGE_LABELS[m].hint(pr)}`, checked: m === method, onClick: () => setMethod(m) }))
+                    data.mergeMethods.map((m, i) => ({
+                      // Bitbucket lists the repository's default first.
+                      label: `${mergeMenuLabel(m, pr.provider)}${i === 0 && pr.provider !== 'github' ? ' (default)' : ''} · ${MERGE_LABELS[m].hint(pr)}`,
+                      checked: m === method,
+                      onClick: () => setMethod(m)
+                    }))
                   )
                 }
               />
@@ -388,6 +439,34 @@ function CleanUpBox({ repo, pr, data, branch }: { repo: string; pr: PullRequest;
             }}
           >
             Keep branch
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function DeleteBranchBox({ repo, pr, data, branch }: { repo: string; pr: PullRequest; data: RepoPullRequests; branch: string }) {
+  const [hidden, setHidden] = useState(false)
+  if (hidden) return null
+  return (
+    <div className="pr-actions">
+      <div className="pr-cleanup">
+        <span>
+          Delete <strong>{branch}</strong> here?
+        </span>
+        <div className="pr-secondary">
+          <Button variant="primary" onClick={() => void deleteClosedBranch(repo, pr, data)}>
+            Delete branch
+          </Button>
+          <Button
+            variant="ghost"
+            onClick={() => {
+              keptBranches.add(`${repo}\0${branch}`)
+              setHidden(true)
+            }}
+          >
+            Keep it
           </Button>
         </div>
       </div>

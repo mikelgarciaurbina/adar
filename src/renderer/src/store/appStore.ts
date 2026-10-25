@@ -25,6 +25,7 @@ import {
   type WorkingStatus
 } from '@shared/types'
 import { arrangeTabs, newGroupId, nextGroupColor, syncGroupOrder, withMembership } from '@renderer/lib/tabGroups'
+import type { HostingProvider } from '@shared/hosting'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -122,8 +123,11 @@ export type ModalState =
   | { kind: 'about' }
   /** from: the version Adar was just updated from ('' when unknown); absent when opened from a command. */
   | { kind: 'whats-new'; from?: string }
-  /** Turn GitHub pull requests on; `next` runs once signed in. */
-  | { kind: 'github-connect'; next?: () => void }
+  /**
+   * Turn pull requests on for a provider (Data Center: for `server`, asked by a remote on `remoteHost`);
+   * `next` runs once signed in.
+   */
+  | { kind: 'pulls-connect'; provider: HostingProvider; server?: string; remoteHost?: string; next?: () => void }
   | { kind: 'create-pull'; repo: string; head?: string; base?: string }
 
 export interface CredentialRequest {

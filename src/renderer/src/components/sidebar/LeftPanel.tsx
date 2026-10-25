@@ -9,7 +9,8 @@ import { defaultRangeExtractor, useVirtualizer, type Range } from '@tanstack/rea
 import { Search, TriangleAlert, X } from 'lucide-react'
 import * as git from '@renderer/actions/git'
 import { checkoutPull, openConnect, selectPull, startPullRequest } from '@renderer/actions/pulls'
-import { isGithubRepo, pullIndexOf, usePulls } from '@renderer/components/pulls/pullStore'
+import { hostingKnown, hostingOn, pullIndexOf, repoHosting, usePulls } from '@renderer/components/pulls/pullStore'
+import { PROVIDER_NAMES } from '@shared/hosting'
 import { isMac } from '@renderer/api/client'
 import { Button } from '@renderer/components/common/Button'
 import { showContextMenu, type MenuItem } from '@renderer/components/common/ContextMenu'
@@ -144,18 +145,19 @@ export function LeftPanel({ tab }: { tab: RepoTab }) {
 
   // ── Model ────────────────────────────────────────────────────────────────
 
-  // Pull requests: a section for GitHub repositories once Adar knows whether they are on.
-  const github = isGithubRepo(tab)
-  const connection = usePulls((s) => s.connection)
-  const pullsOn = !!connection?.method
+  // Pull requests: a section for GitHub and Bitbucket repositories once Adar knows whether they are on.
+  const servers = useApp((s) => s.settings.bitbucketServers)
+  const hosting = useMemo(() => repoHosting(tab, servers), [tab, servers])
+  const pullsKnown = usePulls((s) => hostingKnown(hosting, s))
+  const pullsOn = usePulls((s) => hostingOn(hosting, s))
   const pullsState = usePulls((s) => s.repos[repo] ?? null)
   const pulls = useMemo<PullsInput | undefined>(() => {
-    if (!github || !connection) return undefined
-    if (!pullsOn) return { state: 'off' }
+    if (!hosting || !pullsKnown) return undefined
+    if (!pullsOn) return { state: 'off', provider: PROVIDER_NAMES[hosting.provider] }
     if (pullsState?.data) return { state: 'on', pulls: pullIndexOf(pullsState.data, refs).open }
     if (pullsState?.error) return { state: 'error', message: pullsState.error }
     return { state: 'loading' }
-  }, [github, connection, pullsOn, pullsState, refs])
+  }, [hosting, pullsKnown, pullsOn, pullsState, refs])
 
   const sections = useMemo(() => (refs ? buildTree(refs, remotes, pulls) : null), [refs, remotes, pulls])
   const rows = useMemo(
@@ -407,7 +409,7 @@ export function LeftPanel({ tab }: { tab: RepoTab }) {
         selectPull(repo, row.node.pull.number)
         break
       case 'pull-prompt':
-        openConnect()
+        openConnect(hosting)
         break
     }
   }
@@ -436,7 +438,7 @@ export function LeftPanel({ tab }: { tab: RepoTab }) {
         break
       }
       case 'pull-prompt':
-        openConnect()
+        openConnect(hosting)
         break
       case 'section':
         toggleSection(row.id)

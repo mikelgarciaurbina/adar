@@ -31,8 +31,8 @@ export function ModalHost() {
       return <AboutModal />
     case 'whats-new':
       return <WhatsNewModal from={modal.from} />
-    case 'github-connect':
-      return <ConnectDialog next={modal.next} />
+    case 'pulls-connect':
+      return <ConnectDialog key={`${modal.provider}\0${modal.server ?? ''}`} provider={modal.provider} server={modal.server} remoteHost={modal.remoteHost} next={modal.next} />
     case 'create-pull':
       return <CreatePullDialog key={`${modal.repo}\0${modal.head ?? ''}`} repo={modal.repo} head={modal.head} base={modal.base} />
     default:

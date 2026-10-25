@@ -40,7 +40,17 @@ import type {
   RewordResult,
   WorkingStatus
 } from './types'
-import type { CreatePullOptions, GithubAuthMethod, GithubConnection, MergeMethod, PullCommit, PullRequest, RepoPullRequests } from './hosting'
+import type {
+  BitbucketConnections,
+  CreatePullOptions,
+  GithubAuthMethod,
+  GithubConnection,
+  MergeChecks,
+  MergeMethod,
+  PullCommit,
+  PullRequest,
+  RepoPullRequests
+} from './hosting'
 
 export interface AdarApi {
   // ── App / system ────────────────────────────────────────────────────────
@@ -226,7 +236,7 @@ export interface AdarApi {
   // ── Submodules ──────────────────────────────────────────────────────────
   updateSubmodules(repo: string, opts?: { init?: boolean; recursive?: boolean }): Promise<void>
 
-  // ── GitHub pull requests (opt-in, see hosting.ts) ───────────────────────
+  // ── Pull requests (opt-in, see hosting.ts): GitHub, Bitbucket Cloud and Data Center ──
   /**
    * How Adar signs in to GitHub. Talks to GitHub only when pull requests are on; asks gh whether it is signed in only
    * with detectGh (the sign-in dialog) or when gh is the sign-in.
@@ -236,13 +246,25 @@ export interface AdarApi {
   connectGithub(method: GithubAuthMethod, token?: string): Promise<GithubConnection>
   /** Turn pull requests off and forget a stored token. */
   disconnectGithub(): Promise<GithubConnection>
-  /** Pull requests of the repository's GitHub remote; null when it has none or pull requests are off. */
+  /** Bitbucket Cloud and the Bitbucket Data Center servers pull requests are on for, and who is signed in to each. */
+  getBitbucketConnections(): Promise<BitbucketConnections>
+  /**
+   * Turn Bitbucket pull requests on: Cloud with the Atlassian account email and an API token, or a Data Center server
+   * (its web address, the host of the remote that asked) with an HTTP access token. Checked first, then kept encrypted.
+   */
+  connectBitbucket(
+    opts: { kind: 'cloud'; email: string; token: string } | { kind: 'server'; url: string; token: string; remoteHost?: string }
+  ): Promise<BitbucketConnections>
+  disconnectBitbucket(target: { kind: 'cloud' } | { kind: 'server'; url: string }): Promise<BitbucketConnections>
+  /** Pull requests of the repository's remote; null when it has no supported one or pull requests are off for it. */
   getPullRequests(repo: string): Promise<RepoPullRequests | null>
-  /** A pull request's commits as GitHub has them (at most 100, newest first). */
+  /** A pull request's commits as the provider has them (at most 100, newest first). */
   getPullRequestCommits(repo: string, number: number): Promise<PullCommit[]>
-  /** Open a pull request on the repository's GitHub remote (the head branch must be pushed there already). */
+  /** What would stop a merge now, when the provider says it (Bitbucket Data Center); null otherwise. */
+  getPullRequestMergeChecks(repo: string, number: number): Promise<MergeChecks | null>
+  /** Open a pull request on the repository's remote (the head branch must be pushed there already). */
   createPullRequest(repo: string, opts: CreatePullOptions): Promise<PullRequest>
-  /** Merge a pull request on GitHub; refused when its head is no longer `headSha`. */
+  /** Merge a pull request on its provider; refused when its head is no longer `headSha` (full or abbreviated). */
   mergePullRequest(repo: string, number: number, opts: { method: MergeMethod; headSha: string }): Promise<void>
   /**
    * Make the local branch for a pull request, without checking it out: its own branch tracking the remote,
@@ -341,8 +363,12 @@ export const API_METHODS = [
   'getGithubConnection',
   'connectGithub',
   'disconnectGithub',
+  'getBitbucketConnections',
+  'connectBitbucket',
+  'disconnectBitbucket',
   'getPullRequests',
   'getPullRequestCommits',
+  'getPullRequestMergeChecks',
   'createPullRequest',
   'mergePullRequest',
   'pullRequestBranch',

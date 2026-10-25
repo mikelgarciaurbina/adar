@@ -2,12 +2,13 @@ import { describe, expect, it } from 'vitest'
 import type { PullRequest, RepoPullRequests } from '@shared/hosting'
 import type { Ref, RefsResult } from '@shared/types'
 import { buildTree, flattenTree } from '@renderer/components/sidebar/tree'
-import { checksLabel, indexPulls, localBranchFor, mergeBlocker, pullForRef, pullTitle, pushPlan, reviewLabel, suggestBody, suggestTitle } from './pulls'
+import { checksLabel, indexPulls, localBranchFor, mergeBlocker, mergeChecksText, pullForRef, pullTitle, pushPlan, reviewLabel, stateLabel, suggestBody, suggestTitle } from './pulls'
 
 const sha = (c: string) => c.repeat(40)
 
 function pr(p: Partial<PullRequest>): PullRequest {
   return {
+    provider: 'github',
     number: 1,
     title: 'Title',
     body: '',
@@ -35,6 +36,7 @@ function pr(p: Partial<PullRequest>): PullRequest {
     mergeable: 'clean',
     mergeBlocked: false,
     viewerIsAuthor: true,
+    openTasks: 0,
     ...p
   }
 }
@@ -47,6 +49,8 @@ function refsWith(branches: Ref[], remotes: Ref[]): RefsResult {
 }
 
 const data = (pulls: PullRequest[]): RepoPullRequests => ({
+  provider: 'github',
+  host: 'github.com',
   owner: 'acme',
   name: 'widgets',
   remote: 'origin',
@@ -56,6 +60,8 @@ const data = (pulls: PullRequest[]): RepoPullRequests => ({
   mergeMethods: ['squash'],
   deleteBranchOnMerge: false,
   canMerge: true,
+  reportsConflicts: true,
+  mergeChecks: false,
   pulls
 })
 
@@ -108,7 +114,7 @@ describe('pull requests on branches', () => {
     const runs = (...states: Array<'passed' | 'failed' | 'running'>) => states.map((state, i) => ({ name: `c${i}`, state, url: null }))
     expect(checksLabel(pr({ checks: 'passed', checkRuns: runs('passed', 'passed', 'passed', 'passed') }))).toBe('All 4 checks passed')
     expect(checksLabel(pr({ checks: 'failed', checkRuns: runs('failed', 'passed', 'passed', 'passed') }))).toBe('1 of 4 checks failed')
-    expect(checksLabel(pr({ checks: 'running', checkRuns: runs('running', 'passed') }))).toBe('1 check running')
+    expect(checksLabel(pr({ checks: 'running', checkRuns: runs('running', 'passed') }))).toBe('1 of 2 checks running')
     expect(checksLabel(pr({ checks: 'none' }))).toBeNull()
     expect(reviewLabel(pr({ review: 'approved', approvedBy: ['ane'] }))).toBe('Approved by ane')
     expect(reviewLabel(pr({ review: 'changes-requested', changesRequestedBy: ['ane', 'jon', 'miren'] }))).toBe('Changes requested by ane, jon and 1 more')
@@ -123,6 +129,20 @@ describe('pull requests on branches', () => {
     expect(mergeBlocker(pr({}), { canMerge: false })).toMatch(/permission/)
   })
 
+  it('uses Bitbucket’s words for Bitbucket pull requests', () => {
+    const cloud = (p: Partial<PullRequest>) => pr({ provider: 'bitbucket-cloud', ...p })
+    expect(stateLabel(cloud({ state: 'closed' }))).toBe('Declined')
+    expect(stateLabel(pr({ state: 'closed' }))).toBe('Closed')
+    expect(checksLabel(cloud({ checks: 'passed', checkRuns: [{ name: 'ci', state: 'passed', url: null }] }))).toBe('The build passed')
+    expect(checksLabel(cloud({ checks: 'failed', checkRuns: [] }))).toBe('Builds failed')
+    expect(reviewLabel(pr({ provider: 'bitbucket-server', review: 'changes-requested', changesRequestedBy: ['Ane'] }))).toBe('Ane marked it as needing work')
+    expect(mergeBlocker(cloud({ state: 'draft' }), data([]))).toBe('It is a draft. Mark it ready for review on Bitbucket first.')
+    expect(pullTitle(cloud({ state: 'closed' }))).toContain('Declined · Mikel Garcia')
+    expect(mergeChecksText(['It conflicts with main', 'main needs 2 approvals (it has 1).'])).toBe('Bitbucket says: it conflicts with main, and main needs 2 approvals (it has 1).')
+    expect(mergeChecksText(['CI builds are not green'])).toBe('Bitbucket says: CI builds are not green.')
+    expect(mergeChecksText([])).toBe('Bitbucket says it cannot be merged yet.')
+  })
+
   it('writes a title and description from the commits', () => {
     expect(suggestTitle('feat/workspaces', ['Add the dashboard'])).toBe('Add the dashboard')
     expect(suggestTitle('feat/group-dashboard', ['b', 'a'])).toBe('Group dashboard')
@@ -133,7 +153,7 @@ describe('pull requests on branches', () => {
   it('adds a Pull requests section to the left panel for GitHub repositories', () => {
     const refs = refsWith([branch('main', sha('a'))], [])
     expect(buildTree(refs, []).map((s) => s.id)).not.toContain('pulls')
-    const off = flattenTree(buildTree(refs, [], { state: 'off' }))
+    const off = flattenTree(buildTree(refs, [], { state: 'off', provider: 'GitHub' }))
     expect(off.map((r) => r.kind)).toContain('pull-prompt')
     const on = flattenTree(buildTree(refs, [], { state: 'on', pulls: [pr({ number: 42, title: 'Workspaces' }), pr({ number: 41, title: 'Rebase todo', headRef: 'fix' })] }))
     const section = on.find((r) => r.kind === 'section' && r.id === 'pulls')

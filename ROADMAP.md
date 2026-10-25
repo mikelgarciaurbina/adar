@@ -29,7 +29,9 @@ signed with an Apple Developer ID and notarized (since 0.6.1) · the antlers in 
 project's branch and latest commits on their lanes, Pull and Push, and a project switcher · notifications when a fetch
 brings new commits to the checked-out branch · a "What's new" panel with the release notes after each update · GitHub
 pull requests (opt-in, signed in through the GitHub CLI or a token): on branch labels and in the left panel with their
-checks and reviews, created from a branch (pushed first), checked out (forks too), merged and cleaned up.
+checks and reviews, created from a branch (pushed first), checked out (forks too), merged and cleaned up · the same for
+Bitbucket Cloud (API token) and Bitbucket Data Center (HTTP access token), with builds, tasks and Bitbucket's merge
+strategies and merge checks.
 
 ---
 
@@ -45,8 +47,8 @@ checks and reviews, created from a branch (pushed first), checked out (forks too
 - [ ] Contributor guide for adding a language through a pull request.
 
 ### Hosting integrations (opt-in)
-- [ ] **Merge requests and pull requests beyond GitHub**: GitLab, Bitbucket and Azure DevOps in the same panel and
-      labels as GitHub's (reuse `glab` and credential helper tokens before asking for anything).
+- [ ] **Merge requests and pull requests on GitLab and Azure DevOps** in the same panel and labels as GitHub's and
+      Bitbucket's (reuse `glab` and credential helper tokens before asking for anything).
 - [ ] GitHub: sign in from the browser (device flow, needs an OAuth app for Adar), and GitHub Enterprise hosts.
 - [ ] **CI status** dots on commits and branches (GitHub Actions, GitLab pipelines).
 - [ ] "Open on GitHub/GitLab…" for commits, files and line ranges; clickable `#123` issue references.

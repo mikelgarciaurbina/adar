@@ -1,4 +1,4 @@
-// "Create pull request": from a local branch into a branch of the GitHub remote, with the
+// "Create pull request": from a local branch into a branch of the hosting remote, with the
 // title and description written from the branch's commits, pushing the branch first when
 // the remote does not have all of it yet.
 
@@ -112,7 +112,7 @@ export function CreatePullDialog({ repo, head: initialHead, base: initialBase }:
       footer={
         <>
           <span className="pr-footer-where md-footer-start" title={data?.webUrl}>
-            {remote} · {data ? `github.com/${data.owner}/${data.name}` : ''}
+            {remote} · {data ? `${data.host}/${data.owner}/${data.name}` : ''}
           </span>
           <Button variant="ghost" onClick={close}>
             Cancel

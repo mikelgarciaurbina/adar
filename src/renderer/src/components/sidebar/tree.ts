@@ -85,7 +85,12 @@ export interface PullPromptLeaf {
 }
 
 /** What the Pull requests section shows: absent for repositories without a GitHub remote. */
-export type PullsInput = { state: 'off' } | { state: 'loading' } | { state: 'error'; message: string } | { state: 'on'; pulls: PullRequest[] }
+export type PullsInput =
+  /** `provider`: who to show them from ("GitHub", "Bitbucket"). */
+  | { state: 'off'; provider: string }
+  | { state: 'loading' }
+  | { state: 'error'; message: string }
+  | { state: 'on'; pulls: PullRequest[] }
 
 export interface FolderNode {
   kind: 'folder'
@@ -230,7 +235,7 @@ function pullsSection(input: PullsInput): Section {
   const base = { id: 'pulls' as const, key: sectionKey('pulls'), title: SECTION_TITLES.pulls }
   switch (input.state) {
     case 'off':
-      return { ...base, children: [{ kind: 'pull-prompt', key: 'pull-prompt', label: 'Show pull requests from GitHub…', search: '' }], total: 0 }
+      return { ...base, children: [{ kind: 'pull-prompt', key: 'pull-prompt', label: `Show pull requests from ${input.provider}…`, search: '' }], total: 0 }
     case 'loading':
       return { ...base, children: [], total: 0, hint: 'Loading…' }
     case 'error':
