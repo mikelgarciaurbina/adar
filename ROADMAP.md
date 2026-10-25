@@ -33,13 +33,6 @@ brings new commits to the checked-out branch · a "What's new" panel with the re
 
 ## Next (0.2 – 0.4)
 
-### Distribution
-- [ ] Delta updates (smaller downloads).
-- [ ] The updater checks that a downloaded macOS update is signed with Adar's Developer ID (the same team as the
-      running app) before replacing it.
-- [ ] Sign update archives with an offline maintainer key (ed25519) and verify them in the updater, on top of today's
-      GitHub digest, host, bundle-identity and version checks.
-
 ### Localization (i18n)
 - [ ] Lightweight translation layer (`t()` + JSON catalogs, `Intl` for plurals, dates and numbers); a test that flags
       missing keys.
@@ -131,6 +124,13 @@ Bring-your-own-key or local models only, disabled by default, and never sending 
 - [ ] Project website with screenshots, docs and a changelog.
 - [ ] Extension API (custom commands, panels, hosting providers).
 - [ ] Opt-in crash reports (no telemetry).
+
+### Distribution
+- [ ] Delta updates (smaller downloads).
+- [ ] The updater checks that a downloaded macOS update is signed with Adar's Developer ID (the same team as the
+      running app) before replacing it.
+- [ ] Sign update archives with an offline maintainer key (ed25519) and verify them in the updater, on top of today's
+      GitHub digest, host, bundle-identity and version checks.
 
 ---
 
