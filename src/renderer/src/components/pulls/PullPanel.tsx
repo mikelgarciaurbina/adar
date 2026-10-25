@@ -338,6 +338,7 @@ function PullActions(props: { tab: RepoTab; pr: PullRequest; data: RepoPullReque
                 variant="primary"
                 className="pr-merge-more"
                 aria-label="Other ways to merge"
+                icon={<ChevronDown size={14} />}
                 disabled={!!blocker || merging}
                 onClick={(e) =>
                   showMenuBelow(
@@ -345,9 +346,7 @@ function PullActions(props: { tab: RepoTab; pr: PullRequest; data: RepoPullReque
                     data.mergeMethods.map((m) => ({ label: `${MERGE_LABELS[m].menu} · ${MERGE_LABELS[m].hint(pr)}`, checked: m === method, onClick: () => setMethod(m) }))
                   )
                 }
-              >
-                <ChevronDown size={14} />
-              </Button>
+              />
             )}
           </div>
           {blocker ? (

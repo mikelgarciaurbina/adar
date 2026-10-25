@@ -329,6 +329,10 @@
   flex: 1;
   min-width: 0;
 }
+/* With the arrow beside it, the label is centred on the whole button, not just on its own part. */
+.pr-merge > .pr-merge-main:not(:only-child) {
+  padding-left: calc(12px + 34px);
+}
 .pr-merge > .pr-merge-more {
   flex: none;
   width: 34px;
