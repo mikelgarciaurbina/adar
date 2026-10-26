@@ -308,6 +308,23 @@ const jsonLd = JSON.stringify({
             </div>
           </article>
 
+          <article class="feat feat--pulls card tilt spotlight reveal" data-animate>
+            <div class="feat__art" aria-hidden="true">
+              <div class="prs">
+                <ul class="prs__list">
+                  <li class="prs__row" style="--c:var(--lane-1);--i:0"><span class="prs__host">GitHub</span><span class="prs__num">#42</span><em>Workspaces: a dashboard per tab group</em><span class="prs__st prs__st--ok"><Icon name="check" />4 checks</span></li>
+                  <li class="prs__row is-hot" style="--c:var(--lane-5);--i:1"><span class="prs__host">GitLab</span><span class="prs__num">!12</span><em>Rates: round prices per currency</em><span class="prs__st prs__st--run"><i></i>2 of 3 jobs</span></li>
+                  <li class="prs__row" style="--c:var(--lane-3);--i:2"><span class="prs__host">Bitbucket</span><span class="prs__num">#128</span><em>Booking: pay with saved cards</em><span class="prs__st prs__st--review">Review</span></li>
+                </ul>
+                <div class="prs__bar"><span><Icon name="check" />Approved by ane · no conflicts</span><b><Icon name="merge" />Squash and merge</b></div>
+              </div>
+            </div>
+            <div class="feat__body">
+              <h3><Icon name="pull-request" /><Fragment set:html={t.branches.pulls[0]} /></h3>
+              <p set:html={t.branches.pulls[1]} />
+            </div>
+          </article>
+
           <article class="feat feat--groups card tilt spotlight reveal" data-animate style="--delay:60ms">
             <div class="feat__art" aria-hidden="true">
               <div class="tabs">
