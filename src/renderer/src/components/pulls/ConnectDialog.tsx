@@ -11,6 +11,7 @@ import { Button } from '@renderer/components/common/Button'
 import { Modal } from '@renderer/components/common/Modal'
 import { closeIfTopmost } from '@renderer/components/modals/controls'
 import { useApp } from '@renderer/store/appStore'
+import { CLOUD_TOKEN_SCOPES } from '@shared/bitbucket'
 import { describeError } from '@shared/errors'
 import type { GithubAuthMethod, HostingProvider } from '@shared/hosting'
 import { repoHosting, usePulls } from './pullStore'
@@ -312,11 +313,17 @@ function BitbucketConnect({ provider, server, remoteHost, next }: ConnectProps) 
           />
           {cloud ? (
             <span className="ui-hint">
+              In your{' '}
               <button type="button" className="ui-link" onClick={() => openWebPage(ATLASSIAN_TOKENS_URL)}>
-                Create an API token
-              </button>{' '}
-              for Bitbucket with the scopes <code>read:user:bitbucket</code>, <code>read:repository:bitbucket</code>, <code>read:pullrequest:bitbucket</code> and{' '}
-              <code>write:pullrequest:bitbucket</code>.
+                Atlassian API tokens
+              </button>
+              , choose <strong>Create API token with scopes</strong>, pick <strong>Bitbucket</strong> as the app and select{' '}
+              {CLOUD_TOKEN_SCOPES.map((scope, i) => (
+                <span key={scope}>
+                  <code>{scope}</code>
+                  {i < CLOUD_TOKEN_SCOPES.length - 2 ? ', ' : i === CLOUD_TOKEN_SCOPES.length - 2 ? ' and ' : '.'}
+                </span>
+              ))}
             </span>
           ) : (
             <span className="ui-hint">

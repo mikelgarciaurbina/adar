@@ -23,6 +23,7 @@ const obj = (v: unknown): Obj => (isObj(v) ? v : {})
 const str = (v: unknown): string => (typeof v === 'string' ? v : '')
 const num = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0)
 const arr = (v: unknown): Obj[] => (Array.isArray(v) ? v.filter(isObj) : [])
+const arrOf = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [])
 /** `values` of a paged answer. */
 export const pageValues = (v: unknown): Obj[] => arr(obj(v).values)
 
@@ -35,10 +36,26 @@ function reviewOf(changes: string[], approvals: string[], waiting: string[]): Re
   return waiting.length ? 'review-required' : 'none'
 }
 
+/** The scopes a Bitbucket Cloud API token needs for Adar's pull requests. */
+export const CLOUD_TOKEN_SCOPES = ['read:user:bitbucket', 'read:repository:bitbucket', 'read:pullrequest:bitbucket', 'write:pullrequest:bitbucket'] as const
+
+const inWords = (items: readonly string[]) => (items.length > 1 ? `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}` : items.join(''))
+
+/** How to make a token Bitbucket Cloud accepts (Atlassian's plain "Create API token" makes one without scopes). */
+const SCOPED_TOKEN_HOWTO = `Create a new one with “Create API token with scopes”: choose Bitbucket and select ${inWords(CLOUD_TOKEN_SCOPES)}.`
+
 /** "Bitbucket: <message>" from an error answer (Cloud: { error: { message, detail } }, Data Center: { errors: [{ message }] }). */
 export function bitbucketErrorMessage(body: unknown, fallback: string): string {
   const b = obj(body)
   const cloud = obj(b.error)
+  const message = (str(cloud.message) || str(b.message)).trim().slice(0, 200)
+  // An API token made without scopes, or with another Atlassian app's.
+  if (/no bitbucket scopes/i.test(message)) return `this API token has no Bitbucket scopes. ${SCOPED_TOKEN_HOWTO}`
+  // A scope the token lacks: Cloud names the ones it required.
+  const required = arrOf(obj(cloud.detail).required)
+    .filter((s) => /^[\w:.-]{1,60}$/.test(s))
+    .slice(0, 6)
+  if (required.length) return `${message.replace(/\.?$/, '.')} It needs ${inWords(required)}. ${SCOPED_TOKEN_HOWTO}`
   const text = [str(cloud.message), str(cloud.detail)].filter(Boolean).join(': ') || arr(b.errors).map((e) => str(e.message)).filter(Boolean).join('; ') || str(b.message)
   return text ? text.slice(0, 300) : fallback
 }

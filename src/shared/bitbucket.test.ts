@@ -129,6 +129,15 @@ describe('Bitbucket Cloud answers', () => {
       { sha: sha('c'), subject: 'Remember the card', author: 'Ane' }
     ])
     expect(bitbucketErrorMessage({ type: 'error', error: { message: 'Bad request', detail: 'No commits' } }, 'x')).toBe('Bad request: No commits')
+    // Tokens without Bitbucket scopes, or missing one: say how to make the right one.
+    const noScopes = bitbucketErrorMessage({ type: 'error', error: { message: 'API Token provided has no Bitbucket scopes.' } }, 'x')
+    expect(noScopes).toMatch(/^this API token has no Bitbucket scopes\. Create a new one with “Create API token with scopes”: choose Bitbucket and select read:user:bitbucket, /)
+    expect(noScopes).toContain('read:pullrequest:bitbucket and write:pullrequest:bitbucket.')
+    const missing = bitbucketErrorMessage(
+      { type: 'error', error: { message: 'Your credentials lack one or more required privilege scopes.', detail: { granted: ['read:user:bitbucket'], required: ['write:pullrequest:bitbucket', '<b>'] } } },
+      'x'
+    )
+    expect(missing).toMatch(/^Your credentials lack one or more required privilege scopes\. It needs write:pullrequest:bitbucket\. Create a new one/)
   })
 })
 
