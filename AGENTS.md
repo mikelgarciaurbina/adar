@@ -12,8 +12,9 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
   API, plus `API_METHODS`), `errors.ts` (`AdarError`, `describeError`, `errorDetail`), `update.ts` (updater types and
   pure helpers), `patch.ts` (partial-staging patch builder), `menubar.ts` (the menu bar panel's calls and limits),
   `hosting.ts` (provider-neutral pull request types, GitHub's GraphQL query and the pure mapping of its answers),
-  `bitbucket.ts` (pure mapping of Bitbucket Cloud and Data Center answers), `remoteUrl.ts` (remote URL → web page,
-  provider; `hostingOf`/`pickHostingRemote` find GitHub, bitbucket.org and Data Center remotes).
+  `bitbucket.ts` / `gitlab.ts` (pure mapping of Bitbucket Cloud and Data Center answers / of GitLab's merge requests),
+  `remoteUrl.ts` (remote URL → web page, provider; `hostingOf`/`pickHostingRemote` find GitHub, GitLab — gitlab.com,
+  gitlab.* hosts and signed-in instances —, bitbucket.org and Data Center remotes).
 - `src/main/` — Electron main process.
   - `index.ts` window, native menu, IPC (`dispatch.ts`), dev/e2e hooks; `quitGuard.ts` asks the renderer before quitting.
   - `backend.ts` composes the read side (`git/read/*`, parsers in `git/parsers/*`), the write side (`git/write/*`) and
@@ -29,15 +30,17 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
     (`openRepo` and its trust check, or the panel's `menuBarUseRepo`).
   - `updater.ts` — in-app updates from GitHub Releases (check → download → verify → replace bundle → relaunch) on
     macOS; Windows and Linux builds only check, and "Download" opens the release page.
-  - `hosting/` — pull requests on GitHub, Bitbucket Cloud and Bitbucket Data Center, each opt-in
-    (`settings.githubAuth`, `bitbucketAuth` + `bitbucketEmail`, `bitbucketServers`). `provider.ts` is the interface each
-    one implements (`githubProvider.ts`, `bitbucketCloud.ts`, `bitbucketServer.ts`); `http.ts` the JSON client that only
-    calls its own base address; `auth.ts` the GitHub CLI sign-in (asks `gh auth token` each time, never stored) and the
-    token files encrypted with Electron `safeStorage` (`PlatformAdapter.secrets`: GitHub, Bitbucket Cloud's API token,
-    one HTTP access token per Data Center server). `index.ts` picks the repository's remote and provider, and makes the
-    local branch for checking a pull request out (`pr/<n>` for forks, from `refs/pull/<n>/head` on GitHub or
-    `refs/pull-requests/<n>/from` on Data Center). Nothing talks to a service while its pull requests are off, and
-    tokens never reach the renderer or the logs.
+  - `hosting/` — pull requests on GitHub, GitLab (merge requests, gitlab.com and self-managed), Bitbucket Cloud and
+    Bitbucket Data Center, each opt-in (`settings.githubAuth`, `gitlabServers`, `bitbucketAuth` + `bitbucketEmail`,
+    `bitbucketServers`). `provider.ts` is the interface each one implements (`githubProvider.ts`, `gitlabProvider.ts`,
+    `bitbucketCloud.ts`, `bitbucketServer.ts`); `http.ts` the JSON client that only calls its own base address; `auth.ts`
+    the GitHub CLI sign-in (asks `gh auth token` each time, never stored) and the token files encrypted with Electron
+    `safeStorage` (`PlatformAdapter.secrets`: GitHub, one personal access token per GitLab instance, Bitbucket Cloud's
+    API token, one HTTP access token per Data Center server). `index.ts` picks the repository's remote and provider, and
+    makes the local branch for checking a pull request out (forks: `pr/<n>` from `refs/pull/<n>/head` on GitHub or
+    `refs/pull-requests/<n>/from` on Data Center, `mr/<n>` from `refs/merge-requests/<n>/head` on GitLab). Nothing talks
+    to a service while its pull requests are off, and tokens never reach the renderer or the logs. The UI uses each
+    provider's words (`lib/pulls.ts`: `pullNoun`, `pullRef` — "merge request !12" on GitLab).
   - `cli.ts` / `cliPath.ts` — install/uninstall the `adar` command (symlink to `resources/bin/adar`, shipped in the
     bundle as `Contents/Resources/bin/adar`); `openRequests.ts` queues folders to open from the CLI/Dock
     (`open-file`), `--open-repo=<path>` launch args and second instances until the renderer takes them.
@@ -115,11 +118,12 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
   `node scripts/make-big-repo.mjs <dir> [commits] [branches]` (performance).
 - Website: `cd site && npm install && npm run dev` (http://localhost:4321/), or `npm run build && npm run preview`
   to check the static output. Add `?capture` to a URL to keep WebGL frames readable by screenshot tools.
-- Pull requests without touching GitHub or Bitbucket: unpackaged builds send API calls to
-  `ADAR_GITHUB_API=http://127.0.0.1:<port>` / `ADAR_BITBUCKET_API=http://127.0.0.1:<port>` when set (a fake API server),
-  and `ADAR_HOSTING_LOOPBACK=1` lets a Data Center server be `http://127.0.0.1:<port>`. For GitHub put a fake `gh` first
-  on `PATH` (it must print a token for `gh auth token`) and point `GH_CONFIG_DIR` at a `hosts.yml` with `user:`. Serve
-  the `git@github.com:…`, `git@bitbucket.org:…` or `ssh://git@<host>:7999/…` origin from a local bare repository through
+- Pull requests without touching GitHub, GitLab or Bitbucket: unpackaged builds send API calls to
+  `ADAR_GITHUB_API=http://127.0.0.1:<port>` / `ADAR_BITBUCKET_API=http://127.0.0.1:<port>` / `ADAR_GITLAB_URL=http://127.0.0.1:<port>`
+  (gitlab.com's stand-in; its API under `/api/v4`) when set (a fake API server), and `ADAR_HOSTING_LOOPBACK=1` lets a
+  GitLab instance or Data Center server be `http://127.0.0.1:<port>`. For GitHub put a fake `gh` first on `PATH` (it must
+  print a token for `gh auth token`) and point `GH_CONFIG_DIR` at a `hosts.yml` with `user:`. Serve the `git@github.com:…`,
+  `git@gitlab.com:…`, `git@bitbucket.org:…` or `ssh://git@<host>:7999/…` origin from a local bare repository through
   `GIT_SSH_COMMAND` (name the script `ssh` so git passes the port; `url.<x>.insteadOf` would change what
   `git remote -v` shows).
 - Updater end to end with packaged builds: `scripts/test-updater.sh <workdir>` (must print `UPDATER TEST PASSED`).

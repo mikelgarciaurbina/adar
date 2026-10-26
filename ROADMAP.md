@@ -31,7 +31,8 @@ brings new commits to the checked-out branch · a "What's new" panel with the re
 pull requests (opt-in, signed in through the GitHub CLI or a token): on branch labels and in the left panel with their
 checks and reviews, created from a branch (pushed first), checked out (forks too), merged and cleaned up · the same for
 Bitbucket Cloud (API token) and Bitbucket Data Center (HTTP access token), with builds, tasks and Bitbucket's merge
-strategies and merge checks.
+strategies and merge checks · and for GitLab merge requests (gitlab.com and self-managed, personal access token), with
+their pipelines, approvals and GitLab's merge status.
 
 ---
 
@@ -47,8 +48,9 @@ strategies and merge checks.
 - [ ] Contributor guide for adding a language through a pull request.
 
 ### Hosting integrations (opt-in)
-- [ ] **Merge requests and pull requests on GitLab and Azure DevOps** in the same panel and labels as GitHub's and
-      Bitbucket's (reuse `glab` and credential helper tokens before asking for anything).
+- [ ] **Pull requests on Azure DevOps** in the same panel and labels as GitHub's, GitLab's and Bitbucket's.
+- [ ] GitLab: sign in through `glab` when it is signed in (it has no `gh auth token` counterpart yet), and credential
+      helper tokens before asking for anything.
 - [ ] GitHub: sign in from the browser (device flow, needs an OAuth app for Adar), and GitHub Enterprise hosts.
 - [ ] **CI status** dots on commits and branches (GitHub Actions, GitLab pipelines).
 - [ ] "Open on GitHub/GitLab…" for commits, files and line ranges; clickable `#123` issue references.

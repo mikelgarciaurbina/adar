@@ -225,6 +225,62 @@ describe('Bitbucket pull requests', () => {
   })
 })
 
+describe('GitLab merge requests', () => {
+  const lab = (p: Partial<PullRequest> = {}) =>
+    pr({
+      provider: 'gitlab',
+      url: 'https://gitlab.com/acme/widgets/-/merge_requests/42',
+      checks: 'running',
+      checkRuns: [
+        { name: 'test', state: 'running', url: null },
+        { name: 'lint', state: 'passed', url: null }
+      ],
+      ...p
+    })
+  const labData = (pulls: PullRequest[], patch: Partial<RepoPullRequests> = {}) =>
+    data(pulls, { provider: 'gitlab', host: 'gitlab.com', webUrl: 'https://gitlab.com/acme/widgets', mergeMethods: ['squash', 'merge'], mergeChecks: true, ...patch })
+
+  it('says merge request, !42, jobs and GitLab', () => {
+    seed(labData([lab({ viewerIsAuthor: false })]))
+    const html = renderToStaticMarkup(<PullPanel tab={tab} number={42} />)
+    expect(html).toContain('>Merge request<')
+    expect(html).toContain('!42')
+    expect(html).toContain('Open on GitLab')
+    expect(html).toContain('1 of 2 jobs running')
+    expect(html).toContain('No conflicts with main')
+    expect(html).toContain('Review on GitLab')
+    expect(html).toContain('Squash and merge')
+    expect(renderToStaticMarkup(<PullPanel tab={tab} number={7} />)).toContain('Merge request !7 is not among this repository&#x27;s recent merge requests.')
+  })
+
+  it('says Closed, not Declined, for a closed merge request', () => {
+    seed(labData([lab({ state: 'closed', closedAt: '2026-10-25T11:00:00Z' })]))
+    const html = renderToStaticMarkup(<PullPanel tab={tab} number={42} />)
+    expect(html).toContain('Closed without merging')
+    expect(html).not.toContain('Declined')
+  })
+
+  it('asks for a personal access token, and the address of an instance', () => {
+    const com = renderToStaticMarkup(<ConnectDialog provider="gitlab" />)
+    expect(com).toContain('Merge requests in Adar')
+    expect(com).toContain('Personal access token')
+    expect(com).toContain('<code>api</code> scope')
+    expect(com).toContain('Adar only talks to gitlab.com')
+    expect(com).not.toContain('GitLab address')
+    const own = renderToStaticMarkup(<ConnectDialog provider="gitlab" server="https://gitlab.example.com" />)
+    expect(own).toContain('GitLab address')
+    expect(own).toContain('value="https://gitlab.example.com"')
+    expect(own).toContain('Adar only talks to gitlab.example.com')
+  })
+
+  it('creates a merge request', () => {
+    seed(labData([]))
+    const html = renderToStaticMarkup(<CreatePullDialog repo={REPO} head="feat/new" />)
+    expect(html).toContain('Create merge request')
+    expect(html).toContain('gitlab.com/acme/widgets')
+  })
+})
+
 describe('pull request dialogs', () => {
   it('offers gh when it is signed in, and the token otherwise', () => {
     seed(null, { ...connection, method: null, login: null })

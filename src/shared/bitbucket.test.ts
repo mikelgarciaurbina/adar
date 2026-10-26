@@ -76,8 +76,7 @@ describe('Bitbucket remotes', () => {
     // A plain ssh remote is only Bitbucket when its host is a known server.
     expect(hostingOf('git@ssh.example.com:web/widgets.git')).toBeNull()
     const servers = [{ url: 'https://code.example.com', hosts: ['code.example.com', 'ssh.example.com'] }]
-    expect(hostingOf('git@ssh.example.com:web/widgets.git', servers)).toMatchObject({ provider: 'bitbucket-server', server: 'https://code.example.com', owner: 'web' })
-    expect(hostingOf('https://gitlab.com/acme/widgets.git')).toBeNull()
+    expect(hostingOf('git@ssh.example.com:web/widgets.git', { bitbucket: servers })).toMatchObject({ provider: 'bitbucket-server', server: 'https://code.example.com', owner: 'web' })
     expect(hostingOf('https://bitbucket.org/acme/widgets/extra')).toBeNull()
     expect(pickHostingRemote([{ name: 'up', url: 'git@bitbucket.org:acme/widgets.git' }, { name: 'lab', url: 'git@gitlab.com:a/b.git' }])).toMatchObject({ remote: 'up', provider: 'bitbucket-cloud' })
   })

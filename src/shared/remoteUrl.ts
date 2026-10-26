@@ -121,15 +121,18 @@ export function remoteWebUrl(raw: string): string | null {
   return `${parsed.scheme}://${host}${portPart}${path ? '/' + path : ''}`
 }
 
-/** Where a remote's pull requests live: its provider, host and owner/name (Data Center: project key/repo). */
+/** Where a remote's pull requests live: its provider, host and owner/name (GitLab: group path/project; Data Center: project key/repo). */
 export interface RemoteHosting {
-  provider: 'github' | 'bitbucket-cloud' | 'bitbucket-server'
+  provider: 'github' | 'gitlab' | 'bitbucket-cloud' | 'bitbucket-server'
   host: string
   owner: string
   name: string
-  /** Bitbucket Data Center: the server's web address (a known server's, else a guess from the remote). */
+  /** GitLab and Bitbucket Data Center: the server's web address (a known server's, else a guess from the remote). */
   server?: string
 }
+
+/** Servers pull requests are on for, by provider (see KnownServers in hosting.ts). */
+type Servers = { bitbucket?: ReadonlyArray<{ url: string; hosts: readonly string[] }>; gitlab?: ReadonlyArray<{ url: string; hosts: readonly string[] }> }
 
 const SLUG = /^[A-Za-z0-9._-]{1,100}$/
 const isSlug = (s: string | undefined): s is string => !!s && SLUG.test(s) && s !== '.' && s !== '..'
@@ -142,11 +145,21 @@ function urlHost(url: string): string {
   }
 }
 
+/** The path of a server's address ("gitlab" in https://example.com/gitlab), without slashes. */
+function urlPath(url: string): string {
+  try {
+    return new URL(url).pathname.replace(/^\/+|\/+$/g, '')
+  } catch {
+    return ''
+  }
+}
+
 /**
- * The hosting of a remote URL: github.com, bitbucket.org, or a Bitbucket Data Center server (an https remote under
- * /scm/, an ssh remote on port 7999, or any remote on a server in `servers`). Null for anything else.
+ * The hosting of a remote URL: github.com, gitlab.com, bitbucket.org, a GitLab instance (a known one, or a host
+ * named gitlab.*), or a Bitbucket Data Center server (an https remote under /scm/, an ssh remote on port 7999, or
+ * any remote on a known server). Null for anything else.
  */
-export function hostingOf(raw: string, servers: ReadonlyArray<{ url: string; hosts: readonly string[] }> = []): RemoteHosting | null {
+export function hostingOf(raw: string, servers: Servers = {}): RemoteHosting | null {
   const gh = githubRepoOf(raw)
   if (gh) return { provider: 'github', host: 'github.com', ...gh }
   const parsed = parseRemoteUrl(raw)
@@ -158,8 +171,13 @@ export function hostingOf(raw: string, servers: ReadonlyArray<{ url: string; hos
     return isSlug(owner) && isSlug(name) && !rest.length ? { provider: 'bitbucket-cloud', host, owner, name } : null
   }
   const hostPort = parsed.port && !parsed.sshLike ? `${host}:${parsed.port}` : host
-  const known = servers.find((s) => s.hosts.includes(host) || s.hosts.includes(hostPort) || urlHost(s.url) === hostPort)
+  const on = (list: Servers['gitlab']) => list?.find((s) => s.hosts.includes(host) || s.hosts.includes(hostPort) || urlHost(s.url) === hostPort)
+  const known = on(servers.bitbucket)
   const scm = /^(?:(.+)\/)?scm\/([^/]+)\/([^/]+)$/.exec(path)
+  const knownLab = known ? undefined : on(servers.gitlab)
+  if (knownLab || host === 'gitlab.com' || (!known && !scm && parsed.port !== '7999' && /^gitlab\./.test(host))) {
+    return gitlabOf(parsed, host, hostPort, path, knownLab?.url)
+  }
   let project: string | undefined
   let name: string | undefined
   let context = ''
@@ -176,13 +194,28 @@ export function hostingOf(raw: string, servers: ReadonlyArray<{ url: string; hos
   return { provider: 'bitbucket-server', host, owner: project!, name, server }
 }
 
+/** A GitLab remote: [context/]group[/subgroup…]/project, on gitlab.com or the instance at `known` (else a guess). */
+function gitlabOf(parsed: ParsedRemote, host: string, hostPort: string, path: string, known: string | undefined): RemoteHosting | null {
+  const server = known ?? (host === 'gitlab.com' ? 'https://gitlab.com' : parsed.sshLike ? `https://${host}` : `${parsed.scheme}://${hostPort}`)
+  let rest = path
+  // An instance under a path (https://example.com/gitlab) has it in its https remotes too.
+  const context = urlPath(server)
+  if (context && !parsed.sshLike) {
+    if (!rest.startsWith(`${context}/`)) return null
+    rest = rest.slice(context.length + 1)
+  }
+  const parts = rest.split('/')
+  if (parts.length < 2 || parts.length > 20 || !parts.every((p) => isSlug(p) && p !== '-')) return null
+  return { provider: 'gitlab', host, owner: parts.slice(0, -1).join('/'), name: parts[parts.length - 1], server }
+}
+
 /**
  * The remote pull requests are read from: the one gh was told to use (`preferred`), else origin, else the first
  * remote with a supported hosting.
  */
 export function pickHostingRemote(
   remotes: ReadonlyArray<{ name: string; url: string }>,
-  servers: ReadonlyArray<{ url: string; hosts: readonly string[] }> = [],
+  servers: Servers = {},
   preferred?: string | null
 ): (RemoteHosting & { remote: string }) | null {
   const found: Array<RemoteHosting & { remote: string }> = []

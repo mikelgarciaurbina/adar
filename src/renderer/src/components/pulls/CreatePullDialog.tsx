@@ -1,4 +1,4 @@
-// "Create pull request": from a local branch into a branch of the hosting remote, with the
+// "Create pull request" (GitLab: merge request): from a local branch into a branch of the hosting remote, with the
 // title and description written from the branch's commits, pushing the branch first when
 // the remote does not have all of it yet.
 
@@ -10,7 +10,7 @@ import { Button } from '@renderer/components/common/Button'
 import { Modal } from '@renderer/components/common/Modal'
 import { closeIfTopmost, Select } from '@renderer/components/modals/controls'
 import { pluralize } from '@renderer/lib/format'
-import { pushPlan, suggestBody, suggestTitle } from '@renderer/lib/pulls'
+import { pullNoun, PullNoun, pushPlan, suggestBody, suggestTitle } from '@renderer/lib/pulls'
 import { useApp } from '@renderer/store/appStore'
 import { describeError } from '@shared/errors'
 import { MAX_TITLE } from '@shared/hosting'
@@ -42,6 +42,7 @@ export function CreatePullDialog({ repo, head: initialHead, base: initialBase }:
   const [error, setError] = useState<string | null>(null)
   const ids = { head: useId(), base: useId(), title: useId(), body: useId() }
   const close = () => closeIfTopmost('pr-create')
+  const noun = pullNoun(data?.provider)
 
   const branch = locals.find((b) => b.name === head)
   const plan = branch ? pushPlan(branch, remote) : null
@@ -71,11 +72,11 @@ export function CreatePullDialog({ repo, head: initialHead, base: initialBase }:
   const problem = !data
     ? 'The pull requests of this repository could not be read.'
     : !head
-      ? 'Choose the branch to create the pull request from.'
+      ? `Choose the branch to create the ${noun} from.`
       : !base
         ? `${remote} has no branches to merge into.`
         : plan?.kind === 'other-remote'
-          ? `${head} tracks ${plan.upstream}. Pull requests from other remotes are not supported yet.`
+          ? `${head} tracks ${plan.upstream}. ${PullNoun(data.provider, true)} from other remotes are not supported yet.`
           : plan?.kind === 'behind'
             ? `${remote}/${plan.head} has ${pluralize(plan.behind, 'commit')} that ${head} does not have. Pull first.`
             : (plan?.head ?? head) === base
@@ -103,7 +104,7 @@ export function CreatePullDialog({ repo, head: initialHead, base: initialBase }:
     <Modal
       title={
         <span className="md-title">
-          <GitPullRequest size={16} /> Create pull request
+          <GitPullRequest size={16} /> Create {noun}
         </span>
       }
       className="md-modal pr-create"
@@ -118,7 +119,7 @@ export function CreatePullDialog({ repo, head: initialHead, base: initialBase }:
             Cancel
           </Button>
           <Button variant="primary" icon={<GitPullRequest size={14} />} loading={busy} disabled={!!problem || !title.trim()} onClick={() => void submit()}>
-            {pushes ? 'Push and create' : 'Create pull request'}
+            {pushes ? 'Push and create' : `Create ${noun}`}
           </Button>
         </>
       }

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { PullRequest, RepoPullRequests } from '@shared/hosting'
 import type { Ref, RefsResult } from '@shared/types'
 import { buildTree, flattenTree } from '@renderer/components/sidebar/tree'
-import { checksLabel, indexPulls, localBranchFor, mergeBlocker, mergeChecksText, pullForRef, pullTitle, pushPlan, reviewLabel, stateLabel, suggestBody, suggestTitle } from './pulls'
+import { checksLabel, forkBranch, indexPulls, localBranchFor, mergeBlocker, mergeChecksText, pullForRef, pullNoun, PullNoun, pullRef, pullTitle, pushPlan, reviewLabel, stateLabel, suggestBody, suggestTitle } from './pulls'
 
 const sha = (c: string) => c.repeat(40)
 
@@ -148,6 +148,33 @@ describe('pull requests on branches', () => {
     expect(suggestTitle('feat/group-dashboard', ['b', 'a'])).toBe('Group dashboard')
     expect(suggestBody(['newest', 'oldest'])).toBe('- oldest\n- newest')
     expect(suggestBody(['only'])).toBe('')
+  })
+
+  it('uses GitLab’s words for merge requests', () => {
+    const lab = (p: Partial<PullRequest>) => pr({ provider: 'gitlab', ...p })
+    expect(pullRef(lab({ number: 12 }))).toBe('!12')
+    expect(pullRef(pr({ number: 12 }))).toBe('#12')
+    expect([pullNoun('gitlab'), PullNoun('gitlab', true), pullNoun('github'), pullNoun(null)]).toEqual(['merge request', 'Merge requests', 'pull request', 'pull request'])
+    expect(forkBranch(lab({ number: 13 }))).toBe('mr/13')
+    expect(stateLabel(lab({ state: 'closed' }))).toBe('Closed')
+    const runs = (...states: Array<'passed' | 'failed' | 'running'>) => states.map((state, i) => ({ name: `j${i}`, state, url: null }))
+    expect(checksLabel(lab({ checks: 'passed', checkRuns: runs('passed', 'passed') }))).toBe('All 2 jobs passed')
+    expect(checksLabel(lab({ checks: 'running', checkRuns: runs('running', 'passed', 'passed') }))).toBe('1 of 3 jobs running')
+    expect(checksLabel(lab({ checks: 'failed', checkRuns: [] }))).toBe('The pipeline failed')
+    expect(checksLabel(lab({ checks: 'running', checkRuns: [] }))).toBe('The pipeline is running')
+    expect(reviewLabel(lab({ review: 'changes-requested' }))).toBe('Changes requested')
+    expect(mergeChecksText(['The pipeline must succeed first'], 'GitLab')).toBe('GitLab says: the pipeline must succeed first.')
+    expect(pullTitle(lab({ number: 12, title: 'Round prices' }))).toContain('!12 Round prices')
+    const refs = refsWith([branch('mr/13', sha('d'))], [])
+    expect(localBranchFor(lab({ number: 13, headFork: 'ane/widgets' }), refs, 'origin')?.name).toBe('mr/13')
+    expect(indexPulls({ ...data([lab({ number: 13, headFork: 'ane/widgets', headSha: sha('d') })]), provider: 'gitlab' }, refs).byLocal.get('mr/13')?.number).toBe(13)
+    const off = flattenTree(buildTree(refs, [], { state: 'off', provider: 'GitLab', title: 'Merge requests' }))
+    expect(off.find((r) => r.kind === 'section' && r.id === 'pulls')).toMatchObject({ title: 'Merge requests' })
+    expect(off.some((r) => r.kind === 'pull-prompt' && r.node.label === 'Show merge requests from GitLab…')).toBe(true)
+    const empty = flattenTree(buildTree(refs, [], { state: 'on', pulls: [], title: 'Merge requests' }))
+    expect(empty.some((r) => r.kind === 'hint' && r.text === 'No open merge requests')).toBe(true)
+    const found = flattenTree(buildTree(refs, [], { state: 'on', pulls: [lab({ number: 12, title: 'Round prices' })], title: 'Merge requests' }), { filter: '!12' })
+    expect(found.some((r) => r.kind === 'pull')).toBe(true)
   })
 
   it('adds a Pull requests section to the left panel for GitHub repositories', () => {

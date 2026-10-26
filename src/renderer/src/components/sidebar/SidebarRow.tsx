@@ -183,7 +183,7 @@ export const RowView = memo(function RowView(props: RowViewProps) {
   switch (row.kind) {
     case 'section': {
       const canAdd = row.id === 'local' || row.id === 'remote' || row.id === 'tags' || row.id === 'pulls'
-      const addLabel = row.id === 'local' ? 'Create branch' : row.id === 'remote' ? 'Add remote' : row.id === 'pulls' ? 'Create pull request' : 'Create tag at HEAD'
+      const addLabel = row.id === 'local' ? 'Create branch' : row.id === 'remote' ? 'Add remote' : row.id === 'pulls' ? `Create ${row.title.slice(0, -1).toLowerCase()}` : 'Create tag at HEAD'
       return (
         <div {...common} className={classes.join(' ')} aria-expanded={row.expanded}>
           <Chevron expanded={row.expanded} />

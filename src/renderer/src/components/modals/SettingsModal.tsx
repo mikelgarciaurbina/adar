@@ -5,7 +5,8 @@ import { useEffect, useId, useRef, useState } from 'react'
 import { Download, FileDiff, GitBranch, GitGraph, Plug, RefreshCw, Settings, SlidersHorizontal } from 'lucide-react'
 import { api, cli, isElectron } from '@renderer/api/client'
 import { installCliCommand, uninstallCliCommand } from '@renderer/actions/cli'
-import { openConnect, turnOffBitbucket, turnOffPullRequests } from '@renderer/actions/pulls'
+import { openConnect, turnOffBitbucket, turnOffGitlab, turnOffPullRequests } from '@renderer/actions/pulls'
+import { GITLAB_COM } from '@shared/hosting'
 import { usePulls } from '@renderer/components/pulls/pullStore'
 import type { CliStatus } from '@shared/cli'
 import { Button, Spinner } from '@renderer/components/common/Button'
@@ -421,9 +422,11 @@ function DiffSection() {
 function PullRequestSettings() {
   const connection = usePulls((st) => st.connection)
   const bitbucket = usePulls((st) => st.bitbucket)
+  const gitlab = usePulls((st) => st.gitlab)
   useEffect(() => {
     void usePulls.getState().loadConnection()
     void usePulls.getState().loadBitbucket()
+    void usePulls.getState().loadGitlab()
   }, [])
   const reopen = () => useApp.getState().openModal({ kind: 'settings', section: 'integrations' })
   const status = (text: string, error?: boolean) => <span className={error ? 'md-update-status md-update-error' : undefined}>{text}</span>
@@ -444,8 +447,16 @@ function PullRequestSettings() {
       ? 'The same for repositories on bitbucket.org, with an API token. Adar talks to Bitbucket only while this is on.'
       : (cloud.error ?? `As ${cloud.login ?? cloud.email}${cloud.login ? ` (${cloud.email})` : ''}, with an API token.`)
 
+  const gitlabCom = gitlab?.servers.find((x) => x.url === GITLAB_COM) ?? null
+  const gitlabTarget = { provider: 'gitlab' as const, server: GITLAB_COM, host: 'gitlab.com' }
+  const gitlabText = !gitlab
+    ? 'Checking…'
+    : !gitlabCom
+      ? 'Merge requests on gitlab.com, with a personal access token. Adar talks to GitLab only while this is on.'
+      : (gitlabCom.error ?? `As ${gitlabCom.login ?? 'you'}, with a personal access token.`)
+
   return (
-    <SettingGroup title="Pull requests" description="Bitbucket Data Center servers are turned on from one of their repositories.">
+    <SettingGroup title="Pull requests" description="GitLab and Bitbucket Data Center servers are turned on from one of their repositories.">
       <SettingRow label="GitHub" description={status(githubText, !!connection?.error)}>
         {githubOn ? (
           <div className="md-row-buttons">
@@ -464,6 +475,44 @@ function PullRequestSettings() {
           </Button>
         )}
       </SettingRow>
+      <SettingRow label="GitLab" description={status(gitlabText, !!gitlabCom?.error)}>
+        {gitlabCom ? (
+          <div className="md-row-buttons">
+            {gitlabCom.error && (
+              <Button size="sm" onClick={() => openConnect(gitlabTarget, reopen)}>
+                Sign in again…
+              </Button>
+            )}
+            <Button size="sm" onClick={() => void turnOffGitlab(GITLAB_COM)}>
+              Turn off
+            </Button>
+          </div>
+        ) : (
+          <Button size="sm" variant="primary" disabled={!gitlab} onClick={() => openConnect(gitlabTarget, reopen)}>
+            Turn on…
+          </Button>
+        )}
+      </SettingRow>
+      {gitlab?.servers
+        .filter((server) => server.url !== GITLAB_COM)
+        .map((server) => (
+          <SettingRow
+            key={server.url}
+            label={server.host}
+            description={status(server.error ?? `GitLab${server.login ? `, as ${server.login}` : ''}, with a personal access token.`, !!server.error)}
+          >
+            <div className="md-row-buttons">
+              {server.error && (
+                <Button size="sm" onClick={() => openConnect({ provider: 'gitlab', server: server.url, host: server.host }, reopen)}>
+                  Sign in again…
+                </Button>
+              )}
+              <Button size="sm" onClick={() => void turnOffGitlab(server.url)}>
+                Turn off
+              </Button>
+            </div>
+          </SettingRow>
+        ))}
       <SettingRow label="Bitbucket Cloud" description={status(cloudText, !!cloud?.error)}>
         {cloud ? (
           <div className="md-row-buttons">

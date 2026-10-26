@@ -1,15 +1,17 @@
-// Pull requests (opt-in) from GitHub, Bitbucket Cloud and Bitbucket Data Center: types shared by
-// the backend (src/main/hosting) and the renderer (components/pulls), GitHub's GraphQL query and the
-// pure mapping of its answer. Bitbucket's answers are mapped in bitbucket.ts.
+// Pull requests (opt-in) from GitHub, GitLab (merge requests), Bitbucket Cloud and Bitbucket Data
+// Center: types shared by the backend (src/main/hosting) and the renderer (components/pulls), GitHub's
+// GraphQL query and the pure mapping of its answer. Bitbucket's answers are mapped in bitbucket.ts,
+// GitLab's in gitlab.ts.
 
 export const GITHUB_API = 'https://api.github.com'
 export const BITBUCKET_API = 'https://api.bitbucket.org/2.0'
+export const GITLAB_COM = 'https://gitlab.com'
 
 /** Where a repository's pull requests live. */
-export type HostingProvider = 'github' | 'bitbucket-cloud' | 'bitbucket-server'
+export type HostingProvider = 'github' | 'gitlab' | 'bitbucket-cloud' | 'bitbucket-server'
 
 /** The name people know each provider by. */
-export const PROVIDER_NAMES: Record<HostingProvider, string> = { github: 'GitHub', 'bitbucket-cloud': 'Bitbucket', 'bitbucket-server': 'Bitbucket' }
+export const PROVIDER_NAMES: Record<HostingProvider, string> = { github: 'GitHub', gitlab: 'GitLab', 'bitbucket-cloud': 'Bitbucket', 'bitbucket-server': 'Bitbucket' }
 
 export type GithubAuthMethod = 'gh' | 'token'
 export type PullState = 'open' | 'draft' | 'merged' | 'closed'
@@ -78,9 +80,9 @@ export interface PullCommit {
 
 export interface RepoPullRequests {
   provider: HostingProvider
-  /** github.com, bitbucket.org or the Bitbucket server's host. */
+  /** github.com, gitlab.com, bitbucket.org or the server's host. */
   host: string
-  /** Owner, Bitbucket workspace or Data Center project key. */
+  /** Owner, GitLab group path ("group/subgroup"), Bitbucket workspace or Data Center project key. */
   owner: string
   name: string
   /** Git remote the repository was found through ("origin"). */
@@ -97,13 +99,13 @@ export interface RepoPullRequests {
   canMerge: boolean
   /** The provider says whether a pull request conflicts (Bitbucket Cloud does not). */
   reportsConflicts: boolean
-  /** Ask getPullRequestMergeChecks before merging (Bitbucket Data Center's merge checks). */
+  /** Ask getPullRequestMergeChecks before merging (Bitbucket Data Center's merge checks, GitLab's merge status). */
   mergeChecks: boolean
   /** Open and draft pull requests (most recently updated first), then recently merged and closed ones. */
   pulls: PullRequest[]
 }
 
-/** What stands between a pull request and merging it, as the provider says (Bitbucket Data Center). */
+/** What stands between a pull request and merging it, as the provider says (Bitbucket Data Center, GitLab). */
 export interface MergeChecks {
   /** The provider would refuse to merge now. */
   blocked: boolean
@@ -113,12 +115,30 @@ export interface MergeChecks {
   conflicts: boolean | null
 }
 
-/** A Bitbucket Data Center server pull requests are on for (settings.bitbucketServers). */
-export interface BitbucketServer {
+/** A server pull requests are on for (settings.bitbucketServers, settings.gitlabServers). */
+export interface HostingServer {
   /** Web address, https://host[:port][/context], without a trailing slash. */
   url: string
   /** Hosts of remotes that live on it (the SSH host may differ from the web one). */
   hosts: string[]
+}
+
+/** A Bitbucket Data Center server pull requests are on for. */
+export type BitbucketServer = HostingServer
+/** A GitLab instance merge requests are on for (gitlab.com included, as https://gitlab.com). */
+export type GitlabServer = HostingServer
+
+/** The servers pull requests are on for, by provider: they tell their remotes apart from other hosts. */
+export interface KnownServers {
+  bitbucket?: readonly HostingServer[]
+  gitlab?: readonly HostingServer[]
+}
+
+export interface GitlabConnections {
+  /** Each GitLab instance merge requests are on for, and who is signed in. */
+  servers: Array<{ url: string; host: string; login: string | null; error: string | null }>
+  /** Tokens can be kept encrypted on this computer. */
+  canStoreToken: boolean
 }
 
 export interface BitbucketConnections {

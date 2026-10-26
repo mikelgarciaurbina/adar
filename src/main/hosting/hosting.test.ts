@@ -1,4 +1,4 @@
-// GitHub pull requests: sign-in, reading, creating and merging against a fake api.github.com,
+// Pull requests: sign-in, reading, creating and merging against fake GitHub, Bitbucket and GitLab APIs,
 // and the local branch for a pull request against real repositories ("github.com" is rewritten
 // to a bare repository on disk with url.<path>.insteadOf).
 
@@ -9,7 +9,7 @@ import { AdarError } from '@shared/errors'
 import type { PlatformAdapter } from '../platform'
 import { createGitContext } from '../git/context'
 import { cleanupTmp, commitFile, git, head, initRepo, isolateGitConfig, tmpDir } from '../git/write/__tests__/helpers'
-import { SettingsStore, normalizeServerUrl, sanitizeBitbucketServers } from '../system/settings'
+import { SettingsStore, normalizeServerUrl, sanitizeServers } from '../system/settings'
 import { ghConfigDir, ghUserFromHosts, isPlausibleToken, TokenStore, type SecretBox } from './auth'
 import { cloudForkUrl } from './bitbucketCloud'
 import { pickHostingRemote } from '@shared/remoteUrl'
@@ -105,12 +105,13 @@ describe('GitHub sign-in helpers', () => {
   })
 
   it('picks the remote pull requests live on', () => {
-    const pick = (lines: string, preferred?: string) => pickHostingRemote(parseRemoteUrls(lines), [], preferred)
+    const pick = (lines: string, preferred?: string) => pickHostingRemote(parseRemoteUrls(lines), {}, preferred)
     const lines = 'remote.fork.url git@github.com:me/widgets.git\nremote.origin.url https://github.com/acme/widgets.git\nremote.lab.url git@gitlab.com:x/y.git'
     expect(pick(lines)).toMatchObject({ remote: 'origin', provider: 'github', owner: 'acme', name: 'widgets' })
     expect(pick(lines, 'fork')).toMatchObject({ remote: 'fork', owner: 'me', name: 'widgets' })
     expect(pick('remote.up.stream.url git@github.com-work:acme/widgets')).toMatchObject({ remote: 'up.stream', owner: 'acme', name: 'widgets' })
-    expect(pick('remote.origin.url git@gitlab.com:x/y.git')).toBeNull()
+    expect(pick('remote.origin.url git@gitlab.com:x/y.git')).toMatchObject({ remote: 'origin', provider: 'gitlab', owner: 'x', name: 'y', server: 'https://gitlab.com' })
+    expect(pick('remote.origin.url git@codeberg.org:x/y.git')).toBeNull()
     expect(pick('remote.-x.url git@github.com:a/b.git')).toBeNull()
   })
 })
@@ -351,7 +352,7 @@ describe('Bitbucket server addresses', () => {
     expect(normalizeServerUrl('http://127.0.0.1:7990')).toBeNull()
     expect(normalizeServerUrl('http://127.0.0.1:7990', true)).toBe('http://127.0.0.1:7990')
     expect(
-      sanitizeBitbucketServers([
+      sanitizeServers([
         { url: 'https://a.example.com/', hosts: ['A.example.com', 'ssh.example.com:7999', 'bad host'] },
         { url: 'https://a.example.com' },
         { url: 'ftp://b.example.com', hosts: [] },
@@ -506,6 +507,115 @@ describe('Bitbucket Data Center pull requests', () => {
     expect(head(repo, 'pr/58')).toBe(forkSha)
 
     expect((await ops.disconnectBitbucket({ kind: 'server', url: SERVER })).servers).toEqual([])
+    expect(await ops.getPullRequests(repo)).toBeNull()
+  })
+})
+
+// ── GitLab ─────────────────────────────────────────────────────────────────
+
+describe('GitLab merge requests', () => {
+  const SERVER = 'https://gitlab.example.com'
+  const P = `${SERVER}/api/v4/projects/${encodeURIComponent('web/shop/widgets')}`
+  const GL_TOKEN = 'glpat-' + 'g'.repeat(26)
+  const mr = (iid: number, sha: string, extra: Record<string, unknown> = {}) => ({
+    iid,
+    title: `MR ${iid}`,
+    description: 'Body',
+    state: 'opened',
+    draft: false,
+    author: { username: 'ane', name: 'Ane' },
+    source_branch: iid === 12 ? 'fix/rounding' : 'fix',
+    target_branch: 'main',
+    sha,
+    source_project_id: iid === 13 ? 99 : 7,
+    target_project_id: 7,
+    reviewers: [{ username: 'mikel', name: 'Mikel' }, { username: 'jon', name: 'Jon' }],
+    detailed_merge_status: 'mergeable',
+    has_conflicts: false,
+    updated_at: '2026-10-26T10:00:00Z',
+    ...extra
+  })
+
+  it('signs in with a personal access token, reads, checks, creates and merges, and checks out a fork’s merge request', async () => {
+    // "The instance": a bare repository with the merge request refs GitLab keeps.
+    const work = initRepo()
+    const base = commitFile(work, 'a.txt', 'a\n', 'first')
+    git(work, ['checkout', '-q', '-b', 'fork'])
+    const forkSha = commitFile(work, 'f.txt', 'f\n', 'from a fork')
+    const bare = path.join(tmpDir('adar-gl-server-'), 'widgets.git')
+    git(work, ['init', '-q', '--bare', bare])
+    git(work, ['push', '-q', bare, `${base}:refs/heads/main`, `${forkSha}:refs/merge-requests/13/head`])
+    const repo = tmpDir('adar-gl-clone-')
+    git(repo, ['clone', '-q', bare, '.'])
+    git(repo, ['remote', 'set-url', 'origin', `${SERVER}/web/shop/widgets.git`])
+    git(repo, ['config', `url.${bare}.insteadOf`, `${SERVER}/web/shop/widgets.git`])
+
+    const { ops, calls, settings, userData } = setupBitbucket({
+      [`GET ${SERVER}/api/v4/user`]: () => ({ json: { username: 'mikel', name: 'Mikel Garcia' } }),
+      [`GET ${P}`]: () => ({ json: { default_branch: 'main', merge_method: 'merge', squash_option: 'default_on', permissions: { project_access: { access_level: 30 }, group_access: null } } }),
+      [`GET ${P}/merge_requests?state=opened&order_by=updated_at&sort=desc&per_page=50`]: () => ({ json: [mr(12, sha40('a')), mr(13, forkSha)] }),
+      [`GET ${P}/merge_requests?state=merged&order_by=updated_at&sort=desc&per_page=20`]: () => ({ json: [mr(10, sha40('c'), { state: 'merged', merged_at: '2026-10-25T10:00:00Z' })] }),
+      [`GET ${P}/merge_requests?state=closed&order_by=updated_at&sort=desc&per_page=10`]: () => ({ json: [] }),
+      [`GET ${P}/merge_requests/12`]: () => ({
+        json: { ...mr(12, sha40('a'), { detailed_merge_status: 'ci_still_running' }), head_pipeline: { id: 500, project_id: 7, status: 'running' }, user: { can_merge: true } }
+      }),
+      [`GET ${P}/merge_requests/12/approvals`]: () => ({ json: { approved_by: [{ user: { username: 'jon', name: 'Jon' } }] } }),
+      [`GET ${SERVER}/api/v4/projects/7/pipelines/500/jobs?per_page=100`]: () => ({
+        json: [
+          { name: 'test', status: 'running' },
+          { name: 'lint', status: 'success' },
+          { name: 'flaky', status: 'failed', allow_failure: true }
+        ]
+      }),
+      [`GET ${P}/merge_requests/13`]: () => ({ json: mr(13, forkSha) }),
+      [`GET ${P}/merge_requests/13/approvals`]: () => ({ json: { approved_by: [] } }),
+      [`GET ${SERVER}/api/v4/projects/99`]: () => ({ json: { path_with_namespace: 'ane/widgets' } }),
+      [`GET ${P}/merge_requests/12/commits?per_page=100`]: () => ({ json: [{ id: sha40('a'), title: 'Round prices', author_name: 'Ane' }] }),
+      [`POST ${P}/merge_requests`]: (body) => ({ status: 201, json: { ...mr(14, sha40('d')), title: (body as { title: string }).title, draft: true } }),
+      [`PUT ${P}/merge_requests/12/merge`]: () => ({ json: { state: 'merged' } })
+    })
+    expect(await ops.getPullRequests(repo)).toBeNull()
+    expect(calls).toEqual([])
+    await expect(ops.connectGitlab({ url: 'http://gitlab.example.com', token: GL_TOKEN })).rejects.toThrow(/https/)
+    const conn = await ops.connectGitlab({ url: `${SERVER}/`, token: GL_TOKEN, remoteHost: 'gitlab.example.com' })
+    expect(conn.servers).toEqual([{ url: SERVER, host: 'gitlab.example.com', login: 'Mikel Garcia', error: null }])
+    expect(calls.at(-1)?.auth).toBe(`Bearer ${GL_TOKEN}`)
+    expect((await settings.getSettings()).gitlabServers).toEqual([{ url: SERVER, hosts: ['gitlab.example.com'] }])
+    expect(fs.readdirSync(userData).filter((f) => f.startsWith('gitlab-')).map((f) => fs.readFileSync(path.join(userData, f), 'utf8')).join()).not.toContain(GL_TOKEN)
+
+    const res = await ops.getPullRequests(repo)
+    expect(res).toMatchObject({
+      provider: 'gitlab',
+      host: 'gitlab.example.com',
+      owner: 'web/shop',
+      viewer: 'mikel',
+      webUrl: `${SERVER}/web/shop/widgets`,
+      mergeMethods: ['squash', 'merge'],
+      canMerge: true,
+      mergeChecks: true,
+      reportsConflicts: true
+    })
+    expect(res?.pulls.map((p) => [p.number, p.state, p.checks, p.checkRuns.length, p.approvedBy.join(), p.reviewRequested, p.headFork, p.url])).toEqual([
+      [12, 'open', 'running', 3, 'Jon', true, null, `${SERVER}/web/shop/widgets/-/merge_requests/12`],
+      [13, 'open', 'none', 0, '', true, 'ane/widgets', `${SERVER}/web/shop/widgets/-/merge_requests/13`],
+      [10, 'merged', 'none', 0, '', false, null, `${SERVER}/web/shop/widgets/-/merge_requests/10`]
+    ])
+    expect(await ops.getPullRequestMergeChecks(repo, 12)).toEqual({ blocked: true, reasons: ['The pipeline is still running'], conflicts: false })
+    expect(await ops.getPullRequestCommits(repo, 12)).toEqual([{ sha: sha40('a'), subject: 'Round prices', author: 'Ane' }])
+
+    const created = await ops.createPullRequest(repo, { head: 'feat/search', base: 'main', title: 'Search', body: 'B', draft: true })
+    expect(created).toMatchObject({ number: 14, state: 'draft', title: 'Draft: Search' })
+    expect(calls.find((c) => c.method === 'POST')?.body).toEqual({ source_branch: 'feat/search', target_branch: 'main', title: 'Draft: Search', description: 'B', remove_source_branch: false })
+
+    await expect(ops.mergePullRequest(repo, 12, { method: 'squash', headSha: sha40('e') })).rejects.toThrow(/merge request changed on GitLab/)
+    await expect(ops.mergePullRequest(repo, 12, { method: 'fast-forward', headSha: sha40('a') })).rejects.toThrow(/does not allow/)
+    await ops.mergePullRequest(repo, 12, { method: 'squash', headSha: sha40('a') })
+    expect(calls.at(-1)).toMatchObject({ method: 'PUT', url: `${P}/merge_requests/12/merge`, body: { sha: sha40('a'), squash: true, should_remove_source_branch: false } })
+
+    expect(await ops.pullRequestBranch(repo, 13)).toBe('mr/13')
+    expect(head(repo, 'mr/13')).toBe(forkSha)
+
+    expect((await ops.disconnectGitlab(SERVER)).servers).toEqual([])
     expect(await ops.getPullRequests(repo)).toBeNull()
   })
 })

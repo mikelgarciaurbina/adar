@@ -32,7 +32,8 @@ import * as git from '@renderer/actions/git'
 import { checkoutPull, copyPullLink, openWebPage, startPullRequest } from '@renderer/actions/pulls'
 import type { MenuItem } from '@renderer/components/common/ContextMenu'
 import { branchPullItems } from '@renderer/components/pulls/menus'
-import { usePulls } from '@renderer/components/pulls/pullStore'
+import { pullNounFor, usePulls } from '@renderer/components/pulls/pullStore'
+import { providerName, pullRef } from '@renderer/lib/pulls'
 import { currentBranch, localForRemote } from '@renderer/lib/refs'
 import { useApp } from '@renderer/store/appStore'
 import type { PullRequest } from '@shared/hosting'
@@ -330,7 +331,7 @@ export function sectionMenu(ctx: SidebarMenuCtx, id: SectionId, state: Container
       return [{ label: 'Update submodules', icon: icon(RefreshCw), onClick: () => updateSubmodules(repo) }]
     case 'pulls':
       return [
-        { label: 'Create pull request…', icon: icon(GitPullRequest), onClick: () => void startPullRequest(repo) },
+        { label: `Create ${pullNounFor(repo)}…`, icon: icon(GitPullRequest), onClick: () => void startPullRequest(repo) },
         { label: 'Refresh', icon: icon(RefreshCw), onClick: () => void usePulls.getState().load(repo, { force: true }) }
       ]
   }
@@ -341,9 +342,9 @@ export function sectionMenu(ctx: SidebarMenuCtx, id: SectionId, state: Container
 export function pullMenu(ctx: SidebarMenuCtx, pr: PullRequest): MenuItem[] {
   const { repo } = ctx
   return [
-    { type: 'header', label: `#${pr.number} ${pr.title}` },
+    { type: 'header', label: `${pullRef(pr)} ${pr.title}` },
     { label: 'Check out', icon: icon(Check), onClick: () => void checkoutPull(repo, pr) },
-    { label: 'Open on GitHub', icon: icon(ExternalLink), onClick: () => openWebPage(pr.url) },
+    { label: `Open on ${providerName(pr)}`, icon: icon(ExternalLink), onClick: () => openWebPage(pr.url) },
     SEP,
     { label: 'Copy link', icon: icon(Copy), onClick: () => copyPullLink(pr) },
     { label: 'Copy branch name', icon: icon(Copy), onClick: () => git.copyText(pr.headRef, 'Copied branch name') }

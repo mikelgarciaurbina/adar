@@ -1,4 +1,4 @@
-// What every pull request provider (GitHub, Bitbucket Cloud, Bitbucket Data Center) does for one
+// What every pull request provider (GitHub, GitLab, Bitbucket Cloud, Bitbucket Data Center) does for one
 // repository. index.ts picks the provider from the repository's remote and the user's sign-ins.
 
 import { AdarError } from '@shared/errors'
@@ -27,10 +27,11 @@ export interface PullProvider {
   /** Refuses when the pull request's last commit is no longer `headSha`. */
   merge(number: number, method: MergeMethod, headSha: string): Promise<void>
   source(number: number): Promise<PullSource>
-  /** What blocks a merge, when the provider says it (Bitbucket Data Center); null otherwise. */
+  /** What blocks a merge, when the provider says it (Bitbucket Data Center, GitLab); null otherwise. */
   mergeChecks(number: number): Promise<MergeChecks | null>
 }
 
 export const invalid = (message: string) => new AdarError({ message, code: 'INVALID_ARGUMENT' })
 
-export const changedSinceLooked = (service: string) => invalid(`The pull request changed on ${service} since Adar last looked. Check it again before merging.`)
+export const changedSinceLooked = (service: string, noun = 'pull request') =>
+  invalid(`The ${noun} changed on ${service} since Adar last looked. Check it again before merging.`)

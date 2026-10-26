@@ -13,7 +13,7 @@ import { cleanMessage } from '@renderer/components/details/message'
 import { openFolderOfRepos, suggestGroup } from './groups'
 import { refDropActions } from '@renderer/lib/refDrop'
 import { currentBranch, defaultRemote, localForRemote, mainBranch, remoteBranchName } from '@renderer/lib/refs'
-import { pullRequestForDrop, shouldOfferPullRequest, usePulls } from '@renderer/components/pulls/pullStore'
+import { pullNounFor, pullRequestForDrop, shouldOfferPullRequest, usePulls } from '@renderer/components/pulls/pullStore'
 import { StaleHistoryError, useApp, type RefreshScope, type RepoTab } from '@renderer/store/appStore'
 import { describeError, AdarError } from '@shared/errors'
 import type { DiffTarget, OperationResult, PullMode, Ref, ResetMode, RewordInfo } from '@shared/types'
@@ -680,7 +680,7 @@ export function handleRefDrop(repo: string, source: DraggedRef, target: DraggedR
   if (pr) {
     items.push(
       { type: 'separator' },
-      { label: `Create pull request into ${pr.base}…`, onClick: () => void import('./pulls').then((m) => m.startPullRequest(repo, pr)) }
+      { label: `Create ${pullNounFor(repo)} into ${pr.base}…`, onClick: () => void import('./pulls').then((m) => m.startPullRequest(repo, pr)) }
     )
   }
   showContextMenu(at, items)
@@ -967,7 +967,7 @@ export async function push(
       const msg = `Pushed ${branchName}${remote ? ` to ${remote}` : branch?.upstream ? ` to ${branch.upstream}` : ''}`
       if (shouldOfferPullRequest(repo, branchName)) {
         const create = () => void import('./pulls').then((m) => m.startPullRequest(repo, { head: branchName }))
-        toast.success(msg, { actions: [{ label: 'Create pull request', onClick: create }] })
+        toast.success(msg, { actions: [{ label: `Create ${pullNounFor(repo)}`, onClick: create }] })
       } else toast.success(msg)
     }
     void usePulls.getState().load(repo, { force: true })

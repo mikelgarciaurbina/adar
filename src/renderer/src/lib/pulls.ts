@@ -1,7 +1,7 @@
 // Pure helpers for pull requests in the UI: which pull request belongs to which branch label,
 // and the short texts the chips, the left panel and the details panel show.
 
-import { PROVIDER_NAMES, sameCommit, type PullRequest, type RepoPullRequests } from '@shared/hosting'
+import { PROVIDER_NAMES, sameCommit, type HostingProvider, type PullRequest, type RepoPullRequests } from '@shared/hosting'
 import type { Ref, RefsResult } from '@shared/types'
 import { pluralize } from './format'
 
@@ -30,7 +30,7 @@ export function indexPulls(data: RepoPullRequests | null | undefined, refs: Refs
     if (open) index.open.push(pr)
     const fits = (ref: Ref | undefined) => !!ref && (open || sameCommit(ref.sha, pr.headSha))
     if (pr.headFork) {
-      const local = locals.find((b) => b.name === `pr/${pr.number}`)
+      const local = locals.find((b) => b.name === forkBranch(pr))
       if (fits(local) && !index.byLocal.has(local!.name)) index.byLocal.set(local!.name, pr)
       continue
     }
@@ -52,28 +52,46 @@ export function pullForRef(index: PullIndex, ref: Pick<Ref, 'name' | 'type'>): P
   return undefined
 }
 
-/** "GitHub" or "Bitbucket". */
+/** "GitHub", "GitLab" or "Bitbucket". */
 export const providerName = (pr: Pick<PullRequest, 'provider'>) => PROVIDER_NAMES[pr.provider]
 
+/** What the provider calls them: GitLab has merge requests, the others pull requests. */
+export const pullNoun = (provider: HostingProvider | null | undefined, plural = false) =>
+  `${provider === 'gitlab' ? 'merge request' : 'pull request'}${plural ? 's' : ''}`
+
+/** The same, starting a sentence ("Merge request"). */
+export const PullNoun = (provider: HostingProvider | null | undefined, plural = false) => {
+  const noun = pullNoun(provider, plural)
+  return noun[0].toUpperCase() + noun.slice(1)
+}
+
+/** How the provider writes a pull request's number: !12 on GitLab, #12 elsewhere. */
+export const pullRef = (pr: Pick<PullRequest, 'provider' | 'number'>) => `${pr.provider === 'gitlab' ? '!' : '#'}${pr.number}`
+
+/** The local branch a pull request from a fork is checked out as: pr/<n> (GitLab: mr/<n>). */
+export const forkBranch = (pr: Pick<PullRequest, 'provider' | 'number'>) => `${pr.provider === 'gitlab' ? 'mr' : 'pr'}/${pr.number}`
+
+const isBitbucket = (pr: Pick<PullRequest, 'provider'>) => pr.provider === 'bitbucket-cloud' || pr.provider === 'bitbucket-server'
+
 export function stateLabel(pr: PullRequest): string {
-  if (pr.state === 'closed' && pr.provider !== 'github') return 'Declined'
+  if (pr.state === 'closed' && isBitbucket(pr)) return 'Declined'
   return { open: 'Open', draft: 'Draft', merged: 'Merged', closed: 'Closed' }[pr.state]
 }
 
 export function checksLabel(pr: PullRequest): string | null {
-  // Bitbucket calls them builds.
-  const word = pr.provider === 'github' ? 'check' : 'build'
-  const Word = word[0].toUpperCase() + word.slice(1)
+  // Bitbucket calls them builds; GitLab runs a pipeline of jobs.
+  const word = isBitbucket(pr) ? 'build' : pr.provider === 'gitlab' ? 'job' : 'check'
+  const all = pr.provider === 'gitlab' ? 'The pipeline' : `${word[0].toUpperCase()}${word.slice(1)}s`
   const failed = pr.checkRuns.filter((c) => c.state === 'failed').length
   const total = pr.checkRuns.length
   switch (pr.checks) {
     case 'passed':
-      return total ? (total === 1 ? `The ${word} passed` : `All ${total} ${word}s passed`) : `${Word}s passed`
+      return total ? (total === 1 ? `The ${word} passed` : `All ${total} ${word}s passed`) : `${all} passed`
     case 'failed':
-      return total ? `${failed} of ${pluralize(total, word)} failed` : `${Word}s failed`
+      return total && failed ? `${failed} of ${pluralize(total, word)} failed` : `${all} failed`
     case 'running': {
       const running = pr.checkRuns.filter((c) => c.state === 'running').length
-      return running ? `${running} of ${pluralize(total, word)} running` : `${Word}s running`
+      return running ? `${running} of ${pluralize(total, word)} running` : `${all} ${pr.provider === 'gitlab' ? 'is' : 'are'} running`
     }
     default:
       return null
@@ -84,6 +102,8 @@ export function reviewLabel(pr: PullRequest): string | null {
   const names = (list: string[]) => (list.length > 2 ? `${list.slice(0, 2).join(', ')} and ${list.length - 2} more` : list.join(' and '))
   if (pr.changesRequestedBy.length && pr.provider === 'bitbucket-server') return `${names(pr.changesRequestedBy)} marked it as needing work`
   if (pr.changesRequestedBy.length) return `Changes requested by ${names(pr.changesRequestedBy)}`
+  // GitLab says that changes were requested, not by whom.
+  if (pr.review === 'changes-requested') return 'Changes requested'
   if (pr.review === 'approved') return pr.approvedBy.length ? `Approved by ${names(pr.approvedBy)}` : 'Approved'
   if (pr.reviewRequests.length) return `Waiting for review from ${names(pr.reviewRequests)}`
   if (pr.review === 'review-required') return 'Needs a review'
@@ -93,7 +113,7 @@ export function reviewLabel(pr: PullRequest): string | null {
 
 /** One line for tooltips: "feat/x → main · Mikel Garcia · approved · 4 checks passed". */
 export function pullTitle(pr: PullRequest): string {
-  const parts = [`#${pr.number} ${pr.title}`, `${pr.headFork ? `${pr.headFork.split('/')[0]}:` : ''}${pr.headRef} → ${pr.baseRef}`, `${stateLabel(pr)} · ${pr.authorName ?? pr.author}`]
+  const parts = [`${pullRef(pr)} ${pr.title}`, `${pr.headFork ? `${pr.headFork.split('/')[0]}:` : ''}${pr.headRef} → ${pr.baseRef}`, `${stateLabel(pr)} · ${pr.authorName ?? pr.author}`]
   const review = reviewLabel(pr)
   const checks = checksLabel(pr)
   if (pr.reviewRequested) parts.push('Your review is requested')
@@ -112,16 +132,16 @@ export function mergeBlocker(pr: PullRequest, data: Pick<RepoPullRequests, 'canM
   return null
 }
 
-/** Bitbucket Data Center's merge checks as one sentence: "Bitbucket says: it conflicts with main, and …". */
-export function mergeChecksText(reasons: string[]): string {
+/** A provider's merge checks as one sentence: "Bitbucket says: it conflicts with main, and …" (GitLab: its merge status). */
+export function mergeChecksText(reasons: string[], service = 'Bitbucket'): string {
   const parts = reasons
     .map((r) => r.trim().replace(/[.\s]+$/, ''))
     .filter(Boolean)
     // Lower-case the first word unless it is an acronym ("PR", "CI").
     .map((r) => (/^[A-Z][^A-Z]/.test(r) ? r[0].toLowerCase() + r.slice(1) : r))
-  if (!parts.length) return 'Bitbucket says it cannot be merged yet.'
+  if (!parts.length) return `${service} says it cannot be merged yet.`
   const list = parts.length === 1 ? parts[0] : `${parts.slice(0, -1).join(', ')}, and ${parts[parts.length - 1]}`
-  return `Bitbucket says: ${list}.`
+  return `${service} says: ${list}.`
 }
 
 /** A title for a new pull request: the only commit's subject, else the branch name in words. */
@@ -160,9 +180,9 @@ export function pushPlan(branch: Pick<Ref, 'name' | 'upstream' | 'upstreamGone' 
   return { kind: 'none', head }
 }
 
-/** The local branch a pull request was checked out as (its own branch, or pr/<n> for a fork). */
+/** The local branch a pull request was checked out as (its own branch, or pr/<n> / mr/<n> for a fork). */
 export function localBranchFor(pr: PullRequest, refs: RefsResult | null, remote: string): Ref | undefined {
   const branches = refs?.branches ?? []
-  if (pr.headFork) return branches.find((b) => b.name === `pr/${pr.number}`)
+  if (pr.headFork) return branches.find((b) => b.name === forkBranch(pr))
   return branches.find((b) => b.upstream === `${remote}/${pr.headRef}`) ?? branches.find((b) => b.name === pr.headRef && !b.upstream)
 }

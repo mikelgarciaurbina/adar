@@ -1,4 +1,4 @@
-// Right panel for a pull request: what it is, where it stands (checks, review, conflicts)
+// Right panel for a pull request (GitLab: merge request): what it is, where it stands (checks, review, conflicts)
 // and the one next step that fits: merge, bring the base branch in, check it out, review it
 // on GitHub, or clean up once it is merged.
 
@@ -38,15 +38,18 @@ import { goToCommit } from '@renderer/components/details/CommitPanel'
 import { CopyButton, ErrorBlock, LoadingBlock } from '@renderer/components/details/parts'
 import { ReleaseNotes } from '@renderer/components/update/ReleaseNotes'
 import { pluralize, relativeTime } from '@renderer/lib/format'
-import { checksLabel, localBranchFor, mergeBlocker, mergeChecksText, providerName, reviewLabel, stateLabel } from '@renderer/lib/pulls'
+import { checksLabel, localBranchFor, mergeBlocker, mergeChecksText, providerName, pullNoun, PullNoun, pullRef, reviewLabel, stateLabel } from '@renderer/lib/pulls'
 import { useApp, type RepoTab } from '@renderer/store/appStore'
-import type { MergeChecks, MergeMethod, PullCommit, PullRequest, RepoPullRequests } from '@shared/hosting'
+import type { HostingProvider, MergeChecks, MergeMethod, PullCommit, PullRequest, RepoPullRequests } from '@shared/hosting'
 import { PullStateIcon } from './PullChip'
-import { usePullIndex, usePulls } from './pullStore'
+import { repoHosting, usePullIndex, usePulls } from './pullStore'
 import './pulls.css'
 
 /** Merged pull requests whose Clean up the user turned down (this session). */
 const keptBranches = new Set<string>()
+
+/** Where each provider shows a pull request's changes. */
+const REVIEW_PAGE: Record<HostingProvider, string> = { github: 'files', gitlab: 'diffs', 'bitbucket-cloud': 'diff', 'bitbucket-server': 'diff' }
 
 const ago = (iso: string | null) => (iso ? relativeTime(Math.floor(Date.parse(iso) / 1000)) : '')
 
@@ -54,11 +57,15 @@ export function PullPanel({ tab, number }: { tab: RepoTab; number: number }) {
   const { data, state } = usePullIndex(tab)
   const pr = data?.pulls.find((p) => p.number === number)
   if (!pr || !data) {
-    if (!state || state.loading) return <div className="det-panel"><LoadingBlock label="Loading pull request…" /></div>
+    const provider = data?.provider ?? repoHosting(tab)?.provider
+    if (!state || state.loading) return <div className="det-panel"><LoadingBlock label={`Loading ${pullNoun(provider)}…`} /></div>
     return (
       <div className="det-panel">
         <ErrorBlock
-          message={state.error ?? `Pull request #${number} is not among this repository's recent pull requests.`}
+          message={
+            state.error ??
+            `${PullNoun(provider)} ${pullRef({ provider: provider ?? 'github', number })} is not among this repository's recent ${pullNoun(provider, true)}.`
+          }
           onRetry={() => void usePulls.getState().load(tab.path, { force: true })}
         />
       </div>
@@ -76,9 +83,9 @@ function PullDetails({ tab, pr, data }: { tab: RepoTab; pr: PullRequest; data: R
     <div className="det-panel pr-panel">
       <div className="ui-panel-header det-header">
         <PullStateIcon state={pr.state} size={14} />
-        <span className="det-header-label">Pull request</span>
-        <span className="det-sha selectable">#{pr.number}</span>
-        <CopyButton text={pr.url} label="Copy link to the pull request" what={`Copied the link to #${pr.number}`} />
+        <span className="det-header-label">{PullNoun(pr.provider)}</span>
+        <span className="det-sha selectable">{pullRef(pr)}</span>
+        <CopyButton text={pr.url} label={`Copy link to the ${pullNoun(pr.provider)}`} what={`Copied the link to ${pullRef(pr)}`} />
         <span className="det-spacer" />
         <button type="button" className="ui-link pr-open-link" onClick={() => openWebPage(pr.url)}>
           Open on {providerName(pr)} <ExternalLink size={12} />
@@ -119,9 +126,9 @@ function PullDetails({ tab, pr, data }: { tab: RepoTab; pr: PullRequest; data: R
           <div className="pr-note">
             {pr.state === 'merged'
               ? `Merged into ${pr.baseRef} ${ago(pr.closedAt)}`
-              : pr.provider === 'github'
-                ? `Closed without merging ${ago(pr.closedAt)}`
-                : `Declined ${ago(pr.closedAt)}`}
+              : stateLabel(pr) === 'Declined'
+                ? `Declined ${ago(pr.closedAt)}`
+                : `Closed without merging ${ago(pr.closedAt)}`}
           </div>
         )}
 
@@ -315,7 +322,7 @@ function PullStatus({ pr, data }: { pr: PullRequest; data: RepoPullRequests }) {
   )
 }
 
-/** Bitbucket Data Center's merge checks for an open pull request, asked when it is shown. */
+/** Bitbucket Data Center's merge checks (GitLab: its merge status) for an open pull request, asked when it is shown. */
 function useMergeChecks(repo: string, pr: PullRequest, data: RepoPullRequests): MergeChecks | null {
   const [checks, setChecks] = useState<MergeChecks | null>(null)
   const ask = data.mergeChecks && pr.state === 'open'
@@ -342,7 +349,7 @@ function PullActions(props: { tab: RepoTab; pr: PullRequest; data: RepoPullReque
   const merging = useApp((s) => !!s.busy[`merge-pr:${repo}`])
   const checks = useMergeChecks(repo, pr, data)
   // Bitbucket's own merge checks say it best when it answered (permission, approvals, tasks, conflicts).
-  const blocker = (checks?.blocked ? mergeChecksText(checks.reasons) : null) ?? mergeBlocker(pr, data)
+  const blocker = (checks?.blocked ? mergeChecksText(checks.reasons, providerName(pr)) : null) ?? mergeBlocker(pr, data)
   const canMerge = data.canMerge && pr.state === 'open'
   const label = MERGE_LABELS[method]
 
@@ -358,7 +365,7 @@ function PullActions(props: { tab: RepoTab; pr: PullRequest; data: RepoPullReque
       </Button>
     ),
     !pr.viewerIsAuthor && (
-      <Button key="review" icon={<ExternalLink size={13} />} onClick={() => openWebPage(pr.provider === 'github' ? `${pr.url}/files` : `${pr.url}/diff`)}>
+      <Button key="review" icon={<ExternalLink size={13} />} onClick={() => openWebPage(`${pr.url}/${REVIEW_PAGE[pr.provider]}`)}>
         Review on {providerName(pr)}
       </Button>
     )

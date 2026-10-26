@@ -19,6 +19,8 @@ export interface PlatformAdapter {
   githubApi?: string
   /** Development only: a stand-in for https://api.bitbucket.org/2.0 on 127.0.0.1 (ADAR_BITBUCKET_API). */
   bitbucketApi?: string
-  /** Development only: accept http://127.0.0.1 Bitbucket servers (ADAR_HOSTING_LOOPBACK=1, unpackaged builds). */
+  /** Development only: a stand-in for https://gitlab.com on 127.0.0.1 (ADAR_GITLAB_URL; its API under /api/v4). */
+  gitlabCom?: string
+  /** Development only: accept http://127.0.0.1 Bitbucket and GitLab servers (ADAR_HOSTING_LOOPBACK=1, unpackaged builds). */
   allowLoopbackServers?: boolean
 }

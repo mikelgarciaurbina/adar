@@ -5,7 +5,7 @@
 import { randomBytes } from 'node:crypto'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
-import type { BitbucketServer } from '@shared/hosting'
+import type { HostingServer } from '@shared/hosting'
 import { DEFAULT_SETTINGS, LEGACY_GROUP_COLORS, TAB_GROUP_COLORS, type AppSettings, type RecentRepo, type TabGroup, type TabGroupColor } from '@shared/types'
 import { UNRECORDED_VERSION } from '@shared/update'
 
@@ -61,7 +61,7 @@ export function sanitizeTabGroups(raw: unknown): TabGroup[] | null {
   return out
 }
 
-/** A Bitbucket server's web address: https (no credentials, query or fragment), without a trailing slash; null if not one. */
+/** A Bitbucket or GitLab server's web address: https (no credentials, query or fragment), without a trailing slash; null if not one. */
 export function normalizeServerUrl(raw: unknown, allowLoopbackHttp = false): string | null {
   if (typeof raw !== 'string') return null
   let u: URL
@@ -75,10 +75,10 @@ export function normalizeServerUrl(raw: unknown, allowLoopbackHttp = false): str
   return `${u.protocol}//${u.host.toLowerCase()}${u.pathname.replace(/\/+$/, '')}`
 }
 
-/** Well-formed Bitbucket servers: a valid address, lower-case hosts, no duplicates. */
-export function sanitizeBitbucketServers(raw: unknown): BitbucketServer[] | null {
+/** Well-formed Bitbucket or GitLab servers: a valid address, lower-case hosts, no duplicates. */
+export function sanitizeServers(raw: unknown): HostingServer[] | null {
   if (!Array.isArray(raw)) return null
-  const out: BitbucketServer[] = []
+  const out: HostingServer[] = []
   for (const s of raw) {
     if (!isPlainObject(s)) continue
     const url = normalizeServerUrl(s.url, true)
@@ -119,8 +119,8 @@ export function sanitizeSettings(base: AppSettings, rawPatch: unknown): AppSetti
       if (groups) target[key] = groups
       continue
     }
-    if (key === 'bitbucketServers') {
-      const servers = sanitizeBitbucketServers(value)
+    if (key === 'bitbucketServers' || key === 'gitlabServers') {
+      const servers = sanitizeServers(value)
       if (servers) target[key] = servers
       continue
     }

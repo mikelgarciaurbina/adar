@@ -1,12 +1,14 @@
-// Pull requests (opt-in) from GitHub, Bitbucket Cloud and Bitbucket Data Center: the sign-ins,
+// Pull requests (opt-in) from GitHub, GitLab, Bitbucket Cloud and Bitbucket Data Center: the sign-ins,
 // then each repository's pull requests through the provider its remote lives on (provider.ts),
 // and the local branch for checking one out. Nothing talks to a provider the user has not turned on.
 
 import { createHash } from 'node:crypto'
 import { AdarError } from '@shared/errors'
 import { bitbucketErrorMessage, cloudViewer, type CloudViewer } from '@shared/bitbucket'
+import { gitlabErrorMessage, gitlabUser, type GitlabUser } from '@shared/gitlab'
 import {
   BITBUCKET_API,
+  GITLAB_COM,
   MAX_BODY,
   MAX_TITLE,
   isSafeBranchName,
@@ -14,6 +16,7 @@ import {
   type CreatePullOptions,
   type GithubAuthMethod,
   type GithubConnection,
+  type GitlabConnections,
   type MergeMethod,
   type PullRequest,
   type RepoPullRequests
@@ -30,6 +33,7 @@ import { bitbucketCloudProvider, newCloudCaches } from './bitbucketCloud'
 import { bitbucketServerProvider, newServerCaches, serverWhoAmI } from './bitbucketServer'
 import { GithubClient } from './github'
 import { githubProvider } from './githubProvider'
+import { gitlabProvider, newGitlabCaches } from './gitlabProvider'
 import { ApiClient } from './http'
 import { invalid, type HostingRemote, type PullProvider } from './provider'
 
@@ -59,14 +63,17 @@ export function createHostingOps(ctx: GitContext, services: Pick<SystemServices,
   const cloudTokens = new TokenStore(platform.userDataDir, platform.secrets, 'bitbucket-token.json')
   const serverTokens = (url: string) =>
     new TokenStore(platform.userDataDir, platform.secrets, `bitbucket-server-${createHash('sha256').update(url).digest('hex').slice(0, 16)}.json`)
+  const gitlabTokens = (url: string) =>
+    new TokenStore(platform.userDataDir, platform.secrets, `gitlab-${createHash('sha256').update(url).digest('hex').slice(0, 16)}.json`)
   const fetchFn = platform.fetch ?? ((input: string, init?: RequestInit) => fetch(input, init))
   const userAgent = `Adar/${platform.appVersion}`
-  const caches = { cloud: newCloudCaches(), server: newServerCaches() }
+  const caches = { cloud: newCloudCaches(), server: newServerCaches(), gitlab: newGitlabCaches() }
 
   /** Who each sign-in is, once the provider confirmed it (cleared on a 401 or a change). */
   let githubKnown: { method: GithubAuthMethod; login: string } | null = null
   let cloudKnown: (CloudViewer & { email: string }) | null = null
   const serverKnown = new Map<string, string>()
+  const gitlabKnown = new Map<string, GitlabUser>()
 
   const settings = () => services.settings.getSettings()
 
@@ -181,6 +188,51 @@ export function createHostingOps(ctx: GitContext, services: Pick<SystemServices,
     return { cloud, servers, canStoreToken: cloudTokens.available() }
   }
 
+  // ── GitLab ──────────────────────────────────────────────────────────────
+
+  const gitlabClient = (url: string, token: string) =>
+    new ApiClient({
+      fetch: fetchFn,
+      // Development only: a stand-in for gitlab.com.
+      base: `${url === GITLAB_COM && platform.gitlabCom ? platform.gitlabCom : url}/api/v4`,
+      auth: `Bearer ${token}`,
+      userAgent,
+      service: 'GitLab',
+      errorMessage: gitlabErrorMessage,
+      onUnauthorized: () => gitlabKnown.delete(url)
+    })
+
+  const gitlabToken = async (url: string) => {
+    const token = await gitlabTokens(url).read()
+    if (token) return token
+    throw new AdarError({ message: `No token for ${new URL(url).host} is stored on this computer. Sign in again.`, code: 'AUTH_FAILED' })
+  }
+
+  const gitlabWho = async (api: ApiClient, url: string): Promise<GitlabUser> => {
+    const cached = gitlabKnown.get(url)
+    if (cached) return cached
+    const user = gitlabUser(await api.json('GET', '/user'))
+    if (!user) throw new AdarError({ message: 'GitLab did not say who is signed in', code: 'AUTH_FAILED' })
+    gitlabKnown.set(url, user)
+    return user
+  }
+
+  const getGitlabConnections = async (): Promise<GitlabConnections> => {
+    const s = await settings()
+    const servers = await Promise.all(
+      s.gitlabServers.map(async ({ url }) => {
+        const host = new URL(url).host
+        try {
+          const who = await gitlabWho(gitlabClient(url, await gitlabToken(url)), url)
+          return { url, host, login: who.name, error: null }
+        } catch (err) {
+          return { url, host, login: null, error: err instanceof Error ? err.message : String(err) }
+        }
+      })
+    )
+    return { servers, canStoreToken: githubTokens.available() }
+  }
+
   // ── Repositories ────────────────────────────────────────────────────────
 
   const remoteOf = async (repo: string, s: AppSettings): Promise<HostingRemote | null> => {
@@ -190,7 +242,7 @@ export function createHostingOps(ctx: GitContext, services: Pick<SystemServices,
     ])
     const remotes = urls.code === 0 ? parseRemoteUrls(urls.stdout) : []
     const preferred = resolved.code === 0 ? /^remote\.(.+)\.gh-resolved base$/m.exec(resolved.stdout)?.[1] : null
-    const at = pickHostingRemote(remotes, s.bitbucketServers, preferred)
+    const at = pickHostingRemote(remotes, { bitbucket: s.bitbucketServers, gitlab: s.gitlabServers }, preferred)
     return at ? { ...at, url: remotes.find((r) => r.name === at.remote)?.url ?? '' } : null
   }
 
@@ -202,6 +254,12 @@ export function createHostingOps(ctx: GitContext, services: Pick<SystemServices,
     if (at.provider === 'github') {
       const m = s.githubAuth || null
       return { at, provider: m ? githubProvider(githubClient(await githubTokenFor(m)), at, () => githubKnown?.login ?? '') : null }
+    }
+    if (at.provider === 'gitlab') {
+      const server = s.gitlabServers.find((x) => x.url === at.server)
+      if (!server) return { at, provider: null }
+      const api = gitlabClient(server.url, await gitlabToken(server.url))
+      return { at, provider: gitlabProvider(api, at, server.url, () => gitlabWho(api, server.url).catch(() => null), caches.gitlab) }
     }
     if (at.provider === 'bitbucket-cloud') {
       if (!s.bitbucketAuth) return { at, provider: null }
@@ -216,7 +274,7 @@ export function createHostingOps(ctx: GitContext, services: Pick<SystemServices,
 
   const requireProvider = async (repo: string): Promise<{ at: HostingRemote; provider: PullProvider }> => {
     const { at, provider } = await providerFor(repo)
-    if (!at) throw invalid('This repository has no GitHub or Bitbucket remote')
+    if (!at) throw invalid('This repository has no GitHub, GitLab or Bitbucket remote')
     if (!provider) throw invalid('Pull requests are off for this repository. Turn them on in Settings → Integrations.')
     return { at, provider }
   }
@@ -296,6 +354,32 @@ export function createHostingOps(ctx: GitContext, services: Pick<SystemServices,
       return getBitbucketConnections()
     },
 
+    getGitlabConnections,
+
+    async connectGitlab(opts) {
+      const token = typeof opts?.token === 'string' ? opts.token.trim() : ''
+      if (!isPlausibleToken(token)) throw invalid('That does not look like a GitLab token')
+      if (!githubTokens.available()) throw invalid('This computer offers no protected storage for a token.')
+      const url = normalizeServerUrl(opts.url, !!platform.allowLoopbackServers)
+      if (!url) throw invalid('Use the https address of your GitLab, such as https://gitlab.example.com')
+      gitlabKnown.delete(url)
+      await gitlabWho(gitlabClient(url, token), url)
+      await gitlabTokens(url).write(token)
+      const hosts = [new URL(url).host, typeof opts.remoteHost === 'string' ? opts.remoteHost.toLowerCase() : ''].filter((h) => HOST.test(h))
+      const others = (await settings()).gitlabServers.filter((x) => x.url !== url)
+      await services.settings.updateSettings({ gitlabServers: [...others, { url, hosts: [...new Set(hosts)] }] })
+      return getGitlabConnections()
+    },
+
+    async disconnectGitlab(url) {
+      if (typeof url !== 'string') throw invalid('Unknown GitLab')
+      gitlabKnown.delete(url)
+      await gitlabTokens(url).clear()
+      const servers = (await settings()).gitlabServers.filter((x) => x.url !== url)
+      await services.settings.updateSettings({ gitlabServers: servers })
+      return getGitlabConnections()
+    },
+
     async getPullRequests(repo): Promise<RepoPullRequests | null> {
       await assertRepo(ctx, repo)
       const { provider } = await providerFor(repo)
@@ -357,7 +441,7 @@ export function createHostingOps(ctx: GitContext, services: Pick<SystemServices,
         // From a fork: fetched into pr/<n> (fast-forwarded when it is checked out), never overwriting local commits.
         const { from, ref } = src.fork
         if (from.startsWith('-')) throw invalid('Invalid fork address')
-        const branch = `pr/${number}`
+        const branch = `${at.provider === 'gitlab' ? 'mr' : 'pr'}/${number}`
         const head = await ctx.git(repo, ['symbolic-ref', '--quiet', '--short', 'HEAD'], { allowFailure: true })
         if (head.code === 0 && head.stdout.trim() === branch) {
           await ctx.gitNetwork(repo, ['fetch', from, ref])

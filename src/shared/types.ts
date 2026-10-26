@@ -1,7 +1,7 @@
 // Domain types shared by the main process (git backend), the dev HTTP bridge
 // and the renderer. Everything here must be JSON-serialisable.
 
-import type { BitbucketServer } from './hosting'
+import type { BitbucketServer, GitlabServer } from './hosting'
 
 /** Unix timestamp in seconds (as git reports it). */
 export type UnixSeconds = number
@@ -482,6 +482,8 @@ export interface AppSettings {
   bitbucketEmail: string
   /** Bitbucket Data Center servers pull requests are on for (their HTTP access tokens are stored encrypted). */
   bitbucketServers: BitbucketServer[]
+  /** GitLab instances merge requests are on for, gitlab.com included (their personal access tokens are stored encrypted). */
+  gitlabServers: GitlabServer[]
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -517,7 +519,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   githubAuth: '',
   bitbucketAuth: '',
   bitbucketEmail: '',
-  bitbucketServers: []
+  bitbucketServers: [],
+  gitlabServers: []
 }
 
 export interface AppInfo {

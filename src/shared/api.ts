@@ -45,6 +45,7 @@ import type {
   CreatePullOptions,
   GithubAuthMethod,
   GithubConnection,
+  GitlabConnections,
   MergeChecks,
   MergeMethod,
   PullCommit,
@@ -236,7 +237,7 @@ export interface AdarApi {
   // ── Submodules ──────────────────────────────────────────────────────────
   updateSubmodules(repo: string, opts?: { init?: boolean; recursive?: boolean }): Promise<void>
 
-  // ── Pull requests (opt-in, see hosting.ts): GitHub, Bitbucket Cloud and Data Center ──
+  // ── Pull requests (opt-in, see hosting.ts): GitHub, GitLab, Bitbucket Cloud and Data Center ──
   /**
    * How Adar signs in to GitHub. Talks to GitHub only when pull requests are on; asks gh whether it is signed in only
    * with detectGh (the sign-in dialog) or when gh is the sign-in.
@@ -256,11 +257,19 @@ export interface AdarApi {
     opts: { kind: 'cloud'; email: string; token: string } | { kind: 'server'; url: string; token: string; remoteHost?: string }
   ): Promise<BitbucketConnections>
   disconnectBitbucket(target: { kind: 'cloud' } | { kind: 'server'; url: string }): Promise<BitbucketConnections>
+  /** The GitLab instances merge requests are on for (gitlab.com included), and who is signed in to each. */
+  getGitlabConnections(): Promise<GitlabConnections>
+  /**
+   * Turn GitLab merge requests on for an instance (its web address, the host of the remote that asked) with a personal
+   * access token. Checked first, then kept encrypted.
+   */
+  connectGitlab(opts: { url: string; token: string; remoteHost?: string }): Promise<GitlabConnections>
+  disconnectGitlab(url: string): Promise<GitlabConnections>
   /** Pull requests of the repository's remote; null when it has no supported one or pull requests are off for it. */
   getPullRequests(repo: string): Promise<RepoPullRequests | null>
   /** A pull request's commits as the provider has them (at most 100, newest first). */
   getPullRequestCommits(repo: string, number: number): Promise<PullCommit[]>
-  /** What would stop a merge now, when the provider says it (Bitbucket Data Center); null otherwise. */
+  /** What would stop a merge now, when the provider says it (Bitbucket Data Center, GitLab); null otherwise. */
   getPullRequestMergeChecks(repo: string, number: number): Promise<MergeChecks | null>
   /** Open a pull request on the repository's remote (the head branch must be pushed there already). */
   createPullRequest(repo: string, opts: CreatePullOptions): Promise<PullRequest>
@@ -268,7 +277,7 @@ export interface AdarApi {
   mergePullRequest(repo: string, number: number, opts: { method: MergeMethod; headSha: string }): Promise<void>
   /**
    * Make the local branch for a pull request, without checking it out: its own branch tracking the remote,
-   * or pr/<number> for a pull request from a fork (created or fast-forwarded). Resolves to the branch name.
+   * or pr/<number> (GitLab: mr/<number>) for one from a fork (created or fast-forwarded). Resolves to the branch name.
    */
   pullRequestBranch(repo: string, number: number): Promise<string>
 
@@ -366,6 +375,9 @@ export const API_METHODS = [
   'getBitbucketConnections',
   'connectBitbucket',
   'disconnectBitbucket',
+  'getGitlabConnections',
+  'connectGitlab',
+  'disconnectGitlab',
   'getPullRequests',
   'getPullRequestCommits',
   'getPullRequestMergeChecks',

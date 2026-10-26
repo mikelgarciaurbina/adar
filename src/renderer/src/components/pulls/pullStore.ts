@@ -1,16 +1,16 @@
-// Pull request state for the UI: the GitHub and Bitbucket sign-ins and each repository's pull
+// Pull request state for the UI: the GitHub, GitLab and Bitbucket sign-ins and each repository's pull
 // requests, refreshed when a repository is shown, after every fetch and when the window comes
 // back (at most once a minute unless forced). Nothing is asked while they are off for its provider.
 
 import { useEffect } from 'react'
 import { create } from 'zustand'
 import { api } from '@renderer/api/client'
-import { indexPulls, pullForRef, type PullIndex } from '@renderer/lib/pulls'
+import { indexPulls, pullForRef, pullNoun, type PullIndex } from '@renderer/lib/pulls'
 import { useApp, type RepoTab } from '@renderer/store/appStore'
 import { describeError } from '@shared/errors'
-import type { BitbucketConnections, BitbucketServer, GithubConnection, PullRequest, RepoPullRequests } from '@shared/hosting'
+import type { BitbucketConnections, GithubConnection, GitlabConnections, KnownServers, PullRequest, RepoPullRequests } from '@shared/hosting'
 import { pickHostingRemote, type RemoteHosting } from '@shared/remoteUrl'
-import type { Ref, RefsResult } from '@shared/types'
+import type { AppSettings, Ref, RefsResult } from '@shared/types'
 
 /** Pull requests are asked for again after this long when nothing forces it. */
 const STALE_MS = 60_000
@@ -28,44 +28,60 @@ interface PullsState {
   connection: GithubConnection | null
   /** Bitbucket Cloud's and the Data Center servers' sign-ins (null until known). */
   bitbucket: BitbucketConnections | null
+  /** The GitLab instances' sign-ins (null until known). */
+  gitlab: GitlabConnections | null
   repos: Record<string, RepoPulls>
   /** detectGh: also ask whether the GitHub CLI is signed in (only the sign-in dialog needs it). */
   loadConnection(detectGh?: boolean): Promise<GithubConnection | null>
   setConnection(connection: GithubConnection): void
   loadBitbucket(): Promise<BitbucketConnections | null>
   setBitbucket(connections: BitbucketConnections): void
+  loadGitlab(): Promise<GitlabConnections | null>
+  setGitlab(connections: GitlabConnections): void
   load(repo: string, opts?: { force?: boolean }): Promise<RepoPullRequests | null>
 }
 
 /** A repository's remote with a supported hosting. */
 export type RepoHosting = RemoteHosting & { remote: string }
 
-/** Where a repository tab's pull requests live (its remotes and the known Bitbucket servers), or null. */
-export function repoHosting(tab: Pick<RepoTab, 'info'> | undefined | null, servers: readonly BitbucketServer[] = useApp.getState().settings.bitbucketServers): RepoHosting | null {
+/** The servers pull requests are on for, from the settings. */
+export const knownServers = (s: Pick<AppSettings, 'bitbucketServers' | 'gitlabServers'>): KnownServers => ({ bitbucket: s.bitbucketServers, gitlab: s.gitlabServers })
+
+/** Where a repository tab's pull requests live (its remotes and the known servers), or null. */
+export function repoHosting(tab: Pick<RepoTab, 'info'> | undefined | null, servers: KnownServers = knownServers(useApp.getState().settings)): RepoHosting | null {
   const remotes = tab?.info?.remotes.map((r) => ({ name: r.name, url: r.fetchUrl || r.pushUrl || '' })) ?? []
-  return pickHostingRemote(remotes, servers ?? [])
+  return pickHostingRemote(remotes, servers)
 }
 
-/** Pull requests are on for this hosting's provider (and, on Data Center, for its server). */
-export function hostingOn(h: RepoHosting | null, s: Pick<PullsState, 'connection' | 'bitbucket'> = usePulls.getState()): boolean {
+type Connections = Pick<PullsState, 'connection' | 'bitbucket' | 'gitlab'>
+
+/** Pull requests are on for this hosting's provider (and, on GitLab and Data Center, for its server). */
+export function hostingOn(h: RepoHosting | null, s: Connections = usePulls.getState()): boolean {
   if (!h) return false
   if (h.provider === 'github') return !!s.connection?.method
+  if (h.provider === 'gitlab') return !!s.gitlab?.servers.some((x) => x.url === h.server)
   if (h.provider === 'bitbucket-cloud') return !!s.bitbucket?.cloud
   return !!s.bitbucket?.servers.some((x) => x.url === h.server)
 }
 
 /** Adar knows whether pull requests are on for this hosting (its sign-ins have loaded). */
-export function hostingKnown(h: RepoHosting | null, s: Pick<PullsState, 'connection' | 'bitbucket'> = usePulls.getState()): boolean {
-  return !!h && (h.provider === 'github' ? s.connection !== null : s.bitbucket !== null)
+export function hostingKnown(h: RepoHosting | null, s: Connections = usePulls.getState()): boolean {
+  if (!h) return false
+  if (h.provider === 'github') return s.connection !== null
+  return (h.provider === 'gitlab' ? s.gitlab : s.bitbucket) !== null
 }
 
 const tabAt = (path: string) => useApp.getState().tabs.find((t) => t.path === path)
+
+/** "merge request" for a GitLab repository, "pull request" otherwise. */
+export const pullNounFor = (repo: string) => pullNoun(repoHosting(tabAt(repo))?.provider)
 
 const inFlight = new Map<string, Promise<RepoPullRequests | null>>()
 
 export const usePulls = create<PullsState>()((set, get) => ({
   connection: null,
   bitbucket: null,
+  gitlab: null,
   repos: {},
 
   async loadConnection(detectGh = false) {
@@ -97,6 +113,20 @@ export const usePulls = create<PullsState>()((set, get) => ({
     set({ bitbucket, repos: {} })
   },
 
+  async loadGitlab() {
+    try {
+      const gitlab = await api.getGitlabConnections()
+      set({ gitlab })
+      return gitlab
+    } catch {
+      return null
+    }
+  },
+
+  setGitlab(gitlab) {
+    set({ gitlab, repos: {} })
+  },
+
   load(repo, opts = {}) {
     const running = inFlight.get(repo)
     if (running) return running
@@ -118,6 +148,7 @@ export const usePulls = create<PullsState>()((set, get) => ({
         if ((err as { code?: string }).code === 'AUTH_FAILED') {
           void get().loadConnection()
           void get().loadBitbucket()
+          void get().loadGitlab()
         }
         return get().repos[repo]?.data ?? null
       })
@@ -166,7 +197,7 @@ export function usePullForRefs(refs: readonly Pick<Ref, 'name' | 'type'>[]): Pul
 export function useActiveHostingOn(): boolean {
   // A string key keeps the selector's answer stable between renders.
   const key = useApp((s) => {
-    const h = repoHosting(s.tabs.find((t) => t.path === s.activePath), s.settings.bitbucketServers)
+    const h = repoHosting(s.tabs.find((t) => t.path === s.activePath), knownServers(s.settings))
     return h ? `${h.provider}\0${h.server ?? ''}` : ''
   })
   return usePulls((s) => !!key && hostingOn(repoHosting(tabAt(useApp.getState().activePath ?? '')), s))
@@ -181,6 +212,7 @@ export function usePullRequestSync(): void {
   useEffect(() => {
     void usePulls.getState().loadConnection()
     void usePulls.getState().loadBitbucket()
+    void usePulls.getState().loadGitlab()
   }, [])
   useEffect(() => {
     if (on && activePath) void usePulls.getState().load(activePath)

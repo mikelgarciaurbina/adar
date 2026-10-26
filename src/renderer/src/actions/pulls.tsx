@@ -1,4 +1,4 @@
-// User-level pull request actions (GitHub and Bitbucket): turning them on, creating one (pushing the
+// User-level pull request actions (GitHub, GitLab and Bitbucket): turning them on, creating one (pushing the
 // branch first), checking one out, merging it and cleaning up afterwards, bringing the base branch in.
 // Everything that touches the repository goes through actions/git so it behaves like the rest.
 
@@ -6,7 +6,7 @@ import { api } from '@renderer/api/client'
 import { confirm } from '@renderer/components/common/dialogs'
 import { toast } from '@renderer/components/common/toast'
 import { hostingOn, pullIndexOf, repoHosting, usePulls, type RepoHosting } from '@renderer/components/pulls/pullStore'
-import { localBranchFor, pushPlan } from '@renderer/lib/pulls'
+import { localBranchFor, providerName, pullNoun, pullRef, pushPlan } from '@renderer/lib/pulls'
 import { currentBranch } from '@renderer/lib/refs'
 import { pluralize } from '@renderer/lib/format'
 import { useApp, type RepoTab } from '@renderer/store/appStore'
@@ -27,9 +27,10 @@ export const MERGE_LABELS: Record<MergeMethod, { button: string; menu: string; h
   'fast-forward': { button: 'Fast-forward', menu: 'Fast-forward', hint: (pr) => `The ${commits(pr)} as they are, only if ${pr.baseRef} has not moved` }
 }
 
-/** The merge menu's label: Bitbucket's own names for its strategies. */
+/** The merge menu's label: Bitbucket's and GitLab's own names for their ways of merging. */
 export function mergeMenuLabel(method: MergeMethod, provider: HostingProvider): string {
   if (provider === 'github') return MERGE_LABELS[method].menu
+  if (provider === 'gitlab') return { merge: 'Merge commit', squash: 'Squash commits', rebase: 'Rebase', 'fast-forward': 'Fast-forward merge' }[method]
   return { merge: 'Merge commit', squash: 'Squash', rebase: 'Rebase', 'fast-forward': 'Fast-forward' }[method]
 }
 
@@ -65,7 +66,7 @@ export function openConnect(hosting: Pick<RepoHosting, 'provider' | 'server' | '
     kind: 'pulls-connect',
     provider: hosting?.provider ?? 'github',
     server: hosting?.server,
-    remoteHost: hosting?.provider === 'bitbucket-server' ? hosting.host : undefined,
+    remoteHost: hosting?.provider === 'bitbucket-server' || hosting?.provider === 'gitlab' ? hosting.host : undefined,
     next
   })
 }
@@ -79,10 +80,12 @@ export async function turnOffPullRequests(): Promise<void> {
   }
 }
 
-/** Take the Bitbucket settings the backend changed (servers decide which remotes count as Bitbucket). */
+/** Take the Bitbucket and GitLab settings the backend changed (servers decide which remotes count as theirs). */
 export async function syncHostingSettings(): Promise<void> {
   const s = await api.getSettings()
-  useApp.setState((st) => ({ settings: { ...st.settings, bitbucketAuth: s.bitbucketAuth, bitbucketEmail: s.bitbucketEmail, bitbucketServers: s.bitbucketServers } }))
+  useApp.setState((st) => ({
+    settings: { ...st.settings, bitbucketAuth: s.bitbucketAuth, bitbucketEmail: s.bitbucketEmail, bitbucketServers: s.bitbucketServers, gitlabServers: s.gitlabServers }
+  }))
 }
 
 export async function turnOffBitbucket(target: { kind: 'cloud' } | { kind: 'server'; url: string }): Promise<void> {
@@ -95,12 +98,22 @@ export async function turnOffBitbucket(target: { kind: 'cloud' } | { kind: 'serv
   }
 }
 
+export async function turnOffGitlab(url: string): Promise<void> {
+  try {
+    pulls().setGitlab(await api.disconnectGitlab(url))
+    await syncHostingSettings()
+    toast.success(`Merge requests from ${new URL(url).host} are off`)
+  } catch (err) {
+    toast.error(err)
+  }
+}
+
 export function openWebPage(url: string): void {
   api.openExternal(url).catch((err) => toast.error(err))
 }
 
 export function copyPullLink(pr: PullRequest): void {
-  void git.copyText(pr.url, `Copied the link to #${pr.number}`)
+  void git.copyText(pr.url, `Copied the link to ${pullRef(pr)}`)
 }
 
 /** Open the create dialog for `head` (default: the checked-out branch), or show its pull request when it has one. */
@@ -108,7 +121,7 @@ export async function startPullRequest(repo: string, opts: { head?: string; base
   const tab = tabOf(repo)
   const hosting = repoHosting(tab)
   if (!hosting) {
-    toast.warning('This repository has no GitHub or Bitbucket remote')
+    toast.warning('This repository has no GitHub, GitLab or Bitbucket remote')
     return
   }
   if (!hostingOn(hosting)) {
@@ -117,18 +130,18 @@ export async function startPullRequest(repo: string, opts: { head?: string; base
   }
   const head = opts.head ?? currentBranch(tab?.refs ?? null)?.name
   if (!head) {
-    toast.warning('Check out a branch to create a pull request from it')
+    toast.warning(`Check out a branch to create a ${pullNoun(hosting.provider)} from it`)
     return
   }
   const data = await pulls().load(repo)
   if (!data) {
-    toast.error(pulls().repos[repo]?.error ?? 'Could not read the pull requests')
+    toast.error(pulls().repos[repo]?.error ?? `Could not read the ${pullNoun(hosting.provider, true)}`)
     return
   }
   const existing = pullIndexOf(data, tabOf(repo)?.refs ?? null).byLocal.get(head)
   if (existing && (existing.state === 'open' || existing.state === 'draft')) {
     selectPull(repo, existing.number)
-    toast.info(`${head} already has pull request #${existing.number}`)
+    toast.info(`${head} already has ${pullNoun(existing.provider)} ${pullRef(existing)}`)
     return
   }
   store().openModal({ kind: 'create-pull', repo, head, base: opts.base })
@@ -140,14 +153,15 @@ export async function createPullRequest(repo: string, data: RepoPullRequests, op
   if (!branch) throw new Error(`${opts.head} is not a local branch`)
   const plan = pushPlan(branch, data.remote)
   if (plan.kind === 'behind') throw new Error(`${data.remote}/${plan.head} has ${pluralize(plan.behind, 'commit')} that ${opts.head} does not have. Pull first.`)
-  if (plan.kind === 'other-remote') throw new Error(`${opts.head} tracks ${plan.upstream}. Pull requests from other remotes are not supported yet.`)
-  store().setBusy(`push:${repo}`, plan.kind === 'none' ? 'Creating pull request…' : 'Pushing…')
+  const noun = pullNoun(data.provider)
+  if (plan.kind === 'other-remote') throw new Error(`${opts.head} tracks ${plan.upstream}. ${noun[0].toUpperCase()}${noun.slice(1)}s from other remotes are not supported yet.`)
+  store().setBusy(`push:${repo}`, plan.kind === 'none' ? `Creating ${noun}…` : 'Pushing…')
   try {
     if (plan.kind === 'publish') await api.push(repo, { branch: opts.head, remote: data.remote, remoteBranch: plan.head, setUpstream: true })
     else if (plan.kind === 'push') await api.push(repo, { branch: opts.head })
-    store().setBusy(`push:${repo}`, 'Creating pull request…')
+    store().setBusy(`push:${repo}`, `Creating ${noun}…`)
     const pr = await api.createPullRequest(repo, { ...opts, head: plan.head })
-    toast.success(`Created pull request #${pr.number}`, { actions: [{ label: 'Open on GitHub', onClick: () => openWebPage(pr.url) }] })
+    toast.success(`Created ${noun} ${pullRef(pr)}`, { actions: [{ label: `Open on ${providerName(pr)}`, onClick: () => openWebPage(pr.url) }] })
     await pulls().load(repo, { force: true })
     selectPull(repo, pr.number)
     return pr
@@ -157,9 +171,9 @@ export async function createPullRequest(repo: string, data: RepoPullRequests, op
   }
 }
 
-/** Check out a pull request: its branch, tracking the remote, or pr/<n> for one from a fork. */
+/** Check out a pull request: its branch, tracking the remote, or pr/<n> (GitLab: mr/<n>) for one from a fork. */
 export async function checkoutPull(repo: string, pr: PullRequest): Promise<boolean> {
-  store().setBusy(`checkout:${repo}`, `Getting #${pr.number}…`)
+  store().setBusy(`checkout:${repo}`, `Getting ${pullRef(pr)}…`)
   let branch: string
   try {
     branch = await api.pullRequestBranch(repo, pr.number)
@@ -192,7 +206,7 @@ export async function bringBaseIn(repo: string, pr: PullRequest, data: RepoPullR
 export async function mergePull(repo: string, pr: PullRequest, data: RepoPullRequests, method: MergeMethod, cleanUp: boolean): Promise<boolean> {
   const local = localBranchFor(pr, tabOf(repo)?.refs ?? null, data.remote)
   const what = {
-    // Bitbucket writes its own message for the squashed commit.
+    // Bitbucket and GitLab write their own message for the squashed commit.
     squash: pr.provider === 'github' ? `${pr.baseRef} gets one commit, “${pr.title} (#${pr.number})”.` : `${pr.baseRef} gets one commit with the changes of the ${commits(pr)}.`,
     rebase: `The ${commits(pr)} ${pr.commitCount === 1 ? 'is' : 'are'} added to ${pr.baseRef} one by one.`,
     merge: `${pr.baseRef} gets the ${commits(pr)} and a merge commit.`,
@@ -200,12 +214,12 @@ export async function mergePull(repo: string, pr: PullRequest, data: RepoPullReq
   }[method]
   const after = cleanUp && local ? ` Then Adar switches to ${pr.baseRef}, pulls, and deletes ${local.name}.` : ''
   const ok = await confirm({
-    title: `${MERGE_LABELS[method].button} #${pr.number} into ${pr.baseRef}?`,
+    title: `${MERGE_LABELS[method].button} ${pullRef(pr)} into ${pr.baseRef}?`,
     message: `${what}${after}`,
     confirmLabel: MERGE_LABELS[method].button
   })
   if (!ok) return false
-  store().setBusy(`merge-pr:${repo}`, `Merging #${pr.number}…`)
+  store().setBusy(`merge-pr:${repo}`, `Merging ${pullRef(pr)}…`)
   try {
     await api.mergePullRequest(repo, pr.number, { method, headSha: pr.headSha })
   } catch (err) {
@@ -216,7 +230,7 @@ export async function mergePull(repo: string, pr: PullRequest, data: RepoPullReq
     store().setBusy(`merge-pr:${repo}`, null)
   }
   rememberMergeMethod(method, data.provider)
-  toast.success(`Merged #${pr.number} into ${pr.baseRef}`)
+  toast.success(`Merged ${pullRef(pr)} into ${pr.baseRef}`)
   if (cleanUp && local) await cleanUpAfterMerge(repo, { ...pr, state: 'merged' }, data)
   else {
     await api.fetch(repo, { remote: data.remote, prune: true }).catch(() => undefined)
@@ -227,8 +241,8 @@ export async function mergePull(repo: string, pr: PullRequest, data: RepoPullReq
 }
 
 /**
- * After a merge on GitHub: fetch, switch from the pull request's branch to the base branch and pull it,
- * delete the branch here and (unless GitHub already did) on the remote. Undo brings the local branch back.
+ * After a merge on the provider: fetch, switch from the pull request's branch to the base branch and pull it,
+ * delete the branch here and (unless the provider already did) on the remote. Undo brings the local branch back.
  */
 export async function cleanUpAfterMerge(repo: string, pr: PullRequest, data: RepoPullRequests): Promise<void> {
   const remote = data.remote
@@ -250,7 +264,7 @@ export async function cleanUpAfterMerge(repo: string, pr: PullRequest, data: Rep
     const branch = local ? refs?.branches.find((b) => b.name === local.name) : undefined
     if (branch) {
       if (sameCommit(branch.sha, pr.headSha)) {
-        // Exactly what GitHub merged (a squash or rebase merge leaves it "unmerged" for git): safe to delete.
+        // Exactly what the provider merged (a squash or rebase merge leaves it "unmerged" for git): safe to delete.
         await api.deleteBranch(repo, branch.name, { force: true })
         store().pushHistory(repo, {
           label: `Delete branch ${branch.name}`,
@@ -269,7 +283,7 @@ export async function cleanUpAfterMerge(repo: string, pr: PullRequest, data: Rep
     if (!pr.headFork && remoteRef && !data.deleteBranchOnMerge) {
       await api.deleteRemoteBranch(repo, remote, pr.headRef).catch(() => undefined)
     }
-    toast.success(`Cleaned up after #${pr.number}`)
+    toast.success(`Cleaned up after ${pullRef(pr)}`)
   } catch (err) {
     toast.error(`Could not finish cleaning up: ${describeError(err)}`)
   } finally {

@@ -1,7 +1,8 @@
 // "Pull requests in Adar": turning pull requests on, for the provider of the repository that asked.
 // GitHub: the GitHub CLI's sign-in first when it is there (nothing to type, nothing stored), else a
-// personal access token. Bitbucket Cloud: the Atlassian account email and an API token. Bitbucket
-// Data Center: the server's address and an HTTP access token. Tokens are kept encrypted by the system.
+// personal access token. GitLab (gitlab.com or an instance): a personal access token with the api
+// scope. Bitbucket Cloud: the Atlassian account email and an API token. Bitbucket Data Center: the
+// server's address and an HTTP access token. Tokens are kept encrypted by the system.
 
 import { useEffect, useId, useState } from 'react'
 import { GitPullRequest, KeyRound, ShieldCheck, SquareTerminal } from 'lucide-react'
@@ -13,8 +14,9 @@ import { closeIfTopmost } from '@renderer/components/modals/controls'
 import { useApp } from '@renderer/store/appStore'
 import { CLOUD_TOKEN_SCOPES } from '@shared/bitbucket'
 import { describeError } from '@shared/errors'
-import type { GithubAuthMethod, HostingProvider } from '@shared/hosting'
-import { repoHosting, usePulls } from './pullStore'
+import { GITLAB_TOKEN_SCOPE } from '@shared/gitlab'
+import { GITLAB_COM, type GithubAuthMethod, type HostingProvider } from '@shared/hosting'
+import { knownServers, repoHosting, usePulls } from './pullStore'
 import './pulls.css'
 
 const NEW_TOKEN_URL = 'https://github.com/settings/personal-access-tokens/new'
@@ -22,9 +24,9 @@ const ATLASSIAN_TOKENS_URL = 'https://id.atlassian.com/manage-profile/security/a
 
 export interface ConnectProps {
   provider: HostingProvider
-  /** Bitbucket Data Center: the server's address, as found from the remote. */
+  /** GitLab and Bitbucket Data Center: the server's address, as found from the remote. */
   server?: string
-  /** Bitbucket Data Center: the host of the remote that asked (its SSH host may differ from the web one). */
+  /** GitLab and Bitbucket Data Center: the host of the remote that asked (its SSH host may differ from the web one). */
   remoteHost?: string
   next?: () => void
 }
@@ -32,13 +34,14 @@ export interface ConnectProps {
 /** The active repository's owner/name when it lives on `provider`, for the dialog's first line. */
 function useRepoLabel(provider: HostingProvider): string | null {
   return useApp((s) => {
-    const h = repoHosting(s.tabs.find((t) => t.path === s.activePath), s.settings.bitbucketServers)
+    const h = repoHosting(s.tabs.find((t) => t.path === s.activePath), knownServers(s.settings))
     return h && h.provider === provider ? `${h.owner}/${h.name}` : null
   })
 }
 
 export function ConnectDialog(props: ConnectProps) {
-  return props.provider === 'github' ? <GithubConnect next={props.next} /> : <BitbucketConnect {...props} />
+  if (props.provider === 'github') return <GithubConnect next={props.next} />
+  return props.provider === 'gitlab' ? <GitlabConnect {...props} /> : <BitbucketConnect {...props} />
 }
 
 function GithubConnect({ next }: { next?: () => void }) {
@@ -353,6 +356,135 @@ function BitbucketConnect({ provider, server, remoteHost, next }: ConnectProps) 
           <span>
             Adar only talks to {cloud ? 'api.bitbucket.org' : host || 'your Bitbucket server'}, only for {cloud ? 'repositories on Bitbucket Cloud' : 'its repositories'}, and only while this is
             on. The token is kept encrypted on this computer.
+          </span>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+function GitlabConnect({ server, remoteHost, next }: ConnectProps) {
+  const canStore = usePulls((s) => s.gitlab?.canStoreToken ?? true)
+  const repoName = useRepoLabel('gitlab')
+  const [url, setUrl] = useState(server ?? GITLAB_COM)
+  const [token, setToken] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const ids = { url: useId(), token: useId() }
+  const close = () => closeIfTopmost('pr-connect')
+  // gitlab.com needs no address; an instance shows the one guessed from the remote.
+  const com = (server ?? GITLAB_COM) === GITLAB_COM
+
+  useEffect(() => {
+    void usePulls.getState().loadGitlab()
+  }, [])
+
+  let host = ''
+  try {
+    host = new URL(url).host
+  } catch {
+    host = ''
+  }
+  const ready = !!token.trim() && !!host
+  const base = url.trim().replace(/\/+$/, '')
+
+  const turnOn = async () => {
+    if (!ready) return
+    setBusy(true)
+    setError(null)
+    try {
+      usePulls.getState().setGitlab(await api.connectGitlab({ url: base, token: token.trim(), remoteHost }))
+      // A newly known instance can change which remotes count as GitLab.
+      await syncHostingSettings()
+      const active = useApp.getState().activePath
+      if (active) void usePulls.getState().load(active, { force: true })
+      useApp.getState().closeModal()
+      next?.()
+    } catch (err) {
+      setError(describeError(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+  const onEnter = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && ready) void turnOn()
+  }
+
+  return (
+    <Modal
+      title={
+        <span className="md-title">
+          <GitPullRequest size={16} /> Merge requests in Adar
+        </span>
+      }
+      className="md-modal pr-connect"
+      width={540}
+      onClose={close}
+      footer={
+        <>
+          <Button variant="ghost" onClick={close}>
+            Not now
+          </Button>
+          <Button variant="primary" loading={busy} disabled={!ready || !canStore} onClick={() => void turnOn()}>
+            Turn on
+          </Button>
+        </>
+      }
+    >
+      <div className="pr-connect-body">
+        <p className="pr-lead">
+          Adar shows the merge requests of {repoName ? <strong>{repoName}</strong> : 'your repositories'} on {com ? 'GitLab' : 'your GitLab'} on their branches, and
+          creates, checks out and merges them for you. It asks GitLab with a personal access token of yours.
+        </p>
+        {!com && (
+          <div className="ui-field">
+            <label className="ui-label" htmlFor={ids.url}>
+              GitLab address
+            </label>
+            <input id={ids.url} className="ui-input ui-mono" type="url" value={url} autoComplete="off" spellCheck={false} onChange={(e) => setUrl(e.target.value)} onKeyDown={onEnter} />
+            <span className="ui-hint">From the remote. Change it if GitLab's web address is a different one.</span>
+          </div>
+        )}
+        <div className="ui-field">
+          <label className="ui-label" htmlFor={ids.token}>
+            Personal access token
+          </label>
+          <input
+            id={ids.token}
+            className="ui-input ui-mono"
+            type="password"
+            value={token}
+            autoComplete="off"
+            spellCheck={false}
+            autoFocus
+            onChange={(e) => setToken(e.target.value)}
+            onKeyDown={onEnter}
+          />
+          <span className="ui-hint">
+            {host ? (
+              <button type="button" className="ui-link" onClick={() => openWebPage(`${base}/-/user_settings/personal_access_tokens?name=Adar&scopes=${GITLAB_TOKEN_SCOPE}`)}>
+                Create one in GitLab
+              </button>
+            ) : (
+              'Create one in GitLab'
+            )}{' '}
+            (Edit profile → Access tokens) with the <code>{GITLAB_TOKEN_SCOPE}</code> scope.
+          </span>
+        </div>
+        {!canStore && (
+          <div className="pr-error" role="alert">
+            This computer offers no protected storage for a token.
+          </div>
+        )}
+        {error && (
+          <div className="pr-error" role="alert">
+            {error}
+          </div>
+        )}
+        <div className="pr-privacy">
+          <ShieldCheck size={15} />
+          <span>
+            Adar only talks to {host || 'your GitLab'}, only for its repositories, and only while this is on. The token is kept encrypted on this computer.
           </span>
         </div>
       </div>

@@ -3,6 +3,7 @@
 // the virtualised list renders, applying the filter and expand/collapse state.
 // No React / DOM here so it can be unit-tested and memoised cheaply.
 
+import { pullRef } from '@renderer/lib/pulls'
 import type { PullRequest } from '@shared/hosting'
 import type { Ref, RefsResult, RemoteInfo, Stash, Submodule } from '@shared/types'
 
@@ -84,13 +85,17 @@ export interface PullPromptLeaf {
   search: string
 }
 
-/** What the Pull requests section shows: absent for repositories without a GitHub remote. */
-export type PullsInput =
-  /** `provider`: who to show them from ("GitHub", "Bitbucket"). */
-  | { state: 'off'; provider: string }
+/** What the Pull requests section shows: absent for repositories without a supported remote. */
+export type PullsInput = (
+  | /** `provider`: who to show them from ("GitHub", "GitLab", "Bitbucket"). */
+  { state: 'off'; provider: string }
   | { state: 'loading' }
   | { state: 'error'; message: string }
   | { state: 'on'; pulls: PullRequest[] }
+) & {
+  /** What the provider calls them ("Merge requests" on GitLab); default "Pull requests". */
+  title?: string
+}
 
 export interface FolderNode {
   kind: 'folder'
@@ -232,10 +237,11 @@ function compareRemoteNames(a: string, b: string): number {
 }
 
 function pullsSection(input: PullsInput): Section {
-  const base = { id: 'pulls' as const, key: sectionKey('pulls'), title: SECTION_TITLES.pulls }
+  const title = input.title ?? SECTION_TITLES.pulls
+  const base = { id: 'pulls' as const, key: sectionKey('pulls'), title }
   switch (input.state) {
     case 'off':
-      return { ...base, children: [{ kind: 'pull-prompt', key: 'pull-prompt', label: `Show pull requests from ${input.provider}…`, search: '' }], total: 0 }
+      return { ...base, children: [{ kind: 'pull-prompt', key: 'pull-prompt', label: `Show ${title.toLowerCase()} from ${input.provider}…`, search: '' }], total: 0 }
     case 'loading':
       return { ...base, children: [], total: 0, hint: 'Loading…' }
     case 'error':
@@ -246,9 +252,9 @@ function pullsSection(input: PullsInput): Section {
         key: `pull:${pr.number}`,
         label: pr.title,
         pull: pr,
-        search: `#${pr.number} ${pr.title} ${pr.headRef} ${pr.author} ${pr.authorName ?? ''}`.toLowerCase()
+        search: `${pullRef(pr)} ${pr.title} ${pr.headRef} ${pr.author} ${pr.authorName ?? ''}`.toLowerCase()
       }))
-      return { ...base, children, total: children.length }
+      return { ...base, children, total: children.length, ...(input.title ? { hint: `No open ${title.toLowerCase()}` } : {}) }
     }
   }
 }
