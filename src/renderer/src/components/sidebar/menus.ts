@@ -6,6 +6,7 @@ import {
   Archive,
   ArchiveRestore,
   Box,
+  BrushCleaning,
   Check,
   Copy,
   Crosshair,
@@ -29,6 +30,7 @@ import {
   Upload
 } from 'lucide-react'
 import * as git from '@renderer/actions/git'
+import { openBranchCleanup, useSafeToDelete } from '@renderer/actions/cleanup'
 import { checkoutPull, copyPullLink, openWebPage, startPullRequest } from '@renderer/actions/pulls'
 import type { MenuItem } from '@renderer/components/common/ContextMenu'
 import { branchPullItems } from '@renderer/components/pulls/menus'
@@ -127,6 +129,10 @@ export function localBranchMenu(ctx: SidebarMenuCtx, b: Ref): MenuItem[] {
     { label: 'Create tag here…', icon: icon(Tag), onClick: () => git.createTag(repo, b.sha) },
     { label: 'Rename…', icon: icon(Pencil), onClick: () => git.renameBranch(repo, b) },
     { label: 'Delete…', icon: icon(Trash2), danger: true, onClick: () => git.deleteBranch(repo, b) },
+    // A branch already in the main branch: offer to clean up all of them at once.
+    ...(useSafeToDelete.getState().safe[repo]?.includes(b.name)
+      ? [{ label: 'Clean up merged branches…', icon: icon(BrushCleaning), onClick: () => openBranchCleanup(repo) }]
+      : []),
     { label: b.upstream ? `Set upstream… (${b.upstream})` : 'Set upstream…', icon: icon(Link), onClick: () => git.setUpstreamDialog(repo, b) },
     SEP,
     { label: 'Copy branch name', icon: icon(Copy), onClick: () => git.copyText(b.name, 'Copied branch name') },
@@ -298,6 +304,7 @@ export function sectionMenu(ctx: SidebarMenuCtx, id: SectionId, state: Container
     case 'local':
       return [
         { label: 'Create branch…', icon: icon(Plus), disabled: !headSha, onClick: () => git.createBranch(repo) },
+        { label: 'Clean up branches…', icon: icon(BrushCleaning), disabled: !headSha, onClick: () => openBranchCleanup(repo) },
         SEP,
         ...expandItems,
         SEP,

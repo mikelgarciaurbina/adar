@@ -45,6 +45,32 @@ export interface RepoInfo {
   remotes: RemoteInfo[]
 }
 
+/** A branch as "Clean up branches" sees it (getBranchCleanup). */
+export interface CleanupBranch {
+  /** Local branch name, or the branch's name on the remote ("feat/x", not "origin/feat/x"). */
+  name: string
+  sha: string
+  /** All its commits are in the base branch (the local one or the remote's). */
+  merged: boolean
+  /** Local branches whose upstream is gone: commits that are in no other local or remote branch (0 otherwise). */
+  unique: number
+  /** Its last commit. */
+  subject: string
+  /** Committer date of its last commit (unix seconds). */
+  date: number
+}
+
+export interface BranchCleanupInfo {
+  /** The branch everything is compared with ("main"). */
+  base: string
+  /** The refs the base was found as ("refs/heads/main", "refs/remotes/origin/main"); empty when it exists nowhere. */
+  baseRefs: string[]
+  local: Array<CleanupBranch & { upstream: string | null; upstreamGone: boolean; isHead: boolean }>
+  /** Branches of `remote` (its HEAD left out). */
+  remote: CleanupBranch[]
+  remoteName: string | null
+}
+
 export interface Ref {
   /** Short name: "main", "origin/main", "v1.0.0". */
   name: string

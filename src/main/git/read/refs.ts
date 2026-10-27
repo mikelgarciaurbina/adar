@@ -2,7 +2,8 @@
 
 import { existsSync } from 'node:fs'
 import path from 'node:path'
-import type { RefsResult, Submodule } from '@shared/types'
+import { isSafeBranchName } from '@shared/hosting'
+import type { BranchCleanupInfo, RefsResult, Submodule } from '@shared/types'
 import type { GitContext } from '../context'
 import type { ReadOps } from '../ops'
 import {
@@ -24,7 +25,7 @@ import {
   type TrackInfo
 } from '../parsers/refs'
 import { chunkedPathspecs, gitAtLeast } from '../write/util'
-import { assertRepo, failed, readHead } from './common'
+import { assertRepo, failed, invalidArgument, readHead } from './common'
 
 /** Upstream names safe to embed in a %(ahead-behind:...) atom. */
 const SIMPLE_REF = /^refs\/(heads|remotes|tags)\/[\w./-]+$/
@@ -95,8 +96,61 @@ async function readSubmodules(ctx: GitContext, repo: string): Promise<Submodule[
   return buildSubmodules(parseSubmoduleStatus(status.stdout), urls, status.code !== 0)
 }
 
-export function createRefsOps(ctx: GitContext): Pick<ReadOps, 'getRefs'> {
+/** One line per ref: refname, sha, upstream, committer date, subject. */
+const CLEANUP_FORMAT = '%(refname)%00%(objectname)%00%(upstream)%00%(committerdate:unix)%00%(subject)'
+const isRemoteName = (name: unknown): name is string => typeof name === 'string' && /^[^\s\\:~^?*[]{1,100}$/.test(name) && !name.startsWith('-') && !name.includes('..')
+
+export function createRefsOps(ctx: GitContext): Pick<ReadOps, 'getRefs' | 'getBranchCleanup'> {
   return {
+    async getBranchCleanup(repo, opts): Promise<BranchCleanupInfo> {
+      await assertRepo(ctx, repo)
+      const base = opts?.base
+      const remote = opts?.remote ?? null
+      if (!isSafeBranchName(base)) throw invalidArgument('Invalid base branch')
+      if (remote !== null && !isRemoteName(remote)) throw invalidArgument('Invalid remote')
+      const list = await ctx.git(repo, ['for-each-ref', `--format=${CLEANUP_FORMAT}`, 'refs/heads', 'refs/remotes'], { allowFailure: true })
+      if (list.code !== 0) failed(['for-each-ref'], list)
+      const rows = list.stdout
+        .split('\n')
+        .filter(Boolean)
+        .map((line) => {
+          const [ref = '', sha = '', upstream = '', date = '', subject = ''] = line.split('\0')
+          return { ref, sha, upstream, date: Number(date) || 0, subject }
+        })
+      const known = new Set(rows.map((r) => r.ref))
+      const baseRefs = [`refs/heads/${base}`, ...(remote ? [`refs/remotes/${remote}/${base}`] : [])].filter((r) => known.has(r))
+      // Everything already in the base branch, here or on the remote.
+      const merged = new Set<string>()
+      for (const ref of baseRefs) {
+        const res = await ctx.git(repo, ['for-each-ref', '--format=%(refname)', `--merged=${ref}`, 'refs/heads', ...(remote ? [`refs/remotes/${remote}`] : [])], { allowFailure: true })
+        if (res.code === 0) for (const r of res.stdout.split('\n')) if (r) merged.add(r)
+      }
+      const head = await ctx.git(repo, ['symbolic-ref', '--quiet', 'HEAD'], { allowFailure: true })
+      const headRef = head.code === 0 ? head.stdout.trim() : ''
+      const short = (ref: string) => ref.replace(/^refs\/(heads|remotes)\//, '')
+
+      const local: BranchCleanupInfo['local'] = []
+      for (const r of rows.filter((x) => x.ref.startsWith('refs/heads/'))) {
+        const name = r.ref.slice('refs/heads/'.length)
+        const upstreamGone = !!r.upstream && /^refs\/(heads|remotes)\//.test(r.upstream) && !known.has(r.upstream)
+        const isMerged = merged.has(r.ref)
+        let unique = 0
+        if (upstreamGone && !isMerged && isSafeBranchName(name)) {
+          // Commits only this branch has: everything else (other branches, remote branches) excluded.
+          const res = await ctx.git(repo, ['rev-list', '--count', r.ref, '--not', `--exclude=${name}`, '--branches', '--remotes'], { allowFailure: true })
+          unique = res.code === 0 ? Number(res.stdout.trim()) || 0 : 0
+        }
+        local.push({ name, sha: r.sha, merged: isMerged, unique, subject: r.subject, date: r.date, upstream: r.upstream ? short(r.upstream) : null, upstreamGone, isHead: r.ref === headRef })
+      }
+      const prefix = remote ? `refs/remotes/${remote}/` : null
+      const remoteBranches = prefix
+        ? rows
+            .filter((x) => x.ref.startsWith(prefix) && x.ref !== `${prefix}HEAD`)
+            .map((r) => ({ name: r.ref.slice(prefix.length), sha: r.sha, merged: merged.has(r.ref), unique: 0, subject: r.subject, date: r.date }))
+        : []
+      return { base, baseRefs, local, remote: remoteBranches, remoteName: remote }
+    },
+
     async getRefs(repo): Promise<RefsResult> {
       await assertRepo(ctx, repo)
       const batched = await gitAtLeast(ctx, 2, 41)

@@ -4,6 +4,7 @@
 
 import * as git from '@renderer/actions/git'
 import { installCliCommand, uninstallCliCommand } from '@renderer/actions/cli'
+import { openBranchCleanup } from '@renderer/actions/cleanup'
 import { openConnect, selectPull, startPullRequest, turnOffPullRequests } from '@renderer/actions/pulls'
 import { hostingOn, pullIndexOf, repoHosting, usePulls } from '@renderer/components/pulls/pullStore'
 import { currentBranch } from '@renderer/lib/refs'
@@ -114,6 +115,7 @@ export const COMMANDS: Command[] = [
   { id: 'github-pulls-off', label: 'Turn Off GitHub Pull Requests', group: 'App', when: githubOn, run: () => turnOffPullRequests() },
   { id: 'manage-remotes', label: 'Manage Remotes…', group: 'Remote', when: hasRepo, run: withRepo((r) => useApp.getState().openModal({ kind: 'remotes', repo: r })) },
   { id: 'create-branch', label: 'Create Branch…', group: 'Branch', shortcut: 'Mod+B', when: hasRepo, run: withRepo((r) => git.createBranch(r)) },
+  { id: 'clean-up-branches', label: 'Clean Up Branches…', group: 'Branch', when: hasRepo, run: withRepo((r) => openBranchCleanup(r)) },
   { id: 'stash', label: 'Stash Changes', group: 'Stash', shortcut: 'Mod+Shift+S', when: hasRepo, run: withRepo((r) => git.stash(r)) },
   { id: 'stash-message', label: 'Stash Changes with Message…', group: 'Stash', when: hasRepo, run: withRepo((r) => git.stash(r, { askMessage: true })) },
   { id: 'pop-stash', label: 'Pop Stash', group: 'Stash', shortcut: 'Mod+Alt+S', when: hasRepo, run: withRepo((r) => git.popStash(r)) },

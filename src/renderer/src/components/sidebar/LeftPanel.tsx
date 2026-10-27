@@ -8,6 +8,7 @@ import { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, use
 import { defaultRangeExtractor, useVirtualizer, type Range } from '@tanstack/react-virtual'
 import { Search, TriangleAlert, X } from 'lucide-react'
 import * as git from '@renderer/actions/git'
+import { loadCleanupPlan, openBranchCleanup, useSafeToDelete } from '@renderer/actions/cleanup'
 import { checkoutPull, openConnect, selectPull, startPullRequest } from '@renderer/actions/pulls'
 import { hostingKnown, hostingOn, pullIndexOf, repoHosting, usePulls } from '@renderer/components/pulls/pullStore'
 import { PullNoun } from '@renderer/lib/pulls'
@@ -161,6 +162,18 @@ export function LeftPanel({ tab }: { tab: RepoTab }) {
     if (pullsState?.error) return { state: 'error', message: pullsState.error, title }
     return { state: 'loading', title }
   }, [hosting, pullsKnown, pullsOn, pullsState, refs])
+
+  // Clean up: after a fetch (and when branches or pull requests change), count the branches that can go.
+  const lastFetch = tab.lastFetch
+  const branchKey = useMemo(() => (refs?.branches ?? []).map((b) => `${b.name}@${b.sha}`).join('\n'), [refs])
+  const pullsData = pullsState?.data ?? null
+  const unborn = !refs?.head.sha
+  useEffect(() => {
+    if (!lastFetch || unborn) return
+    const t = setTimeout(() => void loadCleanupPlan(repo).catch(() => undefined), 400)
+    return () => clearTimeout(t)
+  }, [repo, lastFetch, branchKey, pullsData, unborn])
+  const cleanupCount = useSafeToDelete((s) => (lastFetch ? (s.safe[repo]?.length ?? 0) : 0))
 
   const sections = useMemo(() => (refs ? buildTree(refs, remotes, pulls) : null), [refs, remotes, pulls])
   const rows = useMemo(
@@ -522,6 +535,9 @@ export function LeftPanel({ tab }: { tab: RepoTab }) {
       add(id) {
         latest.current.sectionAdd(id)
       },
+      cleanUp() {
+        openBranchCleanup(latest.current.repo)
+      },
       dragStart(row, e) {
         if (row.kind !== 'ref') return
         setRefDragData(e, row.node.ref)
@@ -825,6 +841,7 @@ export function LeftPanel({ tab }: { tab: RepoTab }) {
               solo={solo}
               busy={busy}
               addDisabled={row.kind === 'section' && (((row.id === 'tags' || row.id === 'local') && headUnborn) || (row.id === 'pulls' && !pullsOn))}
+              cleanup={row.kind === 'section' && row.id === 'local' ? cleanupCount : undefined}
               refs={refs}
               lane={row.kind === 'ref' && row.node.ref.type !== 'tag' ? tipColors?.get(row.node.ref.sha) : undefined}
               q={q}

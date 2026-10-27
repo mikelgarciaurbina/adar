@@ -5,6 +5,7 @@ import { CreatePullDialog } from '@renderer/components/pulls/CreatePullDialog'
 import { WhatsNewModal } from '@renderer/components/update/WhatsNew'
 import { useApp } from '@renderer/store/appStore'
 import { AboutModal } from './AboutModal'
+import { BranchCleanupDialog } from './BranchCleanupDialog'
 import { IdentityModal } from './IdentityModal'
 import { RemotesModal } from './RemotesModal'
 import { CloneModal, InitModal, OpenModal } from './RepoModals'
@@ -33,6 +34,8 @@ export function ModalHost() {
       return <WhatsNewModal from={modal.from} />
     case 'pulls-connect':
       return <ConnectDialog key={`${modal.provider}\0${modal.server ?? ''}`} provider={modal.provider} server={modal.server} remoteHost={modal.remoteHost} next={modal.next} />
+    case 'branch-cleanup':
+      return <BranchCleanupDialog key={modal.repo} repo={modal.repo} />
     case 'create-pull':
       return <CreatePullDialog key={`${modal.repo}\0${modal.head ?? ''}`} repo={modal.repo} head={modal.head} base={modal.base} />
     default:

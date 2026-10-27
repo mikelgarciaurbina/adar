@@ -52,6 +52,10 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
   - `store/appStore.ts` — zustand `useApp`: tabs (`RepoTab`), selection, centre view, settings, undo/redo stacks.
   - `actions/git.tsx` — user-level git actions (confirmations, toasts, busy state, refresh, undo entries). UI code calls
     these instead of `api` for anything that mutates a repository.
+  - `actions/cleanup.tsx` — "Clean up branches" (fetch with prune, then `getBranchCleanup`; delete with one undo entry for
+    the local branches) and the count on the Local section; which branches can go and how they are grouped is pure, in
+    `lib/cleanup.ts` (merged pull requests count as merged, so squash merges are found). The dialog is
+    `components/modals/BranchCleanupDialog.tsx`.
   - `actions/groups.tsx` — tab groups (open/close a group, group a folder's repositories, the grouping suggestion);
     groups are saved in `settings.tabGroups`, pure helpers in `lib/tabGroups.ts`.
   - `actions/pulls.tsx` — pull request actions (turn on, create after pushing, check out, merge, clean up, bring the base

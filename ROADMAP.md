@@ -32,7 +32,8 @@ pull requests (opt-in, signed in through the GitHub CLI or a token): on branch l
 checks and reviews, created from a branch (pushed first), checked out (forks too), merged and cleaned up · the same for
 Bitbucket Cloud (API token) and Bitbucket Data Center (HTTP access token), with builds, tasks and Bitbucket's merge
 strategies and merge checks · and for GitLab merge requests (gitlab.com and self-managed, personal access token), with
-their pipelines, approvals and GitLab's merge status.
+their pipelines, approvals and GitLab's merge status · clean up branches in bulk: local branches already in main
+(squash-merged pull requests included) or gone from the remote, and merged branches on the remote, with undo.
 
 ---
 
@@ -52,14 +53,11 @@ their pipelines, approvals and GitLab's merge status.
 - [ ] GitLab: sign in through `glab` when it is signed in (it has no `gh auth token` counterpart yet), and credential
       helper tokens before asking for anything.
 - [ ] GitHub: sign in from the browser (device flow, needs an OAuth app for Adar), and GitHub Enterprise hosts.
-- [ ] **CI status** dots on commits and branches (GitHub Actions, GitLab pipelines).
-- [ ] "Open on GitHub/GitLab…" for commits, files and line ranges; clickable `#123` issue references.
 - [ ] Provider avatars when Gravatar has none.
 
 ### Everyday workflow
 - [ ] **Worktrees** panel: create, open in a new tab, remove.
 - [ ] **Reflog view / "Recover lost commits"** — a safety net beyond undo.
-- [ ] **Branch cleanup**: delete merged branches and branches whose upstream is gone, in bulk.
 - [ ] **Commit signing** (GPG / SSH) and "verified" badges in the graph and commit details.
 - [ ] Commit message helpers: templates (`commit.template`), Conventional Commits prefixes, `Co-authored-by` picker.
 - [ ] Readable output for failing hooks (pre-commit, commit-msg) instead of a raw error.

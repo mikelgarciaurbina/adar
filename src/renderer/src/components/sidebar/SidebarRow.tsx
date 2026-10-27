@@ -2,7 +2,7 @@
 // plus the loading skeleton. Behaviour lives in LeftPanel via RowHandlers.
 
 import { memo, type ReactNode } from 'react'
-import { Archive, Box, Check, ChevronRight, Cloud, Crosshair, Eye, EyeOff, Folder, FolderOpen, GitPullRequest, Plus, RefreshCw, Tag, TriangleAlert } from 'lucide-react'
+import { Archive, Box, BrushCleaning, Check, ChevronRight, Cloud, Crosshair, Eye, EyeOff, Folder, FolderOpen, GitPullRequest, Plus, RefreshCw, Tag, TriangleAlert } from 'lucide-react'
 import { ChecksGlyph, PullStateIcon } from '@renderer/components/pulls/PullChip'
 import { pullTitle } from '@renderer/lib/pulls'
 import { laneColor } from '@renderer/lib/colors'
@@ -54,6 +54,8 @@ export interface RowHandlers {
   unsolo(row: Row): void
   fetch(remote: string): void
   add(section: SectionId): void
+  /** The Local section's clean-up count was clicked. */
+  cleanUp(): void
   dragStart(row: Row, e: React.DragEvent): void
   dragEnd(): void
   dragOver(row: Row, e: React.DragEvent): void
@@ -77,6 +79,8 @@ export interface RowViewProps {
   solo: boolean
   busy: boolean
   addDisabled: boolean
+  /** Local section: branches that can be cleaned up without losing anything (after a fetch). */
+  cleanup?: number
   refs: RefsResult
   /** Branches: colour index of the graph lane their tip is drawn in (none when the tip is not in the graph). */
   lane?: number
@@ -202,6 +206,21 @@ export const RowView = memo(function RowView(props: RowViewProps) {
             )}
           </span>
           {props.busy && <span className="ui-spinner ui-spinner-sm sb-busy" />}
+          {row.id === 'local' && !!props.cleanup && (
+            <button
+              type="button"
+              className="sb-cleanup"
+              title={`${props.cleanup === 1 ? '1 branch is' : `${props.cleanup} branches are`} already in the main branch · Clean up…`}
+              aria-label="Clean up branches"
+              onClick={(e) => {
+                e.stopPropagation()
+                h.cleanUp()
+              }}
+            >
+              <BrushCleaning size={11} />
+              {props.cleanup}
+            </button>
+          )}
           {!(row.id === 'pulls' && props.addDisabled) && <span className="sb-count">{row.count}</span>}
         </div>
       )

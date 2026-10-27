@@ -14,6 +14,7 @@ import type {
   AppInfo,
   AppSettings,
   BlameLine,
+  BranchCleanupInfo,
   Commit,
   CommitDetails,
   CommitPage,
@@ -25,6 +26,7 @@ import type {
   FileContent,
   FileDiff,
   ForcePushMode,
+  FoundRepo,
   GitCommandResult,
   Identity,
   LogOptions,
@@ -32,7 +34,6 @@ import type {
   PullMode,
   RebaseTodoItem,
   RecentRepo,
-  FoundRepo,
   RefsResult,
   RepoInfo,
   ResetMode,
@@ -98,6 +99,11 @@ export interface AdarApi {
   /** Commits of all refs (excluding refs/stash) in --date-order, paginated. */
   getLog(repo: string, opts?: LogOptions): Promise<CommitPage>
   getRefs(repo: string): Promise<RefsResult>
+  /**
+   * Branches for "Clean up branches": every local branch and every branch of `remote`, whether it is in `base`
+   * (locally or on the remote) and, for local branches whose upstream is gone, how many commits only they have.
+   */
+  getBranchCleanup(repo: string, opts: { base: string; remote: string | null }): Promise<BranchCleanupInfo>
   getCommitDetails(repo: string, sha: string): Promise<CommitDetails>
   /** Files changed between two revisions (from..to). */
   getCompareFiles(repo: string, from: string, to: string): Promise<CommitDetails['files']>
@@ -310,6 +316,7 @@ export const API_METHODS = [
   'getRepoInfo',
   'getLog',
   'getRefs',
+  'getBranchCleanup',
   'getCommitDetails',
   'getCompareFiles',
   'getFileHistory',
