@@ -45,6 +45,7 @@ describe('branch cleanup', () => {
           local('release/1.0', { merged: true }),
           local('try/one-page', { upstreamGone: true, unique: 1 }),
           local('wip', { upstream: null }),
+          local('review', { merged: true, worktree: '/p/widgets-review' }),
           local('ahead', { sha: sha('e') })
         ],
         remote: [
@@ -72,6 +73,9 @@ describe('branch cleanup', () => {
       ['origin/release/1.0', false]
     ])
     expect(plan.kept).toEqual(['main', 'develop'])
+    // A branch checked out in another worktree is never offered (git would refuse to delete it).
+    expect(plan.inWorktrees).toEqual(['review'])
+    expect(plan.inBase.some((i) => i.name === 'review')).toBe(false)
     expect([...defaultSelection(plan)].sort()).toEqual(['local:feat/cards', 'local:feat/search', 'local:fix/rounding'])
   })
 

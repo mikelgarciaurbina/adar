@@ -456,6 +456,7 @@ export function pillTitle(p: Pill): string {
       return `Remote branch ${p.ref.name}`
     default: {
       const parts = [`${p.isHead ? 'Checked out: ' : 'Local branch '}${p.ref.name}`]
+      if (p.ref.worktree) parts.push(`checked out in the worktree ${p.ref.worktree}`)
       if (p.remotes.length) parts.push(`also ${p.remotes.map((r) => r.name).join(', ')}`)
       if (p.ref.upstream && !p.remotes.some((r) => r.name === p.ref.upstream)) {
         const ab = [p.ref.ahead ? `${p.ref.ahead} ahead` : '', p.ref.behind ? `${p.ref.behind} behind` : ''].filter(Boolean).join(', ')

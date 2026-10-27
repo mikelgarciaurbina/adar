@@ -13,6 +13,8 @@ import { useApp, type RepoTab } from '@renderer/store/appStore'
 import { describeError } from '@shared/errors'
 import { sameCommit, type CreatePullOptions, type HostingProvider, type MergeMethod, type PullRequest, type RepoPullRequests } from '@shared/hosting'
 import * as git from './git'
+import { finishWorktree, useWorktrees } from './worktrees'
+import { folderName } from '@renderer/lib/tabGroups'
 
 const store = () => useApp.getState()
 const tabOf = (repo: string): RepoTab | undefined => store().tabs.find((t) => t.path === repo)
@@ -212,7 +214,13 @@ export async function mergePull(repo: string, pr: PullRequest, data: RepoPullReq
     merge: `${pr.baseRef} gets the ${commits(pr)} and a merge commit.`,
     'fast-forward': `${pr.baseRef} moves forward to the ${commits(pr)} as they are.`
   }[method]
-  const after = cleanUp && local ? ` Then Adar switches to ${pr.baseRef}, pulls, and deletes ${local.name}.` : ''
+  const tab = tabOf(repo)
+  const inWorktree = !!tab?.info?.mainWorktree && !!local?.isHead
+  const after = !cleanUp || !local
+    ? ''
+    : inWorktree
+      ? ` Then Adar removes the worktree ${tab!.name} and its folder, deletes ${local.name} here${!pr.headFork && !data.deleteBranchOnMerge ? ` and on ${data.remote}` : ''}, and takes you to ${folderName(tab!.info!.mainWorktree!)} with ${pr.baseRef} pulled.`
+      : ` Then Adar switches to ${pr.baseRef}, pulls, and deletes ${local.name}.`
   const ok = await confirm({
     title: `${MERGE_LABELS[method].button} ${pullRef(pr)} into ${pr.baseRef}?`,
     message: `${what}${after}`,
@@ -245,6 +253,17 @@ export async function mergePull(repo: string, pr: PullRequest, data: RepoPullReq
  * delete the branch here and (unless the provider already did) on the remote. Undo brings the local branch back.
  */
 export async function cleanUpAfterMerge(repo: string, pr: PullRequest, data: RepoPullRequests): Promise<void> {
+  // In a linked worktree that has the branch, the base branch cannot be checked out (the main folder has it):
+  // remove the worktree instead.
+  const tab = tabOf(repo)
+  const here = localBranchFor(pr, tab?.refs ?? null, data.remote)
+  if (tab?.info?.mainWorktree && here?.isHead) {
+    const changes = (await useWorktrees.getState().load(repo)).find((w) => w.isCurrent)?.changes ?? 0
+    // Uncommitted changes are never dropped unasked: the merged pull request's panel offers "Remove anyway".
+    if (changes > 0) toast.warning(`${tab.name} has changes that are not committed, so the worktree stays`)
+    else await finishWorktree(repo, { path: repo, name: tab.name, branch: here.name, changes }, pr, data)
+    return
+  }
   const remote = data.remote
   store().setBusy(`cleanup:${repo}`, 'Cleaning up…')
   try {

@@ -56,6 +56,11 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
     the local branches) and the count on the Local section; which branches can go and how they are grouped is pure, in
     `lib/cleanup.ts` (merged pull requests count as merged, so squash merges are found). The dialog is
     `components/modals/BranchCleanupDialog.tsx`.
+  - `actions/worktrees.tsx` — worktrees: each tab's list (`useWorktrees`, from `getWorktrees`), opening one as a tab in
+    the group of the tab it came from, creating one (dialog `components/modals/NewWorktreeDialog.tsx`, or one click for a
+    pull request), removing with undo, and `finishWorktree` after its pull request is merged. Local branches checked out
+    in another worktree carry `Ref.worktree`; a linked worktree's tab has `RepoInfo.mainWorktree`. Backend:
+    `git/read/worktrees.ts`, `git/write/worktrees.ts`.
   - `actions/groups.tsx` — tab groups (open/close a group, group a folder's repositories, the grouping suggestion);
     groups are saved in `settings.tabGroups`, pure helpers in `lib/tabGroups.ts`.
   - `actions/pulls.tsx` — pull request actions (turn on, create after pushing, check out, merge, clean up, bring the base

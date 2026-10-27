@@ -9,10 +9,11 @@ import { defaultRangeExtractor, useVirtualizer, type Range } from '@tanstack/rea
 import { Search, TriangleAlert, X } from 'lucide-react'
 import * as git from '@renderer/actions/git'
 import { loadCleanupPlan, openBranchCleanup, useSafeToDelete } from '@renderer/actions/cleanup'
+import { finishWorktree, forgetMissingWorktrees, newWorktree, openWorktree, useWorktrees } from '@renderer/actions/worktrees'
 import { checkoutPull, openConnect, selectPull, startPullRequest } from '@renderer/actions/pulls'
 import { hostingKnown, hostingOn, pullIndexOf, repoHosting, usePulls } from '@renderer/components/pulls/pullStore'
 import { PullNoun } from '@renderer/lib/pulls'
-import { PROVIDER_NAMES } from '@shared/hosting'
+import { PROVIDER_NAMES, type PullRequest } from '@shared/hosting'
 import { isMac } from '@renderer/api/client'
 import { Button } from '@renderer/components/common/Button'
 import { showContextMenu, type MenuItem } from '@renderer/components/common/ContextMenu'
@@ -26,6 +27,7 @@ import {
   headMenu,
   localBranchMenu,
   pullMenu,
+  worktreeMenu,
   remoteBranchMenu,
   remoteMenu,
   sectionMenu,
@@ -65,7 +67,8 @@ import {
   type PullsInput,
   type Row,
   type Section,
-  type SectionId
+  type SectionId,
+  type WorktreesInput
 } from './tree'
 
 const ROW_H = 24
@@ -175,7 +178,25 @@ export function LeftPanel({ tab }: { tab: RepoTab }) {
   }, [repo, lastFetch, branchKey, pullsData, unborn])
   const cleanupCount = useSafeToDelete((s) => (lastFetch ? (s.safe[repo]?.length ?? 0) : 0))
 
-  const sections = useMemo(() => (refs ? buildTree(refs, remotes, pulls) : null), [refs, remotes, pulls])
+  // Worktrees: reloaded when branches move (a commit or checkout in any worktree changes shared refs).
+  const worktreeList = useWorktrees((s) => s.lists[repo])
+  useEffect(() => {
+    void useWorktrees.getState().load(repo)
+  }, [repo, branchKey])
+  const worktrees = useMemo<WorktreesInput | undefined>(() => {
+    if (!worktreeList) return undefined
+    const merged = new Map<string, PullRequest>()
+    if (pullsData) {
+      const index = pullIndexOf(pullsData, refs)
+      for (const w of worktreeList) {
+        const pr = w.branch ? index.byLocal.get(w.branch) : undefined
+        if (pr?.state === 'merged' && w.branch) merged.set(w.branch, pr)
+      }
+    }
+    return { list: worktreeList, merged }
+  }, [worktreeList, pullsData, refs])
+
+  const sections = useMemo(() => (refs ? buildTree(refs, remotes, pulls, worktrees) : null), [refs, remotes, pulls, worktrees])
   const rows = useMemo(
     () => (sections ? flattenTree(sections, { filter: query, collapsedSections, toggled, filterCollapsed }) : []),
     [sections, query, collapsedSections, toggled, filterCollapsed]
@@ -391,6 +412,8 @@ export function LeftPanel({ tab }: { tab: RepoTab }) {
         return submoduleMenu(ctx, row.node.submodule)
       case 'pull':
         return pullMenu(ctx, row.node.pull)
+      case 'worktree':
+        return worktreeMenu(ctx, row.node.worktree, row.node.merged)
       default:
         return []
     }
@@ -427,6 +450,9 @@ export function LeftPanel({ tab }: { tab: RepoTab }) {
       case 'pull-prompt':
         openConnect(hosting)
         break
+      case 'worktree':
+        setSelectedKey(row.key)
+        break
     }
   }
 
@@ -455,6 +481,9 @@ export function LeftPanel({ tab }: { tab: RepoTab }) {
       }
       case 'pull-prompt':
         openConnect(hosting)
+        break
+      case 'worktree':
+        if (!row.node.worktree.isCurrent && !row.node.worktree.missing) void openWorktree(repo, row.node.worktree.path)
         break
       case 'section':
         toggleSection(row.id)
@@ -486,6 +515,15 @@ export function LeftPanel({ tab }: { tab: RepoTab }) {
     else if (id === 'tags' && headSha) void git.createTag(repo, headSha)
     else if (id === 'submodules') void updateSubmodules(repo)
     else if (id === 'pulls') void startPullRequest(repo)
+    else if (id === 'worktrees') newWorktree(repo)
+  }
+
+  const worktreeAction = (row: Row, action: 'open' | 'finish' | 'forget') => {
+    if (row.kind !== 'worktree') return
+    const { worktree: wt, merged } = row.node
+    if (action === 'open') void openWorktree(repo, wt.path)
+    else if (action === 'forget') void forgetMissingWorktrees(repo)
+    else if (merged && pullsData) void finishWorktree(repo, wt, merged, pullsData)
   }
 
   const openMenuAtRow = (idx: number) => {
@@ -500,8 +538,8 @@ export function LeftPanel({ tab }: { tab: RepoTab }) {
   }
 
   // Stable handler object for memoised rows; reads the latest render's closures.
-  const latest = useRef({ selectRow, activateRow, menuFor, toggleRowHidden, sectionAdd, repo })
-  latest.current = { selectRow, activateRow, menuFor, toggleRowHidden, sectionAdd, repo }
+  const latest = useRef({ selectRow, activateRow, menuFor, toggleRowHidden, sectionAdd, worktreeAction, repo })
+  latest.current = { selectRow, activateRow, menuFor, toggleRowHidden, sectionAdd, worktreeAction, repo }
 
   const handlers = useMemo<RowHandlers>(
     () => ({
@@ -537,6 +575,9 @@ export function LeftPanel({ tab }: { tab: RepoTab }) {
       },
       cleanUp() {
         openBranchCleanup(latest.current.repo)
+      },
+      worktreeAction(row, action) {
+        latest.current.worktreeAction(row, action)
       },
       dragStart(row, e) {
         if (row.kind !== 'ref') return

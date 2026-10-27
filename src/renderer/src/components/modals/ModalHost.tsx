@@ -6,6 +6,7 @@ import { WhatsNewModal } from '@renderer/components/update/WhatsNew'
 import { useApp } from '@renderer/store/appStore'
 import { AboutModal } from './AboutModal'
 import { BranchCleanupDialog } from './BranchCleanupDialog'
+import { NewWorktreeDialog } from './NewWorktreeDialog'
 import { IdentityModal } from './IdentityModal'
 import { RemotesModal } from './RemotesModal'
 import { CloneModal, InitModal, OpenModal } from './RepoModals'
@@ -34,6 +35,8 @@ export function ModalHost() {
       return <WhatsNewModal from={modal.from} />
     case 'pulls-connect':
       return <ConnectDialog key={`${modal.provider}\0${modal.server ?? ''}`} provider={modal.provider} server={modal.server} remoteHost={modal.remoteHost} next={modal.next} />
+    case 'new-worktree':
+      return <NewWorktreeDialog key={modal.repo} repo={modal.repo} branch={modal.branch} />
     case 'branch-cleanup':
       return <BranchCleanupDialog key={modal.repo} repo={modal.repo} />
     case 'create-pull':

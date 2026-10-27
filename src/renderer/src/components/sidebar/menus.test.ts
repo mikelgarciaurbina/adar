@@ -276,7 +276,7 @@ describe('tag, stash, submodule and section menus', () => {
 
   it('section menus', () => {
     const state = { refs: [], canExpandAll: true, expandAll: vi.fn(), collapseAll: vi.fn() }
-    expect(labels(sectionMenu(ctx(), 'local', state))).toEqual(['Create branch…', 'Clean up branches…', 'Expand all folders', 'Collapse all folders'])
+    expect(labels(sectionMenu(ctx(), 'local', state))).toEqual(['Create branch…', 'New worktree…', 'Clean up branches…', 'Expand all folders', 'Collapse all folders'])
     expect(labels(sectionMenu(ctx(), 'remote', state))).toContain('Add remote…')
     const unborn = ctx({ refs: refs({ head: { sha: null, branch: 'main', detached: false, unborn: true } }) })
     expect(find(sectionMenu(unborn, 'tags', state), 'Create tag at HEAD…')?.disabled).toBe(true)

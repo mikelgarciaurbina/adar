@@ -187,6 +187,12 @@ export function createRepoOps(ctx: GitContext, services: SystemServices): RepoOp
       ctx.git(repo, ['remote', '-v'], { allowFailure: true })
     ])
     const root = repo.length > 1 ? repo.replace(/[\\/]+$/, '') : repo
+    // A linked worktree's git dir names the main repository's in its commondir file.
+    const common = await fs
+      .readFile(path.join(gitDir, 'commondir'), 'utf8')
+      .then((rel) => path.resolve(gitDir, rel.trim()))
+      .catch(() => null)
+    const mainWorktree = common ? (path.basename(common) === '.git' ? path.dirname(common) : common) : null
     return {
       path: root,
       name: path.basename(root) || root,
@@ -194,7 +200,8 @@ export function createRepoOps(ctx: GitContext, services: SystemServices): RepoOp
       isBare: bare.stdout.trim() === 'true',
       head,
       state,
-      remotes: remotes.code === 0 ? parseRemotesVerbose(remotes.stdout) : []
+      remotes: remotes.code === 0 ? parseRemotesVerbose(remotes.stdout) : [],
+      mainWorktree
     }
   }
 

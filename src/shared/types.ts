@@ -43,6 +43,32 @@ export interface RepoInfo {
   head: HeadInfo
   state: RepoOperationState
   remotes: RemoteInfo[]
+  /** A linked worktree: the main worktree's root; null for the main one (or a repository without worktrees). */
+  mainWorktree?: string | null
+}
+
+/** A worktree of the repository (getWorktrees). */
+export interface Worktree {
+  /** Absolute path of its folder. */
+  path: string
+  /** Folder name. */
+  name: string
+  /** Checked-out branch, or null (detached HEAD, bare). */
+  branch: string | null
+  sha: string | null
+  /** The repository's own folder (the first worktree git lists). */
+  isMain: boolean
+  /** The worktree the request was made from. */
+  isCurrent: boolean
+  detached: boolean
+  /** Locked: git keeps it even when its folder is unreachable (git worktree lock). */
+  locked: boolean
+  /** Its folder is gone: git would forget it on prune. */
+  missing: boolean
+  /** Files with changes, or null when not read (missing, bare). */
+  changes: number | null
+  /** The first few changed files, by path. */
+  changedFiles: string[]
 }
 
 /** A branch as "Clean up branches" sees it (getBranchCleanup). */
@@ -65,7 +91,7 @@ export interface BranchCleanupInfo {
   base: string
   /** The refs the base was found as ("refs/heads/main", "refs/remotes/origin/main"); empty when it exists nowhere. */
   baseRefs: string[]
-  local: Array<CleanupBranch & { upstream: string | null; upstreamGone: boolean; isHead: boolean }>
+  local: Array<CleanupBranch & { upstream: string | null; upstreamGone: boolean; isHead: boolean; worktree?: string | null }>
   /** Branches of `remote` (its HEAD left out). */
   remote: CleanupBranch[]
   remoteName: string | null
@@ -85,6 +111,8 @@ export interface Ref {
   upstream?: string
   /** Local branches: upstream configured but the remote branch no longer exists. */
   upstreamGone?: boolean
+  /** Local branches checked out in another worktree: that worktree's path. */
+  worktree?: string
   /** Local branches: commits ahead of / behind upstream. */
   ahead?: number
   behind?: number

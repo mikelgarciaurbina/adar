@@ -13,6 +13,7 @@ import {
   Clock,
   ExternalLink,
   Eye,
+  FolderGit2,
   GitMerge,
   ListTodo,
   MessageSquareWarning,
@@ -30,6 +31,8 @@ import {
   openWebPage,
   preferredMergeMethod
 } from '@renderer/actions/pulls'
+import { changesText, finishWorktree, mainWorktreeOf, openWorktree, useWorktrees, worktreeForPull } from '@renderer/actions/worktrees'
+import { folderName } from '@renderer/lib/tabGroups'
 import { api } from '@renderer/api/client'
 import { Avatar } from '@renderer/components/common/Avatar'
 import { Button } from '@renderer/components/common/Button'
@@ -141,8 +144,17 @@ function PullDetails({ tab, pr, data }: { tab: RepoTab; pr: PullRequest; data: R
         <PullCommits repo={repo} pr={pr} remote={data.remote} />
       </div>
 
-      {open && <PullActions tab={tab} pr={pr} data={data} hasLocal={!!local} localName={local?.name ?? null} isCheckedOut={!!local?.isHead} />}
-      {pr.state === 'merged' && local && !keptBranches.has(`${repo}\0${local.name}`) && <CleanUpBox repo={repo} pr={pr} data={data} branch={local.name} />}
+      {open && (
+        <PullActions tab={tab} pr={pr} data={data} hasLocal={!!local} localName={local?.name ?? null} isCheckedOut={!!local?.isHead} elsewhere={local?.worktree ?? null} />
+      )}
+      {pr.state === 'merged' &&
+        local &&
+        !keptBranches.has(`${repo}\0${local.name}`) &&
+        (tab.info?.mainWorktree && local.isHead ? (
+          <WorktreeEndBox tab={tab} pr={pr} data={data} branch={local.name} />
+        ) : (
+          <CleanUpBox repo={repo} pr={pr} data={data} branch={local.name} />
+        ))}
       {pr.state === 'closed' && local && !keptBranches.has(`${repo}\0${local.name}`) && <DeleteBranchBox repo={repo} pr={pr} data={data} branch={local.name} />}
     </div>
   )
@@ -341,7 +353,16 @@ function useMergeChecks(repo: string, pr: PullRequest, data: RepoPullRequests): 
   return checks
 }
 
-function PullActions(props: { tab: RepoTab; pr: PullRequest; data: RepoPullRequests; hasLocal: boolean; localName: string | null; isCheckedOut: boolean }) {
+function PullActions(props: {
+  tab: RepoTab
+  pr: PullRequest
+  data: RepoPullRequests
+  hasLocal: boolean
+  localName: string | null
+  isCheckedOut: boolean
+  /** Its branch is checked out in another worktree (that worktree's path). */
+  elsewhere: string | null
+}) {
   const { tab, pr, data } = props
   const repo = tab.path
   const [method, setMethod] = useState<MergeMethod>(() => preferredMergeMethod(data))
@@ -353,10 +374,23 @@ function PullActions(props: { tab: RepoTab; pr: PullRequest; data: RepoPullReque
   const canMerge = data.canMerge && pr.state === 'open'
   const label = MERGE_LABELS[method]
 
+  // Merging from a linked worktree that has the branch: the clean-up removes the worktree instead.
+  const inWorktree = !!tab.info?.mainWorktree && props.isCheckedOut
   const secondary = [
-    !props.isCheckedOut && (
-      <Button key="checkout" onClick={() => void checkoutPull(repo, pr)}>
-        Check out
+    props.elsewhere ? (
+      <Button key="open-wt" icon={<FolderGit2 size={13} />} onClick={() => void openWorktree(repo, props.elsewhere!)}>
+        Open {folderName(props.elsewhere)}
+      </Button>
+    ) : (
+      !props.isCheckedOut && (
+        <Button key="checkout" onClick={() => void checkoutPull(repo, pr)}>
+          Check out
+        </Button>
+      )
+    ),
+    !props.elsewhere && !props.isCheckedOut && (
+      <Button key="worktree" icon={<FolderGit2 size={13} />} title="Check it out in a new folder next to this one, and open it" onClick={() => void worktreeForPull(repo, pr)}>
+        In a worktree
       </Button>
     ),
     pr.mergeable === 'conflicts' && (
@@ -413,13 +447,56 @@ function PullActions(props: { tab: RepoTab; pr: PullRequest; data: RepoPullReque
             props.hasLocal && (
               <label className="pr-check">
                 <input type="checkbox" checked={cleanUp} onChange={(e) => setCleanUp(e.target.checked)} />
-                Then switch to {pr.baseRef}, pull, and delete {props.localName}
+                {inWorktree ? `Then remove this worktree and delete ${props.localName}` : `Then switch to ${pr.baseRef}, pull, and delete ${props.localName}`}
               </label>
             )
           )}
         </>
       )}
       {secondary.length > 0 && <div className="pr-secondary">{secondary}</div>}
+    </div>
+  )
+}
+
+/** After a merge, in the linked worktree that has the branch: remove the worktree and the branch, go back to the main folder. */
+function WorktreeEndBox({ tab, pr, data, branch }: { tab: RepoTab; pr: PullRequest; data: RepoPullRequests; branch: string }) {
+  const [hidden, setHidden] = useState(false)
+  const main = mainWorktreeOf(tab.path)
+  const busy = useApp((s) => !!s.busy[`cleanup:${main}`])
+  const here = useWorktrees((s) => s.lists[tab.path]?.find((w) => w.isCurrent) ?? null)
+  if (hidden) return null
+  const dirty = (here?.changes ?? 0) > 0
+  return (
+    <div className="pr-actions">
+      <div className={`pr-cleanup${dirty ? ' pr-cleanup-danger' : ''}`}>
+        <span>
+          Remove the worktree <strong>{tab.name}</strong> and delete <strong>{branch}</strong> here
+          {!pr.headFork && !data.deleteBranchOnMerge ? ` and on ${data.remote}` : ''}?
+        </span>
+        {dirty && here && (
+          <span className="pr-cleanup-warn">
+            <TriangleAlert size={14} /> {changesText(here)} They are lost.
+          </span>
+        )}
+        <div className="pr-secondary">
+          <Button
+            variant={dirty ? 'danger' : 'primary'}
+            loading={busy}
+            onClick={() => void finishWorktree(tab.path, { path: tab.path, name: tab.name, branch, changes: here?.changes ?? 0 }, pr, data, { confirmed: true })}
+          >
+            {dirty ? 'Remove anyway' : 'Remove worktree'}
+          </Button>
+          <Button
+            variant="ghost"
+            onClick={() => {
+              keptBranches.add(`${tab.path}\0${branch}`)
+              setHidden(true)
+            }}
+          >
+            Keep it
+          </Button>
+        </div>
+      </div>
     </div>
   )
 }

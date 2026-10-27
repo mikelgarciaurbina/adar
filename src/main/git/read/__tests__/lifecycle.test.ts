@@ -62,7 +62,8 @@ describe('openRepo / getRepoInfo', () => {
       isBare: false,
       head: { sha, branch: 'main', detached: false, unborn: false },
       state: 'none',
-      remotes: [{ name: 'origin', fetchUrl: 'git@github.com:me/private.git', pushUrl: 'git@github.com:me/private.git' }]
+      remotes: [{ name: 'origin', fetchUrl: 'git@github.com:me/private.git', pushUrl: 'git@github.com:me/private.git' }],
+      mainWorktree: null
     })
     const fromFile = await backend.openRepo(path.join(repo, 'src', 'deep', 'file.ts'))
     expect(fromFile.path).toBe(repo)

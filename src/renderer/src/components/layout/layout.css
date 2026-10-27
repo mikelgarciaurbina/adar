@@ -1213,3 +1213,23 @@
 .wl-filter-input:focus-visible {
   outline: none;
 }
+
+/* A linked worktree's tab says so. */
+.tb-tab-worktree {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 3px;
+  height: 16px;
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: 4px;
+  font: 500 10px / 1 var(--font-mono);
+  color: var(--lane-3-ink);
+  background: color-mix(in srgb, var(--lane-3) 14%, transparent);
+}
+@container (max-width: 160px) {
+  .tb-tab-worktree {
+    display: none;
+  }
+}

@@ -33,7 +33,10 @@ checks and reviews, created from a branch (pushed first), checked out (forks too
 Bitbucket Cloud (API token) and Bitbucket Data Center (HTTP access token), with builds, tasks and Bitbucket's merge
 strategies and merge checks · and for GitLab merge requests (gitlab.com and self-managed, personal access token), with
 their pipelines, approvals and GitLab's merge status · clean up branches in bulk: local branches already in main
-(squash-merged pull requests included) or gone from the remote, and merged branches on the remote, with undo.
+(squash-merged pull requests included) or gone from the remote, and merged branches on the remote, with undo ·
+worktrees: a section in the left panel, new worktrees for a branch or a pull request opened as tabs in the same group,
+a branch checked out in another worktree opens that worktree instead of failing, and once its pull request is merged
+the worktree and its branch go in one step.
 
 ---
 
@@ -56,7 +59,6 @@ their pipelines, approvals and GitLab's merge status · clean up branches in bul
 - [ ] Provider avatars when Gravatar has none.
 
 ### Everyday workflow
-- [ ] **Worktrees** panel: create, open in a new tab, remove.
 - [ ] **Reflog view / "Recover lost commits"** — a safety net beyond undo.
 - [ ] **Commit signing** (GPG / SSH) and "verified" badges in the graph and commit details.
 - [ ] Commit message helpers: templates (`commit.template`), Conventional Commits prefixes, `Co-authored-by` picker.

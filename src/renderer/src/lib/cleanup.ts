@@ -51,6 +51,8 @@ export interface CleanupPlan {
   remote: CleanupItem[]
   /** Branches always kept ("main"), for the dialog's last line. */
   kept: string[]
+  /** Branches checked out in another worktree: never offered. */
+  inWorktrees: string[]
 }
 
 const newestFirst = (a: CleanupItem, b: CleanupItem) => b.date - a.date || a.name.localeCompare(b.name)
@@ -77,8 +79,10 @@ export function cleanupPlan(info: BranchCleanupInfo, pulls: RepoPullRequests | n
   const gone: CleanupItem[] = []
   // Upstreams of local branches that stay: their remote branches stay too.
   const staying = new Set<string>()
+  const inWorktrees: string[] = []
   for (const b of info.local) {
-    if (keep(b.name)) {
+    if (keep(b.name) || b.worktree) {
+      if (b.worktree && !keep(b.name)) inWorktrees.push(b.name)
       if (b.upstream) staying.add(b.upstream)
       continue
     }
@@ -122,7 +126,7 @@ export function cleanupPlan(info: BranchCleanupInfo, pulls: RepoPullRequests | n
     : []
 
   const kept = [info.base, ...info.local.map((b) => b.name).filter((n) => n !== info.base && LONG_LIVED.has(n))]
-  return { base: info.base, remoteName: info.remoteName, inBase: inBase.sort(newestFirst), gone: gone.sort(newestFirst), remote: remote.sort(newestFirst), kept }
+  return { base: info.base, remoteName: info.remoteName, inBase: inBase.sort(newestFirst), gone: gone.sort(newestFirst), remote: remote.sort(newestFirst), kept, inWorktrees }
 }
 
 /** What the dialog ticks when it opens: the safe local branches (the remote ones wait until asked for). */

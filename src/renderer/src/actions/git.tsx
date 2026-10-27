@@ -282,6 +282,12 @@ export async function copyText(text: string, what = 'Copied to clipboard'): Prom
 
 /** Checkout a local branch, tag or sha (handles a dirty working tree). */
 export async function checkout(repo: string, ref: string, opts: { silent?: boolean } = {}): Promise<boolean> {
+  // Git keeps a branch in one worktree at a time: offer to open the one that has it instead.
+  const elsewhere = tabOf(repo)?.refs?.branches.find((b) => b.name === ref)?.worktree
+  if (elsewhere) {
+    void import('./worktrees').then((m) => m.offerBusyBranch(repo, ref, elsewhere))
+    return false
+  }
   const previous = headLabel(repo)
   const doCheckout = async (force?: boolean) => {
     await api.checkout(repo, ref, { force })
@@ -323,7 +329,9 @@ export async function checkout(repo: string, ref: string, opts: { silent?: boole
     }
     return true
   } catch (err) {
-    toast.error(err)
+    const busy = /already (?:checked out|used by worktree) at '([^']+)'/.exec(`${(err as AdarError).stderr ?? ''} ${(err as Error).message}`)
+    if (busy) void import('./worktrees').then((m) => m.offerBusyBranch(repo, ref, busy[1]))
+    else toast.error(err)
     return false
   } finally {
     store().setBusy(`checkout:${repo}`, null)

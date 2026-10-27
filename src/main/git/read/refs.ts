@@ -26,6 +26,7 @@ import {
 } from '../parsers/refs'
 import { chunkedPathspecs, gitAtLeast } from '../write/util'
 import { assertRepo, failed, invalidArgument, readHead } from './common'
+import { otherWorktreeBranches } from './worktrees'
 
 /** Upstream names safe to embed in a %(ahead-behind:...) atom. */
 const SIMPLE_REF = /^refs\/(heads|remotes|tags)\/[\w./-]+$/
@@ -125,7 +126,10 @@ export function createRefsOps(ctx: GitContext): Pick<ReadOps, 'getRefs' | 'getBr
         const res = await ctx.git(repo, ['for-each-ref', '--format=%(refname)', `--merged=${ref}`, 'refs/heads', ...(remote ? [`refs/remotes/${remote}`] : [])], { allowFailure: true })
         if (res.code === 0) for (const r of res.stdout.split('\n')) if (r) merged.add(r)
       }
-      const head = await ctx.git(repo, ['symbolic-ref', '--quiet', 'HEAD'], { allowFailure: true })
+      const [head, elsewhere] = await Promise.all([
+        ctx.git(repo, ['symbolic-ref', '--quiet', 'HEAD'], { allowFailure: true }),
+        otherWorktreeBranches(ctx, repo).catch(() => new Map<string, string>())
+      ])
       const headRef = head.code === 0 ? head.stdout.trim() : ''
       const short = (ref: string) => ref.replace(/^refs\/(heads|remotes)\//, '')
 
@@ -140,7 +144,18 @@ export function createRefsOps(ctx: GitContext): Pick<ReadOps, 'getRefs' | 'getBr
           const res = await ctx.git(repo, ['rev-list', '--count', r.ref, '--not', `--exclude=${name}`, '--branches', '--remotes'], { allowFailure: true })
           unique = res.code === 0 ? Number(res.stdout.trim()) || 0 : 0
         }
-        local.push({ name, sha: r.sha, merged: isMerged, unique, subject: r.subject, date: r.date, upstream: r.upstream ? short(r.upstream) : null, upstreamGone, isHead: r.ref === headRef })
+        local.push({
+          name,
+          sha: r.sha,
+          merged: isMerged,
+          unique,
+          subject: r.subject,
+          date: r.date,
+          upstream: r.upstream ? short(r.upstream) : null,
+          upstreamGone,
+          isHead: r.ref === headRef,
+          worktree: elsewhere.get(name) ?? null
+        })
       }
       const prefix = remote ? `refs/remotes/${remote}/` : null
       const remoteBranches = prefix
@@ -156,17 +171,22 @@ export function createRefsOps(ctx: GitContext): Pick<ReadOps, 'getRefs' | 'getBr
       const batched = await gitAtLeast(ctx, 2, 41)
       const format = batched ? FOR_EACH_REF_FORMAT_NO_TRACK : FOR_EACH_REF_FORMAT
       const refArgs = ['for-each-ref', `--format=${format}`, 'refs/heads', 'refs/remotes', 'refs/tags']
-      const [refsRes, remotesRes, stashRes, head, submodules] = await Promise.all([
+      const [refsRes, remotesRes, stashRes, head, submodules, elsewhere] = await Promise.all([
         ctx.git(repo, refArgs, { allowFailure: true }),
         ctx.git(repo, ['remote'], { allowFailure: true }),
         ctx.git(repo, ['stash', 'list', `--format=${STASH_FORMAT}`], { allowFailure: true }),
         readHead(ctx, repo),
-        readSubmodules(ctx, repo).catch(() => [] as Submodule[])
+        readSubmodules(ctx, repo).catch(() => [] as Submodule[]),
+        otherWorktreeBranches(ctx, repo).catch(() => new Map<string, string>())
       ])
       if (refsRes.code !== 0) failed(refArgs, refsRes)
       const remoteNames = remotesRes.code === 0 ? remotesRes.stdout.split('\n').map((s) => s.trim()).filter(Boolean) : []
       const parsed = parseForEachRef(refsRes.stdout, remoteNames)
       if (batched && parsed.upstreamOf.size) applyTracking(parsed.branches, await computeTracking(ctx, repo, parsed))
+      for (const b of parsed.branches) {
+        const at = elsewhere.get(b.name)
+        if (at) b.worktree = at
+      }
       return {
         head,
         branches: sortBranches(parsed.branches),

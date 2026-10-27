@@ -39,7 +39,8 @@ import type {
   ResetMode,
   RewordInfo,
   RewordResult,
-  WorkingStatus
+  WorkingStatus,
+  Worktree
 } from './types'
 import type {
   BitbucketConnections,
@@ -104,6 +105,8 @@ export interface AdarApi {
    * (locally or on the remote) and, for local branches whose upstream is gone, how many commits only they have.
    */
   getBranchCleanup(repo: string, opts: { base: string; remote: string | null }): Promise<BranchCleanupInfo>
+  /** The repository's worktrees (the main one first), with their branch and changed files. */
+  getWorktrees(repo: string): Promise<Worktree[]>
   getCommitDetails(repo: string, sha: string): Promise<CommitDetails>
   /** Files changed between two revisions (from..to). */
   getCompareFiles(repo: string, from: string, to: string): Promise<CommitDetails['files']>
@@ -145,6 +148,16 @@ export interface AdarApi {
   checkout(repo: string, ref: string, opts?: { force?: boolean }): Promise<void>
   createBranch(repo: string, name: string, startPoint?: string, opts?: { checkout?: boolean }): Promise<void>
   deleteBranch(repo: string, name: string, opts?: { force?: boolean }): Promise<void>
+  /**
+   * Add a worktree at `path` (absolute, not existing yet) with `branch` checked out; with `from`, `branch` is created
+   * there first (tracking `from` with `track`). Resolves to the worktree's real path.
+   */
+  addWorktree(repo: string, opts: { path: string; branch: string; from?: string; track?: boolean }): Promise<string>
+  /** Remove a linked worktree (its folder); refused with DIRTY_WORKTREE when it has changes, unless forced. */
+  removeWorktree(repo: string, worktree: string, opts?: { force?: boolean }): Promise<void>
+  setWorktreeLocked(repo: string, worktree: string, locked: boolean): Promise<void>
+  /** Forget the worktrees whose folder is gone. */
+  pruneWorktrees(repo: string): Promise<void>
   renameBranch(repo: string, oldName: string, newName: string): Promise<void>
   /** upstream like "origin/main"; null unsets. */
   setUpstream(repo: string, branch: string, upstream: string | null): Promise<void>
@@ -317,6 +330,7 @@ export const API_METHODS = [
   'getLog',
   'getRefs',
   'getBranchCleanup',
+  'getWorktrees',
   'getCommitDetails',
   'getCompareFiles',
   'getFileHistory',
@@ -338,6 +352,10 @@ export const API_METHODS = [
   'checkout',
   'createBranch',
   'deleteBranch',
+  'addWorktree',
+  'removeWorktree',
+  'setWorktreeLocked',
+  'pruneWorktrees',
   'renameBranch',
   'setUpstream',
   'fastForwardBranch',

@@ -14,10 +14,12 @@ import { createRewordOps } from './reword'
 import { createStashOps } from './stash'
 import { createTagOps } from './tags'
 import { createWorktreeOps } from './worktree'
+import { createWorktreeWriteOps } from './worktrees'
 
 export function createWriteOps(ctx: GitContext): WriteOps {
   return {
     ...createWorktreeOps(ctx),
+    ...createWorktreeWriteOps(ctx),
     ...createBranchOps(ctx),
     ...createOperationOps(ctx),
     ...createInteractiveOps(ctx),

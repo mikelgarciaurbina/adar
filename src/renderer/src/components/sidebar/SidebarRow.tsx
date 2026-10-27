@@ -2,7 +2,7 @@
 // plus the loading skeleton. Behaviour lives in LeftPanel via RowHandlers.
 
 import { memo, type ReactNode } from 'react'
-import { Archive, Box, BrushCleaning, Check, ChevronRight, Cloud, Crosshair, Eye, EyeOff, Folder, FolderOpen, GitPullRequest, Plus, RefreshCw, Tag, TriangleAlert } from 'lucide-react'
+import { Archive, Box, BrushCleaning, Check, ChevronRight, Cloud, Crosshair, ExternalLink, Eye, EyeOff, Folder, FolderGit2, FolderOpen, GitBranch, GitMerge, GitPullRequest, Lock, Plus, RefreshCw, Tag, Trash2, TriangleAlert } from 'lucide-react'
 import { ChecksGlyph, PullStateIcon } from '@renderer/components/pulls/PullChip'
 import { pullTitle } from '@renderer/lib/pulls'
 import { laneColor } from '@renderer/lib/colors'
@@ -11,6 +11,7 @@ import { localForRemote } from '@renderer/lib/refs'
 import type { Ref, RefsResult } from '@shared/types'
 import { remoteWebUrl } from '@shared/remoteUrl'
 import { splitMatch, type Row, type SectionId } from './tree'
+import { pullRef } from '@renderer/lib/pulls'
 
 export type HiddenState = 'none' | 'some' | 'all'
 
@@ -26,6 +27,7 @@ export function aheadBehindText(b: Ref): string {
 function localTitle(b: Ref): string {
   const lines = [b.name]
   if (b.isHead) lines.push('Checked out')
+  if (b.worktree) lines.push(`Checked out in the worktree ${b.worktree}`)
   if (b.upstream) lines.push(b.upstreamGone ? `Upstream ${b.upstream} no longer exists` : `Tracking ${b.upstream} · ${aheadBehindText(b)}`)
   else lines.push('No upstream branch')
   lines.push(shortSha(b.sha))
@@ -56,6 +58,8 @@ export interface RowHandlers {
   add(section: SectionId): void
   /** The Local section's clean-up count was clicked. */
   cleanUp(): void
+  /** A worktree row's button: open it, finish it after its merge, or forget the missing ones. */
+  worktreeAction(row: Row, action: 'open' | 'finish' | 'forget'): void
   dragStart(row: Row, e: React.DragEvent): void
   dragEnd(): void
   dragOver(row: Row, e: React.DragEvent): void
@@ -186,8 +190,8 @@ export const RowView = memo(function RowView(props: RowViewProps) {
 
   switch (row.kind) {
     case 'section': {
-      const canAdd = row.id === 'local' || row.id === 'remote' || row.id === 'tags' || row.id === 'pulls'
-      const addLabel = row.id === 'local' ? 'Create branch' : row.id === 'remote' ? 'Add remote' : row.id === 'pulls' ? `Create ${row.title.slice(0, -1).toLowerCase()}` : 'Create tag at HEAD'
+      const canAdd = row.id === 'local' || row.id === 'remote' || row.id === 'tags' || row.id === 'pulls' || row.id === 'worktrees'
+      const addLabel = row.id === 'local' ? 'Create branch' : row.id === 'worktrees' ? 'New worktree' : row.id === 'remote' ? 'Add remote' : row.id === 'pulls' ? `Create ${row.title.slice(0, -1).toLowerCase()}` : 'Create tag at HEAD'
       return (
         <div {...common} className={classes.join(' ')} aria-expanded={row.expanded}>
           <Chevron expanded={row.expanded} />
@@ -313,6 +317,11 @@ export const RowView = memo(function RowView(props: RowViewProps) {
               {behind > 0 && <span>↓{behind}</span>}
             </span>
           )}
+          {isLocal && ref.worktree && (
+            <span className="sb-worktree-mark" title={`Checked out in the worktree ${ref.worktree}`}>
+              <FolderGit2 size={12} />
+            </span>
+          )}
           {isLocal && ref.upstreamGone && (
             <span className="sb-warn" title={`Upstream ${ref.upstream ?? ''} no longer exists on the remote`}>
               <TriangleAlert size={12} />
@@ -390,6 +399,71 @@ export const RowView = memo(function RowView(props: RowViewProps) {
           {pr.reviewRequested && <span className="sb-review">Review</span>}
           <ChecksGlyph pr={pr} />
           <span className="sb-count sb-count-dim">{pr.number}</span>
+        </div>
+      )
+    }
+
+    case 'worktree': {
+      const wt = row.node.worktree
+      const merged = row.node.merged
+      if (wt.isCurrent) classes.push('sb-worktree-current')
+      if (wt.missing) classes.push('sb-worktree-missing')
+      const title = [wt.path, wt.branch ? `Branch ${wt.branch}` : 'Detached HEAD', wt.isMain ? 'The main folder' : null, wt.locked ? 'Locked' : null]
+        .filter(Boolean)
+        .join('\n')
+      return (
+        <div {...common} className={classes.join(' ')} title={title}>
+          <span className="sb-chevron-space" />
+          <span className="sb-icon sb-icon-worktree">{props.pending ? <span className="ui-spinner ui-spinner-sm" /> : <FolderGit2 size={13} />}</span>
+          <span className="sb-name sb-worktree-name">
+            <Highlight text={row.node.label} q={q} />
+          </span>
+          {merged ? (
+            <span className="sb-worktree-merged" title={`${pullRef(merged)} ${merged.title} was merged: the worktree can go`}>
+              <GitMerge size={10} />
+              merged
+            </span>
+          ) : (
+            wt.branch && (
+              <span className="sb-worktree-branch">
+                <GitBranch size={10} />
+                {wt.branch}
+              </span>
+            )
+          )}
+          <span className="sb-spacer" />
+          {wt.locked && (
+            <span className="sb-worktree-note" title="Locked: git keeps it even when its folder is away">
+              <Lock size={11} />
+            </span>
+          )}
+          {wt.missing ? (
+            <>
+              <span className="sb-worktree-gone">folder missing</span>
+              <ActionButton label="Forget missing worktrees" onClick={() => h.worktreeAction(row, 'forget')}>
+                <Trash2 size={12} />
+              </ActionButton>
+            </>
+          ) : wt.isCurrent ? (
+            <span className="sb-worktree-note">this tab</span>
+          ) : (
+            <>
+              {!!wt.changes && (
+                <span className="sb-worktree-dirty" title={`${wt.changes} ${wt.changes === 1 ? 'file has' : 'files have'} changes`}>
+                  ● {wt.changes}
+                </span>
+              )}
+              {merged ? (
+                <button type="button" className="sb-worktree-remove" onClick={(e) => (e.stopPropagation(), h.worktreeAction(row, 'finish'))}>
+                  Remove
+                </button>
+              ) : (
+                <ActionButton label="Open in a new tab" onClick={() => h.worktreeAction(row, 'open')}>
+                  <ExternalLink size={12} />
+                </ActionButton>
+              )}
+            </>
+          )}
         </div>
       )
     }

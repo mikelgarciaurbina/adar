@@ -195,13 +195,15 @@ export function BranchCleanupDialog({ repo }: { repo: string }) {
                   </div>
                 )}
                 <span className="md-cleanup-kept">
-                  Always kept: {plan!.kept.map((k, i) => (
-                    <span key={k}>
-                      {i > 0 && ', '}
-                      <code>{k}</code>
-                    </span>
-                  ))}{' '}
-                  and branches with work of their own that are still on {plan!.remoteName ?? 'a remote'}.
+                  Always kept: <Names names={plan!.kept} />
+                  {plan!.inWorktrees.length > 0 ? ', ' : ' and '}
+                  branches with work of their own that are still on {plan!.remoteName ?? 'a remote'}
+                  {plan!.inWorktrees.length > 0 && (
+                    <>
+                      , and branches checked out in a worktree (<Names names={plan!.inWorktrees} />)
+                    </>
+                  )}
+                  .
                 </span>
               </>
             )}
@@ -290,4 +292,17 @@ function Reason({ item, base }: { item: CleanupItem; base: string }) {
     default:
       return <span className="md-cleanup-tag md-cleanup-tag-merged">{item.scope === 'remote' ? `in ${base}` : `merged into ${base}`}</span>
   }
+}
+
+function Names({ names }: { names: string[] }) {
+  return (
+    <>
+      {names.map((n, i) => (
+        <span key={n}>
+          {i > 0 && ', '}
+          <code>{n}</code>
+        </span>
+      ))}
+    </>
+  )
 }

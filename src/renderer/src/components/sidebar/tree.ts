@@ -5,14 +5,15 @@
 
 import { pullRef } from '@renderer/lib/pulls'
 import type { PullRequest } from '@shared/hosting'
-import type { Ref, RefsResult, RemoteInfo, Stash, Submodule } from '@shared/types'
+import type { Ref, RefsResult, RemoteInfo, Stash, Submodule, Worktree } from '@shared/types'
 
-export type SectionId = 'local' | 'remote' | 'pulls' | 'tags' | 'stashes' | 'submodules'
+export type SectionId = 'local' | 'worktrees' | 'remote' | 'pulls' | 'tags' | 'stashes' | 'submodules'
 
-export const SECTION_ORDER: readonly SectionId[] = ['local', 'remote', 'pulls', 'tags', 'stashes', 'submodules']
+export const SECTION_ORDER: readonly SectionId[] = ['local', 'worktrees', 'remote', 'pulls', 'tags', 'stashes', 'submodules']
 
 export const SECTION_TITLES: Record<SectionId, string> = {
   local: 'Local',
+  worktrees: 'Worktrees',
   remote: 'Remote',
   pulls: 'Pull requests',
   tags: 'Tags',
@@ -22,6 +23,7 @@ export const SECTION_TITLES: Record<SectionId, string> = {
 
 export const EMPTY_HINTS: Record<SectionId, string> = {
   local: 'No local branches',
+  worktrees: 'No other worktrees',
   remote: 'No remotes',
   pulls: 'No open pull requests',
   tags: 'No tags',
@@ -77,6 +79,23 @@ export interface PullLeaf {
   search: string
 }
 
+/** A worktree of the repository (the Worktrees section, shown once there is more than one). */
+export interface WorktreeLeaf {
+  kind: 'worktree'
+  key: string
+  label: string
+  worktree: Worktree
+  /** Its branch's pull request, when it was merged (the worktree can go). */
+  merged: PullRequest | null
+  search: string
+}
+
+/** What the Worktrees section shows: the repository's worktrees and, by branch, their merged pull requests. */
+export interface WorktreesInput {
+  list: readonly Worktree[]
+  merged?: ReadonlyMap<string, PullRequest>
+}
+
 /** The row that turns pull requests on (shown while they are off). */
 export interface PullPromptLeaf {
   kind: 'pull-prompt'
@@ -122,7 +141,7 @@ export interface RemoteNode {
   leafCount: number
 }
 
-export type LeafNode = RefLeaf | HeadLeaf | StashLeaf | SubmoduleLeaf | PullLeaf | PullPromptLeaf
+export type LeafNode = RefLeaf | HeadLeaf | StashLeaf | SubmoduleLeaf | PullLeaf | PullPromptLeaf | WorktreeLeaf
 export type ContainerNode = FolderNode | RemoteNode
 export type TreeNode = LeafNode | ContainerNode
 
@@ -259,7 +278,7 @@ function pullsSection(input: PullsInput): Section {
   }
 }
 
-export function buildTree(refs: RefsResult, remotes: readonly RemoteInfo[] = [], pulls?: PullsInput): Section[] {
+export function buildTree(refs: RefsResult, remotes: readonly RemoteInfo[] = [], pulls?: PullsInput, worktrees?: WorktreesInput): Section[] {
   const sections: Section[] = []
 
   // LOCAL
@@ -285,6 +304,19 @@ export function buildTree(refs: RefsResult, remotes: readonly RemoteInfo[] = [],
     })
   }
   sections.push({ id: 'local', key: sectionKey('local'), title: SECTION_TITLES.local, children: local, total: refs.branches.length })
+
+  // WORKTREES — once the repository has more than one.
+  if (worktrees && worktrees.list.length > 1) {
+    const children: WorktreeLeaf[] = worktrees.list.map((w) => ({
+      kind: 'worktree',
+      key: `wt:${w.path}`,
+      label: w.name,
+      worktree: w,
+      merged: (w.branch && !w.isMain && !w.isCurrent && worktrees.merged?.get(w.branch)) || null,
+      search: `${w.name} ${w.branch ?? ''} ${w.path}`.toLowerCase()
+    }))
+    sections.push({ id: 'worktrees', key: sectionKey('worktrees'), title: SECTION_TITLES.worktrees, children, total: children.length })
+  }
 
   // REMOTE — one node per remote (configured remotes + any remote seen in refs).
   const byRemote = new Map<string, Ref[]>()
@@ -360,6 +392,7 @@ export type Row =
   | { kind: 'submodule'; key: string; node: SubmoduleLeaf; depth: number }
   | { kind: 'pull'; key: string; node: PullLeaf; depth: number }
   | { kind: 'pull-prompt'; key: string; node: PullPromptLeaf; depth: number }
+  | { kind: 'worktree'; key: string; node: WorktreeLeaf; depth: number }
   | { kind: 'hint'; key: string; text: string; depth: number }
 
 export interface FlattenOptions {
@@ -449,6 +482,11 @@ function emit(nodes: TreeNode[], depth: number, ctx: Ctx, out: Row[]): number {
       case 'pull-prompt':
         if (ctx.q) break
         out.push({ kind: 'pull-prompt', key: node.key, node, depth })
+        break
+      case 'worktree':
+        if (ctx.q && !node.search.includes(ctx.q)) break
+        out.push({ kind: 'worktree', key: node.key, node, depth })
+        count += 1
         break
     }
   }

@@ -3,7 +3,7 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
-import { ChevronDown, CircleArrowUp, Copy, Download, FolderGit2, FolderInput, FolderOpen, FolderPlus, Layers, Plus, RefreshCw, SquareTerminal, X } from 'lucide-react'
+import { ChevronDown, CircleArrowUp, Copy, Download, FolderGit2, FolderInput, FolderOpen, FolderPlus, GitBranch, Layers, Plus, RefreshCw, SquareTerminal, X } from 'lucide-react'
 import { isElectron, isMac } from '@renderer/api/client'
 import * as git from '@renderer/actions/git'
 import { closeGroup, fetchGroup, GROUP_COLOR_LABELS, newGroup, openGroup, renameGroup } from '@renderer/actions/groups'
@@ -77,20 +77,23 @@ export function repoLifecycleItems(): MenuItem[] {
 interface TabLite {
   path: string
   name: string
+  /** A linked worktree: the main worktree's path ('' otherwise). */
+  mainWorktree: string
+  branch: string
 }
 
 export function TabBar() {
   // Select a primitive key so the bar only re-renders when paths/names change,
   // not on every status/log refresh of a tab.
-  const tabsKey = useApp((s) => s.tabs.map((t) => `${t.path}\u0000${t.name}`).join('\u0001'))
+  const tabsKey = useApp((s) => s.tabs.map((t) => `${t.path}\u0000${t.name}\u0000${t.info?.mainWorktree ?? ''}\u0000${t.info?.head.branch ?? ''}`).join('\u0001'))
   const activePath = useApp((s) => s.activePath)
   const busyKey = useApp((s) => Object.keys(s.busy).join('\u0001'))
   const tabs = useMemo<TabLite[]>(
     () =>
       tabsKey
         ? tabsKey.split('\u0001').map((k) => {
-            const [path, name] = k.split('\u0000')
-            return { path, name }
+            const [path, name, mainWorktree = '', branch = ''] = k.split('\u0000')
+            return { path, name, mainWorktree, branch }
           })
         : [],
     [tabsKey]
@@ -328,7 +331,13 @@ export function TabBar() {
         role="tab"
         aria-selected={active}
         tabIndex={active ? 0 : -1}
-        title={group ? `${tab.path}\nGroup: ${group.name || 'Unnamed group'}` : tab.path}
+        title={[
+          tab.path,
+          tab.mainWorktree ? `Worktree of ${tab.mainWorktree}${tab.branch ? ` · ${tab.branch}` : ''}` : null,
+          group ? `Group: ${group.name || 'Unnamed group'}` : null
+        ]
+          .filter(Boolean)
+          .join('\n')}
         draggable
         onDragStart={(e) => onDragStart(e, i)}
         onDragOver={(e) => onDragOver(e, i)}
@@ -367,6 +376,12 @@ export function TabBar() {
           {tab.name}
           {hints.has(tab.path) && <span className="tb-tab-hint">{hints.get(tab.path)}</span>}
         </span>
+        {tab.mainWorktree && (
+          <span className="tb-tab-worktree" aria-label="Worktree">
+            <GitBranch size={10} />
+            worktree
+          </span>
+        )}
         <button
           className="tb-tab-close"
           tabIndex={-1}

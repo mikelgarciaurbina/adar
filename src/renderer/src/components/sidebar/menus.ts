@@ -15,21 +15,33 @@ import {
   Eye,
   EyeOff,
   FastForward,
+  FolderGit2,
   FolderOpen,
   GitBranchPlus,
   GitMerge,
   GitPullRequest,
   GitPullRequestArrow,
   Link,
+  Lock,
   Pencil,
   Plus,
   RefreshCw,
   Settings,
+  SquareTerminal,
   Tag,
   Trash2,
   Upload
 } from 'lucide-react'
 import * as git from '@renderer/actions/git'
+import {
+  finishWorktree,
+  forgetMissingWorktrees,
+  newWorktree,
+  openWorktree,
+  removeWorktree,
+  setWorktreeLocked,
+  useWorktrees
+} from '@renderer/actions/worktrees'
 import { openBranchCleanup, useSafeToDelete } from '@renderer/actions/cleanup'
 import { checkoutPull, copyPullLink, openWebPage, startPullRequest } from '@renderer/actions/pulls'
 import type { MenuItem } from '@renderer/components/common/ContextMenu'
@@ -39,7 +51,8 @@ import { providerName, pullRef } from '@renderer/lib/pulls'
 import { currentBranch, localForRemote } from '@renderer/lib/refs'
 import { useApp } from '@renderer/store/appStore'
 import type { PullRequest } from '@shared/hosting'
-import type { Ref, RefsResult, RemoteInfo, Stash, Submodule } from '@shared/types'
+import type { Ref, RefsResult, RemoteInfo, Stash, Submodule, Worktree } from '@shared/types'
+import { folderName } from '@renderer/lib/tabGroups'
 import {
   editRemoteUrl,
   fetchRemote,
@@ -116,7 +129,10 @@ export function localBranchMenu(ctx: SidebarMenuCtx, b: Ref): MenuItem[] {
   const isCur = !!b.isHead
   const items: MenuItem[] = [
     { type: 'header', label: b.name },
-    { label: 'Checkout', icon: icon(Check), disabled: isCur, onClick: () => void git.checkoutRef(repo, b) }
+    b.worktree
+      ? { label: `Open worktree ${folderName(b.worktree)}`, icon: icon(FolderGit2), onClick: () => void openWorktree(repo, b.worktree!) }
+      : { label: 'Checkout', icon: icon(Check), disabled: isCur, onClick: () => void git.checkoutRef(repo, b) },
+    ...(isCur || b.worktree ? [] : [{ label: 'Check out in a new worktree…', icon: icon(FolderGit2), onClick: () => newWorktree(repo, b.name) }])
   ]
   if (isCur) items.push({ label: 'Pull', icon: icon(Download), onClick: () => git.pull(repo) })
   else if (canFastForward(b))
@@ -294,6 +310,13 @@ function bulkVisibility(ctx: SidebarMenuCtx, refs: Ref[], what: string): MenuIte
 export function sectionMenu(ctx: SidebarMenuCtx, id: SectionId, state: ContainerMenuState): MenuItem[] {
   const { repo } = ctx
   const headSha = ctx.refs.head.sha
+  if (id === 'worktrees') {
+    const missing = useWorktrees.getState().lists[repo]?.some((w) => w.missing)
+    return [
+      { label: 'New worktree…', icon: icon(FolderGit2), disabled: !headSha, onClick: () => newWorktree(repo) },
+      ...(missing ? [{ label: 'Forget missing worktrees', icon: icon(Trash2), onClick: () => void forgetMissingWorktrees(repo) }] : [])
+    ]
+  }
   const expandItems: MenuItem[] = state.canExpandAll
     ? [
         { label: 'Expand all folders', onClick: state.expandAll },
@@ -304,6 +327,7 @@ export function sectionMenu(ctx: SidebarMenuCtx, id: SectionId, state: Container
     case 'local':
       return [
         { label: 'Create branch…', icon: icon(Plus), disabled: !headSha, onClick: () => git.createBranch(repo) },
+        { label: 'New worktree…', icon: icon(FolderGit2), disabled: !headSha, onClick: () => newWorktree(repo) },
         { label: 'Clean up branches…', icon: icon(BrushCleaning), disabled: !headSha, onClick: () => openBranchCleanup(repo) },
         SEP,
         ...expandItems,
@@ -366,4 +390,26 @@ export function folderMenu(ctx: SidebarMenuCtx, label: string, expanded: boolean
     SEP,
     ...bulkVisibility(ctx, state.refs, 'branches')
   ]
+}
+
+// ── Worktrees ──────────────────────────────────────────────────────────────
+
+export function worktreeMenu(ctx: SidebarMenuCtx, wt: Worktree, merged: PullRequest | null): MenuItem[] {
+  const { repo } = ctx
+  const data = usePulls.getState().repos[repo]?.data ?? null
+  const here = wt.isCurrent
+  const items: MenuItem[] = [
+    { type: 'header', label: wt.name },
+    { label: here ? 'This tab' : 'Open in a new tab', icon: icon(ExternalLink), disabled: here || wt.missing, onClick: () => void openWorktree(repo, wt.path) },
+    { label: 'Reveal in Finder', icon: icon(FolderOpen), disabled: wt.missing, onClick: () => git.showInFolder(wt.path) },
+    { label: 'Open in terminal', icon: icon(SquareTerminal), disabled: wt.missing, onClick: () => git.openInTerminal(wt.path) },
+    SEP,
+    { label: 'Copy path', icon: icon(Copy), onClick: () => git.copyText(wt.path, 'Copied the worktree path') }
+  ]
+  if (wt.isMain) return items
+  items.push({ label: wt.locked ? 'Unlock' : 'Lock (keep it if the folder goes away)', icon: icon(Lock), onClick: () => void setWorktreeLocked(repo, wt, !wt.locked) }, SEP)
+  if (merged && data) items.push({ label: `Remove worktree and ${wt.branch}…`, icon: icon(Trash2), danger: true, onClick: () => void finishWorktree(repo, wt, merged, data) })
+  else if (wt.missing) items.push({ label: 'Forget missing worktrees', icon: icon(Trash2), onClick: () => void forgetMissingWorktrees(repo) })
+  else items.push({ label: 'Remove worktree…', icon: icon(Trash2), danger: true, disabled: here || wt.locked, onClick: () => void removeWorktree(repo, wt) })
+  return items
 }

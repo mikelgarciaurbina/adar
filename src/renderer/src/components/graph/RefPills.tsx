@@ -4,7 +4,7 @@
 
 import { memo, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
-import { Check, CircleDot, Cloud, Monitor, Tag } from 'lucide-react'
+import { Check, CircleDot, Cloud, FolderGit2, Monitor, Tag } from 'lucide-react'
 import { PullChip } from '@renderer/components/pulls/PullChip'
 import { usePullForRefs } from '@renderer/components/pulls/pullStore'
 import { getRefDragData, hasRefDragData, setRefDragData } from '@renderer/lib/dnd'
@@ -24,7 +24,13 @@ function PillIcons({ pill }: { pill: Pill }) {
     default:
       return (
         <>
-          {pill.isHead ? <Check size={ICON} strokeWidth={3} className="gr-pill-check" /> : <Monitor size={ICON} className="gr-pill-icon" />}
+          {pill.isHead ? (
+            <Check size={ICON} strokeWidth={3} className="gr-pill-check" />
+          ) : pill.ref.worktree ? (
+            <FolderGit2 size={ICON} className="gr-pill-icon" />
+          ) : (
+            <Monitor size={ICON} className="gr-pill-icon" />
+          )}
           {pill.remotes.length > 0 && <Cloud size={ICON} className="gr-pill-icon" />}
         </>
       )
