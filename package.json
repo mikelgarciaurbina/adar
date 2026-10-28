@@ -1,7 +1,7 @@
 {
   "name": "adar",
   "productName": "Adar",
-  "version": "0.14.1",
+  "version": "0.14.2",
   "description": "Adar — a fast, visual Git client for any repository (public or private)",
   "author": "Mikel García",
   "license": "MIT",
