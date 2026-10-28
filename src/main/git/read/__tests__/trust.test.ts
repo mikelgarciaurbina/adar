@@ -162,6 +162,18 @@ describe('openRepo trust gate', () => {
     await expect(backend.openRepo(repo)).rejects.toMatchObject({ code: 'UNTRUSTED_REPO' })
   })
 
+  it('opens a repository with per-worktree config turned on but no config.worktree, and still checks that file', async () => {
+    const repo = initTestRepo()
+    commitAll(repo, 'init')
+    // Set by tools such as sparse-checkout; git reads a missing config.worktree as empty, `git config --worktree` fails on it.
+    git(repo, ['config', 'extensions.worktreeConfig', 'true'])
+    expect(existsSync(path.join(repo, '.git', 'config.worktree'))).toBe(false)
+    await expect(backend.openRepo(repo)).resolves.toMatchObject({ path: repo })
+    await backend.closeRepo(repo)
+    git(repo, ['config', '--worktree', 'core.sshCommand', 'touch /tmp/adar-should-not-run'])
+    await expect(backend.openRepo(repo)).rejects.toMatchObject({ code: 'UNTRUSTED_REPO' })
+  })
+
   it('trusts repositories Adar cloned or initialised itself, and the linked worktrees of trusted ones', async () => {
     const base = tempDir()
     const created = await backend.initRepo(path.join(base, 'fresh'))

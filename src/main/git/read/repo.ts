@@ -155,7 +155,8 @@ export async function findCommandRunningConfig(ctx: GitContext, loc: RepoLocatio
   }
   const entries = (await exists(path.join(loc.commonDir, 'config'))) ? await list('--local') : []
   const worktreeConfig = entries.some((e) => e.key.toLowerCase() === 'extensions.worktreeconfig' && /^(true|yes|on|1)?$/i.test(e.value ?? ''))
-  if (worktreeConfig) entries.push(...(await list('--worktree')))
+  // git reads a missing config.worktree as empty, but `git config --worktree --list` fails on it.
+  if (worktreeConfig && (await exists(path.join(loc.gitDir, 'config.worktree')))) entries.push(...(await list('--worktree')))
   const found = commandRunningConfig(entries)
 
   // Hooks git would run (commit, checkout, merge, push...): executable files that are not *.sample.
