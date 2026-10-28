@@ -32,6 +32,8 @@ describe('worktrees', () => {
     const alone = flattenTree(buildTree(refs, [], undefined, { list: [wt('widgets')] }))
     expect(alone.filter((r) => r.kind === 'section' && r.id === 'worktrees')).toMatchObject([{ count: 0 }])
     expect(alone.some((r) => r.kind === 'hint' && r.text === 'No other worktrees')).toBe(true)
+    // Below the branches and pull requests, above tags and stashes.
+    expect(buildTree(refs, [], { state: 'loading' }, { list: [wt('widgets')] }).map((s) => s.id)).toEqual(['local', 'remote', 'pulls', 'worktrees', 'tags', 'stashes'])
     const merged = new Map([['feat/review', { number: 41, provider: 'github', state: 'merged' } as PullRequest]])
     const rows = flattenTree(buildTree(refs, [], undefined, { list: [wt('widgets'), wt('review'), wt('old', { missing: true })], merged }))
     expect(rows.find((r) => r.kind === 'section' && r.id === 'worktrees')).toMatchObject({ title: 'Worktrees', count: 3 })

@@ -9,7 +9,7 @@ import type { Ref, RefsResult, RemoteInfo, Stash, Submodule, Worktree } from '@s
 
 export type SectionId = 'local' | 'worktrees' | 'remote' | 'pulls' | 'tags' | 'stashes' | 'submodules'
 
-export const SECTION_ORDER: readonly SectionId[] = ['local', 'worktrees', 'remote', 'pulls', 'tags', 'stashes', 'submodules']
+export const SECTION_ORDER: readonly SectionId[] = ['local', 'remote', 'pulls', 'worktrees', 'tags', 'stashes', 'submodules']
 
 export const SECTION_TITLES: Record<SectionId, string> = {
   local: 'Local',
@@ -305,20 +305,6 @@ export function buildTree(refs: RefsResult, remotes: readonly RemoteInfo[] = [],
   }
   sections.push({ id: 'local', key: sectionKey('local'), title: SECTION_TITLES.local, children: local, total: refs.branches.length })
 
-  // WORKTREES — always there once loaded; empty (with its + to make one) until the repository has a second one.
-  if (worktrees) {
-    const others = worktrees.list.length > 1 ? worktrees.list : []
-    const children: WorktreeLeaf[] = others.map((w) => ({
-      kind: 'worktree',
-      key: `wt:${w.path}`,
-      label: w.name,
-      worktree: w,
-      merged: (w.branch && !w.isMain && !w.isCurrent && worktrees.merged?.get(w.branch)) || null,
-      search: `${w.name} ${w.branch ?? ''} ${w.path}`.toLowerCase()
-    }))
-    sections.push({ id: 'worktrees', key: sectionKey('worktrees'), title: SECTION_TITLES.worktrees, children, total: children.length })
-  }
-
   // REMOTE — one node per remote (configured remotes + any remote seen in refs).
   const byRemote = new Map<string, Ref[]>()
   const urls = new Map<string, string>()
@@ -351,6 +337,20 @@ export function buildTree(refs: RefsResult, remotes: readonly RemoteInfo[] = [],
 
   // PULL REQUESTS — open ones, as GitHub lists them (GitHub remotes only).
   if (pulls) sections.push(pullsSection(pulls))
+
+  // WORKTREES — always there once loaded; empty (with its + to make one) until the repository has a second one.
+  if (worktrees) {
+    const others = worktrees.list.length > 1 ? worktrees.list : []
+    const children: WorktreeLeaf[] = others.map((w) => ({
+      kind: 'worktree',
+      key: `wt:${w.path}`,
+      label: w.name,
+      worktree: w,
+      merged: (w.branch && !w.isMain && !w.isCurrent && worktrees.merged?.get(w.branch)) || null,
+      search: `${w.name} ${w.branch ?? ''} ${w.path}`.toLowerCase()
+    }))
+    sections.push({ id: 'worktrees', key: sectionKey('worktrees'), title: SECTION_TITLES.worktrees, children, total: children.length })
+  }
 
   // TAGS — flat, natural order.
   const tags: RefLeaf[] = refs.tags
