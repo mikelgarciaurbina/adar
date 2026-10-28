@@ -79,7 +79,7 @@ export interface PullLeaf {
   search: string
 }
 
-/** A worktree of the repository (the Worktrees section, shown once there is more than one). */
+/** A worktree of the repository (the Worktrees section lists them all, this one too, once there is more than one). */
 export interface WorktreeLeaf {
   kind: 'worktree'
   key: string
@@ -305,9 +305,10 @@ export function buildTree(refs: RefsResult, remotes: readonly RemoteInfo[] = [],
   }
   sections.push({ id: 'local', key: sectionKey('local'), title: SECTION_TITLES.local, children: local, total: refs.branches.length })
 
-  // WORKTREES — once the repository has more than one.
-  if (worktrees && worktrees.list.length > 1) {
-    const children: WorktreeLeaf[] = worktrees.list.map((w) => ({
+  // WORKTREES — always there once loaded; empty (with its + to make one) until the repository has a second one.
+  if (worktrees) {
+    const others = worktrees.list.length > 1 ? worktrees.list : []
+    const children: WorktreeLeaf[] = others.map((w) => ({
       kind: 'worktree',
       key: `wt:${w.path}`,
       label: w.name,

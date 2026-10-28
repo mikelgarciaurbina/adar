@@ -27,8 +27,11 @@ describe('worktrees', () => {
     expect(worktreeFolder('C:\\code\\widgets', 'pr/41')).toBe('C:\\code\\widgets-41')
   })
 
-  it('shows a Worktrees section once there is more than one, with merged ones marked', () => {
-    expect(buildTree(refs, [], undefined, { list: [wt('widgets')] }).map((s) => s.id)).not.toContain('worktrees')
+  it('shows the Worktrees section once loaded (empty until there is another one), with merged ones marked', () => {
+    expect(buildTree(refs).map((s) => s.id)).not.toContain('worktrees')
+    const alone = flattenTree(buildTree(refs, [], undefined, { list: [wt('widgets')] }))
+    expect(alone.filter((r) => r.kind === 'section' && r.id === 'worktrees')).toMatchObject([{ count: 0 }])
+    expect(alone.some((r) => r.kind === 'hint' && r.text === 'No other worktrees')).toBe(true)
     const merged = new Map([['feat/review', { number: 41, provider: 'github', state: 'merged' } as PullRequest]])
     const rows = flattenTree(buildTree(refs, [], undefined, { list: [wt('widgets'), wt('review'), wt('old', { missing: true })], merged }))
     expect(rows.find((r) => r.kind === 'section' && r.id === 'worktrees')).toMatchObject({ title: 'Worktrees', count: 3 })
