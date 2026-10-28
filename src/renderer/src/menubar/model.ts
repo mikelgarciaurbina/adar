@@ -2,7 +2,7 @@
 // switcher lists, and which of the loaded commits are incoming (on the upstream, not yet on HEAD).
 
 import { basename } from '@renderer/lib/format'
-import type { AppSettings, Commit, RecentRepo, TabGroupColor, WorkingStatus } from '@shared/types'
+import type { AppSettings, Commit, GroupColor, RecentRepo, WorkingStatus } from '@shared/types'
 
 /** The project the panel shows: the one picked in its switcher, else Adar's active tab, its first tab or the latest recent repository. */
 export function pickProject(pinned: string | null, settings: Pick<AppSettings, 'activeTab' | 'openTabs'>, recent: readonly RecentRepo[]): string | null {
@@ -19,7 +19,7 @@ export interface ProjectSection {
   id: string
   title: string
   /** Group colour (null for the other repositories). */
-  color: TabGroupColor | null
+  color: GroupColor | null
   projects: ProjectEntry[]
 }
 
@@ -51,7 +51,7 @@ export function projectSections(settings: Pick<AppSettings, 'openTabs' | 'tabGro
 }
 
 /** The group a repository belongs to, if any. */
-export function groupOf(settings: Pick<AppSettings, 'tabGroups'>, repo: string): { name: string; color: TabGroupColor } | null {
+export function groupOf(settings: Pick<AppSettings, 'tabGroups'>, repo: string): { name: string; color: GroupColor } | null {
   const g = settings.tabGroups.find((x) => x.repos.includes(repo))
   return g ? { name: g.name, color: g.color } : null
 }

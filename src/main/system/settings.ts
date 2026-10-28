@@ -6,11 +6,23 @@ import { randomBytes } from 'node:crypto'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import type { HostingServer } from '@shared/hosting'
-import { DEFAULT_SETTINGS, LEGACY_GROUP_COLORS, TAB_GROUP_COLORS, type AppSettings, type RecentRepo, type TabGroup, type TabGroupColor } from '@shared/types'
+import { normalizeHexColor } from '@shared/groupColor'
+import {
+  DEFAULT_SETTINGS,
+  LEGACY_GROUP_COLORS,
+  TAB_GROUP_COLORS,
+  type AppSettings,
+  type CustomGroupColor,
+  type GroupColor,
+  type RecentRepo,
+  type TabGroup,
+  type TabGroupColor
+} from '@shared/types'
 import { UNRECORDED_VERSION } from '@shared/update'
 
 export const MAX_RECENTS = 30
 export const MAX_TAB_GROUPS = 100
+export const MAX_RECENT_GROUP_COLORS = 8
 const MAX_GROUP_NAME = 80
 /** Trusted repositories kept (most recently trusted first). */
 export const MAX_TRUSTED = 1000
@@ -29,14 +41,22 @@ function isPlainObject(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v)
 }
 
-/** Well-formed groups only: known colours, absolute paths, each repository in one group, unique ids. */
-/** A saved group colour: a current one, an older name mapped to its Basoa colour, or mist. */
-function groupColor(raw: unknown): TabGroupColor {
+/** A saved group colour: a current one, a custom #rrggbb, an older name mapped to its Basoa colour, or mist. */
+function groupColor(raw: unknown): GroupColor {
   if (typeof raw !== 'string') return 'mist'
   if ((TAB_GROUP_COLORS as readonly string[]).includes(raw)) return raw as TabGroupColor
+  if (raw.startsWith('#')) return normalizeHexColor(raw) ?? 'mist'
   return Object.hasOwn(LEGACY_GROUP_COLORS, raw) ? LEGACY_GROUP_COLORS[raw] : 'mist'
 }
 
+/** Recent custom group colours: well-formed, without repeats, at most MAX_RECENT_GROUP_COLORS. */
+function sanitizeRecentGroupColors(raw: unknown): CustomGroupColor[] | null {
+  if (!Array.isArray(raw)) return null
+  const colors = raw.map(normalizeHexColor).filter((c): c is CustomGroupColor => c !== null)
+  return [...new Set(colors)].slice(0, MAX_RECENT_GROUP_COLORS)
+}
+
+/** Well-formed groups only: known colours, absolute paths, each repository in one group, unique ids. */
 export function sanitizeTabGroups(raw: unknown): TabGroup[] | null {
   if (!Array.isArray(raw)) return null
   const out: TabGroup[] = []
@@ -117,6 +137,11 @@ export function sanitizeSettings(base: AppSettings, rawPatch: unknown): AppSetti
     if (key === 'tabGroups') {
       const groups = sanitizeTabGroups(value)
       if (groups) target[key] = groups
+      continue
+    }
+    if (key === 'recentGroupColors') {
+      const colors = sanitizeRecentGroupColors(value)
+      if (colors) target[key] = colors
       continue
     }
     if (key === 'bitbucketServers' || key === 'gitlabServers') {

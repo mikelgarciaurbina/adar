@@ -11,6 +11,7 @@ import { toast } from '@renderer/components/common/toast'
 import { getCommand } from '@renderer/commands'
 import { laneColor, laneForString, laneInk } from '@renderer/lib/colors'
 import { relativeTime } from '@renderer/lib/format'
+import { groupLine } from '@renderer/lib/groupColors'
 import { shortcutLabel } from '@renderer/lib/keys'
 import { useApp } from '@renderer/store/appStore'
 import { summarizeList } from '@renderer/lib/format'
@@ -378,7 +379,7 @@ function GroupList({ groups, homeDir }: { groups: TabGroup[]; homeDir: string | 
                 ])
               }
             >
-              <span className="wl-recent-icon" style={{ color: `var(--group-${g.color})` }}>
+              <span className="wl-recent-icon" style={{ color: groupLine(g.color) }}>
                 {opening === g.id ? <span className="ui-spinner ui-spinner-sm" /> : <Layers size={16} />}
               </span>
               <span className="wl-recent-text">

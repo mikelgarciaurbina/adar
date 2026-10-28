@@ -14,7 +14,9 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
   `hosting.ts` (provider-neutral pull request types, GitHub's GraphQL query and the pure mapping of its answers),
   `bitbucket.ts` / `gitlab.ts` (pure mapping of Bitbucket Cloud and Data Center answers / of GitLab's merge requests),
   `remoteUrl.ts` (remote URL → web page, provider; `hostingOf`/`pickHostingRemote` find GitHub, GitLab — gitlab.com,
-  gitlab.* hosts and signed-in instances —, bitbucket.org and Data Center remotes).
+  gitlab.* hosts and signed-in instances —, bitbucket.org and Data Center remotes), `groupColor.ts` (custom tab group
+  colours: hex parsing, HSV for the picker, and each theme's version of a colour — same hue and chroma in OKLCH, lightness
+  moved into the range the Basoa group colours use, so names stay readable).
 - `src/main/` — Electron main process.
   - `index.ts` window, native menu, IPC (`dispatch.ts`), dev/e2e hooks; `quitGuard.ts` asks the renderer before quitting.
   - `backend.ts` composes the read side (`git/read/*`, parsers in `git/parsers/*`), the write side (`git/write/*`) and
@@ -76,7 +78,9 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
   - `styles/theme.css` — design tokens: the Basoa palette of the website mapped onto the app's names (dark = Gaua,
     light = Eguna). `--accent` is fern for lines, icons and text (deep fern on light surfaces); fills such as primary
     buttons use `--accent-fill` with `--accent-text` on top. Graph lanes are `--lane-1…6` (fern, moss, sea, heather,
-    ember, sun) with `-ink` variants for text on their wash; tab groups use the same palette plus bone and mist.
+    ember, sun) with `-ink` variants for text on their wash; tab groups use the same palette plus bone and mist, or a
+    custom #rrggbb drawn through `lib/groupColors.ts` (`groupLine`/`groupInk`: `light-dark()` of the two theme versions;
+    the picker is `components/common/ColourPicker.tsx`, the group's popover `components/layout/GroupColourPopover.tsx`).
     ALWAYS use CSS variables; dark and light themes must both work.
   - `assets/fonts/` — Geist, Geist Mono and Instrument Serif italic (OFL, same files as `site/src/fonts`), bundled so
     the app makes no font requests. Instrument Serif is only for the word "adar" on the welcome screen.

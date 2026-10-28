@@ -17,11 +17,11 @@ import {
   type Commit,
   type CommitSearch,
   type DiffTarget,
+  type GroupColor,
   type RecentRepo,
   type RefsResult,
   type RepoInfo,
   type TabGroup,
-  type TabGroupColor,
   type WorkingStatus
 } from '@shared/types'
 import { arrangeTabs, newGroupId, nextGroupColor, syncGroupOrder, withMembership } from '@renderer/lib/tabGroups'
@@ -173,7 +173,7 @@ export interface AppState {
 
   // tab groups (settings.tabGroups; groups outlive their tabs)
   /** Group these repositories (taken out of any other group); returns the new group's id. */
-  createGroup(paths: string[], opts?: { name?: string; color?: TabGroupColor }): string
+  createGroup(paths: string[], opts?: { name?: string; color?: GroupColor }): string
   /** Move a repository into a group, or out of its group (null). */
   setTabGroup(path: string, groupId: string | null): void
   updateGroup(id: string, patch: Partial<Pick<TabGroup, 'name' | 'color' | 'collapsed'>>): void

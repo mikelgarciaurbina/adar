@@ -7,7 +7,9 @@
 
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { create } from 'zustand'
+import type { CustomGroupColor } from '@shared/types'
 import { Button } from './Button'
+import { ColourPicker, HexField } from './ColourPicker'
 import { Modal } from './Modal'
 
 export type FormField =
@@ -40,6 +42,13 @@ export type FormField =
       label: string
       options: Array<{ value: string; label: string; color: string; note?: string }>
       defaultValue?: string
+      /** A last swatch that opens a colour picker: the value is then the picked #rrggbb. */
+      custom?: {
+        label: string
+        initial: CustomGroupColor
+        note?: (color: CustomGroupColor) => string
+        preview?: (color: CustomGroupColor, values: Record<string, string | boolean>) => ReactNode
+      }
     }
 
 export interface FormOptions {
@@ -201,6 +210,7 @@ function FormDialog({ req }: { req: Extract<DialogRequest, { kind: 'form' }> }) 
     return v
   })
   const [touched, setTouched] = useState(false)
+  const [customDrafts, setCustomDrafts] = useState<Record<string, CustomGroupColor>>({})
   const firstInput = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null)
 
   useEffect(() => {
@@ -296,7 +306,16 @@ function FormDialog({ req }: { req: Extract<DialogRequest, { kind: 'form' }> }) 
                 </label>
               )
             case 'swatches': {
-              const picked = f.options.find((o) => o.value === values[f.name])
+              const value = String(values[f.name])
+              const picked = f.options.find((o) => o.value === value)
+              const custom = f.custom
+              const isCustom = !!custom && value.startsWith('#')
+              // The custom colour is remembered while another swatch is picked.
+              const customColor = (isCustom ? value : (customDrafts[f.name] ?? custom?.initial)) as CustomGroupColor
+              const setCustom = (c: CustomGroupColor) => {
+                setCustomDrafts((d) => ({ ...d, [f.name]: c }))
+                setValues((v) => ({ ...v, [f.name]: c }))
+              }
               return (
                 <fieldset key={f.name} className="ui-field ui-swatch-field">
                   <legend className="ui-label">{f.label}</legend>
@@ -315,12 +334,38 @@ function FormDialog({ req }: { req: Extract<DialogRequest, { kind: 'form' }> }) 
                         onChange={() => setValues((v) => ({ ...v, [f.name]: o.value }))}
                       />
                     ))}
+                    {custom && (
+                      <input
+                        type="radio"
+                        className="ui-swatch ui-swatch-custom"
+                        name={`dialog-${req.id}-${f.name}`}
+                        value="custom"
+                        aria-label={isCustom ? `${custom.label}, ${customColor.toUpperCase()}` : custom.label}
+                        title={custom.label}
+                        checked={isCustom}
+                        style={{ '--swatch': customColor } as React.CSSProperties}
+                        onChange={() => setCustom(customColor)}
+                      />
+                    )}
                   </div>
-                  {picked && (
-                    <small className="ui-hint">
-                      {picked.label}
-                      {picked.note ? ` · ${picked.note}` : ''}
-                    </small>
+                  {isCustom && (
+                    <div className="ui-swatch-panel">
+                      <ColourPicker className="ui-colour-compact" value={customColor} onChange={setCustom} />
+                      <div className="ui-swatch-side">
+                        <HexField value={customColor} onChange={setCustom} />
+                        {custom.preview?.(customColor, values)}
+                      </div>
+                    </div>
+                  )}
+                  {isCustom ? (
+                    <small className="ui-hint">{custom.note?.(customColor) ?? customColor.toUpperCase()}</small>
+                  ) : (
+                    picked && (
+                      <small className="ui-hint">
+                        {picked.label}
+                        {picked.note ? ` · ${picked.note}` : ''}
+                      </small>
+                    )
                   )}
                 </fieldset>
               )

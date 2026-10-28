@@ -36,7 +36,8 @@ their pipelines, approvals and GitLab's merge status · clean up branches in bul
 (squash-merged pull requests included) or gone from the remote, and merged branches on the remote, with undo ·
 worktrees: a section in the left panel, new worktrees for a branch or a pull request opened as tabs in the same group,
 a branch checked out in another worktree opens that worktree instead of failing, and once its pull request is merged
-the worktree and its branch go in one step.
+the worktree and its branch go in one step · any colour for a tab group (a picker or a hex value), drawn lighter in the
+night theme and deeper in the day theme so its name stays readable.
 
 ---
 
@@ -108,8 +109,6 @@ Windows and Linux builds shipped in 0.6.0 as a beta. Still to do:
 - [ ] Custom themes (theme files), font and density options, high-contrast theme.
 - [ ] Workspaces: a dashboard for a tab group (branch, changes and ahead/behind of each repository) with batch pull,
   and favourites. (Tab groups and Fetch All for a group are done.)
-- [ ] Tab groups: any colour for a group (colour picker or hex value) besides the eight Basoa colours, with the
-  label's colour adjusted so it stays readable in both themes. *(good first issue)*
 - [ ] App menu: once the `adar` command is installed, show **Uninstall Command Line Tool…** instead of *Install…*
   (rebuild the menu after installing or uninstalling, and check at startup). Today uninstalling is only in
   Settings → Integrations and the command palette. *(good first issue)*

@@ -444,6 +444,10 @@ export interface RecentRepo {
 /** Colours a tab group can take: the Basoa lanes plus bone and mist (theme tokens --group-<colour>). */
 export const TAB_GROUP_COLORS = ['fern', 'moss', 'sea', 'heather', 'ember', 'sun', 'bone', 'mist'] as const
 export type TabGroupColor = (typeof TAB_GROUP_COLORS)[number]
+/** A colour picked by hand, as lower-case #rrggbb (each theme draws it lighter or deeper: shared/groupColor.ts). */
+export type CustomGroupColor = `#${string}`
+/** A tab group's colour: a Basoa one by name, or a custom one. */
+export type GroupColor = TabGroupColor | CustomGroupColor
 
 /** Group colours saved by Adar 0.4 and earlier, mapped to the closest Basoa colour. */
 export const LEGACY_GROUP_COLORS: Readonly<Record<string, TabGroupColor>> = {
@@ -462,7 +466,7 @@ export const LEGACY_GROUP_COLORS: Readonly<Record<string, TabGroupColor>> = {
 export interface TabGroup {
   id: string
   name: string
-  color: TabGroupColor
+  color: GroupColor
   /** Repository paths (as opened), in tab order. A repository belongs to one group at most; the group is
    *  kept when its tabs are closed, so the whole set can be reopened at once. */
   repos: string[]
@@ -506,6 +510,8 @@ export interface AppSettings {
   activeTab: string | null
   /** Tab groups, also when none of their tabs is open. */
   tabGroups: TabGroup[]
+  /** Custom group colours picked lately, newest first (the colour picker's Recent row). */
+  recentGroupColors: CustomGroupColor[]
   /** Folders whose "group these repositories?" suggestion the user turned off. */
   groupSuggestionsDismissed: string[]
   leftPanelWidth: number
@@ -557,6 +563,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   openTabs: [],
   activeTab: null,
   tabGroups: [],
+  recentGroupColors: [],
   groupSuggestionsDismissed: [],
   leftPanelWidth: 260,
   rightPanelWidth: 380,

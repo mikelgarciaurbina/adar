@@ -10,6 +10,7 @@ import { DEFAULT_SETTINGS, type AppSettings, type Commit, type PullMode, type Re
 import { api, menuBar, onAdarEvent } from '@renderer/api/client'
 import { badgeColorsFor, laneColor, laneForString, laneInk } from '@renderer/lib/colors'
 import { basename, dirname, pluralize } from '@renderer/lib/format'
+import { groupInk, groupLine } from '@renderer/lib/groupColors'
 import { computeGraph } from '@renderer/components/graph/layout'
 import { buildDisplayRows, hasWorkingChanges, lanesInRange, type DisplayModel, type DisplayRow } from '@renderer/components/graph/model'
 import { colorOf, graphContentWidth } from '@renderer/components/graph/geometry'
@@ -305,8 +306,8 @@ function ProjectButton({ repo, settings, open, onClick }: { repo: string | null;
       <span className="mb-project-text">
         <span className="mb-project-name">{repo ? basename(repo) : 'Adar'}</span>
         {group ? (
-          <span className="mb-project-group" style={{ color: `var(--group-${group.color}-ink)` }}>
-            <span className="mb-dot" style={{ background: `var(--group-${group.color})` }} />
+          <span className="mb-project-group" style={{ color: groupInk(group.color) }}>
+            <span className="mb-dot" style={{ background: groupLine(group.color) }} />
             {group.name}
           </span>
         ) : (
@@ -551,8 +552,8 @@ function Switcher({ settings, recent, pinned, current, onChoose, onClose }: Swit
         )}
         {sections.map((section) => (
           <div key={section.id} role="group" aria-label={section.title}>
-            <div className="mb-section" role="presentation" style={section.color ? { color: `var(--group-${section.color}-ink)` } : undefined}>
-              {section.color && <span className="mb-dot" style={{ background: `var(--group-${section.color})` }} />}
+            <div className="mb-section" role="presentation" style={section.color ? { color: groupInk(section.color) } : undefined}>
+              {section.color && <span className="mb-dot" style={{ background: groupLine(section.color) }} />}
               {section.title}
             </div>
             {section.projects.map((p) => {

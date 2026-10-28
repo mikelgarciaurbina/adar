@@ -6,15 +6,18 @@ import { flushSync } from 'react-dom'
 import { ChevronDown, CircleArrowUp, Copy, Download, FolderGit2, FolderInput, FolderOpen, FolderPlus, GitBranch, Layers, Plus, RefreshCw, SquareTerminal, X } from 'lucide-react'
 import { isElectron, isMac } from '@renderer/api/client'
 import * as git from '@renderer/actions/git'
-import { closeGroup, fetchGroup, GROUP_COLOR_LABELS, newGroup, openGroup, renameGroup } from '@renderer/actions/groups'
+import { closeGroup, fetchGroup, newGroup, openGroup, renameGroup, setGroupColor } from '@renderer/actions/groups'
 import { showContextMenu, showMenuBelow, type MenuItem } from '@renderer/components/common/ContextMenu'
 import { getCommand } from '@renderer/commands'
 import { useUpdates } from '@renderer/components/update/updateStore'
+import { customColorsInUse, GROUP_COLOR_LABELS, groupLine } from '@renderer/lib/groupColors'
 import { isMod, shortcutLabel } from '@renderer/lib/keys'
 import { dropPlacement, groupOf, tabSegments } from '@renderer/lib/tabGroups'
 import { useApp } from '@renderer/store/appStore'
-import { TAB_GROUP_COLORS, type TabGroup } from '@shared/types'
+import { TAB_GROUP_COLORS, type GroupColor, type TabGroup } from '@shared/types'
 import { pendingUpdateVersion, tabHints } from './chrome'
+import { GroupColourPopover } from './GroupColourPopover'
+import { groupStyle } from './GroupTray'
 import { useWindowFullscreen } from './hooks'
 import './layout.css'
 
@@ -33,12 +36,7 @@ function shortcutOf(id: string): string | undefined {
 
 /** Coloured dot for menus and lists. */
 export function GroupDot({ group }: { group: Pick<TabGroup, 'color'> }) {
-  return <span className="tb-group-dot" style={{ background: `var(--group-${group.color})` }} />
-}
-
-/** CSS variables that colour a group's tray, label and dot. */
-function groupStyle(group: Pick<TabGroup, 'color'>): React.CSSProperties {
-  return { '--tb-group': `var(--group-${group.color})`, '--tb-group-ink': `var(--group-${group.color}-ink)` } as React.CSSProperties
+  return <span className="tb-group-dot" style={{ background: groupLine(group.color) }} />
 }
 
 /** "Open Group" entries (one per saved group), or nothing when there are no groups. */
@@ -116,6 +114,10 @@ export function TabBar() {
   const [drop, setDrop] = useState<{ index: number; after: boolean; chip?: string } | null>(null)
   /** Group chip under a dragged tab (dropping there joins the group). */
   const [chipDrop, setChipDrop] = useState<string | null>(null)
+  /** A group's colour picker (under its label), and the colour it shows the group in meanwhile. */
+  const [colourEdit, setColourEdit] = useState<{ id: string; anchor: DOMRect } | null>(null)
+  const [colourPreview, setColourPreview] = useState<{ id: string; color: GroupColor } | null>(null)
+  const colourGroup = colourEdit ? (groups.find((g) => g.id === colourEdit.id) ?? null) : null
   const dragFrom = useRef<number | null>(null)
 
   // Keep the active tab visible.
@@ -276,22 +278,40 @@ export function TabBar() {
   const onChipContextMenu = (e: React.MouseEvent, group: TabGroup) => {
     const st = useApp.getState()
     const openCount = tabs.filter((t) => group.repos.includes(t.path)).length
+    const anchor = e.currentTarget.getBoundingClientRect()
+    // Custom colours groups use, by hex: this group's checked, another's with that group's name.
+    const custom: MenuItem[] = customColorsInUse(groups).map(({ color }) => {
+      const other = groups.find((g) => g.id !== group.id && g.color === color)
+      return {
+        label: color.toUpperCase(),
+        icon: <GroupDot group={{ color }} />,
+        checked: color === group.color,
+        shortcut: other ? other.name || 'Unnamed group' : undefined,
+        onClick: () => setGroupColor(group.id, color)
+      }
+    })
     showContextMenu(e, [
       { type: 'header', label: group.name || 'Unnamed group' },
       { label: 'Rename Group…', onClick: () => void renameGroup(group.id) },
       {
         label: 'Colour',
-        submenu: TAB_GROUP_COLORS.map((c) => {
-          const other = groups.find((g) => g.id !== group.id && g.color === c)
-          return {
-            label: GROUP_COLOR_LABELS[c],
-            icon: <GroupDot group={{ color: c }} />,
-            checked: c === group.color,
-            // Shows which other group already uses the colour.
-            shortcut: other ? other.name || 'Unnamed group' : undefined,
-            onClick: () => st.updateGroup(group.id, { color: c })
-          }
-        })
+        submenu: [
+          ...TAB_GROUP_COLORS.map((c): MenuItem => {
+            const other = groups.find((g) => g.id !== group.id && g.color === c)
+            return {
+              label: GROUP_COLOR_LABELS[c],
+              icon: <GroupDot group={{ color: c }} />,
+              checked: c === group.color,
+              // Shows which other group already uses the colour.
+              shortcut: other ? other.name || 'Unnamed group' : undefined,
+              onClick: () => setGroupColor(group.id, c)
+            }
+          }),
+          { type: 'separator' },
+          ...custom,
+          ...(custom.length ? [{ type: 'separator' } as const] : []),
+          { label: 'Custom Colour…', icon: <span className="tb-group-dot tb-group-dot-custom" />, onClick: () => setColourEdit({ id: group.id, anchor }) }
+        ]
       },
       { label: group.collapsed ? 'Expand' : 'Collapse', onClick: () => st.updateGroup(group.id, { collapsed: !group.collapsed }) },
       ...(openCount < group.repos.length ? [{ label: 'Open All Repositories', onClick: () => void openGroup(group.id) }] : []),
@@ -421,7 +441,7 @@ export function TabBar() {
               key={`group:${group.id}`}
               className={`tb-group${group.collapsed ? ' tb-group-collapsed' : ''}${chipDrop === group.id ? ' tb-group-drop' : ''}${drop?.chip === group.id ? ' tb-drop-before' : ''}`}
               style={{
-                ...groupStyle(group),
+                ...groupStyle(colourPreview?.id === group.id ? colourPreview.color : group.color),
                 // The tray shares the bar like its tabs would on their own (its tabs split the tray).
                 flex: shown.length ? `${shown.length} 1 ${shown.length * TAB_BASIS_W + CHIP_BASIS_W}px` : 'none',
                 maxWidth: shown.length ? shown.length * TAB_MAX_W + CHIP_MAX_W : undefined
@@ -475,6 +495,15 @@ export function TabBar() {
           <CircleArrowUp size={12} />
           <span>Update</span>
         </button>
+      )}
+      {colourEdit && colourGroup && (
+        <GroupColourPopover
+          key={colourGroup.id}
+          group={colourGroup}
+          anchor={colourEdit.anchor}
+          onPreview={(color) => setColourPreview(color ? { id: colourGroup.id, color } : null)}
+          onClose={() => setColourEdit(null)}
+        />
       )}
     </div>
   )

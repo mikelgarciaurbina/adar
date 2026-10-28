@@ -259,6 +259,169 @@
   height: 10px;
   border-radius: 50%;
 }
+.tb-group-dot-custom {
+  background: conic-gradient(from 90deg, var(--lane-5), var(--lane-6), var(--lane-1), var(--lane-2), var(--lane-3), var(--lane-4), var(--lane-5));
+}
+
+/* A group's colour picker, under its label. */
+.tb-colour {
+  -webkit-app-region: no-drag;
+  position: fixed;
+  z-index: 1500;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 14px;
+  border-radius: var(--radius-lg);
+  background: var(--bg-2);
+  box-shadow: var(--shadow-2);
+  box-sizing: border-box;
+}
+.tb-colour-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.tb-colour-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--text-0);
+}
+.tb-colour-kind,
+.tb-colour-hex,
+.tb-colour-picked {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+}
+.tb-colour-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 2px;
+}
+.tb-colour-swatch {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--swatch);
+  cursor: pointer;
+  transition: box-shadow 0.12s var(--ease);
+}
+.tb-colour-swatch:hover {
+  box-shadow: 0 0 0 2px var(--bg-2), 0 0 0 3px color-mix(in srgb, var(--swatch) 60%, transparent);
+}
+.tb-colour-swatch-on,
+.tb-colour-swatch-on:hover {
+  box-shadow: 0 0 0 2px var(--bg-2), 0 0 0 4px var(--swatch);
+}
+.tb-colour-swatch:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 4px;
+}
+.tb-colour-hexrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.tb-colour-hexrow .ui-colour-hex {
+  flex: 1;
+}
+.tb-colour-sample {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+.tb-colour-section {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.tb-colour-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+.tb-colour-themes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+/* Each preview carries its own data-theme, so it shows the group as that theme draws it. */
+.tb-colour-theme {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 8px 6px;
+  border-radius: var(--radius);
+  background: var(--chrome);
+  box-shadow: inset 0 0 0 1px var(--border);
+  color: var(--text-1);
+}
+.tb-colour-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.tb-colour-picked {
+  flex: 1;
+}
+
+/* A group's label as the tab bar draws it (colour picker and New tab group previews). */
+.tb-colour-tray {
+  display: inline-flex;
+  align-items: flex-end;
+  align-self: flex-start;
+  max-width: 100%;
+  height: 28px;
+  padding: 0 3px 0 2px;
+  border-radius: 9px 9px 0 0;
+  background: color-mix(in srgb, var(--tb-group) 9%, transparent);
+  box-shadow: inset 0 2px 0 var(--tb-group);
+  box-sizing: border-box;
+}
+.tb-colour-chip {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  height: 22px;
+  margin-top: 2px;
+  padding: 0 7px;
+  color: var(--tb-group-ink);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+.tb-colour-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tb-colour-tab {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  margin-bottom: -1px;
+  padding: 0 9px;
+  border-radius: 7px 7px 0 0;
+  background: var(--bg-1);
+  color: var(--text-0);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+}
 
 .tb-tab-add {
   -webkit-app-region: no-drag;

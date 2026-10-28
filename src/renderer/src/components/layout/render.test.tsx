@@ -160,6 +160,11 @@ describe('chrome render smoke tests', () => {
     expect(openGroup && 'submenu' in openGroup && openGroup.submenu?.map((x) => ('label' in x ? x.label : ''))).toEqual(['Proj (3)'])
     seed({ tabs: [], activePath: null })
     expect(renderToStaticMarkup(<Welcome />)).toContain('api, app and landing')
+
+    // A custom colour follows the theme: Eguna's version first, Gaua's second.
+    seed({ tabs: [api, app], activePath: app.path, settings: { ...DEFAULT_SETTINGS, tabGroups: [{ ...group, color: '#e8559a' }] } })
+    html = renderToStaticMarkup(<TabBar />)
+    expect(html).toContain('--tb-group:light-dark(#e75499, #ff73b1);--tb-group-ink:light-dark(#ab1167, #ff73b1)')
   })
 
   it('renders the toolbar with badges, busy state and labels', () => {

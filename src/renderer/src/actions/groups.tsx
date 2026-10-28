@@ -5,28 +5,20 @@
 import { api } from '@renderer/api/client'
 import { choose, form, prompt } from '@renderer/components/common/dialogs'
 import { toast } from '@renderer/components/common/toast'
+import { GroupTrayPreview } from '@renderer/components/layout/GroupTray'
 import { summarizeList } from '@renderer/lib/format'
+import { GROUP_COLOR_LABELS, rememberGroupColor } from '@renderer/lib/groupColors'
 import { folderName, groupForFolder, groupOf, groupSuggestion, nextGroupColor, parentFolder } from '@renderer/lib/tabGroups'
 import { useApp } from '@renderer/store/appStore'
 import { AdarError } from '@shared/errors'
-import { TAB_GROUP_COLORS, type FoundRepo, type TabGroupColor } from '@shared/types'
+import { isCustomGroupColor, normalizeHexColor } from '@shared/groupColor'
+import { TAB_GROUP_COLORS, type FoundRepo, type GroupColor } from '@shared/types'
 import { fetchAll, initRepoAt, trustAndOpen } from './git'
 
 const store = () => useApp.getState()
 
 /** A folder with more repositories than this is a code folder (~/Projects), not one project. */
 const MAX_PROJECT_REPOS = 8
-
-export const GROUP_COLOR_LABELS: Record<TabGroupColor, string> = {
-  fern: 'Fern',
-  moss: 'Moss',
-  sea: 'Sea',
-  heather: 'Heather',
-  ember: 'Ember',
-  sun: 'Sun',
-  bone: 'Bone',
-  mist: 'Mist'
-}
 
 /**
  * Open one repository of a group: asks to trust it if needed, but none of openRepoAt's fallbacks for
@@ -118,13 +110,33 @@ export async function newGroup(paths: string[]): Promise<string | null> {
           color: `var(--group-${c})`,
           note: usedBy.has(c) ? `used by ${usedBy.get(c)}` : undefined
         })),
-        defaultValue: nextGroupColor(groups)
+        defaultValue: nextGroupColor(groups),
+        custom: {
+          label: 'Custom colour',
+          initial: store().settings.recentGroupColors[0] ?? '#e8559a',
+          note: (c) => `Custom · ${c.toUpperCase()}${usedBy.has(c) ? ` · used by ${usedBy.get(c)}` : ''} · lighter in Gaua, deeper in Eguna`,
+          preview: (c, values) => <GroupTrayPreview name={String(values.name)} color={c} />
+        }
       }
     ],
     confirmLabel: 'Create group'
   })
   if (!res) return null
-  return store().createGroup(paths, { name: String(res.name), color: String(res.color) as TabGroupColor })
+  const color: GroupColor = normalizeHexColor(res.color) ?? (TAB_GROUP_COLORS.find((c) => c === res.color) || nextGroupColor(groups))
+  const id = store().createGroup(paths, { name: String(res.name), color })
+  rememberColor(color)
+  return id
+}
+
+/** Give a group another colour (a custom one also goes to the picker's Recent row). */
+export function setGroupColor(id: string, color: GroupColor): void {
+  store().updateGroup(id, { color })
+  rememberColor(color)
+}
+
+function rememberColor(color: GroupColor): void {
+  if (!isCustomGroupColor(color)) return
+  void store().updateSettings({ recentGroupColors: rememberGroupColor(store().settings.recentGroupColors, color) })
 }
 
 /** Fetch every open repository of a group (all remotes) side by side, with one toast for the lot. */

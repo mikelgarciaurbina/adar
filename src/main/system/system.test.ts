@@ -267,10 +267,17 @@ describe('settings', () => {
       tabGroups: [
         { id: 'a', name: 'A', color: 'ember', repos: ['/w/a'] },
         { id: 'b', name: 'B', color: 'purple', repos: ['/w/b'] },
-        { id: 'c', name: 'C', color: 'constructor', repos: ['/w/c'] }
-      ]
+        { id: 'c', name: 'C', color: 'constructor', repos: ['/w/c'] },
+        { id: 'd', name: 'D', color: '#E8559A', repos: ['/w/d'] },
+        { id: 'e', name: 'E', color: '#E59', repos: ['/w/e'] },
+        { id: 'f', name: 'F', color: '#nothex', repos: ['/w/f'] }
+      ],
+      recentGroupColors: ['#00B8C4', 'nope', '#00b8c4', '#123', 7]
     })
-    expect(kept.tabGroups.map((g) => g.color)).toEqual(['ember', 'heather', 'mist'])
+    // Custom colours are kept as lower-case #rrggbb; anything else falls back to mist.
+    expect(kept.tabGroups.map((g) => g.color)).toEqual(['ember', 'heather', 'mist', '#e8559a', '#ee5599', 'mist'])
+    expect(kept.recentGroupColors).toEqual(['#00b8c4', '#112233'])
+    expect(sanitizeSettings(DEFAULT_SETTINGS, { recentGroupColors: 'x' }).recentGroupColors).toEqual([])
     expect(s.groupSuggestionsDismissed).toEqual([]) // not all strings: ignored
     expect(sanitizeSettings(DEFAULT_SETTINGS, { tabGroups: 'x' }).tabGroups).toEqual([])
   })
