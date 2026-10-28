@@ -293,7 +293,7 @@
   color: var(--text-0);
 }
 .tb-colour-kind,
-.tb-colour-hex,
+.tb-colour-cap,
 .tb-colour-picked {
   font-family: var(--font-mono);
   font-size: var(--fs-xs);
@@ -355,7 +355,8 @@
 }
 .tb-colour-themes {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  /* minmax(0, …): a long group name is cut short instead of widening the picker. */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 8px;
 }
 /* Each preview carries its own data-theme, so it shows the group as that theme draws it. */
@@ -365,9 +366,16 @@
   gap: 6px;
   padding: 8px 8px 6px;
   border-radius: var(--radius);
+  min-width: 0;
   background: var(--chrome);
   box-shadow: inset 0 0 0 1px var(--border);
   color: var(--text-1);
+}
+.tb-colour-cap {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  white-space: nowrap;
 }
 .tb-colour-actions {
   display: flex;
@@ -383,6 +391,7 @@
   display: inline-flex;
   align-items: flex-end;
   align-self: flex-start;
+  min-width: 0;
   max-width: 100%;
   height: 28px;
   padding: 0 3px 0 2px;
@@ -411,6 +420,7 @@
   white-space: nowrap;
 }
 .tb-colour-tab {
+  flex: none;
   display: inline-flex;
   align-items: center;
   height: 24px;

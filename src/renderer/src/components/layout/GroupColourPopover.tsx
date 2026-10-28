@@ -145,12 +145,18 @@ export function GroupColourPopover(props: { group: TabGroup; anchor: DOMRect; on
         <span className="tb-colour-label">In each theme</span>
         <div className="tb-colour-themes">
           <div className="tb-colour-theme" data-theme="dark">
-            <GroupTrayPreview name={name} color={color} tab="Gaua" />
-            {variants && <span className="tb-colour-hex">{variants.night.toUpperCase()}</span>}
+            <GroupTrayPreview name={name} color={color} />
+            <span className="tb-colour-cap">
+              <span>Gaua</span>
+              {variants && <span>{variants.night.toUpperCase()}</span>}
+            </span>
           </div>
           <div className="tb-colour-theme" data-theme="light">
-            <GroupTrayPreview name={name} color={color} tab="Eguna" />
-            {variants && <span className="tb-colour-hex">{variants.day.toUpperCase()}</span>}
+            <GroupTrayPreview name={name} color={color} />
+            <span className="tb-colour-cap">
+              <span>Eguna</span>
+              {variants && <span>{variants.day.toUpperCase()}</span>}
+            </span>
           </div>
         </div>
       </div>
