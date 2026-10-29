@@ -401,21 +401,28 @@ export interface FlattenOptions {
   filter?: string
   /** Sections the user collapsed (ignored while filtering). */
   collapsedSections?: ReadonlySet<SectionId>
-  /** Folder/remote keys whose expansion differs from their default. */
-  toggled?: ReadonlySet<string>
+  /** Folders and remotes the user opened or closed. */
+  folders?: FolderChoices
   /** While filtering: container/section keys the user explicitly collapsed. */
   filterCollapsed?: ReadonlySet<string>
 }
 
 const EMPTY_SET: ReadonlySet<string> = new Set()
+const NO_CHOICES: FolderChoices = new Map()
+
+/**
+ * Folders and remotes the user opened (true) or closed (false), by key. They stay that way whichever branch is
+ * checked out; the others follow defaultExpanded.
+ */
+export type FolderChoices = ReadonlyMap<string, boolean>
 
 /** Default expansion: remotes open, folders closed unless they contain the checked-out branch. */
 export function defaultExpanded(node: ContainerNode): boolean {
   return node.kind === 'remote' ? true : node.containsHead
 }
 
-export function isContainerExpanded(node: ContainerNode, toggled: ReadonlySet<string>): boolean {
-  return defaultExpanded(node) !== toggled.has(node.key)
+export function isContainerExpanded(node: ContainerNode, folders: FolderChoices): boolean {
+  return folders.get(node.key) ?? defaultExpanded(node)
 }
 
 export function normalizeFilter(filter: string | undefined): string {
@@ -424,7 +431,7 @@ export function normalizeFilter(filter: string | undefined): string {
 
 interface Ctx {
   q: string
-  toggled: ReadonlySet<string>
+  folders: FolderChoices
   filterCollapsed: ReadonlySet<string>
   section: SectionId
 }
@@ -445,7 +452,7 @@ function emit(nodes: TreeNode[], depth: number, ctx: Ctx, out: Row[]): number {
           if (expanded) for (const r of inner) out.push(r)
           count += n
         } else {
-          const expanded = isContainerExpanded(node, ctx.toggled)
+          const expanded = isContainerExpanded(node, ctx.folders)
           out.push(containerRow(node, node.leafCount, expanded, depth))
           if (expanded) {
             if (node.children.length) emit(node.children, depth + 1, ctx, out)
@@ -504,12 +511,12 @@ function containerRow(node: ContainerNode, count: number, expanded: boolean, dep
 export function flattenTree(sections: readonly Section[], opts: FlattenOptions = {}): Row[] {
   const q = normalizeFilter(opts.filter)
   const collapsedSections = opts.collapsedSections ?? (EMPTY_SET as ReadonlySet<SectionId>)
-  const toggled = opts.toggled ?? EMPTY_SET
+  const folders = opts.folders ?? NO_CHOICES
   const filterCollapsed = opts.filterCollapsed ?? EMPTY_SET
   const rows: Row[] = []
 
   for (const s of sections) {
-    const ctx: Ctx = { q, toggled, filterCollapsed, section: s.id }
+    const ctx: Ctx = { q, folders, filterCollapsed, section: s.id }
     if (q) {
       const inner: Row[] = []
       const n = emit(s.children, 1, ctx, inner)
@@ -565,17 +572,33 @@ export function collectContainerKeys(sections: readonly Section[], only?: Sectio
   return out
 }
 
-/**
- * Next `toggled` set after forcing `nodes` expanded/collapsed (toggled stores
- * only deviations from each node's default expansion).
- */
-export function withExpanded(toggled: ReadonlySet<string>, nodes: readonly ContainerNode[], expanded: boolean): Set<string> {
-  const next = new Set(toggled)
+/** The user's choices after opening or closing `nodes` (latest last, so the oldest go first when trimmed). */
+export function withExpanded(folders: FolderChoices, nodes: readonly ContainerNode[], expanded: boolean): Map<string, boolean> {
+  const next = new Map(folders)
   for (const n of nodes) {
-    if (defaultExpanded(n) === expanded) next.delete(n.key)
-    else next.add(n.key)
+    next.delete(n.key)
+    next.set(n.key, expanded)
   }
   return next
+}
+
+/** The user's choices after clicking a folder or remote open or closed. */
+export function withToggled(folders: FolderChoices, node: ContainerNode): Map<string, boolean> {
+  return withExpanded(folders, [node], !isContainerExpanded(node, folders))
+}
+
+/** The local folders holding the checked-out branch, outermost first. */
+export function headFolders(sections: readonly Section[]): FolderNode[] {
+  const out: FolderNode[] = []
+  const walk = (nodes: readonly TreeNode[]) => {
+    for (const n of nodes) {
+      if (n.kind !== 'folder' || !n.containsHead) continue
+      out.push(n)
+      walk(n.children)
+    }
+  }
+  for (const s of sections) if (s.id === 'local') walk(s.children)
+  return out
 }
 
 /** Rows the keyboard cursor can land on (everything except hints). */

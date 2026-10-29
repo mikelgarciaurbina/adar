@@ -7,12 +7,15 @@ import {
   firstLeafIndex,
   flattenTree,
   folderKey,
+  headFolders,
   naturalCompare,
   parentIndex,
   remoteKey,
   sectionKey,
   splitMatch,
   stepIndex,
+  withExpanded,
+  withToggled,
   type FolderNode,
   type RemoteNode,
   type Row
@@ -200,12 +203,29 @@ describe('flattenTree', () => {
     expect(rows.some((r) => r.kind === 'ref' && r.node.label === 'mine')).toBe(true)
   })
 
-  it('toggled keys flip the default expansion', () => {
-    const toggled = new Set([folderKey('local', 'feature'), remoteKey('origin')])
-    const out = labels(flattenTree(sections, { toggled }))
+  it('keeps folders opened or closed by hand, whichever branch is checked out', () => {
+    const folders = new Map([
+      [folderKey('local', 'feature'), true],
+      [remoteKey('origin'), false]
+    ])
+    const out = labels(flattenTree(sections, { folders }))
     expect(out.slice(0, 7)).toEqual(['[Local]', '  > bugfix', '  v feature', '    > ui', '    login', '  Feature-zeta', '  main'])
     expect(out).toContain('  > origin')
     expect(out).not.toContain('    > feature') // origin collapsed hides its folder
+
+    // Checking out a branch inside an opened folder used to close it (the choice was stored as "not the default").
+    const openFolders = (branches: Ref[], choices: Map<string, boolean>) =>
+      flattenTree(buildTree(refsFixture({ branches })), { folders: choices }).flatMap((r) => (r.kind === 'folder' && r.expanded ? [r.node.label] : []))
+    const onFeature = [branch('main'), branch('feature/login', { isHead: true }), branch('bugfix/crash')]
+    const opened = new Map([
+      [folderKey('local', 'feature'), true],
+      [folderKey('local', 'bugfix'), true]
+    ])
+    expect(openFolders(onFeature, opened)).toEqual(['bugfix', 'feature'])
+    expect(openFolders([branch('main', { isHead: true }), branch('feature/login'), branch('bugfix/crash')], opened)).toEqual(['bugfix', 'feature'])
+    // Closed by hand stays closed, even with the checked-out branch inside; untouched folders follow the branch.
+    expect(openFolders(onFeature, new Map([[folderKey('local', 'feature'), false]]))).toEqual([])
+    expect(openFolders(onFeature, new Map())).toEqual(['feature'])
   })
 
   it('collapsed sections hide their children but keep the total count', () => {
@@ -232,7 +252,7 @@ describe('flattenTree', () => {
   })
 
   it('filter ignores collapsed sections and toggles, but honours filterCollapsed', () => {
-    const base = { filter: 'login', collapsedSections: new Set(['local'] as const), toggled: new Set([remoteKey('origin')]) }
+    const base = { filter: 'login', collapsedSections: new Set(['local'] as const), folders: new Map([[remoteKey('origin'), false]]) }
     expect(labels(flattenTree(sections, base))).toHaveLength(7)
     const rows = flattenTree(sections, { ...base, filterCollapsed: new Set([folderKey('local', 'feature'), sectionKey('remote')]) })
     expect(labels(rows)).toEqual(['[Local]', '  > feature', '[Remote]'])
@@ -258,7 +278,7 @@ describe('flattenTree', () => {
   })
 
   it('produces unique keys', () => {
-    const rows = flattenTree(sections, { toggled: new Set(collectContainerKeys(sections).map((n) => n.key)) })
+    const rows = flattenTree(sections, { folders: new Map(collectContainerKeys(sections).map((n) => [n.key, true])) })
     const all = flattenTree(sections, { filter: 'a' })
     for (const list of [rows, all]) expect(new Set(keys(list)).size).toBe(list.length)
   })
@@ -266,6 +286,23 @@ describe('flattenTree', () => {
 
 describe('queries', () => {
   const sections = buildTree(refsFixture(), remotesInfo)
+
+  it('finds the folders of the checked-out branch, and records folders opened and closed', () => {
+    const s = buildTree(refsFixture({ branches: [branch('team/a/mine', { isHead: true }), branch('team/b/other')] }))
+    const [team, teamA] = headFolders(s)
+    expect([team.key, teamA.key]).toEqual([folderKey('local', 'team'), folderKey('local', 'team/a')])
+    // Open by default (the checked-out branch is inside): a click closes it, another opens it.
+    let folders = withToggled(new Map(), team)
+    expect(folders.get(team.key)).toBe(false)
+    folders = withToggled(folders, team)
+    expect(folders.get(team.key)).toBe(true)
+    // The latest choice goes last, so trimming drops the oldest.
+    expect([...withExpanded(new Map([[team.key, false], ['f:local:x', true]]), [team], true)]).toEqual([
+      ['f:local:x', true],
+      [team.key, true]
+    ])
+    expect(headFolders(sections)).toEqual([])
+  })
 
   it('collectRefs returns every ref below a container', () => {
     const origin = sections[1].children[0] as RemoteNode

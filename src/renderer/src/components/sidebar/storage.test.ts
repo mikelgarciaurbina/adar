@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { loadCollapsedSections, loadToggled, MAX_TOGGLED, saveCollapsedSections, saveToggled, sectionStorageKey, treeStorageKey } from './storage'
+import { folderStorageKey, loadCollapsedSections, loadFolders, MAX_FOLDER_CHOICES, saveCollapsedSections, saveFolders, sectionStorageKey } from './storage'
 
 function memoryStorage() {
   const map = new Map<string, string>()
@@ -42,35 +42,37 @@ describe('collapsed sections', () => {
   })
 })
 
-describe('toggled folders', () => {
-  it('round-trips per repo', () => {
+describe('opened and closed folders', () => {
+  it('round-trips per repo, and drops the old format', () => {
     const s = memoryStorage()
-    saveToggled('/repo/a', new Set(['f:local:feature', 'r:origin']), s)
-    expect([...loadToggled('/repo/a', s)]).toEqual(['f:local:feature', 'r:origin'])
-    expect(loadToggled('/repo/b', s).size).toBe(0)
-    saveToggled('/repo/a', new Set(), s)
-    expect(s.map.has(treeStorageKey('/repo/a'))).toBe(false)
+    s.map.set('adar.sb.tree./repo/a', JSON.stringify(['f:local:feature']))
+    saveFolders('/repo/a', new Map([['f:local:feature', true], ['r:origin', false]]), s)
+    expect([...loadFolders('/repo/a', s)]).toEqual([['f:local:feature', true], ['r:origin', false]])
+    expect(s.map.has('adar.sb.tree./repo/a')).toBe(false)
+    expect(loadFolders('/repo/b', s).size).toBe(0)
+    saveFolders('/repo/a', new Map(), s)
+    expect(s.map.has(folderStorageKey('/repo/a'))).toBe(false)
   })
 
-  it('caps the number of remembered keys', () => {
+  it('caps the number of remembered folders', () => {
     const s = memoryStorage()
-    const many = new Set(Array.from({ length: MAX_TOGGLED + 50 }, (_, i) => `f:local:x${i}`))
-    saveToggled('/r', many, s)
-    const loaded = loadToggled('/r', s)
-    expect(loaded.size).toBe(MAX_TOGGLED)
-    expect(loaded.has(`f:local:x${MAX_TOGGLED + 49}`)).toBe(true)
+    const many = new Map(Array.from({ length: MAX_FOLDER_CHOICES + 50 }, (_, i) => [`f:local:x${i}`, true] as const))
+    saveFolders('/r', many, s)
+    const loaded = loadFolders('/r', s)
+    expect(loaded.size).toBe(MAX_FOLDER_CHOICES)
+    expect(loaded.has(`f:local:x${MAX_FOLDER_CHOICES + 49}`)).toBe(true)
     expect(loaded.has('f:local:x0')).toBe(false)
   })
 
   it('ignores corrupt data and broken storage', () => {
     const s = memoryStorage()
-    s.map.set(treeStorageKey('/r'), '{not json')
-    expect(loadToggled('/r', s).size).toBe(0)
-    s.map.set(treeStorageKey('/r'), JSON.stringify(['ok', 3, null]))
-    expect([...loadToggled('/r', s)]).toEqual(['ok'])
-    s.map.set(treeStorageKey('/r'), JSON.stringify({ a: 1 }))
-    expect(loadToggled('/r', s).size).toBe(0)
-    expect(loadToggled('/r', throwing).size).toBe(0)
-    expect(() => saveToggled('/r', new Set(['a']), throwing)).not.toThrow()
+    s.map.set(folderStorageKey('/r'), '{not json')
+    expect(loadFolders('/r', s).size).toBe(0)
+    s.map.set(folderStorageKey('/r'), JSON.stringify([['ok', true], ['no', 'yes'], [3, false], 'x', null]))
+    expect([...loadFolders('/r', s)]).toEqual([['ok', true]])
+    s.map.set(folderStorageKey('/r'), JSON.stringify({ a: 1 }))
+    expect(loadFolders('/r', s).size).toBe(0)
+    expect(loadFolders('/r', throwing).size).toBe(0)
+    expect(() => saveFolders('/r', new Map([['a', true]]), throwing)).not.toThrow()
   })
 })

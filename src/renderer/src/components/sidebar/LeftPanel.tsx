@@ -50,7 +50,7 @@ import {
   useSidebarBusy
 } from './ops'
 import { RowView, Skeleton, type HiddenState, type RowHandlers } from './SidebarRow'
-import { loadCollapsedSections, loadToggled, saveCollapsedSections, saveToggled } from './storage'
+import { loadCollapsedSections, loadFolders, saveCollapsedSections, saveFolders } from './storage'
 import {
   buildTree,
   collectContainers,
@@ -58,11 +58,13 @@ import {
   firstLeafIndex,
   firstNavigable,
   flattenTree,
+  headFolders,
   lastNavigable,
   normalizeFilter,
   parentIndex,
   stepIndex,
   withExpanded,
+  withToggled,
   type ContainerNode,
   type PullsInput,
   type Row,
@@ -113,7 +115,7 @@ export function LeftPanel({ tab }: { tab: RepoTab }) {
   const filtering = q.length > 0
 
   const [collapsedSections, setCollapsedSections] = useState(() => loadCollapsedSections())
-  const [toggled, setToggled] = useState(() => loadToggled(repo))
+  const [folders, setFolders] = useState(() => loadFolders(repo))
   const [filterCollapsed, setFilterCollapsed] = useState<Set<string>>(() => new Set())
   const [cursorKey, setCursorKey] = useState<string | null>(null)
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
@@ -127,7 +129,7 @@ export function LeftPanel({ tab }: { tab: RepoTab }) {
   const [stateRepo, setStateRepo] = useState(repo)
   if (stateRepo !== repo) {
     setStateRepo(repo)
-    setToggled(loadToggled(repo))
+    setFolders(loadFolders(repo))
     setFilter('')
     setFilterCollapsed(new Set())
     setCursorKey(null)
@@ -145,8 +147,8 @@ export function LeftPanel({ tab }: { tab: RepoTab }) {
 
   useEffect(() => saveCollapsedSections(collapsedSections), [collapsedSections])
   useEffect(() => {
-    if (stateRepo === repo) saveToggled(repo, toggled)
-  }, [repo, stateRepo, toggled])
+    if (stateRepo === repo) saveFolders(repo, folders)
+  }, [repo, stateRepo, folders])
 
   // ── Model ────────────────────────────────────────────────────────────────
 
@@ -197,9 +199,21 @@ export function LeftPanel({ tab }: { tab: RepoTab }) {
   }, [worktreeList, pullsData, refs])
 
   const sections = useMemo(() => (refs ? buildTree(refs, remotes, pulls, worktrees) : null), [refs, remotes, pulls, worktrees])
+
+  // Checking a branch out opens its folders, and they stay open after it moves on (until closed by hand).
+  const headBranch = refs && !refs.head.detached ? refs.head.branch : null
+  const [seenHead, setSeenHead] = useState({ repo, branch: headBranch })
+  if (seenHead.repo !== repo || seenHead.branch !== headBranch) {
+    setSeenHead({ repo, branch: headBranch })
+    if (seenHead.repo === repo && seenHead.branch && headBranch && sections) {
+      const opened = headFolders(sections)
+      if (opened.length) setFolders((prev) => withExpanded(prev, opened, true))
+    }
+  }
+
   const rows = useMemo(
-    () => (sections ? flattenTree(sections, { filter: query, collapsedSections, toggled, filterCollapsed }) : []),
-    [sections, query, collapsedSections, toggled, filterCollapsed]
+    () => (sections ? flattenTree(sections, { filter: query, collapsedSections, folders, filterCollapsed }) : []),
+    [sections, query, collapsedSections, folders, filterCollapsed]
   )
   const indexByKey = useMemo(() => {
     const m = new Map<string, number>()
@@ -276,7 +290,7 @@ export function LeftPanel({ tab }: { tab: RepoTab }) {
           }
           return next
         })
-      else setToggled((prev) => withExpanded(prev, nodes, expanded))
+      else setFolders((prev) => withExpanded(prev, nodes, expanded))
     },
     [filtering]
   )
@@ -284,7 +298,7 @@ export function LeftPanel({ tab }: { tab: RepoTab }) {
   const toggleContainer = useCallback(
     (node: ContainerNode) => {
       if (filtering) setFilterCollapsed((prev) => toggleIn(prev, node.key))
-      else setToggled((prev) => toggleIn(prev, node.key))
+      else setFolders((prev) => withToggled(prev, node))
     },
     [filtering]
   )
