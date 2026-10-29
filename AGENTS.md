@@ -31,7 +31,10 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
     only call `MENUBAR_METHODS` and `PANEL_API_METHODS` (`src/shared/menubar.ts`), and only on repositories Adar opened
     (`openRepo` and its trust check, or the panel's `menuBarUseRepo`).
   - `updater.ts` — in-app updates from GitHub Releases (check → download → verify → replace bundle → relaunch) on
-    macOS; Windows and Linux builds only check, and "Download" opens the release page.
+    macOS; Windows and Linux builds only check, and "Download" opens the release page. When only an administrator can
+    change Adar's folder (a standard account and /Applications) it asks for the password first and only the bundle swap
+    runs as root (`ADMIN_SWAP_SCRIPT`, inline); if that is cancelled, the renderer explains how to install by hand.
+    `admin.ts` is the macOS password dialog (osascript), shared with `cli.ts`.
   - `hosting/` — pull requests on GitHub, GitLab (merge requests, gitlab.com and self-managed), Bitbucket Cloud and
     Bitbucket Data Center, each opt-in (`settings.githubAuth`, `gitlabServers`, `bitbucketAuth` + `bitbucketEmail`,
     `bitbucketServers`). `provider.ts` is the interface each one implements (`githubProvider.ts`, `gitlabProvider.ts`,
@@ -139,7 +142,9 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
   `git@gitlab.com:…`, `git@bitbucket.org:…` or `ssh://git@<host>:7999/…` origin from a local bare repository through
   `GIT_SSH_COMMAND` (name the script `ssh` so git passes the port; `url.<x>.insteadOf` would change what
   `git remote -v` shows).
-- Updater end to end with packaged builds: `scripts/test-updater.sh <workdir>` (must print `UPDATER TEST PASSED`).
+- Updater end to end with packaged builds: `scripts/test-updater.sh <workdir>` (must print `UPDATER TEST PASSED`);
+  `--admin-sim` takes the administrator path without the dialog, `--admin` makes the folder read-only and needs a person
+  to type an administrator's password.
 
 ## Commands
 - `npm run dev` (desktop app), `npm run web` (browser), `npm run build`, `npm run dist` (local .dmg/.zip),

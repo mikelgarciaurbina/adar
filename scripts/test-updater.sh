@@ -7,10 +7,22 @@
 #      Adar.app.adar-old until the new version has started, then removed by it
 # The test bundles get their own app name and bundle id, so they never use (or lock) your real Adar
 # profile (~/Library/Application Support/Adar) and LaunchServices keeps them apart from an installed Adar.
-# Usage: scripts/test-updater.sh <workdir> [base=0.0.1] [next=0.0.2]
+# --admin: <work>/Applications is made read-only for you, like /Applications for a standard account:
+#          macOS asks for an administrator's password (type it), the swap runs as root and removes the
+#          previous bundle itself. --admin-sim: the same path, but that part runs as you, without the dialog.
+# Usage: scripts/test-updater.sh <workdir> [base=0.0.1] [next=0.0.2] [--admin | --admin-sim]
 set -euo pipefail
 cd "$(dirname "$0")/.."
-WORK="$1"; BASE="${2:-0.0.1}"; NEXT="${3:-0.0.2}"
+ADMIN=""; POS=()
+for a in "$@"; do
+  case "$a" in
+    --admin) ADMIN=real ;;
+    --admin-sim) ADMIN=sim ;;
+    *) POS+=("$a") ;;
+  esac
+done
+WORK="${POS[0]}"; BASE="${POS[1]:-0.0.1}"; NEXT="${POS[2]:-0.0.2}"
+[ -d "$WORK/Applications" ] && chmod u+w "$WORK/Applications"
 ARCH="$(uname -m)"; [ "$ARCH" = "x86_64" ] && ARCH=x64
 TEST_NAME="Adar Updater Test"             # package.json productName → app.name → userData dir + single-instance lock
 TEST_APP_ID="dev.adar.gitclient.updatertest"
@@ -21,6 +33,7 @@ export CSC_IDENTITY_AUTO_DISCOVERY=false
 SERVER=""
 APP="$WORK/Applications/Adar.app"
 cleanup() {
+  chmod u+w "$WORK/Applications" 2>/dev/null || true
   [ -n "$SERVER" ] && kill "$SERVER" 2>/dev/null || true
   pkill -f "$APP/Contents/MacOS/" 2>/dev/null || true
   # build() baked the test version into out/: leave a normal build behind.
@@ -59,7 +72,11 @@ for i in $(seq 1 20); do curl -sf "http://127.0.0.1:$PORT/latest.json" >/dev/nul
 curl -sf "http://127.0.0.1:$PORT/latest.json" >/dev/null || { echo "Could not start the feed server on port $PORT"; exit 1; }
 
 echo "Installed: $(defaults read "$APP/Contents/Info.plist" CFBundleShortVersionString) ($(defaults read "$APP/Contents/Info.plist" CFBundleIdentifier))"
-ADAR_UPDATE_FEED="http://127.0.0.1:$PORT/latest.json" ADAR_UPDATE_TEST_AUTOINSTALL=1 \
+if [ "$ADMIN" = real ]; then
+  chmod a-w "$WORK/Applications"
+  echo "Only an administrator can change $WORK/Applications now: type your password when macOS asks."
+fi
+ADAR_UPDATE_FEED="http://127.0.0.1:$PORT/latest.json" ADAR_UPDATE_TEST_AUTOINSTALL=1 ADAR_UPDATE_TEST_ADMIN="$ADMIN" \
   "$APP/Contents/MacOS/Adar" 2>&1 | grep "\[updater-test\]" || true
 
 V='?'

@@ -3,15 +3,12 @@
 // "Install 'code' command in PATH". Prefers a directory the user can write to; only
 // falls back to /usr/local/bin with an administrator prompt (macOS authorization dialog).
 
-import { execFile } from 'node:child_process'
 import { promises as fs, constants as fsc } from 'node:fs'
 import path from 'node:path'
-import { promisify } from 'node:util'
 import { AdarError } from '@shared/errors'
 import type { CliStatus } from '@shared/cli'
+import { runAsAdmin } from './admin'
 import { loginShellPath } from './system/shellEnv'
-
-const execFileP = promisify(execFile)
 
 export const CLI_NAME = 'adar'
 /** Candidate directories, in PATH-precedence order on a typical Apple Silicon Mac. */
@@ -93,26 +90,7 @@ async function onPath(dir: string, pathOverride?: string | null): Promise<boolea
   return list.split(':').some((p) => p && path.resolve(p) === dir)
 }
 
-/** Run a shell snippet with administrator rights via the macOS authorization dialog (args are quoted by AppleScript). */
-async function runAsAdmin(script: string, args: string[]): Promise<void> {
-  // `script` uses $1, $2… ; AppleScript builds `sh -c '<script>' sh 'arg1' 'arg2'` with `quoted form of`.
-  const lines = [
-    'on run argv',
-    '  set cmd to "/bin/sh -c " & quoted form of (item 1 of argv) & " sh"',
-    '  repeat with i from 2 to count of argv',
-    '    set cmd to cmd & " " & quoted form of (item i of argv)',
-    '  end repeat',
-    '  do shell script cmd with administrator privileges',
-    'end run'
-  ]
-  try {
-    await execFileP('/usr/bin/osascript', [...lines.flatMap((l) => ['-e', l]), script, ...args])
-  } catch (err) {
-    const text = `${(err as { stderr?: string }).stderr ?? ''} ${(err as Error).message}`
-    if (/-128|User cancell?ed/i.test(text)) throw new AdarError({ code: 'CANCELLED', message: 'Cancelled' })
-    throw new AdarError({ code: 'UNKNOWN', message: 'Could not get administrator rights to install the command', stderr: text.trim() })
-  }
-}
+const ADMIN_FAILURE = 'Could not get administrator rights to install the command'
 
 export async function cliStatus(source: string, candidates: readonly string[] = CLI_DIRS, userPath?: string | null): Promise<CliStatus> {
   const available = process.platform === 'darwin' && (await fs.stat(source).then((s) => s.isFile(), () => false))
@@ -139,7 +117,7 @@ export async function installCli(source: string, force = false, candidates: read
   await fs.chmod(source, 0o755).catch(() => undefined)
   const target = path.join(plan.dir, CLI_NAME)
   if (plan.needsAdmin) {
-    await runAsAdmin('mkdir -p "$1" && ln -sfn "$2" "$3"', [plan.dir, source, target])
+    await runAsAdmin('mkdir -p "$1" && ln -sfn "$2" "$3"', [plan.dir, source, target], { failure: ADMIN_FAILURE })
   } else {
     await fs.rm(target, { force: true })
     await fs.symlink(source, target)
@@ -153,7 +131,7 @@ export async function uninstallCli(source: string, candidates: readonly string[]
     if (d.existing.kind !== 'ours') continue
     const target = path.join(d.dir, CLI_NAME)
     if (d.writable) await fs.rm(target, { force: true })
-    else await runAsAdmin('rm -f "$1"', [target])
+    else await runAsAdmin('rm -f "$1"', [target], { failure: ADMIN_FAILURE })
   }
   return cliStatus(source, candidates, userPath)
 }

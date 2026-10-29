@@ -1,16 +1,20 @@
 // "Update" downloads only; "Restart to update" asks before quitting over running
-// operations, commit drafts or unsaved merge-tool edits.
+// operations, commit drafts or unsaved merge-tool edits, and explains how to install
+// by hand when Adar could not replace itself.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RepoTab } from '@renderer/store/appStore'
-import type { UpdateStatus } from '@shared/update'
+import type { ManualInstall, UpdateStatus } from '@shared/update'
 
 const updatesMock = vi.hoisted(() => ({
   updateDownload: vi.fn(async (): Promise<Partial<UpdateStatus>> => ({ state: 'downloaded', canInstall: true })),
-  updateInstall: vi.fn(async () => undefined)
+  updateInstall: vi.fn(async (): Promise<ManualInstall | null> => null),
+  updateShowDownload: vi.fn(async () => undefined)
 }))
-const dialogs = vi.hoisted(() => ({ confirm: vi.fn(async (_opts: { title: string; danger?: boolean }) => false) }))
-const toasts = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn(), info: vi.fn() }))
+const dialogs = vi.hoisted(() => ({
+  confirm: vi.fn(async (_opts: { title: string; danger?: boolean; confirmLabel?: string; cancelLabel?: string }) => false)
+}))
+const toasts = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn(), info: vi.fn(), loading: vi.fn(() => 7), dismiss: vi.fn() }))
 
 vi.mock('@renderer/api/client', () => ({
   api: {},
@@ -25,7 +29,7 @@ vi.mock('@renderer/components/common/toast', () => ({ toast: toasts }))
 
 import { cacheKeyOf, editorCache } from '@renderer/components/conflicts/editorCache'
 import { useApp } from '@renderer/store/appStore'
-import { confirmRestartForUpdate, installUpdate, startUpdate, workLostOnRestart } from './restart'
+import { confirmRestartForUpdate, installUpdate, manualInstallText, startUpdate, workLostOnRestart } from './restart'
 import { useUpdates } from './updateStore'
 
 const status = (canInstall: boolean): UpdateStatus =>
@@ -111,5 +115,34 @@ describe('"Restart to update"', () => {
     await installUpdate()
     expect(dialogs.confirm).not.toHaveBeenCalled()
     expect(updatesMock.updateInstall).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('when Adar cannot replace itself', () => {
+  it('explains how to install by hand and shows the download only when asked', async () => {
+    updatesMock.updateInstall.mockResolvedValueOnce({ reason: 'cancelled', folder: 'Applications' })
+    dialogs.confirm.mockResolvedValueOnce(false)
+    await installUpdate()
+    expect(dialogs.confirm).toHaveBeenCalledTimes(1)
+    expect(dialogs.confirm.mock.calls[0][0]).toMatchObject({ title: 'Update not installed', confirmLabel: 'Show in Finder', cancelLabel: 'Not now' })
+    expect(updatesMock.updateShowDownload).not.toHaveBeenCalled()
+    // The "Preparing the update…" toast is gone once the dialog is up.
+    expect(toasts.dismiss).toHaveBeenCalledWith(7)
+
+    updatesMock.updateInstall.mockResolvedValueOnce({ reason: 'cancelled', folder: 'Applications' })
+    dialogs.confirm.mockResolvedValueOnce(true)
+    await installUpdate()
+    expect(updatesMock.updateShowDownload).toHaveBeenCalledTimes(1)
+    expect(toasts.error).not.toHaveBeenCalled()
+  })
+
+  it('says why for each case', () => {
+    const cancelled = manualInstallText({ reason: 'cancelled', folder: 'Applications' }, '0.2.0')
+    expect(cancelled.reason).toBe("Adar needs an administrator's name and password to replace itself in Applications.")
+    expect(cancelled.steps).toMatch(/^To install Adar 0\.2\.0 yourself, show the download in Finder, quit Adar, then open the \.zip and drag Adar to Applications\./)
+    expect(cancelled.steps).toContain('~/Applications')
+    expect(manualInstallText({ reason: 'read-only', folder: 'd' }, '0.2.0').title).toBe('Move Adar to Applications')
+    const failed = manualInstallText({ reason: 'failed', folder: 'Applications', error: 'Could not get administrator rights to replace Adar: The password was incorrect.' }, '0.2.0')
+    expect(failed.reason).toBe('Could not get administrator rights to replace Adar: The password was incorrect.')
   })
 })

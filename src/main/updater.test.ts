@@ -1,27 +1,41 @@
 // In-app updater: downloads are verified (host, SHA-256 digest / size) before they can be installed,
-// and the release pipeline only publishes complete, verified releases. Electron is replaced by a
-// stub whose net.fetch is Node's fetch; the "GitHub" feed and assets are served from 127.0.0.1.
+// a folder only administrators can change is updated through the password dialog, and the release
+// pipeline only publishes complete, verified releases. Electron is replaced by a stub whose net.fetch
+// is Node's fetch; the "GitHub" feed and assets are served from 127.0.0.1.
+import { execFileSync, spawn, spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import http from 'node:http'
 import type { AddressInfo } from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const tmp = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'adar-updater-')))
 const openExternal = vi.hoisted(() => vi.fn(async (_url: string) => undefined))
+const showItemInFolder = vi.hoisted(() => vi.fn((_file: string) => undefined))
+/** The running app: unpackaged unless a test installs from a fake bundle (`exe` inside it). */
+const running = vi.hoisted(() => ({ packaged: false, exe: '' }))
+const runAsAdmin = vi.hoisted(() => vi.fn(async (_script: string, _args: readonly string[], _opts: unknown) => undefined))
 vi.mock('electron', () => ({
-  app: { isPackaged: false, getPath: () => tmp, quit: () => undefined },
+  app: {
+    get isPackaged() {
+      return running.packaged
+    },
+    getPath: (name: string) => (name === 'exe' ? running.exe : tmp),
+    quit: () => undefined
+  },
   net: { fetch: (url: string, init?: RequestInit) => fetch(url, init) },
-  shell: { openExternal, openPath: async () => '', showItemInFolder: () => undefined }
+  shell: { openExternal, openPath: async () => '', showItemInFolder }
 }))
+vi.mock('./admin', () => ({ runAsAdmin }))
 
+import { AdarError } from '@shared/errors'
 import { withoutInstallSection, type UpdateStatus } from '@shared/update'
-import { Updater } from './updater'
+import { ADMIN_SWAP_SCRIPT, mainProcessPattern, Updater } from './updater'
 
-const payload = Buffer.from('PK\u0003\u0004 pretend this is Adar.app zipped\n'.repeat(1000))
-const sha256 = createHash('sha256').update(payload).digest('hex')
+let payload = Buffer.from('PK\u0003\u0004 pretend this is Adar.app zipped\n'.repeat(1000))
+let sha256 = createHash('sha256').update(payload).digest('hex')
 const assetName = `Adar-0.0.2-${process.arch}.zip`
 const realPlatform = process.platform
 /** The updater reads process.platform: pin it (only macOS downloads release assets). */
@@ -147,6 +161,186 @@ describe('Windows and Linux builds', () => {
       expect(openExternal).toHaveBeenCalledWith('https://github.com/mikelgarciaurbina/adar/releases/tag/v0.0.2')
       expect(hits).toEqual(['/latest.json'])
     }
+  })
+})
+
+/** A bundle with what the updater reads: Info.plist (identifier, version), plus a `version` file for the tests. */
+function fakeBundle(dir: string, version: string): string {
+  const bundle = path.join(dir, 'Adar.app')
+  mkdirSync(path.join(bundle, 'Contents', 'MacOS'), { recursive: true })
+  writeFileSync(path.join(bundle, 'Contents', 'MacOS', 'Adar'), '')
+  writeFileSync(
+    path.join(bundle, 'Contents', 'Info.plist'),
+    `<?xml version="1.0" encoding="UTF-8"?>
+<plist version="1.0"><dict>
+<key>CFBundleIdentifier</key><string>dev.adar.gitclient.test</string>
+<key>CFBundleShortVersionString</key><string>${version}</string>
+</dict></plist>
+`
+  )
+  writeFileSync(path.join(bundle, 'version'), version)
+  return bundle
+}
+
+const versionOf = (bundle: string) => readFileSync(path.join(bundle, 'version'), 'utf8')
+
+async function waitFor(check: () => boolean, ms = 5000): Promise<void> {
+  for (const end = Date.now() + ms; !check() && Date.now() < end; ) await new Promise((r) => setTimeout(r, 50))
+}
+
+// Packaged macOS builds only (ditto, plutil). As root every folder is writable, so nothing would need a password.
+describe.skipIf(realPlatform !== 'darwin' || process.getuid?.() === 0)('installing into a folder only administrators can change', () => {
+  const testPayload = { payload, sha256 }
+  let apps: string
+  let bundle: string
+
+  beforeAll(() => {
+    // The update: Adar.app 0.0.2, zipped as the release does.
+    const src = mkdtempSync(path.join(tmp, 'next-'))
+    const zip = path.join(src, 'next.zip')
+    execFileSync('/usr/bin/ditto', ['-c', '-k', '--keepParent', fakeBundle(src, '0.0.2'), zip])
+    payload = readFileSync(zip)
+    sha256 = createHash('sha256').update(payload).digest('hex')
+  })
+  afterAll(() => {
+    ;({ payload, sha256 } = testPayload)
+  })
+  beforeEach(() => {
+    apps = mkdtempSync(path.join(tmp, 'Applications-'))
+    bundle = fakeBundle(apps, '0.0.1')
+    running.packaged = true
+    running.exe = path.join(bundle, 'Contents', 'MacOS', 'Adar')
+    runAsAdmin.mockReset()
+    showItemInFolder.mockClear()
+  })
+  afterEach(() => {
+    chmodSync(apps, 0o755)
+    running.packaged = false
+  })
+
+  async function downloaded(): Promise<Updater> {
+    feed({ digest: `sha256:${sha256}` })
+    const updater = newUpdater()
+    expect((await updater.updateCheck(true)).state).toBe('available')
+    expect(await updater.updateDownload()).toMatchObject({ state: 'downloaded', canInstall: true })
+    return updater
+  }
+  const unpacked = () => readdirSync(tmp).filter((e) => e.startsWith('adar-update-'))
+
+  it('asks for the password while Adar is open; cancelling leaves the download to install by hand', async () => {
+    chmodSync(apps, 0o555)
+    const updater = await downloaded()
+    runAsAdmin.mockRejectedValueOnce(new AdarError({ code: 'CANCELLED', message: 'Cancelled' }))
+    expect(await updater.updateInstall()).toEqual({ reason: 'cancelled', folder: path.basename(apps) })
+    // Only the swap runs as root, inline, after Adar quits; the verified bundle comes from this account's temp folder.
+    expect(runAsAdmin).toHaveBeenCalledTimes(1)
+    const [script, args, opts] = runAsAdmin.mock.calls[0]
+    expect(script).toBe(ADMIN_SWAP_SCRIPT)
+    expect(args).toEqual([String(process.pid), bundle, expect.stringMatching(/\/adar-update-[^/]+\/Adar\.app$/), mainProcessPattern(bundle)])
+    expect(opts).toMatchObject({ background: true, prompt: `Adar needs an administrator's name and password to install version 0.0.2 in ${path.basename(apps)}.` })
+    expect(unpacked()).toEqual([])
+    expect(versionOf(bundle)).toBe('0.0.1')
+    // Finder only opens when the user asks for it.
+    expect(showItemInFolder).not.toHaveBeenCalled()
+    await updater.updateShowDownload()
+    expect(showItemInFolder).toHaveBeenCalledWith(path.join(tmp, 'updates', assetName))
+  })
+
+  it('reports why the rights could not be obtained', async () => {
+    chmodSync(apps, 0o555)
+    const updater = await downloaded()
+    const message = 'Could not get administrator rights to replace Adar: The administrator user name or password was incorrect.'
+    runAsAdmin.mockRejectedValueOnce(new AdarError({ code: 'UNKNOWN', message }))
+    expect(await updater.updateInstall()).toEqual({ reason: 'failed', folder: path.basename(apps), error: message })
+    expect(unpacked()).toEqual([])
+  })
+
+  it('never asks for a password for a read-only copy', async () => {
+    // A quarantined download macOS runs from a temporary read-only copy until it is moved (App Translocation).
+    const translocated = path.join(tmp, 'AppTranslocation', 'A1B2', 'd')
+    mkdirSync(translocated, { recursive: true })
+    running.exe = path.join(fakeBundle(translocated, '0.0.1'), 'Contents', 'MacOS', 'Adar')
+    const updater = await downloaded()
+    expect(await updater.updateInstall()).toEqual({ reason: 'read-only', folder: 'd' })
+    expect(runAsAdmin).not.toHaveBeenCalled()
+  })
+})
+
+describe.skipIf(realPlatform !== 'darwin')('ADMIN_SWAP_SCRIPT (run as this user)', () => {
+  /** The script with shorter waits (each `from` must be in it). */
+  function script(waits: Record<string, string>): string {
+    let s = ADMIN_SWAP_SCRIPT
+    for (const [from, to] of Object.entries(waits)) {
+      expect(s).toContain(from)
+      s = s.replace(from, to)
+    }
+    return s
+  }
+  const QUICK = { 'sleep 10': 'sleep 1' }
+
+  function setup(): { current: string; fresh: string; backup: string } {
+    const dir = mkdtempSync(path.join(tmp, 'swap-'))
+    mkdirSync(path.join(dir, 'Apps'))
+    mkdirSync(path.join(dir, 'work'))
+    const current = fakeBundle(path.join(dir, 'Apps'), 'old')
+    const fresh = fakeBundle(path.join(dir, 'work'), 'new')
+    return { current, fresh, backup: `${current}.adar-old` }
+  }
+  function run(s: string, pid: number, current: string, fresh: string): Promise<number | null> {
+    return new Promise((resolve) => {
+      spawn('/bin/sh', ['-c', s, 'sh', String(pid), current, fresh, mainProcessPattern(current)], { stdio: 'ignore' }).on('exit', resolve)
+    })
+  }
+  /** A process id that is no longer running. */
+  const quitPid = () => spawnSync('/usr/bin/true').pid
+  /** A process that looks like the new version to pgrep (its command line starts with the bundle's executable). */
+  const startNewVersion = (current: string) => spawn('/bin/sleep', ['30'], { stdio: 'ignore', argv0: path.join(current, 'Contents', 'MacOS', 'Adar') })
+
+  it('swaps once Adar has quit and removes the previous version once the new one has run', { timeout: 15_000 }, async () => {
+    const { current, fresh, backup } = setup()
+    const adar = spawn('/bin/sleep', ['30'], { stdio: 'ignore' })
+    const done = run(script(QUICK), adar.pid!, current, fresh)
+    await new Promise((r) => setTimeout(r, 500))
+    expect(versionOf(current)).toBe('old')
+    adar.kill()
+    await waitFor(() => !existsSync(fresh))
+    expect(versionOf(current)).toBe('new')
+    expect(versionOf(backup)).toBe('old')
+    const next = startNewVersion(current)
+    try {
+      expect(await done).toBe(0)
+      expect(existsSync(backup)).toBe(false)
+    } finally {
+      next.kill()
+    }
+  })
+
+  it('keeps the previous version when the new one does not start', { timeout: 15_000 }, async () => {
+    const { current, fresh, backup } = setup()
+    expect(await run(script({ ...QUICK, '-gt 300': '-gt 3' }), quitPid(), current, fresh)).toBe(0)
+    expect(versionOf(current)).toBe('new')
+    expect(versionOf(backup)).toBe('old')
+  })
+
+  it('puts the installed version back when the new one cannot be moved in', async () => {
+    const { current, fresh, backup } = setup()
+    rmSync(fresh, { recursive: true })
+    expect(await run(script(QUICK), quitPid(), current, fresh)).toBe(1)
+    expect(versionOf(current)).toBe('old')
+    expect(existsSync(backup)).toBe(false)
+  })
+
+  it('changes nothing when Adar does not quit', { timeout: 15_000 }, async () => {
+    const { current, fresh, backup } = setup()
+    const adar = spawn('/bin/sleep', ['30'], { stdio: 'ignore' })
+    try {
+      expect(await run(script({ '-gt 1500': '-gt 3' }), adar.pid!, current, fresh)).toBe(1)
+    } finally {
+      adar.kill()
+    }
+    expect(versionOf(current)).toBe('old')
+    expect(versionOf(fresh)).toBe('new')
+    expect(existsSync(backup)).toBe(false)
   })
 })
 

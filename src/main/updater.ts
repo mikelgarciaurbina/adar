@@ -4,9 +4,12 @@
 //  1. check:    GET /repos/<owner>/<repo>/releases/latest and compare versions;
 //  2. download: stream the .zip (or .dmg) asset for this CPU into the cache dir, with progress;
 //  3. install:  packaged macOS build + .zip → extract with ditto, then a small detached helper
-//               waits for Adar to quit, swaps the .app bundle and relaunches it. Anything else
-//               (dev build, .dmg only, read-only /Applications) falls back to opening the .dmg
-//               or the release page.
+//               waits for Adar to quit, swaps the .app bundle and relaunches it. When only an
+//               administrator can change the folder that holds Adar (a standard account and
+//               /Applications), Adar first asks for an administrator's password, as Finder does, and
+//               that swap runs as root. Anything else (dev build, .dmg only) opens the .dmg or the
+//               release page; a cancelled password, a read-only copy (disk image, translocated
+//               download) or a failure leave the download for the user to install by hand.
 // Windows and Linux builds only check: the release has no asset for them to install in place, so
 // "Update" opens the release page (pickAssets gives them none).
 //
@@ -23,6 +26,8 @@ import { createWriteStream, existsSync, promises as fs } from 'node:fs'
 import path from 'node:path'
 import { promisify } from 'node:util'
 import { app, net, shell } from 'electron'
+import { AdarError } from '@shared/errors'
+import { runAsAdmin } from './admin'
 import { bypassQuitGuard } from './quitGuard'
 import {
   APP_BUNDLE_ID,
@@ -33,6 +38,7 @@ import {
   releasePageUrl,
   UPDATE_REPO,
   type GithubReleaseAsset,
+  type ManualInstall,
   type UpdateApi,
   type UpdateInfo,
   type UpdateStatus
@@ -93,10 +99,94 @@ async function removeBundleTree(p: string): Promise<void> {
 /** The downloaded update is not the app / version it claims to be. */
 class UpdateRejected extends Error {}
 
+/** Adar runs from a place it cannot change, even with an administrator's password. */
+class ReadOnlyLocation extends Error {}
+
 /** Test feeds (scripts/test-updater.sh) are served over http from 127.0.0.1. */
 function allowLoopbackHttp(): boolean {
   return !!process.env['ADAR_UPDATE_FEED']
 }
+
+/**
+ * Test hook (scripts/test-updater.sh --admin-sim, with a test feed only): install as if the folder needed an
+ * administrator, but run that part as this user, without the password dialog.
+ */
+function simulatedAdmin(): boolean {
+  return allowLoopbackHttp() && process.env['ADAR_UPDATE_TEST_ADMIN'] === 'sim'
+}
+
+/** Whether Adar can replace `bundle` itself, needs an administrator for it, or cannot at all. */
+async function bundleAccess(bundle: string): Promise<'writable' | 'admin' | 'read-only'> {
+  // macOS runs a quarantined download that was never moved from a read-only copy (App Translocation).
+  if (bundle.includes('/AppTranslocation/')) return 'read-only'
+  if (simulatedAdmin()) return 'admin'
+  try {
+    await fs.access(path.dirname(bundle), fs.constants.W_OK)
+    return 'writable'
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code
+    if (code === 'EACCES' || code === 'EPERM') return 'admin'
+    if (code === 'EROFS') return 'read-only'
+    throw err
+  }
+}
+
+/** Remove the previous version kept by an update. In a folder Adar cannot change, the administrator part does it. */
+async function removeBackup(bundle: string): Promise<void> {
+  if (await fs.access(path.dirname(bundle), fs.constants.W_OK).then(() => true, () => false)) {
+    await removeBundleTree(bundle + BACKUP_SUFFIX)
+  }
+}
+
+/** pgrep pattern (extended regex) for the main process of `bundle`, not its helpers (in Contents/Frameworks). */
+export function mainProcessPattern(bundle: string): string {
+  return '^' + `${bundle}/Contents/MacOS/`.replace(/[.[\]()*+?{}|^$\\]/g, '\\$&')
+}
+
+/**
+ * The part of an update that runs as root, for a folder only administrators can change ($1 Adar's pid, $2 the
+ * installed bundle, $3 the verified new one, $4 mainProcessPattern of $2). It waits for Adar to quit (at most 5
+ * minutes; then nothing changes), swaps the bundles (rolling back on failure), and removes the previous one once the
+ * new version has run for a while, which Adar cannot do in that folder (it stays if the new version never starts).
+ * Passed inline to the password dialog, so nothing on disk this account could change runs as root. It only moves
+ * bundles: clearing the quarantine flag and relaunching Adar happen in the user's account.
+ */
+export const ADMIN_SWAP_SCRIPT = [
+  'pid="$1"; current="$2"; fresh="$3"; running="$4"',
+  `backup="$current${BACKUP_SUFFIX}"`,
+  'i=0',
+  'while kill -0 "$pid" 2>/dev/null; do',
+  '  i=$((i + 1)); [ "$i" -gt 1500 ] && exit 1',
+  '  sleep 0.2',
+  'done',
+  'rm -rf "$backup"',
+  'if ! { mv "$current" "$backup" && mv "$fresh" "$current"; }; then',
+  '  [ -d "$backup" ] && [ ! -d "$current" ] && mv "$backup" "$current"',
+  '  exit 1',
+  'fi',
+  'i=0',
+  'until /usr/bin/pgrep -f "$running" >/dev/null; do',
+  '  i=$((i + 1)); [ "$i" -gt 300 ] && exit 0',
+  '  sleep 0.2',
+  'done',
+  `sleep ${BACKUP_CLEANUP_DELAY / 1000}`,
+  '/usr/bin/pgrep -f "$running" >/dev/null && rm -rf "$backup"',
+  ''
+].join('\n')
+
+/**
+ * This account's part of that update ($1 Adar's pid, $2 the installed bundle, $3 the new one): once Adar has quit and
+ * the root part has moved the new version in (or failed: at most 30 s), open Adar again.
+ */
+const RELAUNCH_AFTER_ADMIN_SCRIPT = [
+  '#!/bin/sh',
+  'pid="$1"; current="$2"; fresh="$3"',
+  'while kill -0 "$pid" 2>/dev/null; do sleep 0.2; done',
+  'i=0',
+  'while [ -e "$fresh" ] && [ "$i" -lt 150 ]; do i=$((i + 1)); sleep 0.2; done',
+  '/usr/bin/open "$current"',
+  ''
+].join('\n')
 
 export class Updater implements UpdateApi {
   private status: UpdateStatus
@@ -104,6 +194,7 @@ export class Updater implements UpdateApi {
   private timers: Array<ReturnType<typeof setTimeout>> = []
   private checking: Promise<UpdateStatus> | null = null
   private downloading: Promise<UpdateStatus> | null = null
+  private installing: Promise<ManualInstall | null> | null = null
 
   constructor(private readonly deps: UpdaterDeps) {
     this.status = { state: 'idle', currentVersion: deps.currentVersion, info: null, canInstall: false }
@@ -118,7 +209,7 @@ export class Updater implements UpdateApi {
     let backupRemoved: Promise<void> = Promise.resolve()
     if (bundle && existsSync(bundle + BACKUP_SUFFIX)) {
       backupRemoved = new Promise((resolve) => {
-        this.timers.push(setTimeout(() => void removeBundleTree(bundle + BACKUP_SUFFIX).then(resolve), BACKUP_CLEANUP_DELAY))
+        this.timers.push(setTimeout(() => void removeBackup(bundle).then(resolve), BACKUP_CLEANUP_DELAY))
       })
     }
     // Test hook: with a custom feed, check → download → install immediately (used by scripts/test-updater.sh).
@@ -131,11 +222,17 @@ export class Updater implements UpdateApi {
           console.log(`[updater-test] check → ${s.state} ${s.info?.latestVersion ?? ''}`)
           if (s.state !== 'available') {
             await backupRemoved
+            // In a folder only administrators can change, the root part removes it once this version has run 10 s.
+            for (let i = 0; bundle && i < 60 && existsSync(bundle + BACKUP_SUFFIX); i++) await new Promise((r) => setTimeout(r, 500))
             return app.quit()
           }
           const d = await this.updateDownload()
           console.log(`[updater-test] download → ${d.state} canInstall=${d.canInstall}`)
-          await this.updateInstall()
+          const manual = await this.updateInstall()
+          if (manual) {
+            console.log(`[updater-test] install → by hand (${manual.reason}${manual.error ? `: ${manual.error}` : ''})`)
+            app.quit()
+          }
         })().catch((err) => {
           console.log(`[updater-test] failed: ${String(err)}`)
           app.quit()
@@ -303,19 +400,27 @@ export class Updater implements UpdateApi {
     }
   }
 
-  async updateInstall(): Promise<void> {
+  updateInstall(): Promise<ManualInstall | null> {
+    if (this.installing) return this.installing
+    this.installing = this.doInstall().finally(() => {
+      this.installing = null
+    })
+    return this.installing
+  }
+
+  private async doInstall(): Promise<ManualInstall | null> {
     // Only a file that passed doDownload()'s checks is ever set here.
     const file = this.downloadedFile
     const info = this.status.info
     if (!file || !existsSync(file) || !info) {
       if (info) await shell.openExternal(info.releaseUrl)
-      return
+      return null
     }
     const bundle = currentBundle()
     if (bundle && file.endsWith('.zip')) {
       try {
         await this.installInPlace(file, bundle, info.latestVersion)
-        return
+        return null
       } catch (err) {
         if (process.env['ADAR_UPDATE_TEST_AUTOINSTALL'] === '1') console.log(`[updater-test] install failed: ${String(err)}`)
         if (err instanceof UpdateRejected) {
@@ -325,16 +430,28 @@ export class Updater implements UpdateApi {
           this.set({ state: 'error', error: err.message, manual: true })
           throw err
         }
-        console.error('[adar] in-place update failed, falling back', err)
+        // The user installs the download by hand (the renderer explains how and offers updateShowDownload).
+        const folder = path.basename(path.dirname(bundle))
+        if (err instanceof AdarError && err.code === 'CANCELLED') return { reason: 'cancelled', folder }
+        if (err instanceof ReadOnlyLocation) return { reason: 'read-only', folder }
+        console.error('[adar] in-place update failed', err)
+        return { reason: 'failed', folder, error: err instanceof Error ? err.message : String(err) }
       }
     }
-    // Fallback: open the .dmg (Finder shows the drag-to-Applications window) or reveal the archive.
+    // Open the .dmg (Finder shows the drag-to-Applications window) or reveal the archive.
     if (file.endsWith('.dmg')) await shell.openPath(file)
     else shell.showItemInFolder(file)
+    return null
+  }
+
+  async updateShowDownload(): Promise<void> {
+    const file = this.downloadedFile
+    if (file && existsSync(file)) shell.showItemInFolder(file)
   }
 
   private async installInPlace(zip: string, bundle: string, version: string): Promise<void> {
-    await fs.access(path.dirname(bundle), fs.constants.W_OK)
+    const access = await bundleAccess(bundle)
+    if (access === 'read-only') throw new ReadOnlyLocation(`Adar cannot replace itself in ${path.dirname(bundle)}`)
     const work = await fs.mkdtemp(path.join(app.getPath('temp'), 'adar-update-'))
     await execFileP('/usr/bin/ditto', ['-x', '-k', zip, work])
     const entries = (await fs.readdir(work)).filter((e) => e.endsWith('.app'))
@@ -352,6 +469,7 @@ export class Updater implements UpdateApi {
       await removeBundleTree(work)
       throw new UpdateRejected(mismatch)
     }
+    if (access === 'admin') return this.installAsAdmin(work, fresh, bundle, version)
     // Helper runs after we quit: wait for our pid, swap bundles (rolling back on failure), relaunch.
     // The previous bundle stays as $current.adar-old until the new version has started (start()).
     const script = path.join(work, 'install.sh')
@@ -374,6 +492,37 @@ export class Updater implements UpdateApi {
     )
     const child = spawn('/bin/sh', [script, String(process.pid), bundle, fresh], { detached: true, stdio: 'ignore' })
     child.unref()
+    bypassQuitGuard() // the renderer already confirmed the restart
+    app.quit()
+  }
+
+  /**
+   * Only an administrator can change the folder that holds Adar (a standard account and /Applications): ask for the
+   * password while Adar is still open, as Finder does, and start ADMIN_SWAP_SCRIPT as root, which waits for Adar to
+   * quit. A helper in this account relaunches Adar once the new version is in place.
+   */
+  private async installAsAdmin(work: string, fresh: string, bundle: string, version: string): Promise<void> {
+    // Here, as this user: the root part never touches the downloaded files' contents.
+    await execFileP('/usr/bin/xattr', ['-dr', 'com.apple.quarantine', fresh]).catch(() => undefined)
+    const args = [String(process.pid), bundle, fresh, mainProcessPattern(bundle)]
+    try {
+      if (simulatedAdmin()) {
+        spawn('/bin/sh', ['-c', ADMIN_SWAP_SCRIPT, 'sh', ...args], { detached: true, stdio: 'ignore' }).unref()
+      } else {
+        await runAsAdmin(ADMIN_SWAP_SCRIPT, args, {
+          background: true,
+          prompt: `Adar needs an administrator's name and password to install version ${version} in ${path.basename(path.dirname(bundle))}.`,
+          failure: 'Could not get administrator rights to replace Adar'
+        })
+      }
+    } catch (err) {
+      await removeBundleTree(work)
+      throw err
+    }
+    // From here the root part waits for Adar to quit (if this throws, Adar stays open and it gives up after 5 minutes).
+    const script = path.join(work, 'relaunch.sh')
+    await fs.writeFile(script, RELAUNCH_AFTER_ADMIN_SCRIPT, { mode: 0o755 })
+    spawn('/bin/sh', [script, String(process.pid), bundle, fresh], { detached: true, stdio: 'ignore' }).unref()
     bypassQuitGuard() // the renderer already confirmed the restart
     app.quit()
   }

@@ -62,7 +62,22 @@ export interface UpdateStatus {
   checkedAt?: number
 }
 
-export const UPDATE_METHODS = ['updateGetStatus', 'updateCheck', 'updateDownload', 'updateInstall', 'updateSkip'] as const
+/**
+ * Why "Restart to update" left the update to the user: they cancelled the administrator password Adar needs to replace
+ * itself in a folder only administrators can change, Adar runs from a read-only place (a disk image, or a download macOS
+ * runs from a temporary copy until it is moved), or replacing it failed.
+ */
+export type ManualInstallReason = 'cancelled' | 'read-only' | 'failed'
+
+export interface ManualInstall {
+  reason: ManualInstallReason
+  /** Name of the folder that holds Adar ("Applications"). */
+  folder: string
+  /** What went wrong ('failed' only). */
+  error?: string
+}
+
+export const UPDATE_METHODS = ['updateGetStatus', 'updateCheck', 'updateDownload', 'updateInstall', 'updateShowDownload', 'updateSkip'] as const
 export type UpdateMethod = (typeof UPDATE_METHODS)[number]
 
 export interface UpdateApi {
@@ -70,8 +85,14 @@ export interface UpdateApi {
   /** manual = user-initiated: the answer is always surfaced (even "up to date") and skipped versions are ignored. */
   updateCheck(manual?: boolean): Promise<UpdateStatus>
   updateDownload(): Promise<UpdateStatus>
-  /** Replace the app and relaunch (packaged macOS builds), or open the downloaded .dmg / release page otherwise. */
-  updateInstall(): Promise<void>
+  /**
+   * Replace the app and relaunch (packaged macOS builds; asks for an administrator's password when the app's folder
+   * needs one), or open the downloaded .dmg / release page otherwise. Resolves with the reason when the app could not
+   * replace itself, so the user can install the download by hand.
+   */
+  updateInstall(): Promise<ManualInstall | null>
+  /** Show the downloaded update in Finder. */
+  updateShowDownload(): Promise<void>
   /** Do not notify about this version again. */
   updateSkip(version: string): Promise<void>
 }
