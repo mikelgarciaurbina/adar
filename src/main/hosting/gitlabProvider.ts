@@ -3,10 +3,10 @@
 // a finished pipeline's jobs, and the paths of forks, are cached.
 
 import { AdarError } from '@shared/errors'
-import { gitlabApprovers, gitlabCommits, gitlabJobs, gitlabMergeChecks, gitlabMergeMethods, gitlabPull, type GitlabExtra, type GitlabUser } from '@shared/gitlab'
+import { gitlabApprovers, gitlabCommits, gitlabJobs, gitlabMergeChecks, gitlabMergeMethods, gitlabProtected, gitlabPull, type GitlabExtra, type GitlabUser } from '@shared/gitlab'
 import { sameCommit, type PullCheck, type PullRequest, type RepoPullRequests } from '@shared/hosting'
 import { BoundedCache, mapLimit, type ApiClient } from './http'
-import { changedSinceLooked, invalid, type HostingRemote, type PullProvider } from './provider'
+import { changedSinceLooked, invalid, unlessRefused, type HostingRemote, type PullProvider } from './provider'
 
 /** Open merge requests read in full (pipeline, approvals) per update; the rest show without them. */
 const MAX_DETAILED = 30
@@ -137,6 +137,10 @@ export function gitlabProvider(api: ApiClient, at: HostingRemote, server: string
 
     async mergeChecks(number) {
       return gitlabMergeChecks(await read(number))
+    },
+
+    async protectedBranches() {
+      return unlessRefused(async () => gitlabProtected(await api.json('GET', `${base}/protected_branches?per_page=100`)))
     }
   }
 }

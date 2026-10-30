@@ -29,11 +29,12 @@ import {
   Undo2,
   Upload
 } from 'lucide-react'
+import { keepMenuItem } from '@renderer/actions/cleanup'
 import * as git from '@renderer/actions/git'
 import { branchPullItems } from '@renderer/components/pulls/menus'
 import type { MenuItem } from '@renderer/components/common/ContextMenu'
 import { useMessageEdit } from '@renderer/lib/messageEdit'
-import { currentBranch } from '@renderer/lib/refs'
+import { currentBranch, remoteBranchName } from '@renderer/lib/refs'
 import { useApp, type RepoTab } from '@renderer/store/appStore'
 import type { Commit, Ref, Stash } from '@shared/types'
 import { isAncestor, oldestFirst, type Pill } from './model'
@@ -110,10 +111,11 @@ export function refMenu(repo: string, pill: Pill): MenuItem[] {
   if (isLocal) {
     items.push(
       { label: `Set upstream for ${name}…`, icon: <Link2 size={I} />, onClick: () => git.setUpstreamDialog(repo, ref) },
-      { label: `Rename ${name}…`, icon: <Pencil size={I} />, onClick: () => git.renameBranch(repo, ref) },
-      { label: `Delete ${name}…`, icon: <Trash size={I} />, danger: true, onClick: () => git.deleteBranch(repo, ref) }
+      { label: `Rename ${name}…`, icon: <Pencil size={I} />, onClick: () => git.renameBranch(repo, ref) }
     )
   }
+  if (pill.kind === 'branch' || pill.kind === 'remote') items.push(keepMenuItem(repo, isLocal ? name : remoteBranchName(ref)))
+  if (isLocal) items.push({ label: `Delete ${name}…`, icon: <Trash size={I} />, danger: true, onClick: () => git.deleteBranch(repo, ref) })
   const remoteRefs: Ref[] = pill.kind === 'remote' ? [ref] : pill.remotes
   for (const r of remoteRefs) {
     items.push({ label: `Delete ${r.name} from remote…`, icon: <Trash size={I} />, danger: true, onClick: () => git.deleteRemoteBranch(repo, r) })

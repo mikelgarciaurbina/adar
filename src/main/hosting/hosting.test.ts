@@ -619,3 +619,83 @@ describe('GitLab merge requests', () => {
     expect(await ops.getPullRequests(repo)).toBeNull()
   })
 })
+
+describe('Protected branches (kept by Clean up branches)', () => {
+  it('asks GitHub for its protected branches, only once pull requests are on', async () => {
+    let answer: { status?: number; json: unknown } = { json: [{ name: 'main', protected: true }, { name: 'release/4.2' }, { name: '-x' }, { name: 'main' }] }
+    const { ops, calls } = setup({ ...userRoute, 'GET /repos/acme/widgets/branches?protected=true&per_page=100': () => answer })
+    const repo = githubRepo()
+    await expect(ops.getProtectedBranches(repo)).rejects.toThrow(/off/)
+    expect(calls).toEqual([])
+    await ops.connectGithub('token', TOKEN)
+    expect(await ops.getProtectedBranches(repo)).toEqual(['main', 'release/4.2'])
+    answer = { status: 403, json: { message: 'Resource not accessible by personal access token' } }
+    expect(await ops.getProtectedBranches(repo)).toBeNull()
+    answer = { status: 500, json: { message: 'Oops' } }
+    await expect(ops.getProtectedBranches(repo)).rejects.toMatchObject({ code: 'NETWORK' })
+  })
+
+  it('reads GitLab’s protected branches and patterns, or nothing when the role may not see them', async () => {
+    const SERVER = 'https://gitlab.example.com'
+    const P = `${SERVER}/api/v4/projects/${encodeURIComponent('web/widgets')}`
+    let status = 200
+    const { ops } = setupBitbucket({
+      [`GET ${SERVER}/api/v4/user`]: () => ({ json: { username: 'mikel', name: 'Mikel' } }),
+      [`GET ${P}/protected_branches?per_page=100`]: () => (status === 200 ? { json: [{ name: 'main' }, { name: 'release/*' }, { name: 'a b' }] } : { status, json: { message: '403 Forbidden' } })
+    })
+    const repo = githubRepo(`${SERVER}/web/widgets.git`)
+    await ops.connectGitlab({ url: SERVER, token: 'glpat-' + 'g'.repeat(26), remoteHost: 'gitlab.example.com' })
+    expect(await ops.getProtectedBranches(repo)).toEqual(['main', 'release/*'])
+    status = 403
+    expect(await ops.getProtectedBranches(repo)).toBeNull()
+  })
+
+  it('asks Bitbucket Cloud only when the sign-in administers the repository', async () => {
+    let permission = 'write'
+    const { ops, calls } = setupBitbucket({
+      [`GET ${API}/user`]: () => ({ json: { display_name: 'Mikel', uuid: '{me}' } }),
+      [`GET ${API}/user/permissions/repositories?q=${encodeURIComponent('repository.full_name="acme/widgets"')}`]: () => ({ json: { values: [{ permission }] } }),
+      [`GET ${REPO_API}/branch-restrictions?pagelen=100`]: () => ({
+        json: {
+          values: [
+            { kind: 'push', branch_match_kind: 'glob', pattern: 'main' },
+            { kind: 'delete', branch_match_kind: 'glob', pattern: 'env/*' },
+            { kind: 'push', branch_match_kind: 'branching_model', branch_type: 'release' }
+          ]
+        }
+      })
+    })
+    const repo = githubRepo('git@bitbucket.org:acme/widgets.git')
+    await ops.connectBitbucket({ kind: 'cloud', email: 'mikel@example.com', token: BB_TOKEN })
+    expect(await ops.getProtectedBranches(repo)).toBeNull()
+    expect(calls.some((c) => c.url.includes('branch-restrictions'))).toBe(false)
+    permission = 'admin'
+    expect(await ops.getProtectedBranches(repo)).toEqual(['main', 'env/*'])
+  })
+
+  it('reads Bitbucket Data Center’s branch permissions, or nothing for someone who is not an admin', async () => {
+    const SERVER = 'https://bitbucket.example.com'
+    const RESTRICTIONS = `${SERVER}/rest/branch-permissions/2.0/projects/WEB/repos/widgets/restrictions?limit=100`
+    let status = 200
+    const { ops } = setupBitbucket({
+      [`GET ${SERVER}/rest/api/1.0/application-properties`]: () => ({ json: {}, headers: { 'x-ausername': 'mikel' } }),
+      [`GET ${RESTRICTIONS}`]: () =>
+        status === 200
+          ? {
+              json: {
+                values: [
+                  { type: 'no-deletes', matcher: { id: 'refs/heads/pre', type: { id: 'BRANCH' }, active: true } },
+                  { type: 'read-only', matcher: { id: 'release/*', type: { id: 'PATTERN' }, active: true } },
+                  { type: 'read-only', matcher: { id: 'production', type: { id: 'MODEL_BRANCH' }, active: true } }
+                ]
+              }
+            }
+          : { status, json: { errors: [{ message: 'You are not permitted to access this resource' }] } }
+    })
+    const repo = githubRepo(`${SERVER}/scm/web/widgets.git`)
+    await ops.connectBitbucket({ kind: 'server', url: SERVER, token: BB_TOKEN, remoteHost: 'bitbucket.example.com' })
+    expect(await ops.getProtectedBranches(repo)).toEqual(['pre', 'release/*'])
+    status = 401
+    expect(await ops.getProtectedBranches(repo)).toBeNull()
+  })
+})

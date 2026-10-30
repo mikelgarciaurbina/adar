@@ -1,15 +1,72 @@
 // "Clean up branches": which branches can go, in which group, and which are ticked when the dialog
 // opens. Pure: the backend says what git knows (getBranchCleanup), the pull requests add squash and
-// rebase merges git cannot see.
+// rebase merges git cannot see, and the keep rules (the repository's own list, the branches its
+// service protects) take long-lived branches out.
 
 import { sameCommit, type RepoPullRequests } from '@shared/hosting'
 import type { BranchCleanupInfo, Ref, RefsResult } from '@shared/types'
 import { forkBranch, pullRef } from './pulls'
 
 /** Branches nobody means to clean up, wherever they are. */
-const LONG_LIVED = new Set(['main', 'master', 'develop', 'development', 'dev', 'trunk', 'staging', 'production', 'stable'])
+export const LONG_LIVED: readonly string[] = ['main', 'master', 'develop', 'development', 'dev', 'trunk', 'staging', 'production', 'stable']
+const longLived = new Set(LONG_LIVED)
 /** Release branches: listed, never ticked for you. */
 const isRelease = (name: string) => /^(release|releases|hotfix|support)[/-]/.test(name)
+/** Names environments' branches often have (pre-production, integration, QA…): listed, never ticked for you. */
+const ENVIRONMENTS = new Set(['pre', 'preprod', 'pre-prod', 'preproduction', 'pre-production', 'int', 'integration', 'qa', 'uat', 'test', 'testing', 'stage', 'stg', 'prod', 'prd', 'sandbox', 'demo'])
+export const looksLikeEnvironment = (name: string) => ENVIRONMENTS.has(name.toLowerCase())
+
+/** What keeps a branch out of Clean up branches besides the base branch and the names kept everywhere. */
+export interface KeepRules {
+  /** The repository's own names and patterns (RepoInfo.keptBranches). */
+  mine: readonly string[]
+  /** What its hosting service protects, when it said. */
+  protected: readonly string[]
+}
+
+export const NO_KEEP_RULES: KeepRules = { mine: [], protected: [] }
+
+const patterns = new Map<string, RegExp>()
+
+/** Whether a kept name or pattern covers a branch: "env/*" keeps "env/eu" (* stands for any text). */
+export function keepMatches(pattern: string, name: string): boolean {
+  if (!pattern.includes('*')) return pattern === name
+  let re = patterns.get(pattern)
+  if (!re) {
+    re = new RegExp(`^${pattern.split('*').map((part) => part.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*')}$`)
+    patterns.set(pattern, re)
+  }
+  return re.test(name)
+}
+
+/**
+ * The branches a kept pattern covers: local ones by name, then the remote's own (as "origin/x") when no local
+ * branch has that name.
+ */
+export function keptMatches(pattern: string, locals: readonly string[], remote: string | null, remotes: readonly string[]): string[] {
+  const here = locals.filter((n) => keepMatches(pattern, n))
+  const there = remote ? remotes.filter((n) => keepMatches(pattern, n) && !here.includes(n)).map((n) => `${remote}/${n}`) : []
+  return [...here, ...there]
+}
+
+export type KeptReason =
+  | { kind: 'base' }
+  /** One of LONG_LIVED. */
+  | { kind: 'everywhere' }
+  /** The repository's own list: `rule` is the name itself or the pattern that covers it. */
+  | { kind: 'mine'; rule: string }
+  | { kind: 'protected'; rule: string }
+
+/** Why Clean up branches never offers `name` (a local branch, or a branch's name on the remote), or null. */
+export function keptBy(name: string, base: string, rules: KeepRules): KeptReason | null {
+  if (name === base) return { kind: 'base' }
+  if (longLived.has(name)) return { kind: 'everywhere' }
+  if (rules.mine.includes(name)) return { kind: 'mine', rule: name }
+  const shielded = rules.protected.find((p) => keepMatches(p, name))
+  if (shielded) return { kind: 'protected', rule: shielded }
+  const mine = rules.mine.find((p) => keepMatches(p, name))
+  return mine ? { kind: 'mine', rule: mine } : null
+}
 
 export type CleanupReason =
   /** git: all its commits are in the base branch. */
@@ -36,8 +93,22 @@ export interface CleanupItem {
   isHead: boolean
   /** Commits lost by deleting it (in no other branch). */
   loses: number
+  /** Its name looks like an environment's branch (pre, int, qa…): never ticked for you. */
+  environment: boolean
   /** Ticked when the dialog opens, and when its group is ticked. */
   ticked: boolean
+}
+
+/** What the dialog's last line names as always kept. */
+export interface KeptSummary {
+  /** The default branch. */
+  base: string
+  /** LONG_LIVED names among the local branches. */
+  everywhere: string[]
+  /** What the service protects, as it wrote it. */
+  protected: string[]
+  /** The repository's own list (what the service also protects shows once, as protected). */
+  mine: string[]
 }
 
 export interface CleanupPlan {
@@ -49,8 +120,8 @@ export interface CleanupPlan {
   gone: CleanupItem[]
   /** Branches of the remote already in the base branch. */
   remote: CleanupItem[]
-  /** Branches always kept ("main"), for the dialog's last line. */
-  kept: string[]
+  /** Branches always kept, for the dialog's last line. */
+  kept: KeptSummary
   /** Branches checked out in another worktree: never offered. */
   inWorktrees: string[]
 }
@@ -65,7 +136,7 @@ export function cleanupBase(refs: RefsResult | null, pulls: Pick<RepoPullRequest
   return mainLocal?.name ?? 'main'
 }
 
-export function cleanupPlan(info: BranchCleanupInfo, pulls: RepoPullRequests | null): CleanupPlan {
+export function cleanupPlan(info: BranchCleanupInfo, pulls: RepoPullRequests | null, rules: KeepRules = NO_KEEP_RULES): CleanupPlan {
   const merged = (pulls?.pulls ?? []).filter((p) => p.state === 'merged')
   const pullFor = (name: string, upstream: string | null, sha: string) =>
     merged.find((p) =>
@@ -73,7 +144,7 @@ export function cleanupPlan(info: BranchCleanupInfo, pulls: RepoPullRequests | n
         ? forkBranch(p) === name && sameCommit(p.headSha, sha)
         : (upstream ? upstream === `${pulls!.remote}/${p.headRef}` : name === p.headRef) && sameCommit(p.headSha, sha)
     )
-  const keep = (name: string) => name === info.base || LONG_LIVED.has(name)
+  const keep = (name: string) => keptBy(name, info.base, rules) !== null
 
   const inBase: CleanupItem[] = []
   const gone: CleanupItem[] = []
@@ -98,7 +169,8 @@ export function cleanupPlan(info: BranchCleanupInfo, pulls: RepoPullRequests | n
       reason,
       isHead: b.isHead,
       loses,
-      ticked: loses === 0 && !isRelease(b.name)
+      environment: looksLikeEnvironment(b.name),
+      ticked: loses === 0 && !isRelease(b.name) && !looksLikeEnvironment(b.name)
     })
     if (b.merged) inBase.push(item({ kind: 'merged' }, 0))
     else if (pr) inBase.push(item({ kind: 'pull', ref: pullRef(pr) }, 0))
@@ -121,11 +193,18 @@ export function cleanupPlan(info: BranchCleanupInfo, pulls: RepoPullRequests | n
           reason: { kind: 'merged' } as const,
           isHead: false,
           loses: 0,
-          ticked: !isRelease(r.name)
+          environment: looksLikeEnvironment(r.name),
+          ticked: !isRelease(r.name) && !looksLikeEnvironment(r.name)
         }))
     : []
 
-  const kept = [info.base, ...info.local.map((b) => b.name).filter((n) => n !== info.base && LONG_LIVED.has(n))]
+  const shielded = rules.protected.filter((p) => p !== info.base)
+  const kept: KeptSummary = {
+    base: info.base,
+    everywhere: info.local.map((b) => b.name).filter((n) => n !== info.base && longLived.has(n)),
+    protected: shielded,
+    mine: rules.mine.filter((p) => p !== info.base && !shielded.includes(p))
+  }
   return { base: info.base, remoteName: info.remoteName, inBase: inBase.sort(newestFirst), gone: gone.sort(newestFirst), remote: remote.sort(newestFirst), kept, inWorktrees }
 }
 

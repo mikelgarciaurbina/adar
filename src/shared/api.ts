@@ -252,6 +252,11 @@ export interface AdarApi {
   getIdentity(repo: string | null): Promise<Identity>
   /** Set user.name/email locally for repo, or globally when repo is null. */
   setIdentity(repo: string | null, name: string, email: string): Promise<void>
+  /**
+   * Keep a branch name or pattern ("env/*") out of Clean up branches, here and on the remote, or stop keeping it.
+   * Saved in the repository's own git config (adar.keepBranch, shared by its worktrees); RepoInfo.keptBranches lists them.
+   */
+  keepBranch(repo: string, name: string, keep: boolean): Promise<void>
 
   // ── Submodules ──────────────────────────────────────────────────────────
   updateSubmodules(repo: string, opts?: { init?: boolean; recursive?: boolean }): Promise<void>
@@ -290,6 +295,11 @@ export interface AdarApi {
   getPullRequestCommits(repo: string, number: number): Promise<PullCommit[]>
   /** What would stop a merge now, when the provider says it (Bitbucket Data Center, GitLab); null otherwise. */
   getPullRequestMergeChecks(repo: string, number: number): Promise<MergeChecks | null>
+  /**
+   * Names and patterns ("release/*") of the branches the repository's service protects, for Clean up branches;
+   * null when it would not say to this sign-in (Bitbucket tells only repository admins). Refused when pull requests are off.
+   */
+  getProtectedBranches(repo: string): Promise<string[] | null>
   /** Open a pull request on the repository's remote (the head branch must be pushed there already). */
   createPullRequest(repo: string, opts: CreatePullOptions): Promise<PullRequest>
   /** Merge a pull request on its provider; refused when its head is no longer `headSha` (full or abbreviated). */
@@ -393,6 +403,7 @@ export const API_METHODS = [
   'setRemoteUrl',
   'getIdentity',
   'setIdentity',
+  'keepBranch',
   'updateSubmodules',
   'getGithubConnection',
   'connectGithub',
@@ -406,6 +417,7 @@ export const API_METHODS = [
   'getPullRequests',
   'getPullRequestCommits',
   'getPullRequestMergeChecks',
+  'getProtectedBranches',
   'createPullRequest',
   'mergePullRequest',
   'pullRequestBranch',

@@ -173,11 +173,12 @@ export function LeftPanel({ tab }: { tab: RepoTab }) {
   const branchKey = useMemo(() => (refs?.branches ?? []).map((b) => `${b.name}@${b.sha}`).join('\n'), [refs])
   const pullsData = pullsState?.data ?? null
   const unborn = !refs?.head.sha
+  const keptKey = (tab.info?.keptBranches ?? []).join('\n')
   useEffect(() => {
     if (!lastFetch || unborn) return
     const t = setTimeout(() => void loadCleanupPlan(repo).catch(() => undefined), 400)
     return () => clearTimeout(t)
-  }, [repo, lastFetch, branchKey, pullsData, unborn])
+  }, [repo, lastFetch, branchKey, pullsData, unborn, keptKey])
   const cleanupCount = useSafeToDelete((s) => (lastFetch ? (s.safe[repo]?.length ?? 0) : 0))
 
   // Worktrees: reloaded when branches move (a commit or checkout in any worktree changes shared refs).

@@ -6,6 +6,7 @@ import {
   MAX_TITLE,
   httpsUrl,
   isSafeBranchName,
+  keepPatterns,
   summarizeChecks,
   type MergeChecks,
   type MergeMethod,
@@ -301,4 +302,22 @@ export function serverMergeChecks(json: unknown): MergeChecks {
   const reasons = uniq(arr(m.vetoes).map((v) => str(v.summaryMessage) || str(v.detailedMessage)))
   const conflicts = m.conflicted === true || str(m.outcome) === 'CONFLICTED' ? true : m.conflicted === false ? false : null
   return { blocked: m.canMerge === false, reasons, conflicts }
+}
+
+/**
+ * Patterns of Cloud's branch restrictions (GET …/branch-restrictions). Those that follow the branching model
+ * ("every release branch") are left out: they name a kind of branch, not a pattern.
+ */
+export function cloudProtected(json: unknown): string[] {
+  return keepPatterns(pageValues(json).filter((r) => str(r.branch_match_kind) !== 'branching_model').map((r) => r.pattern))
+}
+
+/** Branches and patterns of Data Center's branch permissions (GET /rest/branch-permissions/2.0/…/restrictions). */
+export function serverProtected(json: unknown): string[] {
+  return keepPatterns(
+    pageValues(json)
+      .map((r) => obj(r.matcher))
+      .filter((m) => m.active !== false && ['BRANCH', 'PATTERN'].includes(str(obj(m.type).id)))
+      .map((m) => str(m.id).replace(/^refs\/heads\//, ''))
+  )
 }

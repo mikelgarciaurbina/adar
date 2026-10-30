@@ -250,6 +250,19 @@ export function isSafeBranchName(name: unknown): name is string {
   return !name.includes('..') && !name.includes('//') && !name.includes('@{') && !name.split('/').some((p) => p.startsWith('.'))
 }
 
+/**
+ * A branch name or pattern to keep out of Clean up branches ("pre", "env/*": * stands for any text), as the
+ * user types it or a service reports a protected branch.
+ */
+export function isKeepPattern(p: unknown): p is string {
+  return typeof p === 'string' && isSafeBranchName(p.replace(/\*/g, 'x'))
+}
+
+/** Unique keep patterns, in order, from untrusted names (at most `max`). */
+export function keepPatterns(names: readonly unknown[], max = 200): string[] {
+  return [...new Set(names.filter(isKeepPattern))].slice(0, max)
+}
+
 const CHECK_ORDER: Record<PullCheck['state'], number> = { failed: 0, running: 1, passed: 2, skipped: 3 }
 
 function checkRunState(status: string, conclusion: string): PullCheck['state'] {
@@ -460,4 +473,9 @@ export function githubErrorMessage(body: unknown, fallback: string): string {
   const main = str(body.message)
   const text = details.length ? details.join('; ') : main
   return text ? text.slice(0, 300) : fallback
+}
+
+/** Names of the protected branches in GET /repos/{owner}/{repo}/branches?protected=true. */
+export function githubProtected(v: unknown): string[] {
+  return Array.isArray(v) ? keepPatterns(v.filter(isObj).map((b) => b.name)) : []
 }

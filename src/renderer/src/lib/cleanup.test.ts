@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { PullRequest, RepoPullRequests } from '@shared/hosting'
 import type { BranchCleanupInfo, RefsResult } from '@shared/types'
-import { cleanupBase, cleanupPlan, cleanupSummary, defaultSelection } from './cleanup'
+import { cleanupBase, cleanupPlan, cleanupSummary, defaultSelection, keepMatches, keptBy, keptMatches } from './cleanup'
 
 const sha = (c: string) => c.repeat(40)
 type Local = BranchCleanupInfo['local'][number]
@@ -72,11 +72,67 @@ describe('branch cleanup', () => {
       ['origin/fix/rounding', true],
       ['origin/release/1.0', false]
     ])
-    expect(plan.kept).toEqual(['main', 'develop'])
+    expect(plan.kept).toEqual({ base: 'main', everywhere: ['develop'], protected: [], mine: [] })
     // A branch checked out in another worktree is never offered (git would refuse to delete it).
     expect(plan.inWorktrees).toEqual(['review'])
     expect(plan.inBase.some((i) => i.name === 'review')).toBe(false)
     expect([...defaultSelection(plan)].sort()).toEqual(['local:feat/cards', 'local:feat/search', 'local:fix/rounding'])
+  })
+
+  it('lists environment branches without ticking them, and leaves out what the repository and its service keep', () => {
+    const remote = (name: string) => ({ name, sha: sha('a'), merged: true, unique: 0, subject: 'x', date: 1 })
+    const data = info({
+      local: [
+        local('pre', { merged: true }),
+        local('qa', { merged: true }),
+        local('int', { merged: true }),
+        local('env/eu', { merged: true }),
+        local('prod', { merged: true }),
+        local('fix/rounding', { merged: true })
+      ],
+      remote: [remote('pre'), remote('int'), remote('env/us'), remote('release/4.2'), remote('fix/rounding')]
+    })
+    // Nothing set up: environment names are offered, never ticked.
+    const before = cleanupPlan(data, null)
+    expect(before.inBase.map((i) => [i.name, i.ticked, i.environment])).toEqual([
+      ['env/eu', true, false],
+      ['fix/rounding', true, false],
+      ['int', false, true],
+      ['pre', false, true],
+      ['prod', false, true],
+      ['qa', false, true]
+    ])
+    expect(before.remote.find((i) => i.name === 'pre')?.ticked).toBe(false)
+
+    // Kept by name and by pattern, here and on the remote; what the service protects too.
+    const plan = cleanupPlan(data, null, { mine: ['pre', 'int', 'env/*', 'prod'], protected: ['prod', 'release/*'] })
+    expect(plan.inBase.map((i) => i.name)).toEqual(['fix/rounding', 'qa'])
+    expect(plan.remote.map((i) => i.label)).toEqual(['origin/fix/rounding'])
+    // The service's rules show once, as protected; the default branch is never repeated.
+    expect(plan.kept).toEqual({ base: 'main', everywhere: [], protected: ['prod', 'release/*'], mine: ['pre', 'int', 'env/*'] })
+    expect(cleanupPlan(data, null, { mine: ['main'], protected: ['main'] }).kept).toEqual({ base: 'main', everywhere: [], protected: [], mine: [] })
+  })
+
+  it('matches kept names and patterns, and says why a branch is kept', () => {
+    expect(keepMatches('pre', 'pre')).toBe(true)
+    expect(keepMatches('pre', 'pre/x')).toBe(false)
+    expect(keepMatches('env/*', 'env/eu')).toBe(true)
+    expect(keepMatches('env/*', 'env/eu/west')).toBe(true)
+    expect(keepMatches('env/*', 'envy')).toBe(false)
+    expect(keepMatches('*-stable', '4.2-stable')).toBe(true)
+    expect(keepMatches('v1.*', 'v1x2')).toBe(false)
+    expect(keepMatches('(a)+*', '(a)+b')).toBe(true)
+    expect(keptMatches('env/*', ['env/eu', 'main', 'env/us'], 'origin', ['env/us', 'env/latam', 'main'])).toEqual(['env/eu', 'env/us', 'origin/env/latam'])
+    expect(keptMatches('env/*', ['env/eu'], null, ['env/latam'])).toEqual(['env/eu'])
+
+    const rules = { mine: ['pre', 'env/*'], protected: ['release/*', 'env/eu'] }
+    expect(keptBy('main', 'main', rules)).toEqual({ kind: 'base' })
+    expect(keptBy('develop', 'main', rules)).toEqual({ kind: 'everywhere' })
+    expect(keptBy('pre', 'main', rules)).toEqual({ kind: 'mine', rule: 'pre' })
+    expect(keptBy('release/4.2', 'main', rules)).toEqual({ kind: 'protected', rule: 'release/*' })
+    expect(keptBy('env/eu', 'main', rules)).toEqual({ kind: 'protected', rule: 'env/eu' })
+    expect(keptBy('env/us', 'main', rules)).toEqual({ kind: 'mine', rule: 'env/*' })
+    expect(keptBy('feat/x', 'main', rules)).toBeNull()
   })
 
   it('treats a fork’s merged pull request branch as merged, and works without a remote', () => {

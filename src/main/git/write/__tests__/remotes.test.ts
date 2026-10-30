@@ -5,6 +5,7 @@ import path from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { AdarEvent } from '@shared/types'
 import { createGitContext } from '../../context'
+import { keptBranches } from '../config'
 import { createWriteOps } from '../index'
 import {
   cleanupTmp,
@@ -291,6 +292,46 @@ describe('remotes & config', () => {
     expect(git(dir, ['config', '--local', 'user.email']).trim()).toBe('ada@example.com')
     await expectCode(ops.setIdentity(dir, 'Bad <name>', 'a@b'), 'INVALID_ARGUMENT')
     await expectCode(ops.setIdentity(dir, 'Name', ''), 'INVALID_ARGUMENT')
+  })
+
+  it('keeps branches out of Clean up branches in the repository config, shared by its worktrees', async () => {
+    const { ctx, ops } = makeOps()
+    const dir = initRepo()
+    commitFile(dir, 'a.txt', 'a\n', 'a')
+    git(dir, ['config', 'extensions.worktreeConfig', 'true'])
+    const linked = path.join(tmpDir(), 'linked')
+    git(dir, ['worktree', 'add', '-q', '-b', 'feat/x', linked])
+
+    await ops.keepBranch(dir, 'pre', true)
+    await ops.keepBranch(linked, 'env/*', true)
+    await ops.keepBranch(dir, 'pre', true)
+    await ops.keepBranch(dir, 'fix(1).a+b', true)
+    expect(git(dir, ['config', '--local', '--get-all', 'adar.keepBranch']).trim().split('\n')).toEqual(['pre', 'env/*', 'fix(1).a+b'])
+    expect(await keptBranches(ctx, linked)).toEqual(['pre', 'env/*', 'fix(1).a+b'])
+    expect(fs.existsSync(path.join(dir, '.git', 'worktrees', 'linked', 'config.worktree'))).toBe(false)
+
+    // Removing matches the exact value only (not as a regular expression).
+    await ops.keepBranch(dir, 'fix(1)xa+b', false)
+    await ops.keepBranch(dir, 'fix(1).a+b', false)
+    await ops.keepBranch(linked, 'pre', false)
+    expect(await keptBranches(ctx, dir)).toEqual(['env/*'])
+    await ops.keepBranch(dir, 'env/*', false)
+    expect(await keptBranches(ctx, dir)).toEqual([])
+
+    await expectCode(ops.keepBranch(dir, '-pre', true), 'INVALID_ARGUMENT')
+    await expectCode(ops.keepBranch(dir, 'a b', true), 'INVALID_ARGUMENT')
+    await expectCode(ops.keepBranch(dir, 'a..b', true), 'INVALID_ARGUMENT')
+    await expectCode(ops.keepBranch(dir, '', true), 'INVALID_ARGUMENT')
+  })
+
+  it('reads only valid kept names', async () => {
+    const { ctx } = makeOps()
+    const dir = initRepo()
+    git(dir, ['config', '--add', 'adar.keepBranch', 'qa'])
+    git(dir, ['config', '--add', 'adar.keepBranch', '--force'])
+    git(dir, ['config', '--add', 'adar.keepBranch', 'qa'])
+    git(dir, ['config', '--add', 'adar.keepBranch', 'release/*'])
+    expect(await keptBranches(ctx, dir)).toEqual(['qa', 'release/*'])
   })
 
   it('sets the global identity in the (isolated) global config', async () => {

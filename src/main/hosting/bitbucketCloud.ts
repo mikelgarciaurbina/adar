@@ -3,11 +3,11 @@
 // its builds once per commit (cached once they finished).
 
 import { AdarError } from '@shared/errors'
-import { buildRuns, cloudCommits, cloudMergeMethods, cloudPull, pageValues, type CloudViewer } from '@shared/bitbucket'
+import { buildRuns, cloudCommits, cloudMergeMethods, cloudProtected, cloudPull, pageValues, type CloudViewer } from '@shared/bitbucket'
 import { sameCommit, type PullCheck, type PullRequest, type RepoPullRequests } from '@shared/hosting'
 import { parseRemoteUrl } from '@shared/remoteUrl'
 import { BoundedCache, mapLimit, type ApiClient } from './http'
-import { changedSinceLooked, invalid, type HostingRemote, type PullProvider } from './provider'
+import { changedSinceLooked, invalid, unlessRefused, type HostingRemote, type PullProvider } from './provider'
 
 /** Open pull requests read in full (reviewers, tasks) per update; the rest show without them. */
 const MAX_DETAILED = 30
@@ -47,11 +47,16 @@ export function bitbucketCloudProvider(api: ApiClient, at: HostingRemote, viewer
     return runs
   }
 
-  const canMerge = async (): Promise<boolean> => {
+  /** The sign-in's permission on the repository ("read", "write", "admin"), or '' when Bitbucket does not say. */
+  const permission = async (): Promise<string> => {
     const q = encodeURIComponent(`repository.full_name="${at.owner}/${at.name}"`)
     const res = await api.json('GET', `/user/permissions/repositories?q=${q}`).catch(() => null)
-    const permission = str(pageValues(res)[0]?.permission)
-    return permission ? permission === 'admin' || permission === 'write' : true
+    return str(pageValues(res)[0]?.permission)
+  }
+
+  const canMerge = async (): Promise<boolean> => {
+    const p = await permission()
+    return p ? p === 'admin' || p === 'write' : true
   }
 
   return {
@@ -148,6 +153,13 @@ export function bitbucketCloudProvider(api: ApiClient, at: HostingRemote, viewer
 
     async mergeChecks() {
       return null
+    },
+
+    async protectedBranches() {
+      // Branch restrictions are shown only to repository admins (and to tokens with an admin scope).
+      const p = await permission()
+      if (p && p !== 'admin') return null
+      return unlessRefused(async () => cloudProtected(await api.json('GET', `${repoPath}/branch-restrictions?pagelen=100`)), ['AUTH_FAILED', 'INVALID_ARGUMENT', 'NOT_FOUND'])
     }
   }
 }

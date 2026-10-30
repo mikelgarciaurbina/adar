@@ -130,6 +130,7 @@ export type ModalState =
   | { kind: 'pulls-connect'; provider: HostingProvider; server?: string; remoteHost?: string; next?: () => void }
   | { kind: 'create-pull'; repo: string; head?: string; base?: string }
   | { kind: 'branch-cleanup'; repo: string }
+  | { kind: 'kept-branches'; repo: string }
   | { kind: 'new-worktree'; repo: string; branch?: string }
 
 export interface CredentialRequest {

@@ -188,6 +188,28 @@ describe('localBranchMenu', () => {
   })
 })
 
+describe('Never clean up', () => {
+  it('is ticked for the repository’s kept branches, here and on the remote, and fixed when something else keeps them', async () => {
+    const { useApp } = await import('@renderer/store/appStore')
+    const [pre, int, eu] = [local('pre'), local('int'), local('env/eu')]
+    const r = refs({ branches: [main, pre, int, eu], remotes: [remote('origin/main'), remote('origin/int')] })
+    useApp.setState({ tabs: [{ path: '/repo', refs: r, info: { remotes: [], keptBranches: ['int', 'env/*'] } }] as never })
+    const c = ctx({ refs: r })
+    const keep = (m: MenuItem[]) => find(m, /^Never clean up/)
+    expect(keep(localBranchMenu(c, pre))).toMatchObject({ label: 'Never clean up' })
+    expect(keep(localBranchMenu(c, pre))?.checked).toBeFalsy()
+    expect(keep(localBranchMenu(c, int))).toMatchObject({ label: 'Never clean up', checked: true })
+    expect(keep(localBranchMenu(c, int))?.disabled).toBeFalsy()
+    expect(keep(remoteBranchMenu(c, remote('origin/int')))).toMatchObject({ label: 'Never clean up', checked: true })
+    expect(keep(localBranchMenu(c, eu))).toMatchObject({ label: 'Never clean up (kept by env/*)', checked: true, disabled: true })
+    expect(keep(localBranchMenu(c, main))).toMatchObject({ label: 'Never clean up (default branch)', disabled: true })
+    // Right before Delete…, as in the design.
+    const order = labels(localBranchMenu(c, pre))
+    expect(order[order.indexOf('Never clean up') + 1]).toBe('Delete…')
+    useApp.setState({ tabs: [] })
+  })
+})
+
 describe('remoteBranchMenu', () => {
   it('offers creating a tracking branch when none exists', () => {
     const lonely = remote('origin/lonely')
@@ -276,7 +298,7 @@ describe('tag, stash, submodule and section menus', () => {
 
   it('section menus', () => {
     const state = { refs: [], canExpandAll: true, expandAll: vi.fn(), collapseAll: vi.fn() }
-    expect(labels(sectionMenu(ctx(), 'local', state))).toEqual(['Create branch…', 'New worktree…', 'Clean up branches…', 'Expand all folders', 'Collapse all folders'])
+    expect(labels(sectionMenu(ctx(), 'local', state))).toEqual(['Create branch…', 'New worktree…', 'Clean up branches…', 'Branches never cleaned up…', 'Expand all folders', 'Collapse all folders'])
     expect(labels(sectionMenu(ctx(), 'remote', state))).toContain('Add remote…')
     const unborn = ctx({ refs: refs({ head: { sha: null, branch: 'main', detached: false, unborn: true } }) })
     expect(find(sectionMenu(unborn, 'tags', state), 'Create tag at HEAD…')?.disabled).toBe(true)

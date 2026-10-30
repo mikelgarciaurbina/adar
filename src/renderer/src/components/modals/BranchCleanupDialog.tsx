@@ -1,26 +1,30 @@
 // "Clean up branches": fetches the remote with prune, then lists the local branches whose work is in the
 // base branch (ticked), those whose branch on the remote was deleted (ticked only when nothing would be
-// lost) and, folded away, the remote branches already in the base branch. Deleting is cleanUpBranches.
+// lost) and, folded away, the remote branches already in the base branch. Branches kept for good (Never
+// clean up, protected by the service) leave the list; Edit… opens their list on top. Deleting is
+// cleanUpBranches.
 
-import { useEffect, useMemo, useState } from 'react'
-import { BrushCleaning, Check, ChevronDown, ChevronRight, GitPullRequest, Sparkle, TriangleAlert } from 'lucide-react'
-import { cleanUpBranches, loadCleanupPlan } from '@renderer/actions/cleanup'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { BrushCleaning, Check, ChevronDown, ChevronRight, GitPullRequest, Pin, Sparkle, TriangleAlert } from 'lucide-react'
+import { cleanUpBranches, loadCleanupPlan, setKept, useKeepRules, useProtectedBranches, useSafeToDelete, type CleanupData } from '@renderer/actions/cleanup'
 import { Button } from '@renderer/components/common/Button'
 import { Modal } from '@renderer/components/common/Modal'
-import { defaultSelection, type CleanupItem, type CleanupPlan } from '@renderer/lib/cleanup'
+import { cleanupPlan, defaultSelection, type CleanupItem, type CleanupPlan } from '@renderer/lib/cleanup'
 import { pluralize, relativeTime } from '@renderer/lib/format'
 import { useApp } from '@renderer/store/appStore'
 import { describeError } from '@shared/errors'
 import { closeIfTopmost } from './controls'
-
-type Loaded = { plan: CleanupPlan; fetchError: string | null }
+import { KeptBranchesDialog, Names } from './KeptBranchesDialog'
 
 export function BranchCleanupDialog({ repo }: { repo: string }) {
-  const [loaded, setLoaded] = useState<Loaded | null>(null)
+  const [loaded, setLoaded] = useState<CleanupData | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [chosen, setChosen] = useState<Set<string>>(new Set())
   const [remoteOpen, setRemoteOpen] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [editing, setEditing] = useState(false)
+  const rules = useKeepRules(repo)
+  const service = useProtectedBranches((s) => s.repos[repo]?.service ?? 'the service')
   const close = () => closeIfTopmost('md-cleanup')
 
   const load = (fetch: boolean) => {
@@ -39,13 +43,19 @@ export function BranchCleanupDialog({ repo }: { repo: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [repo])
 
-  const plan = loaded?.plan ?? null
+  // Redone whenever the kept branches change (Never clean up here, a branch's menu, Edit…).
+  const plan = useMemo(() => (loaded ? cleanupPlan(loaded.info, loaded.pulls, rules) : null), [loaded, rules])
+  useEffect(() => {
+    if (plan) useSafeToDelete.getState().setSafe(repo, plan.inBase.map((i) => i.name))
+  }, [repo, plan])
   const all = useMemo(() => (plan ? [...plan.inBase, ...plan.gone, ...plan.remote] : []), [plan])
   const picked = all.filter((i) => chosen.has(i.key))
   const localCount = picked.filter((i) => i.scope === 'local').length
   const remoteCount = picked.length - localCount
   const losing = picked.filter((i) => i.loses > 0)
   const nothing = !!plan && all.length === 0
+
+  const keep = (item: CleanupItem) => void setKept(repo, item.name, true)
 
   const toggle = (keys: string[], on: boolean) =>
     setChosen((s) => {
@@ -154,9 +164,18 @@ export function BranchCleanupDialog({ repo }: { repo: string }) {
                   items={plan!.inBase}
                   chosen={chosen}
                   onToggle={toggle}
+                  onKeep={keep}
                   base={plan!.base}
                 />
-                <Group title={`Gone from ${plan!.remoteName ?? 'the remote'}`} why="Their commits are in no other branch" items={plan!.gone} chosen={chosen} onToggle={toggle} base={plan!.base} />
+                <Group
+                  title={`Gone from ${plan!.remoteName ?? 'the remote'}`}
+                  why="Their commits are in no other branch"
+                  items={plan!.gone}
+                  chosen={chosen}
+                  onToggle={toggle}
+                  onKeep={keep}
+                  base={plan!.base}
+                />
                 {plan!.remote.length > 0 && (
                   <Group
                     title={`On ${plan!.remoteName}`}
@@ -164,6 +183,7 @@ export function BranchCleanupDialog({ repo }: { repo: string }) {
                     items={plan!.remote}
                     chosen={chosen}
                     onToggle={toggle}
+                    onKeep={keep}
                     base={plan!.base}
                     folded={!remoteOpen}
                     onFold={() => setRemoteOpen((o) => !o)}
@@ -194,23 +214,64 @@ export function BranchCleanupDialog({ repo }: { repo: string }) {
                     </span>
                   </div>
                 )}
-                <span className="md-cleanup-kept">
-                  Always kept: <Names names={plan!.kept} />
-                  {plan!.inWorktrees.length > 0 ? ', ' : ' and '}
-                  branches with work of their own that are still on {plan!.remoteName ?? 'a remote'}
-                  {plan!.inWorktrees.length > 0 && (
-                    <>
-                      , and branches checked out in a worktree (<Names names={plan!.inWorktrees} />)
-                    </>
-                  )}
-                  .
-                </span>
+                <KeptLine plan={plan!} service={service} onEdit={() => setEditing(true)} />
               </>
             )}
           </>
         )}
       </div>
+      {editing && <KeptBranchesDialog repo={repo} onClose={() => setEditing(false)} />}
     </Modal>
+  )
+}
+
+/** "Always kept: main (default branch), pre and int (kept in this repository) and branches with work of their own… Edit…" */
+function KeptLine({ plan, service, onEdit }: { plan: CleanupPlan; service: string; onEdit(): void }) {
+  const { kept } = plan
+  const parts: ReactNode[] = [
+    <>
+      <code>{kept.base}</code> (default branch)
+    </>
+  ]
+  if (kept.everywhere.length)
+    parts.push(
+      <>
+        <Names names={kept.everywhere} /> (kept in every repository)
+      </>
+    )
+  if (kept.protected.length)
+    parts.push(
+      <>
+        <Names names={kept.protected} /> (protected on {service})
+      </>
+    )
+  if (kept.mine.length)
+    parts.push(
+      <>
+        <Names names={kept.mine} /> (kept in this repository)
+      </>
+    )
+  parts.push(`branches with work of their own that are still on ${plan.remoteName ?? 'a remote'}`)
+  if (plan.inWorktrees.length)
+    parts.push(
+      <>
+        branches checked out in a worktree (<Names names={plan.inWorktrees} />)
+      </>
+    )
+  return (
+    <span className="md-cleanup-kept">
+      Always kept:{' '}
+      {parts.map((p, i) => (
+        <span key={i}>
+          {i > 0 && (i === parts.length - 1 ? ' and ' : ', ')}
+          {p}
+        </span>
+      ))}
+      .{' '}
+      <button type="button" className="ui-link" onClick={onEdit}>
+        Edit…
+      </button>
+    </span>
   )
 }
 
@@ -221,6 +282,7 @@ function Group(props: {
   chosen: Set<string>
   base: string
   onToggle(keys: string[], on: boolean): void
+  onKeep(item: CleanupItem): void
   folded?: boolean
   onFold?(): void
 }) {
@@ -265,9 +327,21 @@ function Group(props: {
             <input type="checkbox" checked={chosen.has(i.key)} onChange={(e) => onToggle([i.key], e.target.checked)} />
             <span className="md-cleanup-name">{i.label}</span>
             <Reason item={i} base={props.base} />
+            <button
+              type="button"
+              className="md-cleanup-keep"
+              title={`Clean up branches never offers ${i.name} again, here or on the remote`}
+              onClick={(e) => {
+                e.preventDefault()
+                props.onKeep(i)
+              }}
+            >
+              <Pin size={12} /> Never clean up
+            </button>
             <span className="md-cleanup-sub">
               {i.subject}
               {i.date ? ` · ${relativeTime(i.date)}` : ''}
+              {i.environment && <span className="md-cleanup-env"> · looks like an environment branch, not ticked</span>}
               {i.reason.kind === 'pull' && ' · squash or rebase merged, so git alone would call it unmerged'}
               {i.isHead && <span className="md-cleanup-ok"> · Adar switches to {props.base} first</span>}
               {i.loses > 0 && <span className="md-cleanup-bad"> · {pluralize(i.loses, 'commit')} not in {props.base}</span>}
@@ -292,17 +366,4 @@ function Reason({ item, base }: { item: CleanupItem; base: string }) {
     default:
       return <span className="md-cleanup-tag md-cleanup-tag-merged">{item.scope === 'remote' ? `in ${base}` : `merged into ${base}`}</span>
   }
-}
-
-function Names({ names }: { names: string[] }) {
-  return (
-    <>
-      {names.map((n, i) => (
-        <span key={n}>
-          {i > 0 && ', '}
-          <code>{n}</code>
-        </span>
-      ))}
-    </>
-  )
 }

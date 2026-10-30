@@ -1,9 +1,9 @@
 // GitHub pull requests of one repository: GraphQL for the list, REST for the rest.
 
 import { AdarError } from '@shared/errors'
-import { PULLS_QUERY, pullCommitsFromRest, pullFromRest, pullsFromQuery } from '@shared/hosting'
+import { PULLS_QUERY, githubProtected, pullCommitsFromRest, pullFromRest, pullsFromQuery } from '@shared/hosting'
 import type { GithubClient } from './github'
-import { changedSinceLooked, invalid, type HostingRemote, type PullProvider } from './provider'
+import { changedSinceLooked, invalid, unlessRefused, type HostingRemote, type PullProvider } from './provider'
 
 export function githubProvider(client: GithubClient, at: HostingRemote, viewer: () => string): PullProvider {
   const repoPath = `/repos/${encodeURIComponent(at.owner)}/${encodeURIComponent(at.name)}`
@@ -51,6 +51,11 @@ export function githubProvider(client: GithubClient, at: HostingRemote, viewer: 
 
     async mergeChecks() {
       return null
+    },
+
+    async protectedBranches() {
+      // Anyone who can read the repository may ask; branches under rulesets count too.
+      return unlessRefused(async () => githubProtected(await client.rest('GET', `${repoPath}/branches?protected=true&per_page=100`)))
     }
   }
 }

@@ -6,6 +6,8 @@ import { WhatsNewModal } from '@renderer/components/update/WhatsNew'
 import { useApp } from '@renderer/store/appStore'
 import { AboutModal } from './AboutModal'
 import { BranchCleanupDialog } from './BranchCleanupDialog'
+import { closeIfTopmost } from './controls'
+import { KeptBranchesDialog } from './KeptBranchesDialog'
 import { NewWorktreeDialog } from './NewWorktreeDialog'
 import { IdentityModal } from './IdentityModal'
 import { RemotesModal } from './RemotesModal'
@@ -39,6 +41,8 @@ export function ModalHost() {
       return <NewWorktreeDialog key={modal.repo} repo={modal.repo} branch={modal.branch} />
     case 'branch-cleanup':
       return <BranchCleanupDialog key={modal.repo} repo={modal.repo} />
+    case 'kept-branches':
+      return <KeptBranchesDialog key={modal.repo} repo={modal.repo} onClose={() => closeIfTopmost('md-kept')} />
     case 'create-pull':
       return <CreatePullDialog key={`${modal.repo}\0${modal.head ?? ''}`} repo={modal.repo} head={modal.head} base={modal.base} />
     default:

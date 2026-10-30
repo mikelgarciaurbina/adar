@@ -132,6 +132,43 @@ describe('ModalHost', () => {
     expect(html).toMatch(/<form[^>]*>[\s\S]*<button type="submit" hidden="">/) // Enter submits the form
   })
 
+  it('renders the branches never cleaned up: the default branch, what GitHub protects, and the kept ones with their matches', async () => {
+    const { useProtectedBranches } = await import('@renderer/actions/cleanup')
+    // Server rendering reads a store's initial state.
+    const said = (repos: ReturnType<typeof useProtectedBranches.getState>['repos']) => {
+      useProtectedBranches.setState({ repos })
+      Object.assign(useProtectedBranches.getInitialState(), { repos })
+    }
+    const ref = (name: string, type: 'branch' | 'remote') => ({ name, fullName: `refs/${type === 'branch' ? 'heads' : 'remotes'}/${name}`, type, sha: 'a'.repeat(40), remote: type === 'remote' ? 'origin' : undefined })
+    const refs = {
+      head: info.head,
+      branches: ['main', 'pre', 'env/eu', 'env/us'].map((n) => ref(n, 'branch')),
+      remotes: ['origin/main', 'origin/env/latam'].map((n) => ref(n, 'remote')),
+      tags: [],
+      stashes: [],
+      submodules: []
+    }
+    seed({ tabs: [{ ...useApp.getState().tabs[0], info: { ...info, keptBranches: ['pre', 'env/*', 'prod'] }, refs } as AppState['tabs'][number]] })
+    said({ [repo]: { service: 'GitHub', state: 'known', patterns: ['prod', 'release/*'] } })
+    const html = render({ kind: 'kept-branches', repo })
+    expect(html).toContain('Branches never cleaned up')
+    expect(html).toContain('never offers these in <strong>adar</strong>, here or on origin')
+    const rows = [...html.matchAll(/md-cleanup-name">([^<]+)<\/span><span class="md-cleanup-tag [^"]+">([^<]+)</g)].map((m) => `${m[1]}: ${m[2]}`)
+    // prod is kept by the repository and protected on GitHub: it shows once, as protected.
+    expect(rows).toEqual(['main: default branch', 'prod: protected on GitHub', 'release/*: protected on GitHub', 'pre: kept by you', 'env/*: kept by you'])
+    expect(html).toContain('Matches <span><code>env/eu</code></span><span>, <code>env/us</code></span><span> and <code>origin/env/latam</code></span>')
+    expect(html).toContain('Matches no branch yet')
+    expect(html).toContain('aria-label="Stop keeping pre"')
+    expect(html).not.toContain('aria-label="Stop keeping prod"')
+    expect(html).toContain('Saved in adar, so its worktrees share it.')
+
+    said({ [repo]: { service: 'GitHub', state: 'off', patterns: [] } })
+    expect(render({ kind: 'kept-branches', repo })).toContain('Turn on pull requests to also keep the branches protected on GitHub.')
+    said({ [repo]: { service: 'Bitbucket', state: 'hidden', patterns: [] } })
+    expect(render({ kind: 'kept-branches', repo })).toContain('Bitbucket did not say which branches are protected: it tells only repository admins.')
+    said({})
+  })
+
   it('renders every settings section entry and the general controls', () => {
     const html = render({ kind: 'settings' })
     for (const s of ['General', 'Graph', 'Diff', 'Integrations', 'Git']) expect(html).toContain(`>${s}<`)

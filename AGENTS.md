@@ -59,8 +59,12 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
     these instead of `api` for anything that mutates a repository.
   - `actions/cleanup.tsx` — "Clean up branches" (fetch with prune, then `getBranchCleanup`; delete with one undo entry for
     the local branches) and the count on the Local section; which branches can go and how they are grouped is pure, in
-    `lib/cleanup.ts` (merged pull requests count as merged, so squash merges are found). The dialog is
-    `components/modals/BranchCleanupDialog.tsx`.
+    `lib/cleanup.ts` (merged pull requests count as merged, so squash merges are found; environment names such as `pre`
+    or `qa` are listed but never ticked). The dialog is `components/modals/BranchCleanupDialog.tsx`. Branches it never
+    offers, here or on the remote: the base branch, `LONG_LIVED`, the repository's own names and patterns ("Never clean
+    up", `keepBranch` → `git config adar.keepBranch` in the common config, read into `RepoInfo.keptBranches`) and, while
+    pull requests are on, what the service protects (`getProtectedBranches`, `PullProvider.protectedBranches`; null when
+    it would not say, as Bitbucket for non-admins). Their list is `components/modals/KeptBranchesDialog.tsx`.
   - `actions/worktrees.tsx` — worktrees: each tab's list (`useWorktrees`, from `getWorktrees`), opening one as a tab in
     the group of the tab it came from, creating one (dialog `components/modals/NewWorktreeDialog.tsx`, or one click for a
     pull request), removing with undo, and `finishWorktree` after its pull request is merged. Local branches checked out

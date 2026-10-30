@@ -7,6 +7,7 @@ import {
   MAX_TITLE,
   httpsUrl,
   isSafeBranchName,
+  keepPatterns,
   summarizeChecks,
   type MergeChecks,
   type MergeMethod,
@@ -251,4 +252,9 @@ export function gitlabMergeChecks(mr: unknown): MergeChecks {
   if (obj(v.user).can_merge === false) reasons.push('You do not have permission to merge it')
   if (!SETTLED.has(status)) reasons.push(BLOCKERS[status]?.(base) ?? 'It cannot be merged yet')
   return { blocked: reasons.length > 0, reasons, conflicts: v.has_conflicts === true || status === 'conflict' }
+}
+
+/** Names and patterns ("release/*") of GET /projects/:id/protected_branches. */
+export function gitlabProtected(json: unknown): string[] {
+  return keepPatterns(arr(json).map((b) => b.name))
 }

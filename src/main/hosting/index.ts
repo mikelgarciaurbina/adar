@@ -398,6 +398,11 @@ export function createHostingOps(ctx: GitContext, services: Pick<SystemServices,
       return (await requireProvider(repo)).provider.mergeChecks(number)
     },
 
+    async getProtectedBranches(repo): Promise<string[] | null> {
+      await assertRepo(ctx, repo)
+      return (await requireProvider(repo)).provider.protectedBranches()
+    },
+
     async createPullRequest(repo, opts: CreatePullOptions): Promise<PullRequest> {
       await assertRepo(ctx, repo)
       const title = typeof opts?.title === 'string' ? opts.title.trim() : ''

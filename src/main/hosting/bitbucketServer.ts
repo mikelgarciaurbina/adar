@@ -2,10 +2,10 @@
 // access token). Builds are read per commit (cached once they finished); merge checks on demand.
 
 import { AdarError } from '@shared/errors'
-import { buildRuns, pageValues, serverCommits, serverMergeChecks, serverMergeMethods, serverPull } from '@shared/bitbucket'
+import { buildRuns, pageValues, serverCommits, serverMergeChecks, serverMergeMethods, serverProtected, serverPull } from '@shared/bitbucket'
 import { sameCommit, type PullCheck, type PullRequest, type RepoPullRequests } from '@shared/hosting'
 import { BoundedCache, mapLimit, type ApiClient } from './http'
-import { changedSinceLooked, invalid, type HostingRemote, type PullProvider } from './provider'
+import { changedSinceLooked, invalid, unlessRefused, type HostingRemote, type PullProvider } from './provider'
 
 export interface ServerCaches {
   /** Finished builds by commit. */
@@ -125,6 +125,12 @@ export function bitbucketServerProvider(api: ApiClient, at: HostingRemote, serve
 
     async mergeChecks(number) {
       return serverMergeChecks(await api.json('GET', `${repoPath}/pull-requests/${number}/merge`))
+    },
+
+    async protectedBranches() {
+      // Branch permissions are shown only to repository admins; anyone else gets a 401 or a 403.
+      const path = `/rest/branch-permissions/2.0/projects/${encodeURIComponent(project)}/repos/${encodeURIComponent(at.name)}/restrictions?limit=100`
+      return unlessRefused(async () => serverProtected(await api.json('GET', path)), ['AUTH_FAILED', 'INVALID_ARGUMENT', 'NOT_FOUND'])
     }
   }
 }

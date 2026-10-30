@@ -37,7 +37,10 @@ their pipelines, approvals and GitLab's merge status · clean up branches in bul
 worktrees: a section in the left panel, new worktrees for a branch or a pull request opened as tabs in the same group,
 a branch checked out in another worktree opens that worktree instead of failing, and once its pull request is merged
 the worktree and its branch go in one step · any colour for a tab group (a picker or a hex value), drawn lighter in the
-night theme and deeper in the day theme so its name stays readable.
+night theme and deeper in the day theme so its name stays readable · branches that are never cleaned up: environment
+branches (`pre`, `int`, `qa`…) are listed but never ticked, *Never clean up* keeps a branch or a pattern (`env/*`) out
+for good, here and on the remote, and branches protected on GitHub, GitLab or Bitbucket count too when pull requests
+are on.
 
 ---
 

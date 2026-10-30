@@ -45,6 +45,8 @@ export interface RepoInfo {
   remotes: RemoteInfo[]
   /** A linked worktree: the main worktree's root; null for the main one (or a repository without worktrees). */
   mainWorktree?: string | null
+  /** Branch names and patterns ("env/*") Clean up branches never offers (git config adar.keepBranch). */
+  keptBranches?: string[]
 }
 
 /** A worktree of the repository (getWorktrees). */

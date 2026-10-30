@@ -24,6 +24,7 @@ import {
   Link,
   Lock,
   Pencil,
+  Pin,
   Plus,
   RefreshCw,
   Settings,
@@ -42,13 +43,13 @@ import {
   setWorktreeLocked,
   useWorktrees
 } from '@renderer/actions/worktrees'
-import { openBranchCleanup, useSafeToDelete } from '@renderer/actions/cleanup'
+import { keepMenuItem, openBranchCleanup, openKeptBranches, useSafeToDelete } from '@renderer/actions/cleanup'
 import { checkoutPull, copyPullLink, openWebPage, startPullRequest } from '@renderer/actions/pulls'
 import type { MenuItem } from '@renderer/components/common/ContextMenu'
 import { branchPullItems } from '@renderer/components/pulls/menus'
 import { pullNounFor, usePulls } from '@renderer/components/pulls/pullStore'
 import { providerName, pullRef } from '@renderer/lib/pulls'
-import { currentBranch, localForRemote } from '@renderer/lib/refs'
+import { currentBranch, localForRemote, remoteBranchName } from '@renderer/lib/refs'
 import { useApp } from '@renderer/store/appStore'
 import type { PullRequest } from '@shared/hosting'
 import type { Ref, RefsResult, RemoteInfo, Stash, Submodule, Worktree } from '@shared/types'
@@ -144,6 +145,7 @@ export function localBranchMenu(ctx: SidebarMenuCtx, b: Ref): MenuItem[] {
     { label: 'Create branch here…', icon: icon(GitBranchPlus), onClick: () => git.createBranch(repo, b.name) },
     { label: 'Create tag here…', icon: icon(Tag), onClick: () => git.createTag(repo, b.sha) },
     { label: 'Rename…', icon: icon(Pencil), onClick: () => git.renameBranch(repo, b) },
+    keepMenuItem(repo, b.name),
     { label: 'Delete…', icon: icon(Trash2), danger: true, onClick: () => git.deleteBranch(repo, b) },
     // A branch already in the main branch: offer to clean up all of them at once.
     ...(useSafeToDelete.getState().safe[repo]?.includes(b.name)
@@ -178,6 +180,7 @@ export function remoteBranchMenu(ctx: SidebarMenuCtx, r: Ref): MenuItem[] {
   items.push(
     SEP,
     { label: 'Create branch here…', icon: icon(GitBranchPlus), onClick: () => git.createBranch(repo, r.name) },
+    keepMenuItem(repo, remoteBranchName(r)),
     { label: 'Delete from remote…', icon: icon(Trash2), danger: true, onClick: () => git.deleteRemoteBranch(repo, r) },
     SEP,
     { label: 'Copy branch name', icon: icon(Copy), onClick: () => git.copyText(r.name, 'Copied branch name') },
@@ -329,6 +332,7 @@ export function sectionMenu(ctx: SidebarMenuCtx, id: SectionId, state: Container
         { label: 'Create branch…', icon: icon(Plus), disabled: !headSha, onClick: () => git.createBranch(repo) },
         { label: 'New worktree…', icon: icon(FolderGit2), disabled: !headSha, onClick: () => newWorktree(repo) },
         { label: 'Clean up branches…', icon: icon(BrushCleaning), disabled: !headSha, onClick: () => openBranchCleanup(repo) },
+        { label: 'Branches never cleaned up…', icon: icon(Pin), onClick: () => openKeptBranches(repo) },
         SEP,
         ...expandItems,
         SEP,

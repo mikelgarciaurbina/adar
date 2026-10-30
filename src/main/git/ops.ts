@@ -58,6 +58,7 @@ export const WRITE_METHODS = [
   'renameRemote',
   'setRemoteUrl',
   'setIdentity',
+  'keepBranch',
   'updateSubmodules'
 ] as const satisfies readonly (keyof AdarApi)[]
 
@@ -77,6 +78,7 @@ export const HOSTING_METHODS = [
   'getPullRequests',
   'getPullRequestCommits',
   'getPullRequestMergeChecks',
+  'getProtectedBranches',
   'createPullRequest',
   'mergePullRequest',
   'pullRequestBranch'

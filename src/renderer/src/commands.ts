@@ -4,7 +4,7 @@
 
 import * as git from '@renderer/actions/git'
 import { installCliCommand, uninstallCliCommand } from '@renderer/actions/cli'
-import { openBranchCleanup } from '@renderer/actions/cleanup'
+import { openBranchCleanup, openKeptBranches } from '@renderer/actions/cleanup'
 import { newWorktree } from '@renderer/actions/worktrees'
 import { openConnect, selectPull, startPullRequest, turnOffPullRequests } from '@renderer/actions/pulls'
 import { hostingOn, pullIndexOf, repoHosting, usePulls } from '@renderer/components/pulls/pullStore'
@@ -117,6 +117,7 @@ export const COMMANDS: Command[] = [
   { id: 'manage-remotes', label: 'Manage Remotes…', group: 'Remote', when: hasRepo, run: withRepo((r) => useApp.getState().openModal({ kind: 'remotes', repo: r })) },
   { id: 'create-branch', label: 'Create Branch…', group: 'Branch', shortcut: 'Mod+B', when: hasRepo, run: withRepo((r) => git.createBranch(r)) },
   { id: 'clean-up-branches', label: 'Clean Up Branches…', group: 'Branch', when: hasRepo, run: withRepo((r) => openBranchCleanup(r)) },
+  { id: 'kept-branches', label: 'Branches Never Cleaned Up…', group: 'Branch', when: hasRepo, run: withRepo((r) => openKeptBranches(r)) },
   { id: 'new-worktree', label: 'New Worktree…', group: 'Branch', when: hasRepo, run: withRepo((r) => newWorktree(r)) },
   { id: 'stash', label: 'Stash Changes', group: 'Stash', shortcut: 'Mod+Shift+S', when: hasRepo, run: withRepo((r) => git.stash(r)) },
   { id: 'stash-message', label: 'Stash Changes with Message…', group: 'Stash', when: hasRepo, run: withRepo((r) => git.stash(r, { askMessage: true })) },

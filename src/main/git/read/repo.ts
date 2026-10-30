@@ -7,6 +7,7 @@ import type { RepoInfo } from '@shared/types'
 import type { ReadOps } from '../ops'
 import type { GitContext } from '../context'
 import { parseRemotesVerbose } from '../parsers/refs'
+import { keptBranches } from '../write/config'
 import type { SystemServices } from '../../system'
 import { assertRepo, clampInt, expandHome, failed, invalidArgument, locateRepo, notFound, readHead, type RepoLocation } from './common'
 
@@ -181,11 +182,12 @@ type RepoOps = Pick<ReadOps, 'openRepo' | 'trustRepo' | 'closeRepo' | 'initRepo'
 export function createRepoOps(ctx: GitContext, services: SystemServices): RepoOps {
   const getRepoInfo = async (repo: string): Promise<RepoInfo> => {
     const gitDir = await assertRepo(ctx, repo)
-    const [bare, head, state, remotes] = await Promise.all([
+    const [bare, head, state, remotes, kept] = await Promise.all([
       ctx.git(repo, ['rev-parse', '--is-bare-repository'], { allowFailure: true }),
       readHead(ctx, repo),
       ctx.operationState(repo),
-      ctx.git(repo, ['remote', '-v'], { allowFailure: true })
+      ctx.git(repo, ['remote', '-v'], { allowFailure: true }),
+      keptBranches(ctx, repo)
     ])
     const root = repo.length > 1 ? repo.replace(/[\\/]+$/, '') : repo
     // A linked worktree's git dir names the main repository's in its commondir file.
@@ -202,7 +204,8 @@ export function createRepoOps(ctx: GitContext, services: SystemServices): RepoOp
       head,
       state,
       remotes: remotes.code === 0 ? parseRemotesVerbose(remotes.stdout) : [],
-      mainWorktree
+      mainWorktree,
+      keptBranches: kept
     }
   }
 

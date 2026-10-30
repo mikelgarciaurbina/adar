@@ -53,6 +53,7 @@ describe('openRepo / getRepoInfo', () => {
     write(repo, 'src/deep/file.ts', 'x\n')
     const sha = commitAll(repo, 'init')
     git(repo, ['remote', 'add', 'origin', 'git@github.com:me/private.git'])
+    git(repo, ['config', '--add', 'adar.keepBranch', 'pre'])
 
     const info = await backend.openRepo(path.join(repo, 'src', 'deep'))
     expect(info).toEqual({
@@ -63,7 +64,8 @@ describe('openRepo / getRepoInfo', () => {
       head: { sha, branch: 'main', detached: false, unborn: false },
       state: 'none',
       remotes: [{ name: 'origin', fetchUrl: 'git@github.com:me/private.git', pushUrl: 'git@github.com:me/private.git' }],
-      mainWorktree: null
+      mainWorktree: null,
+      keptBranches: ['pre']
     })
     const fromFile = await backend.openRepo(path.join(repo, 'src', 'deep', 'file.ts'))
     expect(fromFile.path).toBe(repo)

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { checksOf, githubErrorMessage, httpsUrl, isSafeBranchName, pullCommitsFromRest, pullFromNode, pullFromRest, pullsFromQuery } from './hosting'
+import { checksOf, githubErrorMessage, githubProtected, httpsUrl, isKeepPattern, isSafeBranchName, pullCommitsFromRest, pullFromNode, pullFromRest, pullsFromQuery } from './hosting'
 import { githubRepoOf } from './remoteUrl'
 
 const sha = 'a'.repeat(40)
@@ -90,6 +90,10 @@ describe('pull request mapping', () => {
     expect(pullFromNode({ ...base, headRefOid: 'not-a-sha' }, 'x')?.headSha).toBe('')
     for (const bad of ['-x', 'a..b', 'a b', 'a:b', '.hidden', 'x/.y', 'x.lock', 'x/', 'a@{1}', 'a\\b', '']) expect(isSafeBranchName(bad)).toBe(false)
     for (const ok of ['main', 'feat/workspaces', 'fix-rebase_todo.2', 'pr/7']) expect(isSafeBranchName(ok)).toBe(true)
+    for (const ok of ['pre', 'env/*', '*', 'release/*/hotfix', '*-stable']) expect(isKeepPattern(ok)).toBe(true)
+    for (const bad of ['-*', '* x', 'a..*', '*/', '']) expect(isKeepPattern(bad)).toBe(false)
+    expect(githubProtected([{ name: 'main' }, { name: '--x' }, 'prod', { name: 'main' }, { name: 'release/4.2' }])).toEqual(['main', 'release/4.2'])
+    expect(githubProtected({ message: 'Not Found' })).toEqual([])
     expect(httpsUrl('https://github.com/a')).toBe('https://github.com/a')
     expect(httpsUrl('https://u:p@github.com/a')).toBeNull()
   })

@@ -3,10 +3,13 @@
 // context menus, drag & drop, command palette, shortcuts) should call these
 // instead of `api` directly so behaviour is consistent.
 
+import type { ReactNode } from 'react'
+import { Pin } from 'lucide-react'
 import { api, newOpId } from '@renderer/api/client'
 import { choose, confirm, form, prompt, validateRefName } from '@renderer/components/common/dialogs'
 import { showContextMenu, type MenuItem } from '@renderer/components/common/ContextMenu'
 import { toast } from '@renderer/components/common/toast'
+import { keepMatches } from '@renderer/lib/cleanup'
 import type { DraggedRef } from '@renderer/lib/dnd'
 import { pluralize, summarizeList } from '@renderer/lib/format'
 import { cleanMessage } from '@renderer/components/details/message'
@@ -404,7 +407,23 @@ export async function createBranch(repo: string, startPoint?: string, opts: { ch
   }
 }
 
+/** A delete confirmation's note for a branch the repository keeps out of Clean up branches (Never clean up). */
+function keptNote(repo: string, name: string): ReactNode {
+  const kept = tabOf(repo)?.info?.keptBranches ?? []
+  const rule = kept.find((p) => p === name) ?? kept.find((p) => keepMatches(p, name))
+  if (!rule) return null
+  return (
+    <span className="md-kept-why">
+      <Pin size={13} />
+      <span>
+        You keep {rule} in this repository: Clean up branches never offers {rule === name ? 'it' : name}. Deleting it here does not change that.
+      </span>
+    </span>
+  )
+}
+
 export async function deleteBranch(repo: string, branch: Ref): Promise<void> {
+  const note = keptNote(repo, branch.name)
   const remoteNote = branch.upstream ? `The remote branch ${branch.upstream} is not deleted.` : undefined
   if (branch.isHead) {
     // Git cannot delete the checked-out branch: ask which one to check out instead, then delete.
@@ -414,9 +433,17 @@ export async function deleteBranch(repo: string, branch: Ref): Promise<void> {
       toast.warning(`${branch.name} is the only local branch. Create another branch to delete it.`)
       return
     }
+    const checkedOut = `${branch.name} is checked out, so Adar checks out another branch before deleting it.${remoteNote ? ` ${remoteNote}` : ''}`
     const res = await form({
       title: `Delete branch ${branch.name}?`,
-      message: `${branch.name} is checked out, so Adar checks out another branch before deleting it.${remoteNote ? ` ${remoteNote}` : ''}`,
+      message: note ? (
+        <>
+          {checkedOut}
+          {note}
+        </>
+      ) : (
+        checkedOut
+      ),
       fields: [
         {
           type: 'select',
@@ -431,7 +458,19 @@ export async function deleteBranch(repo: string, branch: Ref): Promise<void> {
     })
     if (!res || !(await checkout(repo, String(res.target), { silent: true }))) return
   } else {
-    const ok = await confirm({ title: `Delete branch ${branch.name}?`, message: remoteNote, confirmLabel: 'Delete', danger: true })
+    const ok = await confirm({
+      title: `Delete branch ${branch.name}?`,
+      message: note ? (
+        <>
+          {remoteNote}
+          {note}
+        </>
+      ) : (
+        remoteNote
+      ),
+      confirmLabel: 'Delete',
+      danger: true
+    })
     if (!ok) return
   }
   const sha = branch.sha
@@ -478,7 +517,12 @@ export async function deleteRemoteBranch(repo: string, remoteRef: Ref): Promise<
   const branch = remoteBranchName(remoteRef)
   const ok = await confirm({
     title: `Delete ${remoteRef.name} from ${remote}?`,
-    message: 'This deletes the branch on the remote server for everyone.',
+    message: (
+      <>
+        This deletes the branch on the remote server for everyone.
+        {keptNote(repo, branch)}
+      </>
+    ),
     confirmLabel: 'Delete remote branch',
     danger: true
   })
