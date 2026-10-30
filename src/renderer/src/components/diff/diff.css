@@ -1106,6 +1106,285 @@
   color: var(--danger);
 }
 
+/* Comparing a changed image: the image bar, then side by side or one stage (swipe, onion skin, difference). */
+
+.diff-image-compare {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.diff-image-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 40px;
+  padding: 0 12px;
+  background: var(--bg-1);
+  border-bottom: 1px solid var(--border);
+}
+
+.diff-image-mid {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+  font-size: var(--fs-sm);
+  color: var(--text-3);
+  white-space: nowrap;
+}
+
+.diff-image-hint {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.diff-image-mid b {
+  font-weight: 500;
+  color: var(--text-1);
+}
+
+.diff-image-mid input[type='range'] {
+  flex: 0 1 140px;
+  min-width: 70px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.diff-image-before {
+  font-weight: 600;
+  color: var(--c-deleted);
+}
+
+.diff-image-after {
+  font-weight: 600;
+  color: var(--c-added);
+}
+
+.diff-image-pct {
+  min-width: 34px;
+  font: 500 var(--fs-xs) var(--font-mono);
+  color: var(--text-2);
+}
+
+.diff-image-same,
+.diff-image-working,
+.diff-image-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.diff-image-same svg {
+  color: var(--success);
+}
+
+.diff-image-check {
+  margin-left: 6px;
+  color: var(--text-1);
+  cursor: pointer;
+}
+
+.diff-image-check input {
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.diff-image-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  background: var(--bg-0);
+  outline: none;
+}
+
+.diff-image-centered {
+  margin: auto;
+}
+
+.diff-image-sides {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  gap: 16px;
+  padding: 16px;
+}
+
+.diff-image-sides .diff-image-pane {
+  max-width: none;
+  min-height: 0;
+}
+
+.diff-image-overlay {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.diff-image-scroll {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  overflow: auto;
+  padding: 12px;
+  background: var(--bg-2);
+}
+
+/* margin: auto centres a small image and lets a large one scroll from its top left. */
+.diff-image-box {
+  position: relative;
+  flex: none;
+  margin: auto;
+  background-color: var(--bg-2);
+  background-image:
+    linear-gradient(45deg, var(--bg-3) 25%, transparent 25%), linear-gradient(-45deg, var(--bg-3) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--bg-3) 75%), linear-gradient(-45deg, transparent 75%, var(--bg-3) 75%);
+  background-size: 16px 16px;
+  background-position:
+    0 0,
+    0 8px,
+    8px -8px,
+    -8px 0;
+  box-shadow: var(--shadow-1);
+}
+
+.diff-image-box img,
+.diff-image-box canvas {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: block;
+  max-width: none;
+  user-select: none;
+}
+
+.diff-image-difference {
+  background: #ffffff;
+}
+
+.diff-image-swipe {
+  cursor: ew-resize;
+  touch-action: none;
+  outline: none;
+}
+
+.diff-image-swipe:focus-visible {
+  box-shadow: 0 0 0 2px var(--focus);
+}
+
+.diff-image-onion {
+  cursor: pointer;
+}
+
+.diff-image-clip {
+  position: absolute;
+  inset: 0;
+}
+
+/* Swipe's line: fern with a dark edge, so it shows on light and dark screenshots alike. */
+.diff-image-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--accent);
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.45);
+  pointer-events: none;
+}
+
+.diff-image-grip {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  margin: -13px 0 0 -13px;
+  border-radius: 50%;
+  background: var(--accent-fill);
+  color: var(--accent-text);
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 0.45),
+    0 4px 10px rgb(0 0 0 / 0.35);
+  pointer-events: none;
+}
+
+.diff-image-corner {
+  position: absolute;
+  z-index: 1;
+  top: 10px;
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: 6px;
+  background: var(--bg-1);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  pointer-events: none;
+}
+
+.diff-image-corner-l {
+  left: 16px;
+  color: var(--c-deleted);
+}
+
+.diff-image-corner-r {
+  right: 16px;
+  color: var(--c-added);
+}
+
+.diff-image-foot {
+  flex: none;
+  padding: 6px 12px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-1);
+  font: 500 var(--fs-xs) var(--font-mono);
+  color: var(--text-2);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* A changed area: dashed and numbered in Difference, solid for the one N / P went to. */
+.diff-image-area {
+  position: absolute;
+  border: 1.5px dashed var(--lane-5);
+  border-radius: 3px;
+  pointer-events: none;
+}
+
+.diff-image-area-now {
+  border: 2px solid var(--lane-5);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--lane-5) 30%, transparent);
+}
+
+.diff-image-area-n {
+  position: absolute;
+  left: -9px;
+  top: -9px;
+  display: grid;
+  place-items: center;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 3px;
+  box-sizing: border-box;
+  border-radius: 8px;
+  background: var(--lane-5);
+  color: #ffffff;
+  font: 700 9px var(--font-ui);
+}
+
 /* ── File history ──────────────────────────────────────────────────────── */
 
 .diff-history-main {

@@ -244,6 +244,15 @@ describe('settings', () => {
     expect(s.autoFetchMinutes).toBe(DEFAULT_SETTINGS.autoFetchMinutes)
     expect(sanitizeSettings(DEFAULT_SETTINGS, 'garbage')).toEqual(DEFAULT_SETTINGS)
     expect(sanitizeSettings(DEFAULT_SETTINGS, { theme: 'purple', diffViewMode: 'split' })).toMatchObject({ theme: 'dark', diffViewMode: 'split' })
+    expect(DEFAULT_SETTINGS).toMatchObject({ imageDiffMode: 'side', imageDiffIgnoreAntialiasing: true })
+    expect(sanitizeSettings(DEFAULT_SETTINGS, { imageDiffMode: 'difference', imageDiffIgnoreAntialiasing: false })).toMatchObject({
+      imageDiffMode: 'difference',
+      imageDiffIgnoreAntialiasing: false
+    })
+    expect(sanitizeSettings(DEFAULT_SETTINGS, { imageDiffMode: 'blink', imageDiffIgnoreAntialiasing: 'no' })).toMatchObject({
+      imageDiffMode: 'side',
+      imageDiffIgnoreAntialiasing: true
+    })
   })
 
   it('keeps only well-formed tab groups', () => {

@@ -40,7 +40,8 @@ the worktree and its branch go in one step · any colour for a tab group (a pick
 night theme and deeper in the day theme so its name stays readable · branches that are never cleaned up: environment
 branches (`pre`, `int`, `qa`…) are listed but never ticked, *Never clean up* keeps a branch or a pattern (`env/*`) out
 for good, here and on the remote, and branches protected on GitHub, GitLab or Bitbucket count too when pull requests
-are on.
+are on · changed images compared four ways (side by side, swipe, onion skin and difference, which paints the changed
+pixels), at Fit or 1:1, with N / P going through the areas that changed.
 
 ---
 
@@ -76,7 +77,6 @@ are on.
 - [ ] Merge tool: line-level selection, optional base (ancestor) pane, syntax highlighting in the output editor.
 - [ ] External diff / merge tools (VS Code, Kaleidoscope, FileMerge, Beyond Compare).
 - [ ] Word-wrap toggle and keyboard line cursor for line staging. *(good first issue)*
-- [ ] Image diff modes: swipe and onion skin.
 - [ ] Compare any two refs or files ("Compare with…"), and browse the repository tree at any commit.
 - [ ] Blame: honour `.git-blame-ignore-revs`, "blame previous revision", paging for very long file histories.
 

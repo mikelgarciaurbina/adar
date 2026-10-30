@@ -2,8 +2,9 @@
 // e.g. panel resizing, do not re-render large diffs), plus the setters used by
 // the diff toolbars, menus and shortcuts.
 
+import { create } from 'zustand'
 import { useApp } from '@renderer/store/appStore'
-import type { DiffViewMode } from '@shared/types'
+import type { DiffViewMode, ImageDiffMode } from '@shared/types'
 import { FULL_FILE_CONTEXT } from './targets'
 
 export interface DiffPrefs {
@@ -55,4 +56,36 @@ export function setIgnoreWhitespace(on: boolean): void {
 
 export function setContextLines(n: number): void {
   void useApp.getState().updateSettings({ diffContextLines: sanitizeContext(n) })
+}
+
+const IMAGE_MODES: readonly ImageDiffMode[] = ['side', 'swipe', 'onion', 'difference']
+
+/** How changed images open (the way used last) and whether anti-aliased edges count. */
+export function useImageDiffPrefs(): { mode: ImageDiffMode; ignoreAntialiasing: boolean } {
+  const raw = useApp((s) => s.settings.imageDiffMode)
+  const ignoreAntialiasing = useApp((s) => s.settings.imageDiffIgnoreAntialiasing !== false)
+  return { mode: IMAGE_MODES.includes(raw) ? raw : 'side', ignoreAntialiasing }
+}
+
+export function setImageDiffMode(mode: ImageDiffMode): void {
+  void useApp.getState().updateSettings({ imageDiffMode: mode })
+}
+
+export function setImageDiffIgnoreAntialiasing(on: boolean): void {
+  void useApp.getState().updateSettings({ imageDiffIgnoreAntialiasing: on })
+}
+
+export interface ImageView {
+  zoom: 'fit' | 'actual'
+  /** Swipe: where the line is, 0–1 of the width. */
+  swipe: number
+  /** Onion skin: After's opacity, 0–100. */
+  onion: number
+}
+
+/** Where the zoom, Swipe's line and Onion skin's slider were left, so the next image opens the same way (this session). */
+export const useImageView = create<ImageView>()(() => ({ zoom: 'fit', swipe: 0.5, onion: 50 }))
+
+export function setImageView(patch: Partial<ImageView>): void {
+  useImageView.setState(patch)
 }

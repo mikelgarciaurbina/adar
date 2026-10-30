@@ -485,6 +485,8 @@ export interface FoundRepo {
 export type ThemeSetting = 'dark' | 'light' | 'system'
 /** unified = one column with +/- lines; split = old and new side by side. */
 export type DiffViewMode = 'unified' | 'split'
+/** How a changed image is compared: next to each other, cut by a line, faded one into the other, or only what changed. */
+export type ImageDiffMode = 'side' | 'swipe' | 'onion' | 'difference'
 
 export interface AppSettings {
   theme: ThemeSetting
@@ -497,6 +499,10 @@ export interface AppSettings {
   diffViewMode: DiffViewMode
   /** Show the whole file instead of only the changed hunks (applies to both layouts). */
   diffFullFile: boolean
+  /** The way changed images open: the one used last. */
+  imageDiffMode: ImageDiffMode
+  /** Image comparison leaves out anti-aliased edges (they differ between machines). */
+  imageDiffIgnoreAntialiasing: boolean
   diffIgnoreWhitespace: boolean
   diffContextLines: number
   /** Commits loaded per page in the graph. */
@@ -556,6 +562,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   dateFormat: 'relative',
   diffViewMode: 'unified',
   diffFullFile: false,
+  imageDiffMode: 'side',
+  imageDiffIgnoreAntialiasing: true,
   diffIgnoreWhitespace: false,
   diffContextLines: 3,
   graphPageSize: 2000,

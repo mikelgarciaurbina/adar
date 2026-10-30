@@ -33,6 +33,7 @@ const ENUMS: Partial<Record<keyof AppSettings, readonly string[]>> = {
   defaultPullMode: ['ff-only', 'merge', 'rebase'],
   dateFormat: ['relative', 'absolute'],
   diffViewMode: ['unified', 'split'],
+  imageDiffMode: ['side', 'swipe', 'onion', 'difference'],
   githubAuth: ['', 'gh', 'token'],
   bitbucketAuth: ['', 'token']
 }

@@ -24,7 +24,7 @@ export interface DiffBodyProps {
   onOpenInEditor?: () => void
   /** Leave full-file mode (offered when the whole file is too large to show). */
   onShowChangesOnly?: () => void
-  /** Position among the change blocks (text diffs only). */
+  /** Position among the change blocks (text), or the changed areas (images). */
   onChangeNav?: (nav: ChangeNav | null) => void
 }
 
@@ -53,7 +53,7 @@ export function DiffBody(props: DiffBodyProps) {
       </EmptyState>
     )
   }
-  if (diff.isImage) return <ImageDiff repo={repo} diff={diff} target={target} />
+  if (diff.isImage) return <ImageDiff repo={repo} diff={diff} target={target} handle={handle} onChangeNav={onChangeNav} />
   if (diff.binary) {
     return (
       <EmptyState icon={<Binary size={36} />} title="Binary file">

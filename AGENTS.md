@@ -80,7 +80,8 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
     Pull/Push, mini graph reusing `components/graph`), pure helpers in `model.ts`.
   - `components/` — `common` (Modal, Button, dialogs, ContextMenu, toast, Avatar, Resizer, ErrorBoundary), `layout`
     (tabs, toolbar, status bar, welcome, logo), `graph`, `sidebar`, `details` (commit details, staging, composer),
-    `diff` (diff, blame, history), `conflicts`, `rebase`, `modals`, `palette` (palette + git console), `update`.
+    `diff` (diff, blame, history; changed images in `ImageDiff.tsx`: side by side, swipe, onion skin and difference, with
+    the changed pixels and areas found in `imageCompare.ts`), `conflicts`, `rebase`, `modals`, `palette` (palette + git console), `update`.
   - `lib/` — lane colours, formatting, ref helpers, drag & drop, keyboard helpers.
   - `styles/theme.css` — design tokens: the Basoa palette of the website mapped onto the app's names (dark = Gaua,
     light = Eguna). `--accent` is fern for lines, icons and text (deep fern on light surfaces); fills such as primary
