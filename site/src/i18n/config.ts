@@ -12,9 +12,10 @@ export const LOCALE_INFO: Record<Locale, { name: string; short: string; og: stri
   eu: { name: 'Euskara', short: 'EU', og: 'eu_ES', intl: 'eu' },
 };
 
-export type PageKey = 'home' | 'roadmap' | 'design';
+export type PageKey = 'home' | 'agents' | 'roadmap' | 'design';
 export const ROUTES: Record<PageKey, Record<Locale, string>> = {
   home: { en: '', es: 'es', eu: 'eu' },
+  agents: { en: 'agents', es: 'es/agentes', eu: 'eu/agenteak' },
   roadmap: { en: 'roadmap', es: 'es/hoja-de-ruta', eu: 'eu/bide-orria' },
   design: { en: 'design', es: 'es/diseno', eu: 'eu/diseinua' },
 };
@@ -29,6 +30,7 @@ export const ANCHORS = {
   next: { en: 'next', es: 'proximo', eu: 'hurrengoa' },
   later: { en: 'later', es: 'mas-adelante', eu: 'geroago' },
   shipped: { en: 'shipped', es: 'publicado', eu: 'argitaratua' },
+  loop: { en: 'loop', es: 'ciclo', eu: 'zikloa' },
   logo: { en: 'logo', es: 'logo', eu: 'logoa' },
   color: { en: 'color', es: 'color', eu: 'kolorea' },
 } satisfies Record<string, Record<Locale, string>>;

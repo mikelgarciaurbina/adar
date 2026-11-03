@@ -10,10 +10,10 @@ const { lang, page } = Astro.props;
 const t = ui[lang];
 // On the landing page the first links are anchors into the page itself.
 const links: [string, string][] = page === 'home'
-  ? [[t.nav.name, `#${anchor('name', lang)}`], [t.nav.features, `#${anchor('features', lang)}`], [t.nav.download, `#${anchor('download', lang)}`],
-     [t.nav.roadmap, pageUrl('roadmap', lang)], [t.nav.design, pageUrl('design', lang)]]
-  : [[t.nav.features, pageUrl('home', lang, 'features')], [t.nav.download, pageUrl('home', lang, 'download')], [t.nav.roadmap, pageUrl('roadmap', lang)],
-     [t.nav.changelog, pageUrl('roadmap', lang, 'changelog')], [t.nav.design, pageUrl('design', lang)]];
+  ? [[t.nav.name, `#${anchor('name', lang)}`], [t.nav.features, `#${anchor('features', lang)}`], [t.nav.agents, pageUrl('agents', lang)],
+     [t.nav.download, `#${anchor('download', lang)}`], [t.nav.roadmap, pageUrl('roadmap', lang)], [t.nav.design, pageUrl('design', lang)]]
+  : [[t.nav.features, pageUrl('home', lang, 'features')], [t.nav.agents, pageUrl('agents', lang)], [t.nav.download, pageUrl('home', lang, 'download')],
+     [t.nav.roadmap, pageUrl('roadmap', lang)], [t.nav.changelog, pageUrl('roadmap', lang, 'changelog')], [t.nav.design, pageUrl('design', lang)]];
 const active = page === 'home' ? '' : pageUrl(page, lang);
 const downloadHref = page === 'home' ? `#${anchor('download', lang)}` : pageUrl('home', lang, 'download');
 ---

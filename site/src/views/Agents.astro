@@ -1,0 +1,136 @@
+---
+// "Adar + AI agents", in any of the site's languages: how Adar fits working with coding agents, step by step and
+// only with what Adar already does, with the review view and the inbox as they look in the app. Copy: i18n/agents.ts.
+import Base from '../layouts/Base.astro';
+import Icon from '../components/Icon.astro';
+import { Picture } from 'astro:assets';
+import review from '../assets/review.png';
+import inbox from '../assets/inbox.png';
+import '../styles/home.css';
+import '../styles/agents.css';
+import { REPO_URL, url } from '../lib/url';
+import { anchor, pageUrl, type Locale } from '../i18n/config';
+import { agents } from '../i18n/agents';
+
+interface Props { lang: Locale }
+const { lang } = Astro.props;
+const t = agents[lang];
+// Each step in a lane colour, as branches are drawn in the app.
+const LANES = [1, 2, 3, 4, 5, 6];
+const NOTES = [
+  { x: 47, y: 4 },
+  { x: 20, y: 9 },
+  { x: 42, y: 58 },
+  { x: 88, y: 34, right: true },
+];
+---
+<Base lang={lang} page="agents" title={t.meta.title} description={t.meta.description} ogTitle={t.meta.ogTitle} ogDescription={t.meta.ogDescription}>
+  <main id="main">
+    <section class="ag-hero" aria-labelledby="ag-title">
+      <div class="wrap ag-hero__inner">
+        <p class="eyebrow rise">{t.hero.eyebrow}</p>
+        <h1 id="ag-title" class="rise" style="--delay:80ms" set:html={t.hero.title} />
+        <p class="ag-hero__lede rise" style="--delay:160ms">{t.hero.lede}</p>
+        <div class="ag-hero__ctas rise" style="--delay:240ms">
+          <a class="btn btn--primary btn--lg" href={pageUrl('home', lang, 'download')}><Icon name="download" />{t.hero.download}</a>
+          <a class="btn btn--ghost btn--lg" href={`#${anchor('loop', lang)}`}><Icon name="arrow-down" />{t.hero.howItWorks}</a>
+        </div>
+      </div>
+      <div class="wrap">
+        <figure class="shot ag-shot is-flat rise" style="--delay:320ms">
+          <div class="shot__glow" aria-hidden="true"></div>
+          <div class="shot__frame">
+            <div class="shot__bar" aria-hidden="true"><i></i><i></i><i></i><span>{t.shot.bar}</span></div>
+            <Picture src={review} formats={['avif', 'webp']} widths={[720, 1080, 1440]} sizes="(max-width: 1240px) calc(100vw - 32px), 1180px"
+              decoding="async" alt={t.shot.alt} />
+          </div>
+          <figcaption class="shot__notes">
+            {NOTES.map((n, i) => (
+              <span class={`shot__note${n.right ? ' shot__note--r' : ''}`} style={`--x:${n.x}%;--y:${n.y}%`} set:html={t.shot.notes[i]} />
+            ))}
+          </figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="section ag-loop" id={anchor('loop', lang)} aria-labelledby="loop-title">
+      <div class="wrap">
+        <header class="section-head section-head--center">
+          <p class="eyebrow">{t.steps.eyebrow}</p>
+          <h2 id="loop-title" set:html={t.steps.title} />
+          <p>{t.steps.text}</p>
+        </header>
+        <ol class="ag-steps">
+          {t.steps.items.map(([title, text, word], i) => (
+            <li class="ag-step card reveal" style={`--delay:${(i % 3) * 70}ms;--c:var(--lane-${LANES[i]})`}>
+              <span class="ag-step__n mono" aria-hidden="true">{String(i + 1).padStart(2, '0')}</span>
+              <h3>{title}</h3>
+              <p set:html={text} />
+              <span class="ag-step__ui mono" lang="en">{word}</span>
+            </li>
+          ))}
+        </ol>
+      </div>
+    </section>
+
+    <section class="section ag-inbox" aria-label={t.inbox.caption}>
+      <div class="wrap">
+        <figure class="shot ag-shot reveal">
+          <div class="shot__frame">
+            <div class="shot__bar" aria-hidden="true"><i></i><i></i><i></i><span>{t.inbox.bar}</span></div>
+            <Picture src={inbox} formats={['avif', 'webp']} widths={[720, 1080, 1440]} sizes="(max-width: 1240px) calc(100vw - 32px), 1180px"
+              loading="lazy" decoding="async" alt={t.inbox.alt} />
+          </div>
+          <figcaption class="ag-caption">{t.inbox.caption}</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="section ag-yours" aria-labelledby="yours-title">
+      <div class="wrap ag-yours__grid">
+        <div class="reveal">
+          <h2 id="yours-title" set:html={t.yours.title} />
+          <p>{t.yours.text}</p>
+        </div>
+        <ul class="ticks ag-ticks reveal" style="--delay:80ms">
+          {['key', 'pull-request', 'terminal', 'heart'].map((icon, i) => <li><Icon name={icon} /><span>{t.yours.ticks[i]}</span></li>)}
+        </ul>
+      </div>
+    </section>
+
+    <section class="section ag-next" aria-labelledby="next-title">
+      <div class="wrap">
+        <header class="section-head">
+          <p class="eyebrow">{t.next.eyebrow}</p>
+          <h2 id="next-title" set:html={t.next.title} />
+        </header>
+        <div class="ag-next__grid">
+          {t.next.items.map(([title, text], i) => (
+            <article class="ag-soon card reveal" style={`--delay:${i * 60}ms`}>
+              <span class="ref" style="--ref:var(--lane-3)">{t.next.tag}</span>
+              <h3>{title}</h3>
+              <p>{text}</p>
+            </article>
+          ))}
+        </div>
+        <a class="ag-next__link" href={pageUrl('roadmap', lang, 'next')}>{t.next.link}<Icon name="arrow-right" size={16} /></a>
+      </div>
+    </section>
+
+    <section class="section ag-cta" aria-labelledby="cta-title">
+      <div class="wrap ag-cta__inner reveal">
+        <img src={url('assets/adar-mark.svg')} width="56" height="56" alt="" aria-hidden="true">
+        <h2 id="cta-title" set:html={t.cta.title} />
+        <p>{t.cta.text}</p>
+        <div class="ag-hero__ctas">
+          <a class="btn btn--primary btn--lg" href={pageUrl('home', lang, 'download')}><Icon name="download" />{t.cta.download}</a>
+          <a class="btn btn--ghost btn--lg" href={REPO_URL}><Icon name="star" />{t.cta.github}<span class="btn__meta" data-gh="stars"></span></a>
+        </div>
+      </div>
+    </section>
+  </main>
+</Base>
+
+<script>
+  import '../scripts/site.js';
+</script>

@@ -113,7 +113,8 @@ const jsonLd = JSON.stringify({
               <Icon name="star" />{t.hero.star}<span class="btn__meta" data-gh="stars"></span>
             </a>
           </div>
-          <p class="hero__fine rise" style="--delay:320ms" set:html={t.hero.fine} />
+          <a class="hero__agents rise" style="--delay:300ms" href={pageUrl('agents', lang)}><Icon name="sparkle" />{t.hero.agents}<Icon name="arrow-right" size={14} /></a>
+          <p class="hero__fine rise" style="--delay:340ms" set:html={t.hero.fine} />
         </div>
         <p class="fig hero__fig mono" aria-hidden="true" set:html={t.hero.fig} />
         <a class="hero__scroll" href={at(1)}><span>{t.hero.scroll}</span><Icon name="arrow-down" size={16} /></a>
@@ -340,11 +341,93 @@ const jsonLd = JSON.stringify({
               <p set:html={t.branches.groups[1]} />
             </div>
           </article>
+
+          <article class="feat feat--review card tilt spotlight reveal" data-animate>
+            <div class="feat__art" aria-hidden="true">
+              <div class="rvw">
+                <div class="rvw__bar">
+                  <span class="rvw__seg"><span>All changes <i>5</i></span><span class="is-on">Since your review <i>2</i></span></span>
+                  <span class="rvw__ai"><Icon name="sparkle" />Claude</span>
+                </div>
+                <div class="rvw__diff">
+                  <div class="dl-row dl-del"><i></i><span class="ln">8</span><code>-  status={'{'}readStatus(t.path){'}'}</code></div>
+                  <div class="dl-row dl-add"><i></i><span class="ln">8</span><code>+  status={'{'}useTabStatus(t.path){'}'}</code></div>
+                </div>
+                <div class="rvw__thread">
+                  <p><b>You</b> Each row asks git again here.</p>
+                  <p><b>ane</b> Done in <code>d8d6b21</code>, reads the tab’s status.</p>
+                </div>
+                <div class="rvw__foot"><span><Icon name="check" />2 of 5 viewed</span><b>Request changes</b></div>
+              </div>
+            </div>
+            <div class="feat__body">
+              <h3><Icon name="eye" /><Fragment set:html={t.branches.review[0]} /></h3>
+              <p set:html={t.branches.review[1]} />
+            </div>
+          </article>
+
+          <article class="feat feat--inbox card tilt spotlight reveal" data-animate style="--delay:60ms">
+            <div class="feat__art" aria-hidden="true">
+              <div class="ibx">
+                <ul>
+                  <li class="is-new" style="--i:0"><span class="ibx__n">#42</span><em>Workspaces per tab group</em><span class="ibx__pill">2 new</span></li>
+                  <li class="is-new" style="--i:1"><span class="ibx__n">#44</span><em>Hold rooms while paying</em><span class="ibx__pill">replied</span></li>
+                  <li style="--i:2"><span class="ibx__n">#45</span><em>Remember the last card</em><span class="ibx__pill ibx__pill--ok">ready</span></li>
+                </ul>
+                <div class="ibx__toast"><Icon name="bell" /><span><b>#42 · 2 new commits</b>ane pushed after your review</span></div>
+              </div>
+            </div>
+            <div class="feat__body">
+              <h3><Icon name="inbox" /><Fragment set:html={t.branches.inbox[0]} /></h3>
+              <p set:html={t.branches.inbox[1]} />
+            </div>
+          </article>
+
+          <article class="feat feat--worktrees card tilt spotlight reveal" data-animate>
+            <div class="feat__art" aria-hidden="true">
+              <ul class="wts">
+                <li style="--i:0"><Icon name="folder" /><em>booking-web</em><span class="ref" style="--ref:var(--lane-1)">main</span></li>
+                <li style="--i:1"><Icon name="folder" /><em>booking-web-rooms</em><span class="ref" style="--ref:var(--lane-2)">claude/rooms</span></li>
+                <li style="--i:2"><Icon name="folder" /><em>booking-web-rates</em><span class="ref" style="--ref:var(--lane-4)">codex/rates</span></li>
+              </ul>
+            </div>
+            <div class="feat__body">
+              <h3><Icon name="folder" /><Fragment set:html={t.branches.worktrees[0]} /></h3>
+              <p set:html={t.branches.worktrees[1]} />
+            </div>
+          </article>
+
+          <article class="feat feat--recover card tilt spotlight reveal" data-animate style="--delay:60ms">
+            <div class="feat__art" aria-hidden="true">
+              <div class="rcv">
+                <div class="rcv__head"><Icon name="history" /><span><b>main</b> was reset · 3 commits left behind</span></div>
+                <ul>
+                  <li><code>a91c2e0</code>Hold rooms on the server</li>
+                  <li><code>7be04d1</code>Release the hold after paying</li>
+                  <li><code>3f2a91c</code>Count only visible tabs</li>
+                </ul>
+                <div class="rcv__foot"><b><Icon name="undo" />Move main back</b><span>or a new branch</span></div>
+              </div>
+            </div>
+            <div class="feat__body">
+              <h3><Icon name="history" /><Fragment set:html={t.branches.recover[0]} /></h3>
+              <p set:html={t.branches.recover[1]} />
+            </div>
+          </article>
         </div>
 
         <ul class="more-feats reveal" aria-label={t.branches.moreAria}>
           {t.branches.more.map((m) => <li set:html={m} />)}
         </ul>
+
+        <a class="agents-band card reveal" href={pageUrl('agents', lang)}>
+          <span class="agents-band__mark" aria-hidden="true"><Icon name="sparkle" /></span>
+          <span class="agents-band__copy">
+            <b set:html={t.branches.agents.title} />
+            <span>{t.branches.agents.text}</span>
+          </span>
+          <span class="agents-band__cta">{t.branches.agents.link}<Icon name="arrow-right" size={16} /></span>
+        </a>
       </div>
     </section>
 

@@ -172,7 +172,7 @@ code, kbd, pre, samp { font-family: var(--font-mono); font-size: 0.92em; }
 .nav__links { display: flex; align-items: center; gap: 2px; margin-left: auto; }
 .nav__links a {
   padding: 8px 12px; border-radius: var(--radius-full);
-  font-size: var(--text-sm); color: var(--text-3);
+  font-size: var(--text-sm); color: var(--text-3); white-space: nowrap;
   transition: color var(--dur-2), background var(--dur-2);
 }
 .nav__links a:hover, .nav__links a[aria-current="page"] { color: var(--text); background: rgb(255 255 255 / 0.05); }
@@ -189,7 +189,7 @@ code, kbd, pre, samp { font-family: var(--font-mono); font-size: 0.92em; }
 .nav.is-open .nav__toggle span:first-child { transform: translateY(3.25px) rotate(45deg); }
 .nav.is-open .nav__toggle span:last-child { transform: translateY(-3.25px) rotate(-45deg); }
 
-@media (max-width: 860px) {
+@media (max-width: 1120px) {
   .nav__toggle { display: block; }
   .nav__links, .nav__cta { display: none; }
   .nav.is-open { height: auto; }

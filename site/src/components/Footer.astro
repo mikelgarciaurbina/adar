@@ -9,7 +9,7 @@ const f = ui[lang].footer;
 // Same-page links stay anchors; the rest go to the page in this language.
 const to = (target: PageKey, section?: AnchorKey) => (target === page && section ? `#${anchor(section, lang)}` : pageUrl(target, lang, section));
 const columns: [string, [string, string][]][] = [
-  [f.product, [[f.features, to('home', 'features')], [f.download, to('home', 'download')], [f.changelog, to('roadmap', 'changelog')], [f.roadmap, pageUrl('roadmap', lang)]]],
+  [f.product, [[f.features, to('home', 'features')], [f.agents, pageUrl('agents', lang)], [f.download, to('home', 'download')], [f.changelog, to('roadmap', 'changelog')], [f.roadmap, pageUrl('roadmap', lang)]]],
   [f.project, [[f.github, REPO_URL], [f.issues, `${REPO_URL}/issues`], [f.contributing, `${REPO_URL}/blob/main/CONTRIBUTING.md`], [f.security, `${REPO_URL}/blob/main/SECURITY.md`]]],
   [f.brand, [[f.design, pageUrl('design', lang)], [f.logo, to('design', 'logo')], [f.colour, to('design', 'color')], [f.license, `${REPO_URL}/blob/main/LICENSE`]]],
 ];

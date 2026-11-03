@@ -2,7 +2,7 @@
 // alternates in layouts/Base.astro); repeating them here as xhtml:link would also make browsers show the file as text.
 import { LOCALES, absoluteUrl, type PageKey } from '../i18n/config';
 
-const PAGES: PageKey[] = ['home', 'roadmap', 'design'];
+const PAGES: PageKey[] = ['home', 'agents', 'roadmap', 'design'];
 
 export const GET = () => {
   const lastmod = new Date().toISOString().slice(0, 10);

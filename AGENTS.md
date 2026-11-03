@@ -132,7 +132,9 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
 - `site/` — the project website (https://adargit.com): a separate npm project (Astro, static output) deployed by
   Cloudflare Pages from this repository (root directory `site`, `npm run build`, output `dist`), and rebuilt after each
   release through the deploy hook in `release.yml` (secret `CLOUDFLARE_DEPLOY_HOOK`). `src/views/` has the landing
-  (`Home.astro`; the 3D scene is hand-written WebGL2 in `src/scripts/branches.js`), `Roadmap.astro` (renders the
+  (`Home.astro`; the 3D scene is hand-written WebGL2 in `src/scripts/branches.js`), `Agents.astro` (working with AI
+  coding agents and Adar, step by step, with screenshots of the review view and the inbox from `src/assets`; only
+  what Adar already does), `Roadmap.astro` (renders the
   repository's `ROADMAP.md` and the GitHub Releases at build time — `src/lib/roadmap.ts`, `src/lib/releases.ts`) and
   `Design.astro` (the Basoa design system); `src/pages/404.astro` is the trilingual not-found page. Shared layout/nav/footer/icon in `src/layouts` and
   `src/components`; tokens in `src/styles/tokens.css` (also published as `/tokens.css`); fonts self-hosted; build
@@ -140,7 +142,7 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
   Always link with `url()` from `src/lib/url.ts` (respects the base).
   The site is in English (root), Spanish (`/es`) and Basque (`/eu`) with localized slugs and anchors (`src/i18n/config.ts`:
   routes, anchors, `pageUrl()`). Pages in `src/pages/` are thin wrappers around the templates in `src/views/`; all copy lives
-  in `src/i18n/` (`ui.ts` shared, `home.ts`, `roadmap.ts`, `design.ts`), and strings for scripts reach them through the
+  in `src/i18n/` (`ui.ts` shared, `home.ts`, `agents.ts`, `roadmap.ts`, `design.ts`), and strings for scripts reach them through the
   layout's `#i18n` JSON (`t()` in `site.js`). Add every new string in all three languages. Illustrations of the app stay in
   English (its interface is English); ROADMAP.md items and release notes are shown as written.
 
