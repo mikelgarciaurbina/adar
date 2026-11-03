@@ -19,6 +19,7 @@ export const WRITE_METHODS = [
   'checkout',
   'createBranch',
   'deleteBranch',
+  'moveBranch',
   'addWorktree',
   'removeWorktree',
   'setWorktreeLocked',

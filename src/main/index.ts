@@ -395,6 +395,8 @@ function buildMenu(): void {
         { type: 'separator' },
         item('Undo Last Git Action', 'undo'),
         item('Redo Git Action', 'redo'),
+        item('Recover Lost Commits…', 'recover-lost-commits'),
+        item('Show Reflog', 'show-reflog'),
         { type: 'separator' },
         item('Open in Terminal', 'open-in-terminal', 'CmdOrCtrl+Alt+T'),
         item(isMac ? 'Reveal in Finder' : 'Show in Folder', 'open-in-finder', 'CmdOrCtrl+Alt+R'),

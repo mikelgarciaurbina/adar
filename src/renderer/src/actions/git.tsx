@@ -367,13 +367,14 @@ export async function checkoutRef(repo: string, ref: Pick<Ref, 'name' | 'type'> 
   return checkout(repo, ref.name)
 }
 
-export async function createBranch(repo: string, startPoint?: string, opts: { checkout?: boolean } = {}): Promise<void> {
+export async function createBranch(repo: string, startPoint?: string, opts: { checkout?: boolean; name?: string } = {}): Promise<void> {
   const where = startPoint ? (startPoint.length === 40 ? startPoint.slice(0, 7) : startPoint) : headLabel(repo) ?? 'HEAD'
   const name = await prompt({
     title: 'Create branch',
     message: `New branch at ${where}`,
     label: 'Branch name',
     placeholder: 'feature/my-change',
+    defaultValue: opts.name,
     confirmLabel: opts.checkout === false ? 'Create' : 'Create and checkout',
     monospace: true,
     validate: (v) => validateRefName(v) ?? (tabOf(repo)?.refs?.branches.some((b) => b.name === v.trim()) ? 'A branch with this name already exists' : null)

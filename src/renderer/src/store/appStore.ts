@@ -46,6 +46,8 @@ export type CenterView =
   | { kind: 'rebase'; base: string }
   | { kind: 'history'; path: string }
   | { kind: 'blame'; path: string; rev?: string }
+  /** Lost commits (grouped by what left them behind) or every move of HEAD or a branch. */
+  | { kind: 'reflog'; mode: 'lost' | 'moves' }
 
 export interface HeadSnapshot {
   sha: string | null

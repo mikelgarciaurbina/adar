@@ -2,7 +2,7 @@
 // big icon buttons with labels in the centre, utilities on the right. Empty space
 // is a window drag region.
 
-import { useState, type ReactNode } from 'react'
+import { useState, type MouseEvent, type ReactNode } from 'react'
 import {
   ArchiveRestore,
   ArrowDownToLine,
@@ -12,6 +12,7 @@ import {
   Code,
   FolderOpen,
   GitBranchPlus,
+  History,
   Network,
   Redo2,
   RefreshCw,
@@ -24,11 +25,12 @@ import {
 } from 'lucide-react'
 import { isMac } from '@renderer/api/client'
 import * as git from '@renderer/actions/git'
+import { openReflog } from '@renderer/actions/reflog'
 import { selectPull } from '@renderer/actions/pulls'
 import { PullChip } from '@renderer/components/pulls/PullChip'
 import { usePullForRefs } from '@renderer/components/pulls/pullStore'
 import { Spinner } from '@renderer/components/common/Button'
-import { showMenuBelow, type MenuItem } from '@renderer/components/common/ContextMenu'
+import { showContextMenu, showMenuBelow, type MenuItem } from '@renderer/components/common/ContextMenu'
 import { getCommand, runCommand } from '@renderer/commands'
 import { shortcutLabel } from '@renderer/lib/keys'
 import { currentBranch } from '@renderer/lib/refs'
@@ -61,16 +63,26 @@ interface ToolButtonProps {
   icon: ReactNode
   label: string
   title: string
-  onClick: () => void
+  onClick: (e: MouseEvent<HTMLButtonElement>) => void
+  onContextMenu?: (e: MouseEvent<HTMLButtonElement>) => void
   disabled?: boolean
+  /** Looks disabled, but still answers a click (Undo with nothing to undo opens its menu). */
+  dim?: boolean
   busy?: boolean
   badge?: string
   className?: string
 }
 
-function ToolButton({ icon, label, title, onClick, disabled, busy, badge, className }: ToolButtonProps) {
+function ToolButton({ icon, label, title, onClick, onContextMenu, disabled, dim, busy, badge, className }: ToolButtonProps) {
   return (
-    <button className={`tb-tool${className ? ' ' + className : ''}`} onClick={onClick} disabled={disabled} title={title} aria-label={title}>
+    <button
+      className={`tb-tool${dim ? ' tb-tool-dim' : ''}${className ? ' ' + className : ''}`}
+      onClick={onClick}
+      onContextMenu={onContextMenu}
+      disabled={disabled}
+      title={title}
+      aria-label={title}
+    >
       <span className="tb-tool-icon">
         {busy ? <Spinner size="md" /> : icon}
         {badge && !busy && <span className="tb-badge">{badge}</span>}
@@ -78,6 +90,17 @@ function ToolButton({ icon, label, title, onClick, disabled, busy, badge, classN
       <span className="tb-tool-label">{label}</span>
     </button>
   )
+}
+
+/** Undo's own menu: the last action, and the reflog for what Undo cannot bring back. */
+function undoMenu(repo: string, last: string | null): MenuItem[] {
+  return [
+    last
+      ? { label: `Undo: ${last}`, icon: <Undo2 size={14} />, onClick: () => void git.undo(repo) }
+      : { label: 'Nothing to undo since Adar opened', disabled: true },
+    { type: 'separator' },
+    { label: 'Recover lost commits…', icon: <History size={14} />, onClick: () => openReflog(repo, 'lost') }
+  ]
 }
 
 function UtilityButton({ icon, title, onClick, active }: { icon: ReactNode; title: string; onClick: () => void; active?: boolean }) {
@@ -210,9 +233,10 @@ export function Toolbar({ tab }: { tab: RepoTab }) {
         <ToolButton
           icon={<Undo2 size={18} />}
           label="Undo"
-          title={lastUndo ? withShortcut(`Undo: ${lastUndo.label}`, 'undo') : 'Nothing to undo'}
-          disabled={!lastUndo}
-          onClick={() => void git.undo(repo)}
+          title={lastUndo ? withShortcut(`Undo: ${lastUndo.label}`, 'undo') : 'Nothing to undo since Adar opened. Click to recover lost commits'}
+          dim={!lastUndo}
+          onClick={(e) => (lastUndo ? void git.undo(repo) : showMenuBelow(e.currentTarget, undoMenu(repo, null)))}
+          onContextMenu={(e) => showContextMenu(e, undoMenu(repo, lastUndo?.label ?? null))}
         />
         <ToolButton
           icon={<Redo2 size={18} />}

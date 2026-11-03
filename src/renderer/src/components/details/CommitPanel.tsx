@@ -10,6 +10,7 @@ import { Avatar } from '@renderer/components/common/Avatar'
 import { refsBySha } from '@renderer/lib/refs'
 import { shortSha } from '@renderer/lib/format'
 import { isAncestor } from '@renderer/components/graph/model'
+import { LostCommitNote } from '@renderer/components/reflog/LostCommitNote'
 import { useApp, type RepoTab } from '@renderer/store/appStore'
 import { useCommitLane } from '@renderer/store/laneStore'
 import { laneColor } from '@renderer/lib/colors'
@@ -134,6 +135,7 @@ export function CommitPanel({ tab, sha }: { tab: RepoTab; sha: string }) {
           </div>
         </div>
         <RefChips repo={repo} refs={refsMap.get(commit.sha)} lane={lane} />
+        <LostCommitNote repo={repo} sha={commit.sha} subject={commit.subject} />
         {committerDiffers ? (
           <div className="det-committer">
             <Avatar name={commit.committerName} email={commit.committerEmail} size={18} />

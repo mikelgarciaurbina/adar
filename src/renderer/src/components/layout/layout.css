@@ -629,9 +629,13 @@
 .tb-tool:active:not(:disabled) {
   background: var(--bg-4);
 }
-.tb-tool:disabled {
+.tb-tool:disabled,
+.tb-tool.tb-tool-dim {
   opacity: 0.38;
   cursor: default;
+}
+.tb-tool.tb-tool-dim:hover {
+  opacity: 0.6;
 }
 .tb-tool-icon {
   position: relative;

@@ -3,6 +3,7 @@ import {
   cleanupTmp,
   cloneSetup,
   commitFile,
+  exists,
   expectCode,
   git,
   head,
@@ -202,6 +203,45 @@ describe('reset', () => {
     expect(read(dir, 'a.txt')).toBe('b\n')
 
     await expectCode(ops.reset(dir, 'nope', 'hard'), 'NOT_FOUND')
-    await expectCode(ops.reset(dir, first, 'keep' as never), 'INVALID_ARGUMENT')
+    await expectCode(ops.reset(dir, first, 'sideways' as never), 'INVALID_ARGUMENT')
+  })
+
+  it('keep: moves the files with HEAD but keeps local changes, and refuses when one is in the way', async () => {
+    const { ops } = makeOps()
+    const dir = initRepo()
+    const first = commitFile(dir, 'a.txt', 'a\n', 'a')
+    commitFile(dir, 'b.txt', 'b\n', 'b')
+    write(dir, 'c.txt', 'local\n')
+    git(dir, ['add', 'c.txt'])
+    await ops.reset(dir, first, 'keep')
+    expect(head(dir)).toBe(first)
+    expect(exists(dir, 'b.txt')).toBe(false)
+    expect(read(dir, 'c.txt')).toBe('local\n')
+
+    const second = commitFile(dir, 'a.txt', 'a2\n', 'a2')
+    write(dir, 'a.txt', 'mine\n')
+    await expectCode(ops.reset(dir, first, 'keep'), 'DIRTY_WORKTREE')
+    expect(head(dir)).toBe(second)
+  })
+})
+
+describe('moveBranch', () => {
+  it('moves a branch that is not checked out, only from where Adar saw it', async () => {
+    const { ops } = makeOps()
+    const dir = initRepo()
+    const first = commitFile(dir, 'a.txt', 'a\n', 'a')
+    const second = commitFile(dir, 'a.txt', 'b\n', 'b')
+    git(dir, ['branch', 'other', second])
+    await ops.moveBranch(dir, 'other', first, second)
+    expect(head(dir, 'other')).toBe(first)
+    expect(git(dir, ['reflog', '-1', '--format=%gs', 'other']).trim()).toBe(`adar: move other to ${first}`)
+    // It moved since: refused.
+    await expectCode(ops.moveBranch(dir, 'other', second, second), 'INVALID_ARGUMENT')
+    expect(head(dir, 'other')).toBe(first)
+    // The checked-out branch moves with a reset, not this.
+    const err = await expectCode(ops.moveBranch(dir, 'main', first, second), 'INVALID_ARGUMENT')
+    expect(err.message).toMatch(/checked out/)
+    await expectCode(ops.moveBranch(dir, 'nope', first, second), 'NOT_FOUND')
+    await expectCode(ops.moveBranch(dir, '-x', first, second), 'INVALID_ARGUMENT')
   })
 })

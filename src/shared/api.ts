@@ -21,6 +21,7 @@ import type {
   ConflictResolution,
   ConflictVersions,
   ContentRev,
+  DanglingCommit,
   DiffOptions,
   DiffTarget,
   FileContent,
@@ -30,10 +31,12 @@ import type {
   GitCommandResult,
   Identity,
   LogOptions,
+  LostCommits,
   OperationResult,
   PullMode,
   RebaseTodoItem,
   RecentRepo,
+  ReflogEntry,
   RefsResult,
   RepoInfo,
   ResetMode,
@@ -105,6 +108,12 @@ export interface AdarApi {
    * (locally or on the remote) and, for local branches whose upstream is gone, how many commits only they have.
    */
   getBranchCleanup(repo: string, opts: { base: string; remote: string | null }): Promise<BranchCleanupInfo>
+  /** Moves of HEAD (ref null) or of a local branch, newest first, from its reflog. */
+  getReflog(repo: string, ref: string | null): Promise<ReflogEntry[]>
+  /** Commits no branch, tag or HEAD reaches any more, found in the reflogs and grouped by what left them behind. */
+  getLostCommits(repo: string): Promise<LostCommits>
+  /** Commits that no reflog remembers either (git fsck): dropped stashes, branches deleted without being checked out. */
+  findDanglingCommits(repo: string): Promise<DanglingCommit[]>
   /** The repository's worktrees (the main one first), with their branch and changed files. */
   getWorktrees(repo: string): Promise<Worktree[]>
   getCommitDetails(repo: string, sha: string): Promise<CommitDetails>
@@ -148,6 +157,8 @@ export interface AdarApi {
   checkout(repo: string, ref: string, opts?: { force?: boolean }): Promise<void>
   createBranch(repo: string, name: string, startPoint?: string, opts?: { checkout?: boolean }): Promise<void>
   deleteBranch(repo: string, name: string, opts?: { force?: boolean }): Promise<void>
+  /** Point a branch that is not checked out at `to`, if it still points at `from` (undo, recovering lost commits). */
+  moveBranch(repo: string, branch: string, to: string, from: string): Promise<void>
   /**
    * Add a worktree at `path` (absolute, not existing yet) with `branch` checked out; with `from`, `branch` is created
    * there first (tracking `from` with `track`). Resolves to the worktree's real path.
@@ -340,6 +351,9 @@ export const API_METHODS = [
   'getLog',
   'getRefs',
   'getBranchCleanup',
+  'getReflog',
+  'getLostCommits',
+  'findDanglingCommits',
   'getWorktrees',
   'getCommitDetails',
   'getCompareFiles',
@@ -362,6 +376,7 @@ export const API_METHODS = [
   'checkout',
   'createBranch',
   'deleteBranch',
+  'moveBranch',
   'addWorktree',
   'removeWorktree',
   'setWorktreeLocked',

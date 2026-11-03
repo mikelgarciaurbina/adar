@@ -1,4 +1,4 @@
-// Branches & HEAD: checkout, create/delete/rename, upstreams, fast-forward, reset.
+// Branches & HEAD: checkout, create/delete/rename, upstreams, fast-forward, moving a branch, reset.
 
 import type { ResetMode } from '@shared/types'
 import type { GitContext } from '../context'
@@ -20,10 +20,10 @@ import {
 
 type BranchOps = Pick<
   WriteOps,
-  'checkout' | 'createBranch' | 'deleteBranch' | 'renameBranch' | 'setUpstream' | 'fastForwardBranch' | 'reset'
+  'checkout' | 'createBranch' | 'deleteBranch' | 'renameBranch' | 'setUpstream' | 'fastForwardBranch' | 'moveBranch' | 'reset'
 >
 
-const RESET_MODES: readonly ResetMode[] = ['soft', 'mixed', 'hard']
+const RESET_MODES: readonly ResetMode[] = ['soft', 'mixed', 'hard', 'keep']
 
 export function createBranchOps(ctx: GitContext): BranchOps {
   /** Run a command that changes the worktree, surfacing local-change refusals as DIRTY_WORKTREE. */
@@ -160,6 +160,28 @@ export function createBranchOps(ctx: GitContext): BranchOps {
         const anc = await ctx.git(repo, ['merge-base', '--is-ancestor', oldSha, toSha], { okCodes: [0, 1] })
         if (anc.code !== 0) throw invalid(`Cannot fast-forward ${b} to ${target}: not a fast-forward`)
         await ctx.git(repo, ['update-ref', '-m', `adar: fast-forward ${b} to ${target}`, `refs/heads/${b}`, toSha, oldSha])
+      })
+    },
+
+    async moveBranch(repo, branch, to, from) {
+      const b = nameArg(branch, 'branch name')
+      const target = arg(to, 'target')
+      const expected = arg(from, 'current commit')
+      await ctx.exclusive(repo, async () => {
+        if (!(await refExists(ctx, repo, `refs/heads/${b}`))) throw notFound(`Branch ${b} does not exist`)
+        // A checked-out branch moves with its files (reset); this only moves the branch itself.
+        const wt = await ctx.git(repo, ['worktree', 'list', '--porcelain'], { allowFailure: true })
+        if ((await currentBranch(ctx, repo)) === b || (wt.code === 0 && wt.stdout.split('\n').some((l) => l.trim() === `branch refs/heads/${b}`))) {
+          throw invalid(`${b} is checked out`)
+        }
+        const toSha = await resolveCommit(ctx, repo, target)
+        const fromSha = await resolveCommit(ctx, repo, expected)
+        // update-ref refuses when the branch is no longer at `from` (it moved since Adar looked).
+        try {
+          await ctx.git(repo, ['update-ref', '-m', `adar: move ${b} to ${target}`, `refs/heads/${b}`, toSha, fromSha])
+        } catch (err) {
+          throw mapInvalid(err, /cannot lock ref|is at .* but expected/i)
+        }
       })
     },
 

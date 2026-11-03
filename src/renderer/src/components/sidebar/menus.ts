@@ -21,6 +21,7 @@ import {
   GitMerge,
   GitPullRequest,
   GitPullRequestArrow,
+  History,
   Link,
   Lock,
   Pencil,
@@ -44,6 +45,7 @@ import {
   useWorktrees
 } from '@renderer/actions/worktrees'
 import { keepMenuItem, openBranchCleanup, openKeptBranches, useSafeToDelete } from '@renderer/actions/cleanup'
+import { openReflog } from '@renderer/actions/reflog'
 import { checkoutPull, copyPullLink, openWebPage, startPullRequest } from '@renderer/actions/pulls'
 import type { MenuItem } from '@renderer/components/common/ContextMenu'
 import { branchPullItems } from '@renderer/components/pulls/menus'
@@ -333,6 +335,7 @@ export function sectionMenu(ctx: SidebarMenuCtx, id: SectionId, state: Container
         { label: 'New worktree…', icon: icon(FolderGit2), disabled: !headSha, onClick: () => newWorktree(repo) },
         { label: 'Clean up branches…', icon: icon(BrushCleaning), disabled: !headSha, onClick: () => openBranchCleanup(repo) },
         { label: 'Branches never cleaned up…', icon: icon(Pin), onClick: () => openKeptBranches(repo) },
+        { label: 'Recover lost commits…', icon: icon(History), onClick: () => openReflog(repo, 'lost') },
         SEP,
         ...expandItems,
         SEP,

@@ -99,6 +99,76 @@ export interface BranchCleanupInfo {
   remoteName: string | null
 }
 
+/** What a reflog entry did, from git's own words for it. */
+export type ReflogKind = 'commit' | 'amend' | 'reset' | 'checkout' | 'merge' | 'rebase' | 'pull' | 'cherry-pick' | 'revert' | 'branch' | 'other'
+
+/** One move of HEAD or of a branch, newest first (getReflog). */
+export interface ReflogEntry {
+  /** The commit the move led to. */
+  sha: string
+  /** When the move happened (unix seconds). */
+  date: number
+  kind: ReflogKind
+  /** git's words for the move after its kind: "moving to HEAD~3", "moving from feat to main". */
+  detail: string
+  /** The commit's subject and author. */
+  subject: string
+  author: string
+  /** No branch, tag or HEAD reaches the commit any more. */
+  lost: boolean
+}
+
+/** A commit no branch, tag or HEAD reaches any more. */
+export interface LostCommit {
+  sha: string
+  parents: string[]
+  subject: string
+  author: string
+  email: string
+  /** Committer date (unix seconds). */
+  date: number
+}
+
+/**
+ * Lost commits left behind together: by a reset, a deleted branch, work on a detached HEAD, a rewrite
+ * (amend, rebase), or something else.
+ */
+export interface LostGroup {
+  kind: 'reset' | 'deleted' | 'detached' | 'rewritten' | 'other'
+  /** The branch that was reset or deleted. */
+  branch: string | null
+  /** When the commits were left behind (unix seconds). */
+  date: number
+  /** git's words for that move ("reset: moving to HEAD~3"), or '' when no reflog says. */
+  move: string
+  /** Where the move went. */
+  to: string | null
+  /** Newest first; the first is the one the branch or HEAD was on. */
+  commits: LostCommit[]
+  /** Days before git may forget them, or null when it never does. */
+  daysLeft: number | null
+  /** Reset: the branch can go back to the first commit without losing any (it is an ancestor of it). */
+  canMoveBack: boolean
+  /** Deleted: no branch has that name now, so it can come back as it was. */
+  canRestore: boolean
+}
+
+export interface LostCommits {
+  groups: LostGroup[]
+  /** How long git keeps lost commits in the reflog (gc.reflogExpireUnreachable), or null: forever. */
+  expireDays: number | null
+}
+
+/** A commit that no reflog remembers either (findDanglingCommits). */
+export interface DanglingCommit {
+  sha: string
+  subject: string
+  author: string
+  date: number
+  /** Looks like a dropped stash ("WIP on main: …"). */
+  stash: boolean
+}
+
 export interface Ref {
   /** Short name: "main", "origin/main", "v1.0.0". */
   name: string
@@ -426,7 +496,8 @@ export interface RewordResult extends OperationResult {
 }
 
 export type PullMode = 'ff-only' | 'merge' | 'rebase'
-export type ResetMode = 'soft' | 'mixed' | 'hard'
+/** keep: like hard, but keeps local changes (and refuses when one is in the way). */
+export type ResetMode = 'soft' | 'mixed' | 'hard' | 'keep'
 export type ForcePushMode = false | 'with-lease' | 'force'
 
 export interface Identity {
@@ -706,6 +777,8 @@ export const MENU_COMMANDS = [
   'pop-stash',
   'undo',
   'redo',
+  'recover-lost-commits',
+  'show-reflog',
   'refresh',
   'toggle-left-panel',
   'toggle-right-panel',

@@ -24,7 +24,7 @@ export function withCode(err: AdarError, code: AdarErrorCode, message?: string):
 }
 
 const DIRTY_RE =
-  /would be overwritten|commit your changes or stash them|please move or remove them|you have unstaged changes|your local changes to the following files/i
+  /would be overwritten|commit your changes or stash them|please move or remove them|you have unstaged changes|your local changes to the following files|not uptodate\. cannot merge/i
 
 /**
  * The runner checks for "conflict" before the dirty-worktree patterns, so a

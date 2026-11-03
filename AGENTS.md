@@ -65,6 +65,12 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
     up", `keepBranch` → `git config adar.keepBranch` in the common config, read into `RepoInfo.keptBranches`) and, while
     pull requests are on, what the service protects (`getProtectedBranches`, `PullProvider.protectedBranches`; null when
     it would not say, as Bitbucket for non-admins). Their list is `components/modals/KeptBranchesDialog.tsx`.
+  - `actions/reflog.tsx` — recovering lost commits: the reflog view (`components/reflog/ReflogView.tsx`, a centre view:
+    *Lost commits* grouped by what left them behind — reset, deleted branch, detached HEAD, rewritten — and *Every move*
+    of HEAD or a branch), moving a reset branch back (`fastForwardBranch`; Undo with `reset --keep` or `moveBranch`),
+    restoring a deleted branch, a `recovered/…` branch for any lost commit. Backend: `git/read/reflog.ts` (`getReflog`,
+    `getLostCommits`, `findDanglingCommits` with git fsck), the grouping is pure in `git/parsers/reflog.ts`. Opened from
+    Undo's menu (and a click on Undo with nothing to undo), the Local section's menu, the palette and the Repository menu.
   - `actions/worktrees.tsx` — worktrees: each tab's list (`useWorktrees`, from `getWorktrees`), opening one as a tab in
     the group of the tab it came from, creating one (dialog `components/modals/NewWorktreeDialog.tsx`, or one click for a
     pull request), removing with undo, and `finishWorktree` after its pull request is merged. Local branches checked out
@@ -110,7 +116,7 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
 ## Conventions
 - CSS class prefixes per module: `app-` shell, `ui-` common, `tb-`/`wl-` toolbar, tabs, status bar, welcome, `sb-` left
   panel, `gr-` graph, `det-` right panel, `diff-` diff/blame/history, `cf-` conflicts, `rb-` rebase, `md-` modals,
-  `pal-` palette/console, `up-` updates, `mb-` menu bar panel, `pr-` pull requests. Each module imports its own `.css`
+  `pal-` palette/console, `up-` updates, `mb-` menu bar panel, `pr-` pull requests, `rl-` reflog. Each module imports its own `.css`
   file.
 - Icons: `lucide-react`. Virtualised lists: `@tanstack/react-virtual`. Syntax highlighting: `highlight.js`.
 - Do not add npm dependencies without discussing it first.

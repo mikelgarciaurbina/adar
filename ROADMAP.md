@@ -41,7 +41,10 @@ night theme and deeper in the day theme so its name stays readable · branches t
 branches (`pre`, `int`, `qa`…) are listed but never ticked, *Never clean up* keeps a branch or a pattern (`env/*`) out
 for good, here and on the remote, and branches protected on GitHub, GitLab or Bitbucket count too when pull requests
 are on · changed images compared four ways (side by side, swipe, onion skin and difference, which paints the changed
-pixels), at Fit or 1:1, with N / P going through the areas that changed.
+pixels), at Fit or 1:1, with N / P going through the areas that changed · recover lost commits: what a reset, a
+deleted branch, a detached HEAD or a rewrite left behind, grouped from the reflog, with a way back for each (move the
+branch back, restore the branch, or a new branch), every move of HEAD or a branch in words, and a deeper search for
+dropped stashes.
 
 ---
 
@@ -64,7 +67,6 @@ pixels), at Fit or 1:1, with N / P going through the areas that changed.
 - [ ] Provider avatars when Gravatar has none.
 
 ### Everyday workflow
-- [ ] **Reflog view / "Recover lost commits"** — a safety net beyond undo.
 - [ ] **Commit signing** (GPG / SSH) and "verified" badges in the graph and commit details.
 - [ ] Commit message helpers: templates (`commit.template`), Conventional Commits prefixes, `Co-authored-by` picker.
 - [ ] Readable output for failing hooks (pre-commit, commit-msg) instead of a raw error.

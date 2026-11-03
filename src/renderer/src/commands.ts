@@ -5,6 +5,7 @@
 import * as git from '@renderer/actions/git'
 import { installCliCommand, uninstallCliCommand } from '@renderer/actions/cli'
 import { openBranchCleanup, openKeptBranches } from '@renderer/actions/cleanup'
+import { openReflog } from '@renderer/actions/reflog'
 import { newWorktree } from '@renderer/actions/worktrees'
 import { openConnect, selectPull, startPullRequest, turnOffPullRequests } from '@renderer/actions/pulls'
 import { hostingOn, pullIndexOf, repoHosting, usePulls } from '@renderer/components/pulls/pullStore'
@@ -137,6 +138,8 @@ export const COMMANDS: Command[] = [
   },
   { id: 'undo', label: 'Undo', group: 'Repository', shortcut: 'Mod+Z', when: hasRepo, run: withRepo((r) => git.undo(r)) },
   { id: 'redo', label: 'Redo', group: 'Repository', shortcut: 'Mod+Shift+Z', when: hasRepo, run: withRepo((r) => git.redo(r)) },
+  { id: 'recover-lost-commits', label: 'Recover Lost Commits…', group: 'Repository', when: hasRepo, run: withRepo((r) => openReflog(r, 'lost')) },
+  { id: 'show-reflog', label: 'Show Reflog', group: 'Repository', when: hasRepo, run: withRepo((r) => openReflog(r, 'moves')) },
   {
     id: 'refresh',
     label: 'Refresh',
