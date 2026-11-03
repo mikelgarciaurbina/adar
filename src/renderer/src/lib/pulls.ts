@@ -65,8 +65,8 @@ export const PullNoun = (provider: HostingProvider | null | undefined, plural = 
   return noun[0].toUpperCase() + noun.slice(1)
 }
 
-/** How the provider writes a pull request's number: !12 on GitLab, #12 elsewhere. */
-export const pullRef = (pr: Pick<PullRequest, 'provider' | 'number'>) => `${pr.provider === 'gitlab' ? '!' : '#'}${pr.number}`
+/** How the provider writes a pull request's number: !12 on GitLab and Azure DevOps, #12 elsewhere. */
+export const pullRef = (pr: Pick<PullRequest, 'provider' | 'number'>) => `${pr.provider === 'gitlab' || pr.provider === 'azure' ? '!' : '#'}${pr.number}`
 
 /** The local branch a pull request from a fork is checked out as: pr/<n> (GitLab: mr/<n>). */
 export const forkBranch = (pr: Pick<PullRequest, 'provider' | 'number'>) => `${pr.provider === 'gitlab' ? 'mr' : 'pr'}/${pr.number}`

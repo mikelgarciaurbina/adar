@@ -83,7 +83,7 @@ function SelectedCommitList({ repo, ordered, bySha }: { repo: string; ordered: s
               }}
             >
               <span className="det-multi-num">{vi.index + 1}</span>
-              {c && <Avatar name={c.authorName} email={c.authorEmail} size={18} />}
+              {c && <Avatar name={c.authorName} email={c.authorEmail} sha={sha} size={18} />}
               <span className="det-multi-subject">{c?.subject ?? '(commit not loaded)'}</span>
               <span className="det-multi-sha">{shortSha(sha)}</span>
             </div>

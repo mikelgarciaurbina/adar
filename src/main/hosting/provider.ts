@@ -2,7 +2,7 @@
 // repository. index.ts picks the provider from the repository's remote and the user's sign-ins.
 
 import { AdarError } from '@shared/errors'
-import type { CreatePullOptions, MergeChecks, MergeMethod, PullCommit, PullRequest, RepoPullRequests } from '@shared/hosting'
+import type { AuthorAsk, CreatePullOptions, MergeChecks, MergeMethod, PullCommit, PullRequest, RepoPullRequests } from '@shared/hosting'
 import type { RemoteHosting } from '@shared/remoteUrl'
 
 /** A repository's remote with a supported hosting. */
@@ -31,6 +31,10 @@ export interface PullProvider {
   mergeChecks(number: number): Promise<MergeChecks | null>
   /** Names and patterns ("release/*") of the branches the service protects; null when it would not say to this sign-in. */
   protectedBranches(): Promise<string[] | null>
+  /** Pictures of these authors the service has (lower-case email → image URL); absent when it keeps none to ask for. */
+  avatars?(authors: readonly AuthorAsk[]): Promise<Map<string, string>>
+  /** A picture on the service's own host, fetched with the sign-in, as a data: URL (see ApiClient.image). */
+  image?(url: string): Promise<string | null>
 }
 
 export const invalid = (message: string) => new AdarError({ message, code: 'INVALID_ARGUMENT' })

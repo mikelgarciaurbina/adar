@@ -52,7 +52,8 @@ import './pulls.css'
 const keptBranches = new Set<string>()
 
 /** Where each provider shows a pull request's changes. */
-const REVIEW_PAGE: Record<HostingProvider, string> = { github: 'files', gitlab: 'diffs', 'bitbucket-cloud': 'diff', 'bitbucket-server': 'diff' }
+/** The page with a pull request's changes, after its own address. */
+const REVIEW_PAGE: Record<HostingProvider, string> = { github: '/files', gitlab: '/diffs', 'bitbucket-cloud': '/diff', 'bitbucket-server': '/diff', azure: '?_a=files' }
 
 const ago = (iso: string | null) => (iso ? relativeTime(Math.floor(Date.parse(iso) / 1000)) : '')
 
@@ -399,7 +400,7 @@ function PullActions(props: {
       </Button>
     ),
     !pr.viewerIsAuthor && (
-      <Button key="review" icon={<ExternalLink size={13} />} onClick={() => openWebPage(`${pr.url}/${REVIEW_PAGE[pr.provider]}`)}>
+      <Button key="review" icon={<ExternalLink size={13} />} onClick={() => openWebPage(`${pr.url}${REVIEW_PAGE[pr.provider]}`)}>
         Review on {providerName(pr)}
       </Button>
     )

@@ -1,21 +1,27 @@
-// Pull requests (opt-in) from GitHub, GitLab, Bitbucket Cloud and Bitbucket Data Center: the sign-ins,
+// Pull requests (opt-in) from GitHub, GitLab, Bitbucket Cloud, Bitbucket Data Center and Azure DevOps: the sign-ins,
 // then each repository's pull requests through the provider its remote lives on (provider.ts),
 // and the local branch for checking one out. Nothing talks to a provider the user has not turned on.
 
 import { createHash } from 'node:crypto'
 import { AdarError } from '@shared/errors'
+import { azureErrorMessage, azureUser, type AzureUser } from '@shared/azure'
 import { bitbucketErrorMessage, cloudViewer, type CloudViewer } from '@shared/bitbucket'
 import { gitlabErrorMessage, gitlabUser, type GitlabUser } from '@shared/gitlab'
 import {
+  AZURE_DEVOPS,
   BITBUCKET_API,
   GITLAB_COM,
   MAX_BODY,
   MAX_TITLE,
   isSafeBranchName,
+  type AuthorAsk,
+  type AzureConnections,
   type BitbucketConnections,
   type CreatePullOptions,
   type GithubAuthMethod,
   type GithubConnection,
+  type HostingServer,
+  type ServerAuth,
   type GitlabConnections,
   type MergeMethod,
   type PullRequest,
@@ -28,18 +34,25 @@ import type { HostingOps } from '../git/ops'
 import { assertRepo } from '../git/read/common'
 import type { SystemServices } from '../system'
 import { normalizeServerUrl } from '../system/settings'
-import { GhCli, TokenStore, isPlausibleToken } from './auth'
+import { GhCli, GlabCli, TokenStore, isPlausibleToken } from './auth'
+import { azureProvider } from './azureProvider'
 import { bitbucketCloudProvider, newCloudCaches } from './bitbucketCloud'
 import { bitbucketServerProvider, newServerCaches, serverWhoAmI } from './bitbucketServer'
+import { MAX_AVATAR_ASKS, PUBLIC_AVATAR_HOSTS } from './avatars'
 import { GithubClient } from './github'
+import { GITHUB_OAUTH_CLIENT_ID, GithubDeviceFlow } from './githubDevice'
 import { githubProvider } from './githubProvider'
 import { gitlabProvider, newGitlabCaches } from './gitlabProvider'
-import { ApiClient } from './http'
+import { ApiClient, BoundedCache, mapLimit, publicImage } from './http'
 import { invalid, type HostingRemote, type PullProvider } from './provider'
 
 export interface HostingOptions {
   /** The GitHub CLI (tests pass a fake so they never read the developer's own sign-in). */
   gh?: Pick<GhCli, 'token' | 'login' | 'forget'>
+  /** The GitLab CLI (the same, for glab). */
+  glab?: Pick<GlabCli, 'token' | 'forget'>
+  /** Signing in from the browser: tests pass an OAuth app id, a stand-in for github.com and their own clock. */
+  githubOAuth?: { clientId: string; web?: string; now?: () => number }
 }
 
 /** Remotes from `git config --get-regexp ^remote\..*\.url$` output. */
@@ -53,27 +66,46 @@ export function parseRemoteUrls(lines: string): Array<{ name: string; url: strin
 }
 
 const MERGE_METHODS: readonly MergeMethod[] = ['squash', 'merge', 'rebase', 'fast-forward']
+/** An author the provider had no picture for is asked about again after this long. */
+const AVATAR_MISS_MS = 30 * 60_000
 const EMAIL = /^[^\s@]{1,100}@[^\s@]{1,200}$/
 const HOST = /^[a-z0-9.-]{1,200}(:\d{1,5})?$/
 
 export function createHostingOps(ctx: GitContext, services: Pick<SystemServices, 'ready' | 'settings'>, options: HostingOptions = {}): HostingOps {
   const { platform } = ctx
   const gh = options.gh ?? new GhCli(services.ready)
+  const glab = options.glab ?? new GlabCli(services.ready)
   const githubTokens = new TokenStore(platform.userDataDir, platform.secrets)
   const cloudTokens = new TokenStore(platform.userDataDir, platform.secrets, 'bitbucket-token.json')
   const serverTokens = (url: string) =>
     new TokenStore(platform.userDataDir, platform.secrets, `bitbucket-server-${createHash('sha256').update(url).digest('hex').slice(0, 16)}.json`)
   const gitlabTokens = (url: string) =>
     new TokenStore(platform.userDataDir, platform.secrets, `gitlab-${createHash('sha256').update(url).digest('hex').slice(0, 16)}.json`)
+  const enterpriseTokens = (url: string) =>
+    new TokenStore(platform.userDataDir, platform.secrets, `github-${createHash('sha256').update(url).digest('hex').slice(0, 16)}.json`)
+  const azureTokens = (url: string) =>
+    new TokenStore(platform.userDataDir, platform.secrets, `azure-${createHash('sha256').update(url).digest('hex').slice(0, 16)}.json`)
   const fetchFn = platform.fetch ?? ((input: string, init?: RequestInit) => fetch(input, init))
   const userAgent = `Adar/${platform.appVersion}`
   const caches = { cloud: newCloudCaches(), server: newServerCaches(), gitlab: newGitlabCaches() }
+  const device = new GithubDeviceFlow({
+    fetch: fetchFn,
+    userAgent,
+    clientId: options.githubOAuth?.clientId ?? platform.githubClientId ?? GITHUB_OAUTH_CLIENT_ID,
+    web: options.githubOAuth?.web ?? platform.githubWeb,
+    now: options.githubOAuth?.now
+  })
 
   /** Who each sign-in is, once the provider confirmed it (cleared on a 401 or a change). */
   let githubKnown: { method: GithubAuthMethod; login: string } | null = null
   let cloudKnown: (CloudViewer & { email: string }) | null = null
   const serverKnown = new Map<string, string>()
   const gitlabKnown = new Map<string, GitlabUser>()
+  const azureKnown = new Map<string, AzureUser>()
+  /** GitHub Enterprise servers' signed-in users, by address. */
+  const enterpriseKnown = new Map<string, string>()
+  /** Authors' pictures (data: URLs, or null for none) by provider and email, for this run of Adar. */
+  const avatarCache = new BoundedCache<{ data: string | null; at: number }>(2000)
 
   const settings = () => services.settings.getSettings()
 
@@ -106,9 +138,57 @@ export function createHostingOps(ctx: GitContext, services: Pick<SystemServices,
     return user.login
   }
 
-  const getGithubConnection = async (opts?: { detectGh?: boolean }): Promise<GithubConnection> => {
+  // GitHub Enterprise Server: its API under /api (REST at /api/v3, GraphQL at /api/graphql), with gh's sign-in
+  // for its host or a token kept encrypted per server.
+  const hostOf = (url: string) => new URL(url).host
+
+  const enterpriseClient = (url: string, token: string) =>
+    new GithubClient(
+      fetchFn,
+      token,
+      userAgent,
+      () => {
+        enterpriseKnown.delete(url)
+        gh.forget(hostOf(url))
+      },
+      `${url}/api`,
+      '/v3'
+    )
+
+  const enterpriseToken = async (server: HostingServer): Promise<string> => {
+    const host = hostOf(server.url)
+    const token = server.auth === 'gh' ? await gh.token(host) : await enterpriseTokens(server.url).read()
+    if (token) return token
+    throw new AdarError({
+      message:
+        server.auth === 'gh'
+          ? `The GitHub CLI is not signed in to ${host}. Run “gh auth login --hostname ${host}”, or sign in again in Adar.`
+          : `No token for ${host} is stored on this computer. Sign in again.`,
+      code: 'AUTH_FAILED'
+    })
+  }
+
+  const enterpriseServers = async (): Promise<GithubConnection['servers']> =>
+    Promise.all(
+      (await settings()).githubServers.map(async (server) => {
+        const method: GithubAuthMethod = server.auth === 'gh' ? 'gh' : 'token'
+        const host = hostOf(server.url)
+        const known = enterpriseKnown.get(server.url)
+        if (known) return { url: server.url, host, method, login: known, error: null }
+        try {
+          const login = await githubLogin(enterpriseClient(server.url, await enterpriseToken(server)))
+          enterpriseKnown.set(server.url, login)
+          return { url: server.url, host, method, login, error: null }
+        } catch (err) {
+          return { url: server.url, host, method, login: null, error: err instanceof Error ? err.message : String(err) }
+        }
+      })
+    )
+
+  const getGithubConnection = async (opts?: { detectGh?: boolean; server?: string }): Promise<GithubConnection> => {
     const m = (await settings()).githubAuth || null
-    const ghLogin = opts?.detectGh === true || m === 'gh' ? await gh.login() : null
+    const asked = typeof opts?.server === 'string' ? normalizeServerUrl(opts.server, !!platform.allowLoopbackServers) : null
+    const ghLogin = asked ? (opts?.detectGh === true ? await gh.login(hostOf(asked)) : null) : opts?.detectGh === true || m === 'gh' ? await gh.login() : null
     let login: string | null = null
     let error: string | null = null
     if (m) {
@@ -122,7 +202,8 @@ export function createHostingOps(ctx: GitContext, services: Pick<SystemServices,
         }
       }
     }
-    return { method: m, login, error, ghLogin, canStoreToken: githubTokens.available() }
+    const canStoreToken = githubTokens.available()
+    return { method: m, login, error, ghLogin, servers: await enterpriseServers(), canStoreToken, canUseBrowser: canStoreToken && device.available }
   }
 
   // ── Bitbucket ───────────────────────────────────────────────────────────
@@ -202,10 +283,38 @@ export function createHostingOps(ctx: GitContext, services: Pick<SystemServices,
       onUnauthorized: () => gitlabKnown.delete(url)
     })
 
-  const gitlabToken = async (url: string) => {
-    const token = await gitlabTokens(url).read()
+  /**
+   * The password git's credential helper keeps for a server (osxkeychain, the Git Credential Manager…): often a
+   * personal access token for GitLab. Asked for with every prompt off; never stored by Adar.
+   */
+  const gitCredential = async (url: string): Promise<string | null> => {
+    const u = new URL(url)
+    const input = `protocol=${u.protocol.replace(':', '')}\nhost=${u.host}\n${u.pathname.length > 1 ? `path=${u.pathname.slice(1)}\n` : ''}\n`
+    const res = await ctx.gitGlobal(['-c', 'core.askPass=', '-c', 'credential.interactive=false', 'credential', 'fill'], {
+      input,
+      allowFailure: true,
+      timeoutMs: 15_000,
+      env: { GIT_ASKPASS: undefined, SSH_ASKPASS: undefined, GCM_INTERACTIVE: 'never', GIT_TERMINAL_PROMPT: '0' }
+    })
+    if (res.code !== 0) return null
+    const password = /^password=(.*)$/m.exec(res.stdout)?.[1]?.trim() ?? ''
+    return isPlausibleToken(password) ? password : null
+  }
+
+  /** A GitLab server's token: kept encrypted, or asked of glab or git's credential helper each time. */
+  const gitlabToken = async (url: string, auth?: ServerAuth) => {
+    const host = new URL(url).host
+    const token = auth === 'glab' ? await glab.token(host) : auth === 'git' ? await gitCredential(url) : await gitlabTokens(url).read()
     if (token) return token
-    throw new AdarError({ message: `No token for ${new URL(url).host} is stored on this computer. Sign in again.`, code: 'AUTH_FAILED' })
+    throw new AdarError({
+      message:
+        auth === 'glab'
+          ? `The GitLab CLI is not signed in to ${host}. Run “glab auth login --hostname ${host}”, or sign in again in Adar.`
+          : auth === 'git'
+            ? `Git no longer has a saved token for ${host}. Sign in again.`
+            : `No token for ${host} is stored on this computer. Sign in again.`,
+      code: 'AUTH_FAILED'
+    })
   }
 
   const gitlabWho = async (api: ApiClient, url: string): Promise<GitlabUser> => {
@@ -217,20 +326,76 @@ export function createHostingOps(ctx: GitContext, services: Pick<SystemServices,
     return user
   }
 
-  const getGitlabConnections = async (): Promise<GitlabConnections> => {
+  const getGitlabConnections = async (opts?: { detect?: string }): Promise<GitlabConnections> => {
     const s = await settings()
     const servers = await Promise.all(
-      s.gitlabServers.map(async ({ url }) => {
+      s.gitlabServers.map(async ({ url, auth }) => {
         const host = new URL(url).host
+        const method: GitlabConnections['servers'][number]['method'] = auth === 'glab' || auth === 'git' ? auth : 'token'
         try {
-          const who = await gitlabWho(gitlabClient(url, await gitlabToken(url)), url)
-          return { url, host, login: who.name, error: null }
+          const who = await gitlabWho(gitlabClient(url, await gitlabToken(url, auth)), url)
+          return { url, host, method, login: who.name, error: null }
         } catch (err) {
-          return { url, host, login: null, error: err instanceof Error ? err.message : String(err) }
+          return { url, host, method, login: null, error: err instanceof Error ? err.message : String(err) }
         }
       })
     )
-    return { servers, canStoreToken: githubTokens.available() }
+    // Only the sign-in dialog asks what glab and git's credential helper have for the server.
+    const asked = typeof opts?.detect === 'string' ? normalizeServerUrl(opts.detect, !!platform.allowLoopbackServers) : null
+    const found = asked ? { glab: !!(await glab.token(new URL(asked).host)), git: !!(await gitCredential(asked)) } : null
+    return { servers, found, canStoreToken: githubTokens.available() }
+  }
+
+  // ── Azure DevOps ────────────────────────────────────────────────────────
+
+  /** An organization's address, https://dev.azure.com/<org> in lower case, or null. */
+  const azureOrgUrl = (raw: unknown): string | null => {
+    const url = normalizeServerUrl(raw, false)?.toLowerCase() ?? null
+    return url && /^https:\/\/dev\.azure\.com\/[^/]{1,64}$/.test(url) ? url : null
+  }
+
+  const azureClient = (url: string, token: string) =>
+    new ApiClient({
+      fetch: fetchFn,
+      // Development only: a stand-in for dev.azure.com.
+      base: platform.azureDevOps ? url.replace(AZURE_DEVOPS, platform.azureDevOps) : url,
+      auth: `Basic ${Buffer.from(`:${token}`).toString('base64')}`,
+      userAgent,
+      service: 'Azure DevOps',
+      errorMessage: azureErrorMessage,
+      onUnauthorized: () => azureKnown.delete(url)
+    })
+
+  const azureToken = async (url: string) => {
+    const token = await azureTokens(url).read()
+    if (token) return token
+    throw new AdarError({ message: `No token for ${url.replace('https://', '')} is stored on this computer. Sign in again.`, code: 'AUTH_FAILED' })
+  }
+
+  const azureWho = async (api: ApiClient, url: string): Promise<AzureUser> => {
+    const cached = azureKnown.get(url)
+    if (cached) return cached
+    // A wrong token gets a sign-in page instead of an answer: no account in it.
+    const user = azureUser(await api.json('GET', '/_apis/connectionData'))
+    if (!user) throw new AdarError({ message: 'Azure DevOps did not accept the token: it is wrong, expired, or not for this organization', code: 'AUTH_FAILED' })
+    azureKnown.set(url, user)
+    return user
+  }
+
+  const getAzureConnections = async (): Promise<AzureConnections> => {
+    const s = await settings()
+    const organizations = await Promise.all(
+      s.azureServers.map(async ({ url }) => {
+        const name = decodeURIComponent(url.slice(`${AZURE_DEVOPS}/`.length))
+        try {
+          const who = await azureWho(azureClient(url, await azureToken(url)), url)
+          return { url, name, login: who.login, error: null }
+        } catch (err) {
+          return { url, name, login: null, error: err instanceof Error ? err.message : String(err) }
+        }
+      })
+    )
+    return { organizations, canStoreToken: azureTokens('').available() }
   }
 
   // ── Repositories ────────────────────────────────────────────────────────
@@ -242,7 +407,7 @@ export function createHostingOps(ctx: GitContext, services: Pick<SystemServices,
     ])
     const remotes = urls.code === 0 ? parseRemoteUrls(urls.stdout) : []
     const preferred = resolved.code === 0 ? /^remote\.(.+)\.gh-resolved base$/m.exec(resolved.stdout)?.[1] : null
-    const at = pickHostingRemote(remotes, { bitbucket: s.bitbucketServers, gitlab: s.gitlabServers }, preferred)
+    const at = pickHostingRemote(remotes, { bitbucket: s.bitbucketServers, gitlab: s.gitlabServers, github: s.githubServers }, preferred)
     return at ? { ...at, url: remotes.find((r) => r.name === at.remote)?.url ?? '' } : null
   }
 
@@ -251,6 +416,12 @@ export function createHostingOps(ctx: GitContext, services: Pick<SystemServices,
     const s = await settings()
     const at = await remoteOf(repo, s)
     if (!at) return { at, provider: null }
+    if (at.provider === 'github' && at.server) {
+      const server = s.githubServers.find((x) => x.url === at.server)
+      if (!server) return { at, provider: null }
+      const client = enterpriseClient(server.url, await enterpriseToken(server))
+      return { at, provider: githubProvider(client, at, () => enterpriseKnown.get(server.url) ?? '') }
+    }
     if (at.provider === 'github') {
       const m = s.githubAuth || null
       return { at, provider: m ? githubProvider(githubClient(await githubTokenFor(m)), at, () => githubKnown?.login ?? '') : null }
@@ -258,13 +429,19 @@ export function createHostingOps(ctx: GitContext, services: Pick<SystemServices,
     if (at.provider === 'gitlab') {
       const server = s.gitlabServers.find((x) => x.url === at.server)
       if (!server) return { at, provider: null }
-      const api = gitlabClient(server.url, await gitlabToken(server.url))
+      const api = gitlabClient(server.url, await gitlabToken(server.url, server.auth))
       return { at, provider: gitlabProvider(api, at, server.url, () => gitlabWho(api, server.url).catch(() => null), caches.gitlab) }
     }
     if (at.provider === 'bitbucket-cloud') {
       if (!s.bitbucketAuth) return { at, provider: null }
       const api = cloudClient(s.bitbucketEmail, await cloudToken())
       return { at, provider: bitbucketCloudProvider(api, at, () => cloudWho(api, s.bitbucketEmail).catch(() => null), caches.cloud) }
+    }
+    if (at.provider === 'azure') {
+      const org = s.azureServers.find((x) => x.url === at.server)
+      if (!org) return { at, provider: null }
+      const api = azureClient(org.url, await azureToken(org.url))
+      return { at, provider: azureProvider(api, at, org.url, () => azureWho(api, org.url).catch(() => null)) }
     }
     const server = s.bitbucketServers.find((x) => x.url === at.server)
     if (!server) return { at, provider: null }
@@ -274,7 +451,7 @@ export function createHostingOps(ctx: GitContext, services: Pick<SystemServices,
 
   const requireProvider = async (repo: string): Promise<{ at: HostingRemote; provider: PullProvider }> => {
     const { at, provider } = await providerFor(repo)
-    if (!at) throw invalid('This repository has no GitHub, GitLab or Bitbucket remote')
+    if (!at) throw invalid('This repository has no GitHub, GitLab, Bitbucket or Azure DevOps remote')
     if (!provider) throw invalid('Pull requests are off for this repository. Turn them on in Settings → Integrations.')
     return { at, provider }
   }
@@ -286,8 +463,32 @@ export function createHostingOps(ctx: GitContext, services: Pick<SystemServices,
   return {
     getGithubConnection,
 
-    async connectGithub(m, token) {
+    async connectGithub(m, token, server) {
       if (m !== 'gh' && m !== 'token') throw invalid('Unknown sign-in method')
+      if (server !== undefined) {
+        const url = normalizeServerUrl(server?.url, !!platform.allowLoopbackServers)
+        if (!url) throw invalid('Use the https address of your GitHub Enterprise server, such as https://github.example.com')
+        const host = hostOf(url)
+        let secret: string | null
+        if (m === 'gh') {
+          gh.forget(host)
+          secret = await gh.token(host)
+          if (!secret) throw new AdarError({ message: `The GitHub CLI is not signed in to ${host}. Run “gh auth login --hostname ${host}” first.`, code: 'AUTH_FAILED' })
+        } else {
+          secret = typeof token === 'string' ? token.trim() : ''
+          if (!isPlausibleToken(secret)) throw invalid('That does not look like a GitHub token')
+          if (!enterpriseTokens(url).available()) throw invalid('This computer offers no protected storage for a token. Use the GitHub CLI instead.')
+        }
+        enterpriseKnown.delete(url)
+        const login = await githubLogin(enterpriseClient(url, secret))
+        if (m === 'token') await enterpriseTokens(url).write(secret)
+        else await enterpriseTokens(url).clear()
+        const hosts = [host, typeof server.remoteHost === 'string' ? server.remoteHost.toLowerCase() : ''].filter((h) => HOST.test(h))
+        const others = (await settings()).githubServers.filter((x) => x.url !== url)
+        await services.settings.updateSettings({ githubServers: [...others, { url, hosts: [...new Set(hosts)], ...(m === 'gh' ? { auth: 'gh' as const } : {}) }] })
+        enterpriseKnown.set(url, login)
+        return getGithubConnection()
+      }
       let secret: string
       if (m === 'gh') {
         gh.forget()
@@ -306,7 +507,34 @@ export function createHostingOps(ctx: GitContext, services: Pick<SystemServices,
       return getGithubConnection()
     },
 
-    async disconnectGithub() {
+    async startGithubSignIn() {
+      if (!githubTokens.available()) throw invalid('This computer offers no protected storage for a token. Use the GitHub CLI instead.')
+      return device.start()
+    },
+
+    async checkGithubSignIn(id) {
+      if (typeof id !== 'string') throw invalid('Unknown sign-in')
+      const token = await device.check(id)
+      if (!token) return null
+      const login = await githubLogin(githubClient(token))
+      await githubTokens.write(token)
+      await services.settings.updateSettings({ githubAuth: 'browser' })
+      githubKnown = { method: 'browser', login }
+      return getGithubConnection()
+    },
+
+    async cancelGithubSignIn(id) {
+      if (typeof id === 'string') device.cancel(id)
+    },
+
+    async disconnectGithub(server) {
+      if (typeof server === 'string') {
+        enterpriseKnown.delete(server)
+        await enterpriseTokens(server).clear()
+        const servers = (await settings()).githubServers.filter((x) => x.url !== server)
+        await services.settings.updateSettings({ githubServers: servers })
+        return getGithubConnection()
+      }
       githubKnown = null
       gh.forget()
       await githubTokens.clear()
@@ -357,17 +585,42 @@ export function createHostingOps(ctx: GitContext, services: Pick<SystemServices,
     getGitlabConnections,
 
     async connectGitlab(opts) {
-      const token = typeof opts?.token === 'string' ? opts.token.trim() : ''
-      if (!isPlausibleToken(token)) throw invalid('That does not look like a GitLab token')
-      if (!githubTokens.available()) throw invalid('This computer offers no protected storage for a token.')
-      const url = normalizeServerUrl(opts.url, !!platform.allowLoopbackServers)
+      const method = opts?.method ?? 'token'
+      if (method !== 'token' && method !== 'glab' && method !== 'git') throw invalid('Unknown sign-in method')
+      const url = normalizeServerUrl(opts?.url, !!platform.allowLoopbackServers)
       if (!url) throw invalid('Use the https address of your GitLab, such as https://gitlab.example.com')
+      const host = new URL(url).host
+      let token: string
+      if (method === 'token') {
+        token = typeof opts.token === 'string' ? opts.token.trim() : ''
+        if (!isPlausibleToken(token)) throw invalid('That does not look like a GitLab token')
+        if (!githubTokens.available()) throw invalid('This computer offers no protected storage for a token.')
+      } else {
+        glab.forget(host)
+        const found = method === 'glab' ? await glab.token(host) : await gitCredential(url)
+        if (!found) {
+          throw new AdarError({
+            message: method === 'glab' ? `The GitLab CLI is not signed in to ${host}.` : `Git has no saved token for ${host}.`,
+            code: 'AUTH_FAILED'
+          })
+        }
+        token = found
+      }
       gitlabKnown.delete(url)
-      await gitlabWho(gitlabClient(url, token), url)
-      await gitlabTokens(url).write(token)
-      const hosts = [new URL(url).host, typeof opts.remoteHost === 'string' ? opts.remoteHost.toLowerCase() : ''].filter((h) => HOST.test(h))
+      try {
+        await gitlabWho(gitlabClient(url, token), url)
+      } catch (err) {
+        // A saved account password is not a token GitLab's API takes.
+        if (method === 'git' && err instanceof AdarError && err.code === 'AUTH_FAILED') {
+          throw new AdarError({ message: `What git keeps for ${host} is not a token GitLab accepts (it may be a password). Use a personal access token.`, code: 'AUTH_FAILED' })
+        }
+        throw err
+      }
+      if (method === 'token') await gitlabTokens(url).write(token)
+      else await gitlabTokens(url).clear()
+      const hosts = [host, typeof opts.remoteHost === 'string' ? opts.remoteHost.toLowerCase() : ''].filter((h) => HOST.test(h))
       const others = (await settings()).gitlabServers.filter((x) => x.url !== url)
-      await services.settings.updateSettings({ gitlabServers: [...others, { url, hosts: [...new Set(hosts)] }] })
+      await services.settings.updateSettings({ gitlabServers: [...others, { url, hosts: [...new Set(hosts)], ...(method === 'token' ? {} : { auth: method }) }] })
       return getGitlabConnections()
     },
 
@@ -378,6 +631,32 @@ export function createHostingOps(ctx: GitContext, services: Pick<SystemServices,
       const servers = (await settings()).gitlabServers.filter((x) => x.url !== url)
       await services.settings.updateSettings({ gitlabServers: servers })
       return getGitlabConnections()
+    },
+
+    getAzureConnections,
+
+    async connectAzure(opts) {
+      const token = typeof opts?.token === 'string' ? opts.token.trim() : ''
+      if (!isPlausibleToken(token)) throw invalid('That does not look like an Azure DevOps token')
+      if (!azureTokens('').available()) throw invalid('This computer offers no protected storage for a token.')
+      const url = azureOrgUrl(opts?.url)
+      if (!url) throw invalid('Use the address of your organization, such as https://dev.azure.com/contoso')
+      azureKnown.delete(url)
+      await azureWho(azureClient(url, token), url)
+      await azureTokens(url).write(token)
+      const org = url.slice(`${AZURE_DEVOPS}/`.length)
+      const others = (await settings()).azureServers.filter((x) => x.url !== url)
+      await services.settings.updateSettings({ azureServers: [...others, { url, hosts: ['dev.azure.com', 'ssh.dev.azure.com', `${org}.visualstudio.com`] }] })
+      return getAzureConnections()
+    },
+
+    async disconnectAzure(url) {
+      if (typeof url !== 'string') throw invalid('Unknown Azure DevOps organization')
+      azureKnown.delete(url)
+      await azureTokens(url).clear()
+      const organizations = (await settings()).azureServers.filter((x) => x.url !== url)
+      await services.settings.updateSettings({ azureServers: organizations })
+      return getAzureConnections()
     },
 
     async getPullRequests(repo): Promise<RepoPullRequests | null> {
@@ -396,6 +675,49 @@ export function createHostingOps(ctx: GitContext, services: Pick<SystemServices,
       await assertRepo(ctx, repo)
       checkNumber(number)
       return (await requireProvider(repo)).provider.mergeChecks(number)
+    },
+
+    async getAuthorAvatars(repo, authors) {
+      await assertRepo(ctx, repo)
+      if (!Array.isArray(authors)) throw invalid('Invalid authors')
+      if (!(await settings()).providerAvatars) return {}
+      const asks = new Map<string, AuthorAsk>()
+      for (const a of authors as unknown[]) {
+        const { email, sha } = (typeof a === 'object' && a !== null ? a : {}) as Record<string, unknown>
+        const e = typeof email === 'string' ? email.trim().toLowerCase() : ''
+        const c = typeof sha === 'string' ? sha.toLowerCase() : ''
+        if (EMAIL.test(e) && /^[0-9a-f]{40}$/.test(c) && !asks.has(e)) asks.set(e, { email: e, sha: c })
+      }
+      if (!asks.size) return {}
+      // Only while pull requests are on for the repository's provider.
+      const { at, provider } = await providerFor(repo).catch(() => ({ at: null, provider: null }))
+      if (!at || !provider?.avatars) return {}
+      const key = at.server ?? at.host
+      const out: Record<string, string> = {}
+      const now = Date.now()
+      const missing: AuthorAsk[] = []
+      for (const a of asks.values()) {
+        const hit = avatarCache.get(`${key}|${a.email}`)
+        if (hit?.data) out[a.email] = hit.data
+        else if (!hit || now - hit.at > AVATAR_MISS_MS) missing.push(a)
+      }
+      const asking = missing.slice(0, MAX_AVATAR_ASKS)
+      if (!asking.length) return out
+      let urls: Map<string, string>
+      try {
+        urls = await provider.avatars(asking)
+      } catch {
+        // Asked again next time (offline, rate limited…).
+        return out
+      }
+      const hosts = at.server ? [...PUBLIC_AVATAR_HOSTS, new RegExp(`^avatars\\.${new URL(at.server).hostname.replace(/[.]/g, '\\.')}$`)] : PUBLIC_AVATAR_HOSTS
+      await mapLimit(asking, 6, async (a) => {
+        const url = urls.get(a.email)
+        const data = url ? ((await provider.image?.(url)) ?? (await publicImage(fetchFn, url, userAgent, hosts))) : null
+        avatarCache.set(`${key}|${a.email}`, { data, at: now })
+        if (data) out[a.email] = data
+      })
+      return out
     },
 
     async getProtectedBranches(repo): Promise<string[] | null> {

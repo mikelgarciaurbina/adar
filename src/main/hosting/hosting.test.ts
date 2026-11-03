@@ -10,7 +10,7 @@ import type { PlatformAdapter } from '../platform'
 import { createGitContext } from '../git/context'
 import { cleanupTmp, commitFile, git, head, initRepo, isolateGitConfig, tmpDir } from '../git/write/__tests__/helpers'
 import { SettingsStore, normalizeServerUrl, sanitizeServers } from '../system/settings'
-import { ghConfigDir, ghUserFromHosts, isPlausibleToken, TokenStore, type SecretBox } from './auth'
+import { ghConfigDir, ghUserFromHosts, glabStatusToken, isPlausibleToken, TokenStore, type SecretBox } from './auth'
 import { cloudForkUrl } from './bitbucketCloud'
 import { pickHostingRemote } from '@shared/remoteUrl'
 import { createHostingOps, parseRemoteUrls } from './index'
@@ -79,10 +79,20 @@ beforeAll(() => isolateGitConfig())
 afterAll(() => cleanupTmp())
 
 describe('GitHub sign-in helpers', () => {
+  it('reads the token glab keeps in the keychain from its status, never a masked one', () => {
+    const token = 'glpat-' + 'k'.repeat(26)
+    const status = (line: string) => ({ stdout: '', stderr: `gitlab.example.com\n  ✓ Logged in to gitlab.example.com as mikel (keyring)\n  ${line}\n` })
+    expect(glabStatusToken(status(`✓ Token: ${token}`))).toBe(token)
+    expect(glabStatusToken(status(`✓ Token found: ${token}`))).toBe(token)
+    expect(glabStatusToken(status('✓ Token: **************************'))).toBeNull()
+    expect(glabStatusToken({ stdout: '', stderr: 'x No token provided in configuration file.' })).toBeNull()
+  })
+
   it('reads gh’s github.com user from hosts.yml', () => {
     const yaml = 'gitlab.com:\n    user: other\ngithub.com:\n    users:\n        mikel:\n    git_protocol: ssh\n    user: mikel\n'
     expect(ghUserFromHosts(yaml)).toBe('mikel')
     expect(ghUserFromHosts('gitlab.com:\n    user: other\n')).toBeNull()
+    expect(ghUserFromHosts('"github.example.com":\n    user: ane\ngithub.com:\n    user: mikel\n', 'github.example.com')).toBe('ane')
     expect(ghUserFromHosts('')).toBeNull()
     expect(ghConfigDir({ GH_CONFIG_DIR: '/x' }, 'darwin', '/home/me')).toBe('/x')
     expect(ghConfigDir({}, 'linux', '/home/me')).toBe(path.join('/home/me', '.config', 'gh'))
@@ -319,7 +329,7 @@ function fakeHttp(routes: Record<string, Route>) {
   return { calls, fetchFn }
 }
 
-function setupBitbucket(routes: Record<string, Route>) {
+function setupBitbucket(routes: Record<string, Route>, opts: { glab?: { token: (host: string) => Promise<string | null>; forget: () => void } } = {}) {
   const userData = tmpDir('adar-bb-ud-')
   const http = fakeHttp(routes)
   const platform: PlatformAdapter = {
@@ -335,7 +345,7 @@ function setupBitbucket(routes: Record<string, Route>) {
   const ctx = createGitContext(platform, () => undefined)
   const settings = new SettingsStore(userData)
   const ghCli = { token: async () => null, login: async () => null, forget: () => undefined }
-  return { ops: createHostingOps(ctx, { ready: Promise.resolve(), settings }, { gh: ghCli }), calls: http.calls, settings, userData }
+  return { ops: createHostingOps(ctx, { ready: Promise.resolve(), settings }, { gh: ghCli, glab: opts.glab }), calls: http.calls, settings, userData }
 }
 
 const API = 'https://api.bitbucket.org/2.0'
@@ -578,7 +588,7 @@ describe('GitLab merge requests', () => {
     expect(calls).toEqual([])
     await expect(ops.connectGitlab({ url: 'http://gitlab.example.com', token: GL_TOKEN })).rejects.toThrow(/https/)
     const conn = await ops.connectGitlab({ url: `${SERVER}/`, token: GL_TOKEN, remoteHost: 'gitlab.example.com' })
-    expect(conn.servers).toEqual([{ url: SERVER, host: 'gitlab.example.com', login: 'Mikel Garcia', error: null }])
+    expect(conn.servers).toEqual([{ url: SERVER, host: 'gitlab.example.com', method: 'token', login: 'Mikel Garcia', error: null }])
     expect(calls.at(-1)?.auth).toBe(`Bearer ${GL_TOKEN}`)
     expect((await settings.getSettings()).gitlabServers).toEqual([{ url: SERVER, hosts: ['gitlab.example.com'] }])
     expect(fs.readdirSync(userData).filter((f) => f.startsWith('gitlab-')).map((f) => fs.readFileSync(path.join(userData, f), 'utf8')).join()).not.toContain(GL_TOKEN)
@@ -617,6 +627,59 @@ describe('GitLab merge requests', () => {
 
     expect((await ops.disconnectGitlab(SERVER)).servers).toEqual([])
     expect(await ops.getPullRequests(repo)).toBeNull()
+  })
+  it('signs in through the GitLab CLI or the token git keeps, and never stores either', async () => {
+    const GLAB_TOKEN = 'glpat-' + 'l'.repeat(26)
+    const GIT_TOKEN = 'glpat-' + 't'.repeat(26)
+    let glabToken: string | null = GLAB_TOKEN
+    const glab = { token: async (host: string) => (host === 'gitlab.example.com' ? glabToken : null), forget: () => undefined }
+    const accepted = new Set([`Bearer ${GLAB_TOKEN}`, `Bearer ${GIT_TOKEN}`])
+    const h = setupBitbucket(
+      {
+        [`GET ${SERVER}/api/v4/user`]: () =>
+          accepted.has(h.calls.at(-1)?.auth ?? '') ? { json: { username: 'mikel', name: 'Mikel Garcia' } } : { status: 401, json: { message: '401 Unauthorized' } }
+      },
+      { glab }
+    )
+    const { ops, calls, settings, userData } = h
+    // What git's credential helper keeps: git's own "store" helper, with a file of its own.
+    const creds = path.join(tmpDir('adar-gl-creds-'), 'credentials')
+    const keep = (secret: string) => fs.writeFileSync(creds, `https://oauth2:${secret}@gitlab.example.com\n`)
+    const repo = initRepo()
+    const helperKey = `credential.${SERVER}.helper`
+    try {
+      expect((await ops.getGitlabConnections({ detect: SERVER })).found).toEqual({ glab: true, git: false })
+      expect((await ops.getGitlabConnections()).found).toBeNull()
+      keep(GIT_TOKEN)
+      git(repo, ['config', '--global', helperKey, `store --file=${creds.replace(/\\/g, '/')}`])
+      expect((await ops.getGitlabConnections({ detect: `${SERVER}/` })).found).toEqual({ glab: true, git: true })
+
+      const viaGlab = await ops.connectGitlab({ url: SERVER, method: 'glab', remoteHost: 'gitlab.example.com' })
+      expect(viaGlab.servers).toEqual([{ url: SERVER, host: 'gitlab.example.com', method: 'glab', login: 'Mikel Garcia', error: null }])
+      expect(calls.at(-1)?.auth).toBe(`Bearer ${GLAB_TOKEN}`)
+      expect((await settings.getSettings()).gitlabServers).toEqual([{ url: SERVER, hosts: ['gitlab.example.com'], auth: 'glab' }])
+      expect(fs.readdirSync(userData).filter((f) => f.startsWith('gitlab-'))).toEqual([])
+      // Signed out of glab: the server says so instead of failing quietly.
+      glabToken = null
+      expect((await ops.getGitlabConnections()).servers[0]).toMatchObject({ method: 'glab', login: null, error: expect.stringMatching(/GitLab CLI is not signed in to gitlab\.example\.com/) })
+      await expect(ops.connectGitlab({ url: SERVER, method: 'glab' })).rejects.toThrow(/not signed in/)
+
+      const viaGit = await ops.connectGitlab({ url: SERVER, method: 'git' })
+      expect(viaGit.servers).toEqual([{ url: SERVER, host: 'gitlab.example.com', method: 'git', login: 'Mikel Garcia', error: null }])
+      expect(calls.at(-1)?.auth).toBe(`Bearer ${GIT_TOKEN}`)
+      // The hosts it was turned on with are kept when the method changes.
+      expect((await settings.getSettings()).gitlabServers).toEqual([{ url: SERVER, hosts: ['gitlab.example.com'], auth: 'git' }])
+      expect(fs.readdirSync(userData).filter((f) => f.startsWith('gitlab-'))).toEqual([])
+
+      // An account password git keeps for pushing over https is not a token GitLab's API takes.
+      keep('my-account-password-1234')
+      await expect(ops.connectGitlab({ url: SERVER, method: 'git' })).rejects.toThrow(/not a token GitLab accepts/)
+      fs.rmSync(creds)
+      await expect(ops.connectGitlab({ url: SERVER, method: 'git' })).rejects.toThrow(/Git has no saved token for gitlab\.example\.com/)
+      await expect(ops.connectGitlab({ url: SERVER, method: 'password' as 'git' })).rejects.toThrow(/Unknown sign-in method/)
+    } finally {
+      git(repo, ['config', '--global', '--unset-all', helperKey])
+    }
   })
 })
 
@@ -697,5 +760,288 @@ describe('Protected branches (kept by Clean up branches)', () => {
     expect(await ops.getProtectedBranches(repo)).toEqual(['pre', 'release/*'])
     status = 401
     expect(await ops.getProtectedBranches(repo)).toBeNull()
+  })
+})
+
+describe('Azure DevOps pull requests', () => {
+  const ORG = 'https://dev.azure.com/contoso'
+  const R = `${ORG}/Web/_apis/git/repositories/widgets`
+  const AZ_TOKEN = 'a'.repeat(52)
+  const v = (path: string) => `${path}${path.includes('?') ? '&' : '?'}api-version=7.1`
+  const pr = (id: number, status = 'active', extra: Record<string, unknown> = {}) => ({
+    pullRequestId: id,
+    status,
+    title: `PR ${id}`,
+    description: 'Body',
+    createdBy: { id: 'u-ane', displayName: 'Ane', uniqueName: 'ane@contoso.com' },
+    creationDate: '2026-11-01T10:00:00Z',
+    sourceRefName: 'refs/heads/feat/cards',
+    targetRefName: 'refs/heads/main',
+    lastMergeSourceCommit: { commitId: sha40('a') },
+    mergeStatus: 'succeeded',
+    reviewers: [{ id: 'u-me', displayName: 'Mikel', vote: 0 }],
+    ...extra
+  })
+
+  it('signs in with a personal access token per organization, then reads, creates, checks and completes', async () => {
+    let completed = false
+    const evaluations = {
+      value: [{ status: 'rejected', configuration: { isEnabled: true, isBlocking: true, type: { displayName: 'Minimum number of reviewers' } } }]
+    }
+    const { ops, calls, settings, userData } = setupBitbucket({
+      [`GET ${ORG}/_apis/connectionData`]: () => ({ json: { authenticatedUser: { id: 'u-me', providerDisplayName: 'Mikel Garcia', properties: { Account: { $value: 'mikel@contoso.com' } } } } }),
+      [`GET ${v(R)}`]: () => ({ json: { id: 'r1', defaultBranch: 'refs/heads/main', project: { id: 'p1', name: 'Web' } } }),
+      [`GET ${v(`${R}/pullrequests?searchCriteria.status=active&$top=50`)}`]: () => ({ json: { value: [pr(12)] } }),
+      [`GET ${v(`${R}/pullrequests?searchCriteria.status=completed&$top=20`)}`]: () => ({ json: { value: [pr(10, 'completed', { closedDate: '2026-10-30T10:00:00Z' })] } }),
+      [`GET ${v(`${R}/pullrequests?searchCriteria.status=abandoned&$top=10`)}`]: () => ({ json: { value: [] } }),
+      [`GET ${v(`${ORG}/Web/_apis/policy/configurations`)}`]: () => ({
+        json: { value: [{ isEnabled: true, isBlocking: true, type: { displayName: 'Build' }, settings: { scope: [{ refName: 'refs/heads/main', matchKind: 'Exact', repositoryId: 'r1' }] } }] }
+      }),
+      [`GET ${v(`${R}/pullRequests/12/statuses`)}`]: () => ({ json: { value: [{ state: 'succeeded', context: { genre: 'ci', name: 'tests' } }] } }),
+      [`GET ${ORG}/Web/_apis/policy/evaluations?artifactId=${encodeURIComponent('vstfs:///CodeReview/CodeReviewId/p1/12')}&api-version=7.1-preview.1`]: () => ({ json: evaluations }),
+      [`GET ${v(`${R}/pullrequests/12`)}`]: () => ({ json: pr(12, completed ? 'completed' : 'active') }),
+      [`GET ${v(`${R}/pullRequests/12/commits?$top=100`)}`]: () => ({ json: { value: [{ commitId: sha40('c'), comment: 'Saved cards', author: { name: 'Ane' } }] } }),
+      [`POST ${v(`${R}/pullrequests`)}`]: () => ({ status: 201, json: pr(13, 'active', { title: 'Search', isDraft: true }) }),
+      [`PATCH ${v(`${R}/pullrequests/12`)}`]: () => {
+        completed = true
+        return { json: pr(12) }
+      }
+    })
+    const repo = githubRepo('git@ssh.dev.azure.com:v3/contoso/Web/widgets')
+    expect(await ops.getPullRequests(repo)).toBeNull()
+    expect(calls).toEqual([])
+
+    await expect(ops.connectAzure({ url: 'https://example.com/contoso', token: AZ_TOKEN })).rejects.toThrow(/organization/)
+    const conn = await ops.connectAzure({ url: 'https://dev.azure.com/Contoso/', token: AZ_TOKEN })
+    expect(conn.organizations).toEqual([{ url: ORG, name: 'contoso', login: 'mikel@contoso.com', error: null }])
+    expect(calls.at(-1)?.auth).toBe(`Basic ${Buffer.from(`:${AZ_TOKEN}`).toString('base64')}`)
+    expect((await settings.getSettings()).azureServers).toEqual([{ url: ORG, hosts: ['dev.azure.com', 'ssh.dev.azure.com', 'contoso.visualstudio.com'] }])
+    expect(fs.readdirSync(userData).filter((f) => f.startsWith('azure-')).map((f) => fs.readFileSync(path.join(userData, f), 'utf8')).join()).not.toContain(AZ_TOKEN)
+
+    const res = await ops.getPullRequests(repo)
+    expect(res).toMatchObject({ provider: 'azure', host: 'dev.azure.com', owner: 'Web', name: 'widgets', viewer: 'mikel@contoso.com', defaultBranch: 'main', mergeChecks: true })
+    expect(res?.pulls.map((p) => [p.number, p.state, p.checks, p.mergeBlocked, p.reviewRequested, p.url])).toEqual([
+      [12, 'open', 'passed', true, true, 'https://dev.azure.com/contoso/Web/_git/widgets/pullrequest/12'],
+      [10, 'merged', 'none', false, false, 'https://dev.azure.com/contoso/Web/_git/widgets/pullrequest/10']
+    ])
+    expect(await ops.getPullRequestCommits(repo, 12)).toEqual([{ sha: sha40('c'), subject: 'Saved cards', author: 'Ane' }])
+    expect(await ops.getPullRequestMergeChecks(repo, 12)).toEqual({ blocked: true, reasons: ['It needs more approvals'], conflicts: false })
+    expect(await ops.getProtectedBranches(repo)).toEqual(['main'])
+
+    const created = await ops.createPullRequest(repo, { head: 'feat/search', base: 'main', title: 'Search', body: 'B', draft: true })
+    expect(created).toMatchObject({ number: 13, state: 'draft' })
+    expect(calls.find((c) => c.method === 'POST')?.body).toEqual({ sourceRefName: 'refs/heads/feat/search', targetRefName: 'refs/heads/main', title: 'Search', description: 'B', isDraft: true })
+
+    await expect(ops.mergePullRequest(repo, 12, { method: 'squash', headSha: sha40('9') })).rejects.toThrow(/changed on Azure DevOps/)
+    await expect(ops.mergePullRequest(repo, 12, { method: 'fast-forward', headSha: sha40('a') })).rejects.toThrow(/fast-forwarding/)
+    await ops.mergePullRequest(repo, 12, { method: 'squash', headSha: sha40('a') })
+    expect(calls.find((c) => c.method === 'PATCH')?.body).toEqual({
+      status: 'completed',
+      lastMergeSourceCommit: { commitId: sha40('a') },
+      completionOptions: { mergeStrategy: 'squash', deleteSourceBranch: false }
+    })
+
+    expect((await ops.disconnectAzure(ORG)).organizations).toEqual([])
+    expect(await ops.getPullRequests(repo)).toBeNull()
+  })
+
+  it('reports a token Azure DevOps does not accept', async () => {
+    const { ops } = setupBitbucket({
+      // A wrong token gets a sign-in page (HTTP 203), not an answer.
+      [`GET ${ORG}/_apis/connectionData`]: () => ({ status: 203, text: '<html>Sign in</html>' })
+    })
+    await expect(ops.connectAzure({ url: ORG, token: AZ_TOKEN })).rejects.toMatchObject({ code: 'AUTH_FAILED' })
+  })
+})
+
+describe('GitHub Enterprise pull requests', () => {
+  const SERVER = 'https://github.example.com'
+  const graphqlAnswer = () => ({
+    json: {
+      data: {
+        viewer: { login: 'ane' },
+        repository: {
+          url: `${SERVER}/acme/widgets`,
+          viewerPermission: 'WRITE',
+          squashMergeAllowed: true,
+          mergeCommitAllowed: true,
+          rebaseMergeAllowed: false,
+          defaultBranchRef: { name: 'main' },
+          open: {
+            nodes: [
+              {
+                number: 7,
+                title: 'Rates',
+                url: `${SERVER}/acme/widgets/pull/7`,
+                state: 'OPEN',
+                isDraft: false,
+                headRefName: 'feat/rates',
+                headRefOid: sha40('b'),
+                isCrossRepository: false,
+                baseRefName: 'main',
+                author: { login: 'ane' }
+              }
+            ]
+          },
+          done: { nodes: [] }
+        }
+      }
+    }
+  })
+
+  it('signs in to a server with a token or with gh for its host, and reads its pull requests at /api', async () => {
+    const userData = tmpDir('adar-ghe-ud-')
+    const http = fakeHttp({
+      [`GET ${SERVER}/api/v3/user`]: () => ({ json: { login: 'ane' } }),
+      [`POST ${SERVER}/api/graphql`]: graphqlAnswer
+    })
+    const platform: PlatformAdapter = {
+      isElectron: false,
+      appVersion: 'test',
+      userDataDir: userData,
+      pickDirectory: async () => null,
+      openExternal: async () => undefined,
+      showInFolder: async () => undefined,
+      fetch: http.fetchFn,
+      secrets: box
+    }
+    const settings = new SettingsStore(userData)
+    const asked: string[] = []
+    const ghCli = {
+      token: async (host = 'github.com') => (asked.push(host), host === 'github.example.com' ? GH_TOKEN : null),
+      login: async (host = 'github.com') => (host === 'github.example.com' ? 'ane' : null),
+      forget: () => undefined
+    }
+    const ops = createHostingOps(createGitContext(platform, () => undefined), { ready: Promise.resolve(), settings }, { gh: ghCli })
+    const repo = githubRepo('git@github.example.com:acme/widgets.git')
+
+    // Not on until it is turned on, even though the host looks like GitHub.
+    expect(await ops.getPullRequests(repo)).toBeNull()
+    expect(http.calls).toEqual([])
+    expect((await ops.getGithubConnection({ detectGh: true, server: SERVER })).ghLogin).toBe('ane')
+    await expect(ops.connectGithub('token', TOKEN, { url: 'http://github.example.com' })).rejects.toThrow(/https/)
+
+    const conn = await ops.connectGithub('token', TOKEN, { url: `${SERVER}/`, remoteHost: 'github.example.com' })
+    expect(conn.servers).toEqual([{ url: SERVER, host: 'github.example.com', method: 'token', login: 'ane', error: null }])
+    expect(conn.method).toBeNull()
+    expect(http.calls.at(-1)).toMatchObject({ url: `${SERVER}/api/v3/user`, auth: `Bearer ${TOKEN}` })
+    expect((await settings.getSettings()).githubServers).toEqual([{ url: SERVER, hosts: ['github.example.com'] }])
+
+    const res = await ops.getPullRequests(repo)
+    expect(http.calls.at(-1)).toMatchObject({ method: 'POST', url: `${SERVER}/api/graphql` })
+    expect(res).toMatchObject({ provider: 'github', host: 'github.example.com', owner: 'acme', name: 'widgets', webUrl: `${SERVER}/acme/widgets`, mergeMethods: ['squash', 'merge'] })
+    expect(res?.pulls.map((p) => [p.number, p.url])).toEqual([[7, `${SERVER}/acme/widgets/pull/7`]])
+
+    // gh signed in to the server's host: nothing stored.
+    const viaGh = await ops.connectGithub('gh', undefined, { url: SERVER })
+    expect(viaGh.servers).toEqual([{ url: SERVER, host: 'github.example.com', method: 'gh', login: 'ane', error: null }])
+    expect(http.calls.at(-1)?.auth).toBe(`Bearer ${GH_TOKEN}`)
+    expect(asked).toContain('github.example.com')
+    expect((await settings.getSettings()).githubServers).toEqual([{ url: SERVER, hosts: ['github.example.com'], auth: 'gh' }])
+    expect(fs.readdirSync(userData).some((f) => f.startsWith('github-') && f !== 'github-token.json')).toBe(false)
+
+    expect((await ops.disconnectGithub(SERVER)).servers).toEqual([])
+    expect(await ops.getPullRequests(repo)).toBeNull()
+  })
+})
+
+describe('Signing in to GitHub from the browser', () => {
+  const WEB = 'https://github.com'
+  const OAUTH_TOKEN = 'gho_' + 'o'.repeat(36)
+
+  function setupDevice(answers: Array<Record<string, unknown>>, opts: { clientId?: string; userData?: string; code?: Record<string, unknown> } = {}) {
+    const userData = opts.userData ?? tmpDir('adar-device-ud-')
+    let clock = 1_000_000
+    const calls: Array<{ url: string; body: string; auth: string | null }> = []
+    const reply = (json: unknown) => new Response(JSON.stringify(json), { status: 200 })
+    const fetchFn = async (url: string, init?: RequestInit) => {
+      calls.push({ url, body: String(init?.body ?? ''), auth: new Headers(init?.headers).get('authorization') })
+      if (url === `${WEB}/login/device/code`) {
+        return reply(opts.code ?? { device_code: 'dc-secret', user_code: 'ABCD-1234', verification_uri: `${WEB}/login/device`, expires_in: 900, interval: 5 })
+      }
+      if (url === `${WEB}/login/oauth/access_token`) return reply(answers.shift() ?? { error: 'authorization_pending' })
+      if (url === 'https://api.github.com/user') return reply({ login: 'mikel' })
+      return new Response('{}', { status: 404 })
+    }
+    const platform: PlatformAdapter = {
+      isElectron: false,
+      appVersion: 'test',
+      userDataDir: userData,
+      pickDirectory: async () => null,
+      openExternal: async () => undefined,
+      showInFolder: async () => undefined,
+      fetch: fetchFn,
+      secrets: box
+    }
+    const settings = new SettingsStore(userData)
+    const ghCli = { token: async () => null, login: async () => null, forget: () => undefined }
+    const ops = createHostingOps(createGitContext(platform, () => undefined), { ready: Promise.resolve(), settings }, {
+      gh: ghCli,
+      githubOAuth: { clientId: opts.clientId ?? 'Ov23liTestClient01', now: () => clock }
+    })
+    return { ops, calls, settings, userData, tick: (seconds: number) => (clock += seconds * 1000) }
+  }
+
+  it('is only offered with an OAuth app', async () => {
+    const { ops, calls } = setupDevice([], { clientId: '' })
+    expect((await ops.getGithubConnection()).canUseBrowser).toBe(false)
+    await expect(ops.startGithubSignIn()).rejects.toThrow(/not available/)
+    expect(calls).toEqual([])
+  })
+
+  it('shows a code, waits as GitHub asks, then keeps the token encrypted', async () => {
+    const { ops, calls, settings, userData, tick } = setupDevice([{ error: 'authorization_pending' }, { error: 'slow_down', interval: 10 }, { access_token: OAUTH_TOKEN, token_type: 'bearer', scope: 'repo' }])
+    expect((await ops.getGithubConnection()).canUseBrowser).toBe(true)
+    await expect(ops.connectGithub('browser')).rejects.toThrow(/Unknown sign-in method/)
+
+    const code = await ops.startGithubSignIn()
+    expect(code).toMatchObject({ userCode: 'ABCD-1234', verificationUri: `${WEB}/login/device`, interval: 5 })
+    // The device code never leaves the main process.
+    expect(JSON.stringify(code)).not.toContain('dc-secret')
+    expect(new URLSearchParams(calls[0].body).get('scope')).toBe('repo')
+
+    // Asked too soon: GitHub is not asked at all.
+    expect(await ops.checkGithubSignIn(code.id)).toBeNull()
+    expect(calls).toHaveLength(1)
+    tick(5)
+    expect(await ops.checkGithubSignIn(code.id)).toBeNull()
+    expect(new URLSearchParams(calls[1].body).get('device_code')).toBe('dc-secret')
+    tick(5)
+    expect(await ops.checkGithubSignIn(code.id)).toBeNull() // slow_down: every 10 s from now on
+    tick(5)
+    expect(await ops.checkGithubSignIn(code.id)).toBeNull()
+    expect(calls).toHaveLength(3)
+    tick(5)
+    const conn = await ops.checkGithubSignIn(code.id)
+    expect(conn).toMatchObject({ method: 'browser', login: 'mikel', error: null })
+    expect(calls.at(-1)).toMatchObject({ url: 'https://api.github.com/user', auth: `Bearer ${OAUTH_TOKEN}` })
+    expect((await settings.getSettings()).githubAuth).toBe('browser')
+    expect(fs.readFileSync(path.join(userData, 'github-token.json'), 'utf8')).not.toContain(OAUTH_TOKEN)
+    await expect(ops.checkGithubSignIn(code.id)).rejects.toThrow(/over/)
+
+    // Adar opened again: the kept token still signs in.
+    const again = setupDevice([], { userData })
+    expect(await again.ops.getGithubConnection()).toMatchObject({ method: 'browser', login: 'mikel', error: null })
+    expect((await again.ops.disconnectGithub()).method).toBeNull()
+  })
+
+  it('stops when the code is refused, expires or is given up, and only opens GitHub’s own page', async () => {
+    const { ops, tick } = setupDevice([{ error: 'access_denied' }])
+    const denied = await ops.startGithubSignIn()
+    tick(5)
+    await expect(ops.checkGithubSignIn(denied.id)).rejects.toThrow(/cancelled on GitHub/)
+
+    const late = await ops.startGithubSignIn()
+    tick(901)
+    await expect(ops.checkGithubSignIn(late.id)).rejects.toThrow(/expired/)
+
+    const dropped = await ops.startGithubSignIn()
+    await ops.cancelGithubSignIn(dropped.id)
+    await expect(ops.checkGithubSignIn(dropped.id)).rejects.toThrow(/over/)
+
+    const elsewhere = setupDevice([], { code: { device_code: 'dc', user_code: 'ABCD-1234', verification_uri: 'https://evil.example.com/login/device', interval: 5 } })
+    await expect(elsewhere.ops.startGithubSignIn()).rejects.toThrow(/did not give a code/)
+    const refused = setupDevice([], { code: { error: 'device_flow_disabled', error_description: 'Device Flow must be explicitly enabled for this App' } })
+    await expect(refused.ops.startGithubSignIn()).rejects.toThrow(/GitHub: Device Flow must be explicitly enabled/)
   })
 })

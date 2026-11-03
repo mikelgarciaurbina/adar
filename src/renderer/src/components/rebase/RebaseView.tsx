@@ -731,7 +731,7 @@ const RebaseRow = memo(function RebaseRow(p: RowProps) {
           <span className="rb-action-label">{info.label}</span>
           <ChevronDown size={11} />
         </button>
-        <Avatar name={commit.authorName} email={commit.authorEmail} size={20} className="rb-avatar" />
+        <Avatar name={commit.authorName} email={commit.authorEmail} sha={commit.sha} size={20} className="rb-avatar" />
         <span className="rb-sha mono" title={commit.sha}>
           {shortSha(commit.sha)}
         </span>

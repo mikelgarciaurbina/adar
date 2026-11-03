@@ -152,10 +152,14 @@ export function LeftPanel({ tab }: { tab: RepoTab }) {
 
   // ── Model ────────────────────────────────────────────────────────────────
 
-  // Pull requests: a section for GitHub, GitLab and Bitbucket repositories once Adar knows whether they are on.
+  // Pull requests: a section for GitHub, GitLab, Bitbucket and Azure DevOps repositories once Adar knows whether they are on.
   const bitbucketServers = useApp((s) => s.settings.bitbucketServers)
   const gitlabServers = useApp((s) => s.settings.gitlabServers)
-  const hosting = useMemo(() => repoHosting(tab, { bitbucket: bitbucketServers, gitlab: gitlabServers }), [tab, bitbucketServers, gitlabServers])
+  const githubServers = useApp((s) => s.settings.githubServers)
+  const hosting = useMemo(
+    () => repoHosting(tab, { bitbucket: bitbucketServers, gitlab: gitlabServers, github: githubServers }),
+    [tab, bitbucketServers, gitlabServers, githubServers]
+  )
   const pullsKnown = usePulls((s) => hostingKnown(hosting, s))
   const pullsOn = usePulls((s) => hostingOn(hosting, s))
   const pullsState = usePulls((s) => s.repos[repo] ?? null)

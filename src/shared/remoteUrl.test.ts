@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseRemoteUrl, remoteProvider, remoteWebUrl } from './remoteUrl'
+import { hostingOf, parseRemoteUrl, remoteProvider, remoteWebUrl } from './remoteUrl'
 
 describe('remoteWebUrl', () => {
   const cases: Array<[string, string | null]> = [
@@ -88,5 +88,53 @@ describe('remoteProvider', () => {
     expect(remoteProvider('git@ssh.dev.azure.com:v3/o/p/r')).toBe('Azure DevOps')
     expect(remoteProvider('git@git.example.com:a/b.git')).toBeNull()
     expect(remoteProvider('/local/path')).toBeNull()
+  })
+})
+
+describe('hostingOf: Azure DevOps', () => {
+  const azure = (owner: string, name: string, org = 'contoso') => ({ provider: 'azure', host: 'dev.azure.com', owner, name, server: `https://dev.azure.com/${org}` })
+  it('finds the organization, project and repository of every kind of Azure DevOps remote', () => {
+    expect(hostingOf('https://dev.azure.com/contoso/Web/_git/widgets')).toEqual(azure('Web', 'widgets'))
+    expect(hostingOf('https://Contoso@dev.azure.com/Contoso/Web/_git/widgets')).toEqual(azure('Web', 'widgets'))
+    expect(hostingOf('https://dev.azure.com/contoso/My%20Project/_git/My%20Repo')).toEqual(azure('My Project', 'My Repo'))
+    expect(hostingOf('git@ssh.dev.azure.com:v3/contoso/Web/widgets')).toEqual(azure('Web', 'widgets'))
+    expect(hostingOf('git@ssh.dev.azure.com:v3/contoso/My%20Project/widgets')).toEqual(azure('My Project', 'widgets'))
+    expect(hostingOf('https://contoso.visualstudio.com/Web/_git/widgets')).toEqual(azure('Web', 'widgets'))
+    expect(hostingOf('https://contoso.visualstudio.com/DefaultCollection/Web/_git/widgets')).toEqual(azure('Web', 'widgets'))
+    expect(hostingOf('contoso@vs-ssh.visualstudio.com:v3/contoso/Web/widgets')).toEqual(azure('Web', 'widgets'))
+    // A repository with its project's name leaves the project out.
+    expect(hostingOf('https://dev.azure.com/contoso/_git/widgets')).toEqual(azure('widgets', 'widgets'))
+  })
+
+  it('refuses what is not a repository', () => {
+    expect(hostingOf('https://dev.azure.com/contoso/Web')).toBeNull()
+    expect(hostingOf('https://dev.azure.com/contoso/Web/_git')).toBeNull()
+    expect(hostingOf('https://dev.azure.com/contoso/Web/_git/a/b')).toBeNull()
+    expect(hostingOf('git@ssh.dev.azure.com:v2/contoso/Web/widgets')).toBeNull()
+    expect(hostingOf('https://dev.azure.com/contoso/..%2F/_git/widgets')).toBeNull()
+    expect(hostingOf('https://dev.azure.com/contoso/Web/_git/%E0%A4%A')).toBeNull()
+  })
+})
+
+describe('hostingOf: GitHub Enterprise', () => {
+  it('finds a known server, and guesses hosts named github.*', () => {
+    const servers = { github: [{ url: 'https://code.example.com', hosts: ['code.example.com', 'ssh.code.example.com'] }] }
+    expect(hostingOf('git@ssh.code.example.com:acme/widgets.git', servers)).toEqual({
+      provider: 'github',
+      host: 'ssh.code.example.com',
+      owner: 'acme',
+      name: 'widgets',
+      server: 'https://code.example.com'
+    })
+    expect(hostingOf('https://github.example.com/acme/widgets.git')).toEqual({
+      provider: 'github',
+      host: 'github.example.com',
+      owner: 'acme',
+      name: 'widgets',
+      server: 'https://github.example.com'
+    })
+    expect(hostingOf('git@github.example.com:acme/team/widgets.git')).toBeNull()
+    // github.com itself has no server.
+    expect(hostingOf('git@github.com:acme/widgets.git')).toEqual({ provider: 'github', host: 'github.com', owner: 'acme', name: 'widgets' })
   })
 })

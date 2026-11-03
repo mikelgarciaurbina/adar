@@ -125,7 +125,7 @@ export const GraphRow = memo(function GraphRow(props: GraphRowProps) {
     )
     author = (
       <>
-        <Avatar name={c.authorName} email={c.authorEmail} size={18} />
+        <Avatar name={c.authorName} email={c.authorEmail} sha={c.sha} size={18} />
         <span className="gr-author-name">
           <Highlighted text={c.authorName} query={hlField === 'author' ? hl : ''} />
         </span>

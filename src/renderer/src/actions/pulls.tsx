@@ -68,7 +68,7 @@ export function openConnect(hosting: Pick<RepoHosting, 'provider' | 'server' | '
     kind: 'pulls-connect',
     provider: hosting?.provider ?? 'github',
     server: hosting?.server,
-    remoteHost: hosting?.provider === 'bitbucket-server' || hosting?.provider === 'gitlab' ? hosting.host : undefined,
+    remoteHost: hosting?.provider === 'bitbucket-server' || hosting?.provider === 'gitlab' || (hosting?.provider === 'github' && hosting.server) ? hosting.host : undefined,
     next
   })
 }
@@ -82,11 +82,19 @@ export async function turnOffPullRequests(): Promise<void> {
   }
 }
 
-/** Take the Bitbucket and GitLab settings the backend changed (servers decide which remotes count as theirs). */
+/** Take the Bitbucket, GitLab and Azure DevOps settings the backend changed (servers decide which remotes count as theirs). */
 export async function syncHostingSettings(): Promise<void> {
   const s = await api.getSettings()
   useApp.setState((st) => ({
-    settings: { ...st.settings, bitbucketAuth: s.bitbucketAuth, bitbucketEmail: s.bitbucketEmail, bitbucketServers: s.bitbucketServers, gitlabServers: s.gitlabServers }
+    settings: {
+      ...st.settings,
+      bitbucketAuth: s.bitbucketAuth,
+      bitbucketEmail: s.bitbucketEmail,
+      bitbucketServers: s.bitbucketServers,
+      gitlabServers: s.gitlabServers,
+      azureServers: s.azureServers,
+      githubServers: s.githubServers
+    }
   }))
 }
 
@@ -95,6 +103,26 @@ export async function turnOffBitbucket(target: { kind: 'cloud' } | { kind: 'serv
     pulls().setBitbucket(await api.disconnectBitbucket(target))
     await syncHostingSettings()
     toast.success(target.kind === 'cloud' ? 'Bitbucket pull requests are off' : `Pull requests from ${new URL(target.url).host} are off`)
+  } catch (err) {
+    toast.error(err)
+  }
+}
+
+export async function turnOffGithubServer(url: string): Promise<void> {
+  try {
+    pulls().setConnection(await api.disconnectGithub(url))
+    await syncHostingSettings()
+    toast.success(`Pull requests from ${new URL(url).host} are off`)
+  } catch (err) {
+    toast.error(err)
+  }
+}
+
+export async function turnOffAzure(url: string): Promise<void> {
+  try {
+    pulls().setAzure(await api.disconnectAzure(url))
+    await syncHostingSettings()
+    toast.success(`Pull requests from ${decodeURIComponent(url.replace(/^https:\/\/dev\.azure\.com\//, ''))} are off`)
   } catch (err) {
     toast.error(err)
   }

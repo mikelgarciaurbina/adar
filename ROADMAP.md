@@ -44,7 +44,9 @@ are on · changed images compared four ways (side by side, swipe, onion skin and
 pixels), at Fit or 1:1, with N / P going through the areas that changed · recover lost commits: what a reset, a
 deleted branch, a detached HEAD or a rewrite left behind, grouped from the reflog, with a way back for each (move the
 branch back, restore the branch, or a new branch), every move of HEAD or a branch in words, and a deeper search for
-dropped stashes.
+dropped stashes · Azure DevOps pull requests (a personal access token per organization), with their checks, votes and
+branch policies · GitHub Enterprise servers, through the GitHub CLI or a token · GitLab through `glab` or the token git
+already keeps for it, before asking for one · authors' pictures from GitHub, GitLab or Bitbucket when Gravatar has none.
 
 ---
 
@@ -60,11 +62,7 @@ dropped stashes.
 - [ ] Contributor guide for adding a language through a pull request.
 
 ### Hosting integrations (opt-in)
-- [ ] **Pull requests on Azure DevOps** in the same panel and labels as GitHub's, GitLab's and Bitbucket's.
-- [ ] GitLab: sign in through `glab` when it is signed in (it has no `gh auth token` counterpart yet), and credential
-      helper tokens before asking for anything.
-- [ ] GitHub: sign in from the browser (device flow, needs an OAuth app for Adar), and GitHub Enterprise hosts.
-- [ ] Provider avatars when Gravatar has none.
+- [ ] GitHub: sign in from the browser (device flow; built, waiting for Adar's OAuth app).
 
 ### Everyday workflow
 - [ ] **Commit signing** (GPG / SSH) and "verified" badges in the graph and commit details.

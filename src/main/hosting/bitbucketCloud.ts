@@ -6,6 +6,7 @@ import { AdarError } from '@shared/errors'
 import { buildRuns, cloudCommits, cloudMergeMethods, cloudProtected, cloudPull, pageValues, type CloudViewer } from '@shared/bitbucket'
 import { sameCommit, type PullCheck, type PullRequest, type RepoPullRequests } from '@shared/hosting'
 import { parseRemoteUrl } from '@shared/remoteUrl'
+import { cloudCommitAvatar } from './avatars'
 import { BoundedCache, mapLimit, type ApiClient } from './http'
 import { changedSinceLooked, invalid, unlessRefused, type HostingRemote, type PullProvider } from './provider'
 
@@ -160,6 +161,16 @@ export function bitbucketCloudProvider(api: ApiClient, at: HostingRemote, viewer
       const p = await permission()
       if (p && p !== 'admin') return null
       return unlessRefused(async () => cloudProtected(await api.json('GET', `${repoPath}/branch-restrictions?pagelen=100`)), ['AUTH_FAILED', 'INVALID_ARGUMENT', 'NOT_FOUND'])
+    },
+
+    async avatars(authors) {
+      // A commit Bitbucket has not seen (only local) is a 404: no picture.
+      const out = new Map<string, string>()
+      await mapLimit(authors, 4, async (a) => {
+        const url = cloudCommitAvatar(await unlessRefused(() => api.json('GET', `${repoPath}/commit/${a.sha}`)), a.email)
+        if (url) out.set(a.email, url)
+      })
+      return out
     }
   }
 }

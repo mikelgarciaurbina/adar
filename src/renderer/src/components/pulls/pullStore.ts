@@ -1,4 +1,4 @@
-// Pull request state for the UI: the GitHub, GitLab and Bitbucket sign-ins and each repository's pull
+// Pull request state for the UI: the GitHub, GitLab, Bitbucket and Azure DevOps sign-ins and each repository's pull
 // requests, refreshed when a repository is shown, after every fetch and when the window comes
 // back (at most once a minute unless forced). Nothing is asked while they are off for its provider.
 
@@ -8,7 +8,7 @@ import { api } from '@renderer/api/client'
 import { indexPulls, pullForRef, pullNoun, type PullIndex } from '@renderer/lib/pulls'
 import { useApp, type RepoTab } from '@renderer/store/appStore'
 import { describeError } from '@shared/errors'
-import type { BitbucketConnections, GithubConnection, GitlabConnections, KnownServers, PullRequest, RepoPullRequests } from '@shared/hosting'
+import type { AzureConnections, BitbucketConnections, GithubConnection, GitlabConnections, KnownServers, PullRequest, RepoPullRequests } from '@shared/hosting'
 import { pickHostingRemote, type RemoteHosting } from '@shared/remoteUrl'
 import type { AppSettings, Ref, RefsResult } from '@shared/types'
 
@@ -30,14 +30,19 @@ interface PullsState {
   bitbucket: BitbucketConnections | null
   /** The GitLab instances' sign-ins (null until known). */
   gitlab: GitlabConnections | null
+  /** The Azure DevOps organizations' sign-ins (null until known). */
+  azure: AzureConnections | null
   repos: Record<string, RepoPulls>
-  /** detectGh: also ask whether the GitHub CLI is signed in (only the sign-in dialog needs it). */
-  loadConnection(detectGh?: boolean): Promise<GithubConnection | null>
+  /** detectGh: also ask whether the GitHub CLI is signed in (only the sign-in dialog needs it), to `server`'s host when given. */
+  loadConnection(detectGh?: boolean, server?: string): Promise<GithubConnection | null>
   setConnection(connection: GithubConnection): void
   loadBitbucket(): Promise<BitbucketConnections | null>
   setBitbucket(connections: BitbucketConnections): void
-  loadGitlab(): Promise<GitlabConnections | null>
+  /** detect: also ask whether glab or git's credential helper has a token for that server (only the sign-in dialog needs it). */
+  loadGitlab(detect?: string): Promise<GitlabConnections | null>
   setGitlab(connections: GitlabConnections): void
+  loadAzure(): Promise<AzureConnections | null>
+  setAzure(connections: AzureConnections): void
   load(repo: string, opts?: { force?: boolean }): Promise<RepoPullRequests | null>
 }
 
@@ -45,7 +50,11 @@ interface PullsState {
 export type RepoHosting = RemoteHosting & { remote: string }
 
 /** The servers pull requests are on for, from the settings. */
-export const knownServers = (s: Pick<AppSettings, 'bitbucketServers' | 'gitlabServers'>): KnownServers => ({ bitbucket: s.bitbucketServers, gitlab: s.gitlabServers })
+export const knownServers = (s: Pick<AppSettings, 'bitbucketServers' | 'gitlabServers' | 'githubServers'>): KnownServers => ({
+  bitbucket: s.bitbucketServers,
+  gitlab: s.gitlabServers,
+  github: s.githubServers
+})
 
 /** Where a repository tab's pull requests live (its remotes and the known servers), or null. */
 export function repoHosting(tab: Pick<RepoTab, 'info'> | undefined | null, servers: KnownServers = knownServers(useApp.getState().settings)): RepoHosting | null {
@@ -53,13 +62,14 @@ export function repoHosting(tab: Pick<RepoTab, 'info'> | undefined | null, serve
   return pickHostingRemote(remotes, servers)
 }
 
-type Connections = Pick<PullsState, 'connection' | 'bitbucket' | 'gitlab'>
+type Connections = Pick<PullsState, 'connection' | 'bitbucket' | 'gitlab' | 'azure'>
 
 /** Pull requests are on for this hosting's provider (and, on GitLab and Data Center, for its server). */
 export function hostingOn(h: RepoHosting | null, s: Connections = usePulls.getState()): boolean {
   if (!h) return false
-  if (h.provider === 'github') return !!s.connection?.method
+  if (h.provider === 'github') return h.server ? !!s.connection?.servers.some((x) => x.url === h.server) : !!s.connection?.method
   if (h.provider === 'gitlab') return !!s.gitlab?.servers.some((x) => x.url === h.server)
+  if (h.provider === 'azure') return !!s.azure?.organizations.some((x) => x.url === h.server)
   if (h.provider === 'bitbucket-cloud') return !!s.bitbucket?.cloud
   return !!s.bitbucket?.servers.some((x) => x.url === h.server)
 }
@@ -68,6 +78,7 @@ export function hostingOn(h: RepoHosting | null, s: Connections = usePulls.getSt
 export function hostingKnown(h: RepoHosting | null, s: Connections = usePulls.getState()): boolean {
   if (!h) return false
   if (h.provider === 'github') return s.connection !== null
+  if (h.provider === 'azure') return s.azure !== null
   return (h.provider === 'gitlab' ? s.gitlab : s.bitbucket) !== null
 }
 
@@ -82,11 +93,12 @@ export const usePulls = create<PullsState>()((set, get) => ({
   connection: null,
   bitbucket: null,
   gitlab: null,
+  azure: null,
   repos: {},
 
-  async loadConnection(detectGh = false) {
+  async loadConnection(detectGh = false, server) {
     try {
-      const connection = await api.getGithubConnection({ detectGh })
+      const connection = await api.getGithubConnection({ detectGh, ...(server ? { server } : {}) })
       set({ connection })
       return connection
     } catch {
@@ -95,8 +107,9 @@ export const usePulls = create<PullsState>()((set, get) => ({
   },
 
   setConnection(connection) {
-    // Signing out (or in as someone else) invalidates every list.
-    set((s) => ({ connection, repos: connection.method === s.connection?.method && connection.login === s.connection?.login ? s.repos : {} }))
+    // Signing out (or in as someone else, here or on an Enterprise server) invalidates every list.
+    const who = (c: GithubConnection | null) => JSON.stringify([c?.method, c?.login, c?.servers.map((x) => [x.url, x.login])])
+    set((s) => ({ connection, repos: who(connection) === who(s.connection) ? s.repos : {} }))
   },
 
   async loadBitbucket() {
@@ -113,9 +126,9 @@ export const usePulls = create<PullsState>()((set, get) => ({
     set({ bitbucket, repos: {} })
   },
 
-  async loadGitlab() {
+  async loadGitlab(detect) {
     try {
-      const gitlab = await api.getGitlabConnections()
+      const gitlab = await api.getGitlabConnections(detect ? { detect } : undefined)
       set({ gitlab })
       return gitlab
     } catch {
@@ -125,6 +138,20 @@ export const usePulls = create<PullsState>()((set, get) => ({
 
   setGitlab(gitlab) {
     set({ gitlab, repos: {} })
+  },
+
+  async loadAzure() {
+    try {
+      const azure = await api.getAzureConnections()
+      set({ azure })
+      return azure
+    } catch {
+      return null
+    }
+  },
+
+  setAzure(azure) {
+    set({ azure, repos: {} })
   },
 
   load(repo, opts = {}) {
@@ -149,6 +176,7 @@ export const usePulls = create<PullsState>()((set, get) => ({
           void get().loadConnection()
           void get().loadBitbucket()
           void get().loadGitlab()
+          void get().loadAzure()
         }
         return get().repos[repo]?.data ?? null
       })
@@ -213,6 +241,7 @@ export function usePullRequestSync(): void {
     void usePulls.getState().loadConnection()
     void usePulls.getState().loadBitbucket()
     void usePulls.getState().loadGitlab()
+    void usePulls.getState().loadAzure()
   }, [])
   useEffect(() => {
     if (on && activePath) void usePulls.getState().load(activePath)

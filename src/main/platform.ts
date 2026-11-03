@@ -17,10 +17,16 @@ export interface PlatformAdapter {
   secrets?: SecretBox
   /** Development only: a stand-in for https://api.github.com on 127.0.0.1 (ADAR_GITHUB_API, unpackaged builds). */
   githubApi?: string
+  /** Development only: a stand-in for https://github.com's sign-in pages on 127.0.0.1 (ADAR_GITHUB_WEB). */
+  githubWeb?: string
+  /** Development only: an OAuth app to sign in from the browser with, before Adar has its own (ADAR_GITHUB_CLIENT_ID). */
+  githubClientId?: string
   /** Development only: a stand-in for https://api.bitbucket.org/2.0 on 127.0.0.1 (ADAR_BITBUCKET_API). */
   bitbucketApi?: string
   /** Development only: a stand-in for https://gitlab.com on 127.0.0.1 (ADAR_GITLAB_URL; its API under /api/v4). */
   gitlabCom?: string
+  /** Development only: a stand-in for https://dev.azure.com on 127.0.0.1 (ADAR_AZURE_URL; organizations under it). */
+  azureDevOps?: string
   /** Development only: accept http://127.0.0.1 Bitbucket and GitLab servers (ADAR_HOSTING_LOOPBACK=1, unpackaged builds). */
   allowLoopbackServers?: boolean
 }

@@ -5,7 +5,7 @@ import { useEffect, useId, useRef, useState } from 'react'
 import { Download, FileDiff, GitBranch, GitGraph, Plug, RefreshCw, Settings, SlidersHorizontal } from 'lucide-react'
 import { api, cli, isElectron } from '@renderer/api/client'
 import { installCliCommand, uninstallCliCommand } from '@renderer/actions/cli'
-import { openConnect, turnOffBitbucket, turnOffGitlab, turnOffPullRequests } from '@renderer/actions/pulls'
+import { openConnect, turnOffAzure, turnOffBitbucket, turnOffGithubServer, turnOffGitlab, turnOffPullRequests } from '@renderer/actions/pulls'
 import { GITLAB_COM } from '@shared/hosting'
 import { usePulls } from '@renderer/components/pulls/pullStore'
 import type { CliStatus } from '@shared/cli'
@@ -230,6 +230,12 @@ function GeneralSection() {
         <SettingRow label="Gravatar avatars" description="Load author pictures from gravatar.com (sends a hash of the email). Initials are used otherwise.">
           <Switch label="Gravatar avatars" checked={s.gravatar} onChange={(gravatar) => update({ gravatar })} />
         </SettingRow>
+        <SettingRow
+          label="Pictures from GitHub, GitLab and Bitbucket"
+          description="For repositories whose pull requests are on: authors' pictures from their accounts there, when Gravatar has none."
+        >
+          <Switch label="Pictures from GitHub, GitLab and Bitbucket" checked={s.providerAvatars} onChange={(providerAvatars) => update({ providerAvatars })} />
+        </SettingRow>
         {desktop && appInfo?.platform === 'darwin' && (
           <SettingRow label="Menu bar icon" description="The antlers in the menu bar: the active project's branch and latest commits, with Pull and Push.">
             <Switch label="Menu bar icon" checked={s.menuBarIcon} onChange={(menuBarIcon) => update({ menuBarIcon })} />
@@ -423,16 +429,18 @@ function PullRequestSettings() {
   const connection = usePulls((st) => st.connection)
   const bitbucket = usePulls((st) => st.bitbucket)
   const gitlab = usePulls((st) => st.gitlab)
+  const azure = usePulls((st) => st.azure)
   useEffect(() => {
     void usePulls.getState().loadConnection()
     void usePulls.getState().loadBitbucket()
     void usePulls.getState().loadGitlab()
+    void usePulls.getState().loadAzure()
   }, [])
   const reopen = () => useApp.getState().openModal({ kind: 'settings', section: 'integrations' })
   const status = (text: string, error?: boolean) => <span className={error ? 'md-update-status md-update-error' : undefined}>{text}</span>
 
   const githubOn = !!connection?.method
-  const how = connection?.method === 'gh' ? 'Through the GitHub CLI' : 'With a personal access token'
+  const how = connection?.method === 'gh' ? 'Through the GitHub CLI' : connection?.method === 'browser' ? 'Signed in on GitHub' : 'With a personal access token'
   const githubText = !connection
     ? 'Checking…'
     : !githubOn
@@ -447,16 +455,21 @@ function PullRequestSettings() {
       ? 'The same for repositories on bitbucket.org, with an API token. Adar talks to Bitbucket only while this is on.'
       : (cloud.error ?? `As ${cloud.login ?? cloud.email}${cloud.login ? ` (${cloud.email})` : ''}, with an API token.`)
 
+  const gitlabHow = (method: 'token' | 'glab' | 'git') =>
+    method === 'glab' ? 'through the GitLab CLI' : method === 'git' ? 'with the token git uses' : 'with a personal access token'
   const gitlabCom = gitlab?.servers.find((x) => x.url === GITLAB_COM) ?? null
   const gitlabTarget = { provider: 'gitlab' as const, server: GITLAB_COM, host: 'gitlab.com' }
   const gitlabText = !gitlab
     ? 'Checking…'
     : !gitlabCom
-      ? 'Merge requests on gitlab.com, with a personal access token. Adar talks to GitLab only while this is on.'
-      : (gitlabCom.error ?? `As ${gitlabCom.login ?? 'you'}, with a personal access token.`)
+      ? 'Merge requests on gitlab.com. Adar talks to GitLab only while this is on.'
+      : (gitlabCom.error ?? `As ${gitlabCom.login ?? 'you'}, ${gitlabHow(gitlabCom.method)}.`)
 
   return (
-    <SettingGroup title="Pull requests" description="GitLab and Bitbucket Data Center servers are turned on from one of their repositories.">
+    <SettingGroup
+      title="Pull requests"
+      description="GitHub Enterprise, GitLab and Bitbucket Data Center servers, and Azure DevOps organizations, are turned on from one of their repositories."
+    >
       <SettingRow label="GitHub" description={status(githubText, !!connection?.error)}>
         {githubOn ? (
           <div className="md-row-buttons">
@@ -475,6 +488,27 @@ function PullRequestSettings() {
           </Button>
         )}
       </SettingRow>
+      {connection?.servers.map((server) => (
+        <SettingRow
+          key={server.url}
+          label={server.host}
+          description={status(
+            server.error ?? `GitHub Enterprise, ${server.method === 'gh' ? 'through the GitHub CLI' : 'with a personal access token'}${server.login ? ` as ${server.login}` : ''}.`,
+            !!server.error
+          )}
+        >
+          <div className="md-row-buttons">
+            {server.error && (
+              <Button size="sm" onClick={() => openConnect({ provider: 'github', server: server.url, host: server.host }, reopen)}>
+                Sign in again…
+              </Button>
+            )}
+            <Button size="sm" onClick={() => void turnOffGithubServer(server.url)}>
+              Turn off
+            </Button>
+          </div>
+        </SettingRow>
+      ))}
       <SettingRow label="GitLab" description={status(gitlabText, !!gitlabCom?.error)}>
         {gitlabCom ? (
           <div className="md-row-buttons">
@@ -499,7 +533,7 @@ function PullRequestSettings() {
           <SettingRow
             key={server.url}
             label={server.host}
-            description={status(server.error ?? `GitLab${server.login ? `, as ${server.login}` : ''}, with a personal access token.`, !!server.error)}
+            description={status(server.error ?? `GitLab${server.login ? `, as ${server.login}` : ''}, ${gitlabHow(server.method)}.`, !!server.error)}
           >
             <div className="md-row-buttons">
               {server.error && (
@@ -544,6 +578,24 @@ function PullRequestSettings() {
               </Button>
             )}
             <Button size="sm" onClick={() => void turnOffBitbucket({ kind: 'server', url: server.url })}>
+              Turn off
+            </Button>
+          </div>
+        </SettingRow>
+      ))}
+      {azure?.organizations.map((org) => (
+        <SettingRow
+          key={org.url}
+          label={`Azure DevOps · ${org.name}`}
+          description={status(org.error ?? `${org.login ? `As ${org.login}, w` : 'W'}ith a personal access token.`, !!org.error)}
+        >
+          <div className="md-row-buttons">
+            {org.error && (
+              <Button size="sm" onClick={() => openConnect({ provider: 'azure', server: org.url, host: 'dev.azure.com' }, reopen)}>
+                Sign in again…
+              </Button>
+            )}
+            <Button size="sm" onClick={() => void turnOffAzure(org.url)}>
               Turn off
             </Button>
           </div>

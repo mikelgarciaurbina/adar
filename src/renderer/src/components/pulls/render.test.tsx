@@ -106,7 +106,7 @@ const tab = {
   selection: { kind: 'pull', number: 42 }
 } as unknown as RepoTab
 
-const connection: GithubConnection = { method: 'gh', login: 'mikel', error: null, ghLogin: 'mikel', canStoreToken: true }
+const connection: GithubConnection = { method: 'gh', login: 'mikel', error: null, ghLogin: 'mikel', servers: [], canStoreToken: true, canUseBrowser: false }
 
 function seed(pulls: RepoPullRequests | null, conn: GithubConnection | null = connection) {
   // Server rendering reads the stores' initial state, so seed both.

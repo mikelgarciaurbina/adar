@@ -74,12 +74,18 @@ const NON_REPO_METHODS: ReadonlySet<string> = new Set([
   'getGithubConnection',
   'connectGithub',
   'disconnectGithub',
+  'startGithubSignIn',
+  'checkGithubSignIn',
+  'cancelGithubSignIn',
   'getBitbucketConnections',
   'connectBitbucket',
   'disconnectBitbucket',
   'getGitlabConnections',
   'connectGitlab',
-  'disconnectGitlab'
+  'disconnectGitlab',
+  'getAzureConnections',
+  'connectAzure',
+  'disconnectAzure'
 ])
 
 /**

@@ -2,6 +2,7 @@
 
 import { AdarError } from '@shared/errors'
 import { PULLS_QUERY, githubProtected, pullCommitsFromRest, pullFromRest, pullsFromQuery } from '@shared/hosting'
+import { githubAvatarQuery, githubAvatars, githubNoreplyAvatar } from './avatars'
 import type { GithubClient } from './github'
 import { changedSinceLooked, invalid, unlessRefused, type HostingRemote, type PullProvider } from './provider'
 
@@ -56,6 +57,22 @@ export function githubProvider(client: GithubClient, at: HostingRemote, viewer: 
     async protectedBranches() {
       // Anyone who can read the repository may ask; branches under rulesets count too.
       return unlessRefused(async () => githubProtected(await client.rest('GET', `${repoPath}/branches?protected=true&per_page=100`)))
-    }
+    },
+
+    async avatars(authors) {
+      const out = new Map<string, string>()
+      // github.com's noreply addresses carry the account's id: no question needed.
+      const rest = authors.filter((a) => {
+        const url = at.server ? null : githubNoreplyAvatar(a.email)
+        if (url) out.set(a.email, url)
+        return !url
+      })
+      if (!rest.length) return out
+      const data = await unlessRefused(() => client.graphql(githubAvatarQuery(rest), { owner: at.owner, name: at.name }))
+      for (const [email, url] of githubAvatars(data, rest)) out.set(email, url)
+      return out
+    },
+
+    image: (url) => client.image(url)
   }
 }

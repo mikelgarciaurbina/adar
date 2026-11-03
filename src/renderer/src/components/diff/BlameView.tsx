@@ -292,7 +292,7 @@ const BlameRow = memo(function BlameRow({
               </span>
             ) : (
               <span className="diff-blame-info">
-                <Avatar name={info.authorName} email={info.authorEmail} size={16} />
+                <Avatar name={info.authorName} email={info.authorEmail} sha={info.sha} size={16} />
                 <span className="diff-blame-author">{info.authorName}</span>
                 <span className="diff-blame-summary">{info.summary}</span>
                 <span className="diff-blame-date">{formatDate(info.authorDate, dateFormat)}</span>

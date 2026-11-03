@@ -5,6 +5,7 @@
 import { AdarError } from '@shared/errors'
 import { gitlabApprovers, gitlabCommits, gitlabJobs, gitlabMergeChecks, gitlabMergeMethods, gitlabProtected, gitlabPull, type GitlabExtra, type GitlabUser } from '@shared/gitlab'
 import { sameCommit, type PullCheck, type PullRequest, type RepoPullRequests } from '@shared/hosting'
+import { gitlabAvatar } from './avatars'
 import { BoundedCache, mapLimit, type ApiClient } from './http'
 import { changedSinceLooked, invalid, unlessRefused, type HostingRemote, type PullProvider } from './provider'
 
@@ -141,6 +142,18 @@ export function gitlabProvider(api: ApiClient, at: HostingRemote, server: string
 
     async protectedBranches() {
       return unlessRefused(async () => gitlabProtected(await api.json('GET', `${base}/protected_branches?per_page=100`)))
-    }
+    },
+
+    async avatars(authors) {
+      // GitLab answers by public email, whatever the commit.
+      const out = new Map<string, string>()
+      await mapLimit(authors, 4, async (a) => {
+        const url = gitlabAvatar(await unlessRefused(() => api.json('GET', `/avatar?email=${encodeURIComponent(a.email)}&size=64`)), api.base)
+        if (url) out.set(a.email, url)
+      })
+      return out
+    },
+
+    image: (url) => api.image(url)
   }
 }

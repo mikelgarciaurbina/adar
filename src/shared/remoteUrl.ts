@@ -123,16 +123,21 @@ export function remoteWebUrl(raw: string): string | null {
 
 /** Where a remote's pull requests live: its provider, host and owner/name (GitLab: group path/project; Data Center: project key/repo). */
 export interface RemoteHosting {
-  provider: 'github' | 'gitlab' | 'bitbucket-cloud' | 'bitbucket-server'
+  provider: 'github' | 'gitlab' | 'bitbucket-cloud' | 'bitbucket-server' | 'azure'
   host: string
   owner: string
   name: string
-  /** GitLab and Bitbucket Data Center: the server's web address (a known server's, else a guess from the remote). */
+  /**
+   * GitLab and Bitbucket Data Center: the server's web address (a known server's, else a guess from the remote).
+   * GitHub Enterprise Server: its web address (absent for github.com). Azure DevOps: the organization's,
+   * https://dev.azure.com/<organization> (owner is "<project>").
+   */
   server?: string
 }
 
 /** Servers pull requests are on for, by provider (see KnownServers in hosting.ts). */
-type Servers = { bitbucket?: ReadonlyArray<{ url: string; hosts: readonly string[] }>; gitlab?: ReadonlyArray<{ url: string; hosts: readonly string[] }> }
+type Server = { url: string; hosts: readonly string[] }
+type Servers = { bitbucket?: readonly Server[]; gitlab?: readonly Server[]; github?: readonly Server[] }
 
 const SLUG = /^[A-Za-z0-9._-]{1,100}$/
 const isSlug = (s: string | undefined): s is string => !!s && SLUG.test(s) && s !== '.' && s !== '..'
@@ -155,9 +160,10 @@ function urlPath(url: string): string {
 }
 
 /**
- * The hosting of a remote URL: github.com, gitlab.com, bitbucket.org, a GitLab instance (a known one, or a host
- * named gitlab.*), or a Bitbucket Data Center server (an https remote under /scm/, an ssh remote on port 7999, or
- * any remote on a known server). Null for anything else.
+ * The hosting of a remote URL: github.com, gitlab.com, bitbucket.org, Azure DevOps, a GitHub Enterprise server (a
+ * known one, or a host named github.*), a GitLab instance (a known one, or a host named gitlab.*), or a Bitbucket
+ * Data Center server (an https remote under /scm/, an ssh remote on port 7999, or any remote on a known server).
+ * Null for anything else.
  */
 export function hostingOf(raw: string, servers: Servers = {}): RemoteHosting | null {
   const gh = githubRepoOf(raw)
@@ -166,6 +172,8 @@ export function hostingOf(raw: string, servers: Servers = {}): RemoteHosting | n
   if (!parsed) return null
   const host = unalias(parsed.host.toLowerCase())
   const path = cleanPath(parsed.path)
+  const azure = azureOf(host, path)
+  if (azure) return azure
   if (host === 'bitbucket.org') {
     const [owner, name, ...rest] = path.split('/')
     return isSlug(owner) && isSlug(name) && !rest.length ? { provider: 'bitbucket-cloud', host, owner, name } : null
@@ -174,6 +182,12 @@ export function hostingOf(raw: string, servers: Servers = {}): RemoteHosting | n
   const on = (list: Servers['gitlab']) => list?.find((s) => s.hosts.includes(host) || s.hosts.includes(hostPort) || urlHost(s.url) === hostPort)
   const known = on(servers.bitbucket)
   const scm = /^(?:(.+)\/)?scm\/([^/]+)\/([^/]+)$/.exec(path)
+  const knownHub = known ? undefined : on(servers.github)
+  if (knownHub || (!known && !scm && parsed.port !== '7999' && /^github\./.test(host) && !on(servers.gitlab))) {
+    const [owner, name, ...rest] = path.split('/')
+    if (!isSlug(owner) || !isSlug(name) || rest.length) return null
+    return { provider: 'github', host, owner, name, server: knownHub?.url ?? (parsed.sshLike ? `https://${host}` : `${parsed.scheme}://${hostPort}`) }
+  }
   const knownLab = known ? undefined : on(servers.gitlab)
   if (knownLab || host === 'gitlab.com' || (!known && !scm && parsed.port !== '7999' && /^gitlab\./.test(host))) {
     return gitlabOf(parsed, host, hostPort, path, knownLab?.url)
@@ -192,6 +206,49 @@ export function hostingOf(raw: string, servers: Servers = {}): RemoteHosting | n
   if (!isSlug(project?.replace(/^~/, '')) || !isSlug(name) || /[^A-Za-z0-9/._-]/.test(context)) return null
   const server = known?.url ?? (parsed.sshLike ? `https://${host}` : `${parsed.scheme}://${hostPort}${context ? `/${context}` : ''}`)
   return { provider: 'bitbucket-server', host, owner: project!, name, server }
+}
+
+/** Azure DevOps names (organization, project, repository), decoded: no slashes, controls or URL punctuation. */
+const AZURE_NAME = /^[^\u0000-\u001f/\\?#%:@]{1,128}$/
+const azureName = (raw: string | undefined): string | null => {
+  if (raw === undefined) return null
+  let name: string
+  try {
+    name = decodeURIComponent(raw)
+  } catch {
+    return null
+  }
+  return AZURE_NAME.test(name) && !name.startsWith('.') && name.trim() === name ? name : null
+}
+
+/**
+ * An Azure DevOps remote: https://dev.azure.com/org/project/_git/repo, https://org.visualstudio.com/[DefaultCollection/]project/_git/repo
+ * (the project left out when it has the repository's name), or ssh: ssh.dev.azure.com:v3/org/project/repo,
+ * org@vs-ssh.visualstudio.com:v3/org/project/repo.
+ */
+function azureOf(host: string, path: string): RemoteHosting | null {
+  const parts = path.split('/')
+  let org: string | null = null
+  let rest: string[] = []
+  if (host === 'ssh.dev.azure.com' || host.endsWith('.vs-ssh.visualstudio.com') || host === 'vs-ssh.visualstudio.com') {
+    if (parts[0] !== 'v3' || parts.length !== 4) return null
+    const [, o, project, repo] = parts
+    org = azureName(o)
+    rest = [project, '_git', repo]
+  } else if (host === 'dev.azure.com') {
+    org = azureName(parts[0])
+    rest = parts.slice(1)
+  } else if (/^[a-z0-9-]+\.visualstudio\.com$/.test(host)) {
+    org = host.slice(0, -'.visualstudio.com'.length)
+    rest = parts[0]?.toLowerCase() === 'defaultcollection' ? parts.slice(1) : parts
+  } else return null
+  const git = rest.indexOf('_git')
+  if (!org || git < 0 || git > 1 || rest.length !== git + 2) return null
+  const name = azureName(rest[git + 1])
+  const project = git === 1 ? azureName(rest[0]) : name
+  if (!name || !project) return null
+  // Organization names are not case-sensitive: one address per organization.
+  return { provider: 'azure', host: 'dev.azure.com', owner: project, name, server: `https://dev.azure.com/${encodeURIComponent(org.toLowerCase())}` }
 }
 
 /** A GitLab remote: [context/]group[/subgroup…]/project, on gitlab.com or the instance at `known` (else a guess). */

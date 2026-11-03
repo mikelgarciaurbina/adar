@@ -267,7 +267,7 @@ function CommitRow(props: { kind: LostGroup['kind'] | 'deeper'; commit: Pick<Los
       <span className="rl-subject">{c.subject || '(no message)'}</span>
       {note && <span className="rl-note-tag">{note}</span>}
       <span className="rl-who">
-        <Avatar name={c.author} email={c.email ?? ''} size={18} />
+        <Avatar name={c.author} email={c.email ?? ''} sha={c.sha} size={18} />
         {c.author}
       </span>
       <span className="rl-when" title={absoluteTime(c.date)}>

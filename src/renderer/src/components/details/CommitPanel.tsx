@@ -123,7 +123,7 @@ export function CommitPanel({ tab, sha }: { tab: RepoTab; sha: string }) {
         )}
 
         <div className="det-person">
-          <Avatar name={commit.authorName} email={commit.authorEmail} size={32} />
+          <Avatar name={commit.authorName} email={commit.authorEmail} sha={commit.sha} size={32} />
           <div className="det-person-text">
             <div className="det-person-line">
               <span className="det-person-name selectable">{commit.authorName}</span>
@@ -138,7 +138,7 @@ export function CommitPanel({ tab, sha }: { tab: RepoTab; sha: string }) {
         <LostCommitNote repo={repo} sha={commit.sha} subject={commit.subject} />
         {committerDiffers ? (
           <div className="det-committer">
-            <Avatar name={commit.committerName} email={commit.committerEmail} size={18} />
+            <Avatar name={commit.committerName} email={commit.committerEmail} sha={commit.sha} size={18} />
             <span>committed by</span>
             <span className="det-person-name selectable">{commit.committerName}</span>
             <span className="det-person-email selectable">{commit.committerEmail}</span>

@@ -1,5 +1,5 @@
-// Minimal GitHub API client (api.github.com only): GraphQL for reading pull requests, REST for
-// creating and merging them. Failures become AdarErrors with GitHub's own explanation.
+// Minimal GitHub API client (api.github.com, or a GitHub Enterprise server's /api): GraphQL for reading
+// pull requests, REST for creating and merging them. Failures become AdarErrors with GitHub's own explanation.
 
 import { AdarError } from '@shared/errors'
 import { GITHUB_API, githubErrorMessage } from '@shared/hosting'
@@ -16,7 +16,9 @@ export class GithubClient {
     userAgent: string,
     /** Called when GitHub rejects the credentials (revoked token, gh signed out). */
     onUnauthorized: () => void = () => undefined,
-    base: string = GITHUB_API
+    base: string = GITHUB_API,
+    /** REST paths' prefix: '' on api.github.com, '/v3' under a GitHub Enterprise server's /api (GraphQL is /api/graphql there). */
+    private readonly restPrefix = ''
   ) {
     this.api = new ApiClient({
       fetch: fetchFn,
@@ -33,7 +35,12 @@ export class GithubClient {
 
   /** REST call; `apiPath` starts with "/" and is built from validated parts only. */
   async rest(method: 'GET' | 'POST' | 'PUT', apiPath: string, body?: unknown): Promise<unknown> {
-    return this.api.json(method, apiPath, body)
+    return this.api.json(method, `${this.restPrefix}${apiPath}`, body)
+  }
+
+  /** A picture on GitHub Enterprise's own host, with the sign-in (see ApiClient.image). */
+  image(url: string): Promise<string | null> {
+    return this.api.image(url)
   }
 
   async graphql(query: string, variables: Record<string, unknown>): Promise<unknown> {

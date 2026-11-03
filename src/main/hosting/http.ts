@@ -1,5 +1,5 @@
-// JSON client for the hosting APIs (GitHub, Bitbucket Cloud, Bitbucket Data Center). Only ever
-// talks to its own base address; failures become AdarErrors with the service's own explanation.
+// JSON client for the hosting APIs (GitHub, GitLab, Bitbucket, Azure DevOps). Only ever talks to its own base
+// address (avatars: its own host); failures become AdarErrors with the service's own explanation.
 
 import { AdarError } from '@shared/errors'
 
@@ -41,6 +41,27 @@ export class ApiClient {
   /** JSON answer of `method path` (path starts with "/" and is built from validated parts only). */
   async json(method: string, path: string, body?: unknown): Promise<unknown> {
     return (await this.call(method, path, body)).json
+  }
+
+  /**
+   * A picture on the service's own host (such as a user's avatar), fetched with the sign-in, as a data: URL; null when
+   * it is on another host or fails. A redirect elsewhere (a storage bucket) is followed once, without the sign-in.
+   */
+  async image(url: string): Promise<string | null> {
+    try {
+      const u = new URL(url)
+      if (u.origin !== new URL(this.opts.base).origin || u.username || u.password) return null
+      const headers = { Accept: 'image/*', 'User-Agent': this.opts.userAgent }
+      let res = await this.opts.fetch(u.href, { headers: { ...headers, Authorization: this.opts.auth }, redirect: 'manual', signal: AbortSignal.timeout(TIMEOUT_MS) })
+      if (res.status >= 300 && res.status < 400) {
+        const next = new URL(res.headers.get('location') ?? '', u)
+        if (next.protocol !== 'https:') return null
+        res = await this.opts.fetch(next.href, { headers, signal: AbortSignal.timeout(TIMEOUT_MS) })
+      }
+      return await imageData(res)
+    } catch {
+      return null
+    }
   }
 
   /** The full answer, for status codes and headers. `path` may also be an absolute URL under the base address. */
@@ -88,6 +109,33 @@ export class ApiClient {
       throw new AdarError({ message: `${service}: not found, or this sign-in has no access to it (${detail})`, code: 'NOT_FOUND' })
     }
     throw new AdarError({ message: `${service}: ${detail}`, code: res.status >= 500 ? 'NETWORK' : 'INVALID_ARGUMENT' })
+  }
+}
+
+/** Pictures an avatar may be: small raster images (never SVG). */
+const IMAGE_TYPES = /^image\/(png|jpeg|gif|webp)$/
+const MAX_IMAGE_BYTES = 256 * 1024
+
+/** An answer's picture as a data: URL, or null (not a picture, too big, an error). */
+export async function imageData(res: Response): Promise<string | null> {
+  if (!res.ok) return null
+  const type = (res.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase()
+  if (!IMAGE_TYPES.test(type)) return null
+  const declared = Number(res.headers.get('content-length') ?? 0)
+  if (declared > MAX_IMAGE_BYTES) return null
+  const bytes = Buffer.from(await res.arrayBuffer())
+  if (!bytes.length || bytes.length > MAX_IMAGE_BYTES) return null
+  return `data:${type};base64,${bytes.toString('base64')}`
+}
+
+/** A picture from a public avatar host (no sign-in sent), as a data: URL; null when it is anywhere else or fails. */
+export async function publicImage(fetchFn: FetchFn, url: string, userAgent: string, hosts: readonly RegExp[]): Promise<string | null> {
+  try {
+    const u = new URL(url)
+    if (u.protocol !== 'https:' || u.username || u.password || !hosts.some((h) => h.test(u.hostname))) return null
+    return await imageData(await fetchFn(u.href, { headers: { Accept: 'image/*', 'User-Agent': userAgent }, signal: AbortSignal.timeout(TIMEOUT_MS) }))
+  } catch {
+    return null
   }
 }
 

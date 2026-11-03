@@ -1,19 +1,28 @@
-// Pull requests (opt-in) from GitHub, GitLab (merge requests), Bitbucket Cloud and Bitbucket Data
-// Center: types shared by the backend (src/main/hosting) and the renderer (components/pulls), GitHub's
-// GraphQL query and the pure mapping of its answer. Bitbucket's answers are mapped in bitbucket.ts,
-// GitLab's in gitlab.ts.
+// Pull requests (opt-in) from GitHub, GitLab (merge requests), Bitbucket Cloud, Bitbucket Data Center
+// and Azure DevOps: types shared by the backend (src/main/hosting) and the renderer (components/pulls),
+// GitHub's GraphQL query and the pure mapping of its answer. Bitbucket's answers are mapped in
+// bitbucket.ts, GitLab's in gitlab.ts, Azure DevOps' in azure.ts.
 
 export const GITHUB_API = 'https://api.github.com'
 export const BITBUCKET_API = 'https://api.bitbucket.org/2.0'
 export const GITLAB_COM = 'https://gitlab.com'
+/** Azure DevOps: each organization's API and web pages live under https://dev.azure.com/<organization>. */
+export const AZURE_DEVOPS = 'https://dev.azure.com'
 
 /** Where a repository's pull requests live. */
-export type HostingProvider = 'github' | 'gitlab' | 'bitbucket-cloud' | 'bitbucket-server'
+export type HostingProvider = 'github' | 'gitlab' | 'bitbucket-cloud' | 'bitbucket-server' | 'azure'
 
 /** The name people know each provider by. */
-export const PROVIDER_NAMES: Record<HostingProvider, string> = { github: 'GitHub', gitlab: 'GitLab', 'bitbucket-cloud': 'Bitbucket', 'bitbucket-server': 'Bitbucket' }
+export const PROVIDER_NAMES: Record<HostingProvider, string> = {
+  github: 'GitHub',
+  gitlab: 'GitLab',
+  'bitbucket-cloud': 'Bitbucket',
+  'bitbucket-server': 'Bitbucket',
+  azure: 'Azure DevOps'
+}
 
-export type GithubAuthMethod = 'gh' | 'token'
+/** gh's sign-in, a personal access token, or a token from signing in on github.com from the browser (Adar's OAuth app). */
+export type GithubAuthMethod = 'gh' | 'token' | 'browser'
 export type PullState = 'open' | 'draft' | 'merged' | 'closed'
 /** Combined state of a pull request's checks (GitHub Actions, status checks). */
 export type ChecksState = 'passed' | 'failed' | 'running' | 'none'
@@ -115,13 +124,24 @@ export interface MergeChecks {
   conflicts: boolean | null
 }
 
-/** A server pull requests are on for (settings.bitbucketServers, settings.gitlabServers). */
+/** How Adar signs in to a server: a token it keeps encrypted, or one it asks a tool for each time (never stored). */
+export type ServerAuth = 'token' | 'gh' | 'glab' | 'git'
+
+/** A server pull requests are on for (settings.bitbucketServers, gitlabServers, githubServers, azureServers). */
 export interface HostingServer {
   /** Web address, https://host[:port][/context], without a trailing slash. */
   url: string
   /** Hosts of remotes that live on it (the SSH host may differ from the web one). */
   hosts: string[]
+  /** How Adar signs in to it; a stored token when absent. */
+  auth?: ServerAuth
 }
+
+/** A GitHub Enterprise Server pull requests are on for. */
+export type GithubServer = HostingServer
+
+/** An Azure DevOps organization pull requests are on for: https://dev.azure.com/<organization>. */
+export type AzureOrganization = HostingServer
 
 /** A Bitbucket Data Center server pull requests are on for. */
 export type BitbucketServer = HostingServer
@@ -129,14 +149,30 @@ export type BitbucketServer = HostingServer
 export type GitlabServer = HostingServer
 
 /** The servers pull requests are on for, by provider: they tell their remotes apart from other hosts. */
+/** An author whose picture is asked of the provider: the email, and a commit of theirs it knows them by. */
+export interface AuthorAsk {
+  email: string
+  sha: string
+}
+
 export interface KnownServers {
   bitbucket?: readonly HostingServer[]
   gitlab?: readonly HostingServer[]
+  github?: readonly HostingServer[]
 }
 
 export interface GitlabConnections {
-  /** Each GitLab instance merge requests are on for, and who is signed in. */
-  servers: Array<{ url: string; host: string; login: string | null; error: string | null }>
+  /** Each GitLab instance merge requests are on for, how Adar signs in to it, and who is signed in. */
+  servers: Array<{ url: string; host: string; method: 'token' | 'glab' | 'git'; login: string | null; error: string | null }>
+  /** For the server the sign-in dialog asked about: glab is signed in to it; git's credential helper keeps a token for it. */
+  found: { glab: boolean; git: boolean } | null
+  /** Tokens can be kept encrypted on this computer. */
+  canStoreToken: boolean
+}
+
+export interface AzureConnections {
+  /** Each Azure DevOps organization pull requests are on for, and who is signed in. */
+  organizations: Array<{ url: string; name: string; login: string | null; error: string | null }>
   /** Tokens can be kept encrypted on this computer. */
   canStoreToken: boolean
 }
@@ -150,16 +186,33 @@ export interface BitbucketConnections {
 }
 
 export interface GithubConnection {
-  /** How Adar signs in to GitHub, or null when pull requests are off. */
+  /** How Adar signs in to github.com, or null when pull requests are off there. */
   method: GithubAuthMethod | null
   /** Signed-in user, once checked. */
   login: string | null
   /** Why the sign-in does not work (revoked token, gh signed out…). */
   error: string | null
-  /** gh is installed and signed in to github.com: its user ('' when gh does not say), else null (or not asked). */
+  /** gh is installed and signed in to github.com (or to the server asked about): its user ('' when gh does not say), else null (or not asked). */
   ghLogin: string | null
+  /** GitHub Enterprise servers pull requests are on for, how Adar signs in to each and who it is. */
+  servers: Array<{ url: string; host: string; method: GithubAuthMethod; login: string | null; error: string | null }>
   /** A personal access token can be kept encrypted on this computer. */
   canStoreToken: boolean
+  /** Signing in to github.com from the browser is offered (this build has Adar's OAuth app, and a token can be kept). */
+  canUseBrowser: boolean
+}
+
+/** A sign-in from the browser waiting for its code to be entered on GitHub (the device code itself stays in the main process). */
+export interface GithubDeviceCode {
+  id: string
+  /** What to type on the verification page ("ABCD-1234"). */
+  userCode: string
+  /** https://github.com/login/device */
+  verificationUri: string
+  /** Seconds between checks. */
+  interval: number
+  /** When the code stops working (ms since the epoch). */
+  expiresAt: number
 }
 
 export interface CreatePullOptions {
@@ -381,7 +434,7 @@ export function pullFromNode(node: unknown, viewer: string): PullRequest | null 
 }
 
 /** The answer of PULLS_QUERY (its `data`) as RepoPullRequests, or null when the repository is missing. */
-export function pullsFromQuery(data: unknown, at: { owner: string; name: string; remote: string }): RepoPullRequests | null {
+export function pullsFromQuery(data: unknown, at: { owner: string; name: string; remote: string; host?: string }): RepoPullRequests | null {
   if (!isObj(data) || !isObj(data.repository)) return null
   const repo = data.repository
   const viewer = isObj(data.viewer) ? str(data.viewer.login) : ''
@@ -401,11 +454,11 @@ export function pullsFromQuery(data: unknown, at: { owner: string; name: string;
   const permission = str(repo.viewerPermission)
   return {
     provider: 'github',
-    host: 'github.com',
+    host: at.host ?? 'github.com',
     owner: at.owner,
     name: at.name,
     remote: at.remote,
-    webUrl: httpsUrl(repo.url) ?? `https://github.com/${at.owner}/${at.name}`,
+    webUrl: httpsUrl(repo.url) ?? `https://${at.host ?? 'github.com'}/${at.owner}/${at.name}`,
     viewer,
     defaultBranch: isObj(repo.defaultBranchRef) && isSafeBranchName(repo.defaultBranchRef.name) ? (repo.defaultBranchRef.name as string) : 'main',
     mergeMethods: methods.length ? methods : ['merge'],

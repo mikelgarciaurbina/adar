@@ -5,7 +5,7 @@
 import { randomBytes } from 'node:crypto'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
-import type { HostingServer } from '@shared/hosting'
+import type { HostingServer, ServerAuth } from '@shared/hosting'
 import { normalizeHexColor } from '@shared/groupColor'
 import {
   DEFAULT_SETTINGS,
@@ -34,7 +34,7 @@ const ENUMS: Partial<Record<keyof AppSettings, readonly string[]>> = {
   dateFormat: ['relative', 'absolute'],
   diffViewMode: ['unified', 'split'],
   imageDiffMode: ['side', 'swipe', 'onion', 'difference'],
-  githubAuth: ['', 'gh', 'token'],
+  githubAuth: ['', 'gh', 'token', 'browser'],
   bitbucketAuth: ['', 'token']
 }
 
@@ -82,7 +82,7 @@ export function sanitizeTabGroups(raw: unknown): TabGroup[] | null {
   return out
 }
 
-/** A Bitbucket or GitLab server's web address: https (no credentials, query or fragment), without a trailing slash; null if not one. */
+/** A Bitbucket, GitLab or Azure DevOps server's web address: https (no credentials, query or fragment), without a trailing slash; null if not one. */
 export function normalizeServerUrl(raw: unknown, allowLoopbackHttp = false): string | null {
   if (typeof raw !== 'string') return null
   let u: URL
@@ -96,7 +96,9 @@ export function normalizeServerUrl(raw: unknown, allowLoopbackHttp = false): str
   return `${u.protocol}//${u.host.toLowerCase()}${u.pathname.replace(/\/+$/, '')}`
 }
 
-/** Well-formed Bitbucket or GitLab servers: a valid address, lower-case hosts, no duplicates. */
+const SERVER_AUTH: readonly ServerAuth[] = ['token', 'gh', 'glab', 'git']
+
+/** Well-formed Bitbucket, GitLab, GitHub Enterprise and Azure DevOps servers: a valid address, lower-case hosts, how Adar signs in, no duplicates. */
 export function sanitizeServers(raw: unknown): HostingServer[] | null {
   if (!Array.isArray(raw)) return null
   const out: HostingServer[] = []
@@ -105,7 +107,8 @@ export function sanitizeServers(raw: unknown): HostingServer[] | null {
     const url = normalizeServerUrl(s.url, true)
     if (!url || out.some((x) => x.url === url)) continue
     const hosts = Array.isArray(s.hosts) ? s.hosts.filter((h): h is string => typeof h === 'string' && /^[a-z0-9.-]+(:\d+)?$/i.test(h)).map((h) => h.toLowerCase()) : []
-    out.push({ url, hosts: [...new Set(hosts)].slice(0, 20) })
+    const auth = typeof s.auth === 'string' && SERVER_AUTH.includes(s.auth as ServerAuth) ? (s.auth as ServerAuth) : undefined
+    out.push({ url, hosts: [...new Set(hosts)].slice(0, 20), ...(auth && auth !== 'token' ? { auth } : {}) })
     if (out.length >= 50) break
   }
   return out
@@ -145,7 +148,7 @@ export function sanitizeSettings(base: AppSettings, rawPatch: unknown): AppSetti
       if (colors) target[key] = colors
       continue
     }
-    if (key === 'bitbucketServers' || key === 'gitlabServers') {
+    if (key === 'bitbucketServers' || key === 'gitlabServers' || key === 'azureServers' || key === 'githubServers') {
       const servers = sanitizeServers(value)
       if (servers) target[key] = servers
       continue

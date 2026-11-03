@@ -46,10 +46,13 @@ import type {
   Worktree
 } from './types'
 import type {
+  AuthorAsk,
+  AzureConnections,
   BitbucketConnections,
   CreatePullOptions,
   GithubAuthMethod,
   GithubConnection,
+  GithubDeviceCode,
   GitlabConnections,
   MergeChecks,
   MergeMethod,
@@ -274,14 +277,30 @@ export interface AdarApi {
 
   // ── Pull requests (opt-in, see hosting.ts): GitHub, GitLab, Bitbucket Cloud and Data Center ──
   /**
-   * How Adar signs in to GitHub. Talks to GitHub only when pull requests are on; asks gh whether it is signed in only
-   * with detectGh (the sign-in dialog) or when gh is the sign-in.
+   * How Adar signs in to GitHub and its GitHub Enterprise servers. Talks to GitHub only when pull requests are on; asks
+   * gh whether it is signed in only with detectGh (the sign-in dialog; for `server`'s host when given) or when gh is the sign-in.
    */
-  getGithubConnection(opts?: { detectGh?: boolean }): Promise<GithubConnection>
-  /** Turn pull requests on with gh's sign-in or a personal access token (checked first, then kept encrypted). */
-  connectGithub(method: GithubAuthMethod, token?: string): Promise<GithubConnection>
-  /** Turn pull requests off and forget a stored token. */
-  disconnectGithub(): Promise<GithubConnection>
+  getGithubConnection(opts?: { detectGh?: boolean; server?: string }): Promise<GithubConnection>
+  /**
+   * Turn pull requests on with gh's sign-in or a personal access token (checked first, then kept encrypted): for
+   * github.com, or for a GitHub Enterprise server (its address, and the host of the remote that asked).
+   */
+  connectGithub(method: GithubAuthMethod, token?: string, server?: { url: string; remoteHost?: string }): Promise<GithubConnection>
+  /** Turn pull requests off (for github.com, or a GitHub Enterprise server) and forget a stored token. */
+  disconnectGithub(server?: string): Promise<GithubConnection>
+  /**
+   * Authors' pictures from the provider of a repository whose pull requests are on (GitHub, GitLab, Bitbucket), as
+   * data: URLs by lower-case email; authors it has none for are left out. Nothing is asked while pull requests are off.
+   */
+  getAuthorAvatars(repo: string, authors: AuthorAsk[]): Promise<Record<string, string>>
+  /** Sign in to github.com from the browser: a code to type on GitHub's page (OAuth device flow). */
+  startGithubSignIn(): Promise<GithubDeviceCode>
+  /**
+   * Whether the code was entered and approved: the connection once it was (pull requests are then on, the token kept
+   * encrypted), null while it is still waiting. Asking more often than GitHub allows just answers null.
+   */
+  checkGithubSignIn(id: string): Promise<GithubConnection | null>
+  cancelGithubSignIn(id: string): Promise<void>
   /** Bitbucket Cloud and the Bitbucket Data Center servers pull requests are on for, and who is signed in to each. */
   getBitbucketConnections(): Promise<BitbucketConnections>
   /**
@@ -292,14 +311,23 @@ export interface AdarApi {
     opts: { kind: 'cloud'; email: string; token: string } | { kind: 'server'; url: string; token: string; remoteHost?: string }
   ): Promise<BitbucketConnections>
   disconnectBitbucket(target: { kind: 'cloud' } | { kind: 'server'; url: string }): Promise<BitbucketConnections>
-  /** The GitLab instances merge requests are on for (gitlab.com included), and who is signed in to each. */
-  getGitlabConnections(): Promise<GitlabConnections>
   /**
-   * Turn GitLab merge requests on for an instance (its web address, the host of the remote that asked) with a personal
-   * access token. Checked first, then kept encrypted.
+   * The GitLab instances merge requests are on for (gitlab.com included), and who is signed in to each; with `detect`
+   * (a server's address, from the sign-in dialog), whether glab or git's credential helper has a token for it.
    */
-  connectGitlab(opts: { url: string; token: string; remoteHost?: string }): Promise<GitlabConnections>
+  getGitlabConnections(opts?: { detect?: string }): Promise<GitlabConnections>
+  /**
+   * Turn GitLab merge requests on for an instance (its web address, the host of the remote that asked): with a
+   * personal access token (checked first, then kept encrypted), or with glab's sign-in or the token git's credential
+   * helper keeps for it (asked for each time, never stored).
+   */
+  connectGitlab(opts: { url: string; method?: 'token' | 'glab' | 'git'; token?: string; remoteHost?: string }): Promise<GitlabConnections>
   disconnectGitlab(url: string): Promise<GitlabConnections>
+  /** The Azure DevOps organizations pull requests are on for, and who is signed in to each. */
+  getAzureConnections(): Promise<AzureConnections>
+  /** Turn Azure DevOps pull requests on for an organization (https://dev.azure.com/<org>) with a personal access token: checked, then kept encrypted. */
+  connectAzure(opts: { url: string; token: string }): Promise<AzureConnections>
+  disconnectAzure(url: string): Promise<AzureConnections>
   /** Pull requests of the repository's remote; null when it has no supported one or pull requests are off for it. */
   getPullRequests(repo: string): Promise<RepoPullRequests | null>
   /** A pull request's commits as the provider has them (at most 100, newest first). */
@@ -423,12 +451,19 @@ export const API_METHODS = [
   'getGithubConnection',
   'connectGithub',
   'disconnectGithub',
+  'startGithubSignIn',
+  'checkGithubSignIn',
+  'cancelGithubSignIn',
+  'getAuthorAvatars',
   'getBitbucketConnections',
   'connectBitbucket',
   'disconnectBitbucket',
   'getGitlabConnections',
   'connectGitlab',
   'disconnectGitlab',
+  'getAzureConnections',
+  'connectAzure',
+  'disconnectAzure',
   'getPullRequests',
   'getPullRequestCommits',
   'getPullRequestMergeChecks',

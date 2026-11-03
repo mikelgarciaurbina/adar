@@ -12,9 +12,11 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
   API, plus `API_METHODS`), `errors.ts` (`AdarError`, `describeError`, `errorDetail`), `update.ts` (updater types and
   pure helpers), `patch.ts` (partial-staging patch builder), `menubar.ts` (the menu bar panel's calls and limits),
   `hosting.ts` (provider-neutral pull request types, GitHub's GraphQL query and the pure mapping of its answers),
-  `bitbucket.ts` / `gitlab.ts` (pure mapping of Bitbucket Cloud and Data Center answers / of GitLab's merge requests),
-  `remoteUrl.ts` (remote URL → web page, provider; `hostingOf`/`pickHostingRemote` find GitHub, GitLab — gitlab.com,
-  gitlab.* hosts and signed-in instances —, bitbucket.org and Data Center remotes), `groupColor.ts` (custom tab group
+  `bitbucket.ts` / `gitlab.ts` / `azure.ts` (pure mapping of Bitbucket Cloud and Data Center answers / of GitLab's merge
+  requests / of Azure DevOps' pull requests, votes and branch policies), `remoteUrl.ts` (remote URL → web page, provider;
+  `hostingOf`/`pickHostingRemote` find GitHub — github.com, signed-in GitHub Enterprise servers and github.* hosts —,
+  GitLab — gitlab.com, gitlab.* hosts and signed-in instances —, bitbucket.org, Data Center and Azure DevOps remotes —
+  dev.azure.com, ssh.dev.azure.com and <org>.visualstudio.com, all as https://dev.azure.com/<org>), `groupColor.ts` (custom tab group
   colours: hex parsing, HSV for the picker, and each theme's version of a colour — same hue and chroma in OKLCH, lightness
   moved into the range the Basoa group colours use, so names stay readable).
 - `src/main/` — Electron main process.
@@ -35,17 +37,25 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
     change Adar's folder (a standard account and /Applications) it asks for the password first and only the bundle swap
     runs as root (`ADMIN_SWAP_SCRIPT`, inline); if that is cancelled, the renderer explains how to install by hand.
     `admin.ts` is the macOS password dialog (osascript), shared with `cli.ts`.
-  - `hosting/` — pull requests on GitHub, GitLab (merge requests, gitlab.com and self-managed), Bitbucket Cloud and
-    Bitbucket Data Center, each opt-in (`settings.githubAuth`, `gitlabServers`, `bitbucketAuth` + `bitbucketEmail`,
-    `bitbucketServers`). `provider.ts` is the interface each one implements (`githubProvider.ts`, `gitlabProvider.ts`,
-    `bitbucketCloud.ts`, `bitbucketServer.ts`); `http.ts` the JSON client that only calls its own base address; `auth.ts`
-    the GitHub CLI sign-in (asks `gh auth token` each time, never stored) and the token files encrypted with Electron
-    `safeStorage` (`PlatformAdapter.secrets`: GitHub, one personal access token per GitLab instance, Bitbucket Cloud's
-    API token, one HTTP access token per Data Center server). `index.ts` picks the repository's remote and provider, and
+  - `hosting/` — pull requests on GitHub (github.com and GitHub Enterprise servers, their API under `/api`), GitLab
+    (merge requests, gitlab.com and self-managed), Bitbucket Cloud, Bitbucket Data Center and Azure DevOps, each opt-in
+    (`settings.githubAuth`, `githubServers`, `gitlabServers`, `bitbucketAuth` + `bitbucketEmail`, `bitbucketServers`,
+    `azureServers`; a server's `auth` says how Adar signs in to it). `provider.ts` is the interface each one implements
+    (`githubProvider.ts`, `gitlabProvider.ts`, `bitbucketCloud.ts`, `bitbucketServer.ts`, `azureProvider.ts`); `http.ts`
+    the JSON client that only calls its own base address (and fetches pictures on its own host); `auth.ts` the GitHub
+    and GitLab CLIs' sign-ins (`gh auth token`, `glab config get token` or `glab auth status --show-token`, asked each
+    time, never stored) and the token files encrypted with Electron `safeStorage` (`PlatformAdapter.secrets`: GitHub,
+    one per GitHub Enterprise server, one personal access token per GitLab instance, Bitbucket Cloud's API token, one
+    HTTP access token per Data Center server, one per Azure DevOps organization). GitLab can also use the token git's
+    credential helper keeps (`git credential fill` with every prompt off, never stored). `githubDevice.ts` signs in to
+    github.com from the browser (OAuth device flow with Adar's OAuth app, `GITHUB_OAUTH_CLIENT_ID`; not offered while it
+    is empty); the device code stays in the main process and the renderer polls `checkGithubSignIn`. `avatars.ts` maps
+    what each provider knows about an author's picture (`getAuthorAvatars`: GitHub by commit, GitLab by public email,
+    Bitbucket by commit; Azure DevOps none), returned as data: URLs and cached. `index.ts` picks the repository's remote and provider, and
     makes the local branch for checking a pull request out (forks: `pr/<n>` from `refs/pull/<n>/head` on GitHub or
     `refs/pull-requests/<n>/from` on Data Center, `mr/<n>` from `refs/merge-requests/<n>/head` on GitLab). Nothing talks
     to a service while its pull requests are off, and tokens never reach the renderer or the logs. The UI uses each
-    provider's words (`lib/pulls.ts`: `pullNoun`, `pullRef` — "merge request !12" on GitLab).
+    provider's words (`lib/pulls.ts`: `pullNoun`, `pullRef` — "merge request !12" on GitLab, "!12" on Azure DevOps).
   - `cli.ts` / `cliPath.ts` — install/uninstall the `adar` command (symlink to `resources/bin/adar`, shipped in the
     bundle as `Contents/Resources/bin/adar`); `openRequests.ts` queues folders to open from the CLI/Dock
     (`open-file`), `--open-repo=<path>` launch args and second instances until the renderer takes them.
@@ -88,7 +98,9 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
     (tabs, toolbar, status bar, welcome, logo), `graph`, `sidebar`, `details` (commit details, staging, composer),
     `diff` (diff, blame, history; changed images in `ImageDiff.tsx`: side by side, swipe, onion skin and difference, with
     the changed pixels and areas found in `imageCompare.ts`), `conflicts`, `rebase`, `modals`, `palette` (palette + git console), `update`.
-  - `lib/` — lane colours, formatting, ref helpers, drag & drop, keyboard helpers.
+  - `lib/` — lane colours, formatting, ref helpers, drag & drop, keyboard helpers; `providerAvatars.ts` batches the
+    provider pictures `Avatar` asks for when Gravatar has none (`settings.providerAvatars`, only while pull requests are
+    on for the active repository).
   - `styles/theme.css` — design tokens: the Basoa palette of the website mapped onto the app's names (dark = Gaua,
     light = Eguna). `--accent` is fern for lines, icons and text (deep fern on light surfaces); fills such as primary
     buttons use `--accent-fill` with `--accent-text` on top. Graph lanes are `--lane-1…6` (fern, moss, sea, heather,
@@ -145,11 +157,17 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
   `node scripts/make-big-repo.mjs <dir> [commits] [branches]` (performance).
 - Website: `cd site && npm install && npm run dev` (http://localhost:4321/), or `npm run build && npm run preview`
   to check the static output. Add `?capture` to a URL to keep WebGL frames readable by screenshot tools.
-- Pull requests without touching GitHub, GitLab or Bitbucket: unpackaged builds send API calls to
+- Pull requests without touching GitHub, GitLab, Bitbucket or Azure DevOps: unpackaged builds send API calls to
   `ADAR_GITHUB_API=http://127.0.0.1:<port>` / `ADAR_BITBUCKET_API=http://127.0.0.1:<port>` / `ADAR_GITLAB_URL=http://127.0.0.1:<port>`
-  (gitlab.com's stand-in; its API under `/api/v4`) when set (a fake API server), and `ADAR_HOSTING_LOOPBACK=1` lets a
-  GitLab instance or Data Center server be `http://127.0.0.1:<port>`. For GitHub put a fake `gh` first on `PATH` (it must
-  print a token for `gh auth token`) and point `GH_CONFIG_DIR` at a `hosts.yml` with `user:`. Serve the `git@github.com:…`,
+  (gitlab.com's stand-in; its API under `/api/v4`) / `ADAR_AZURE_URL=http://127.0.0.1:<port>` (dev.azure.com's stand-in;
+  organizations under it) when set (a fake API server), and `ADAR_HOSTING_LOOPBACK=1` lets a GitLab instance, GitHub
+  Enterprise or Data Center server be `http://127.0.0.1:<port>`. Signing in from the browser: `ADAR_GITHUB_WEB` (github.com's
+  `/login/device/code` and `/login/oauth/access_token`) and `ADAR_GITHUB_CLIENT_ID` (any id, before Adar has its own); in
+  scripted runs `openExternal` only logs the address, so the developer's browser never opens. For GitHub put a fake `gh`
+  first on `PATH` (it must print a token for `gh auth token`, or exit 1 to be signed out) and point `GH_CONFIG_DIR` at a
+  `hosts.yml` with `user:`; the same for `glab`. Run the app's git with `GIT_CONFIG_GLOBAL=<file>` and `GIT_CONFIG_NOSYSTEM=1`
+  so the developer's credential helpers are never asked (a `credential.helper = store --file=<file>` there stands in for
+  one). Serve the `git@github.com:…`,
   `git@gitlab.com:…`, `git@bitbucket.org:…` or `ssh://git@<host>:7999/…` origin from a local bare repository through
   `GIT_SSH_COMMAND` (name the script `ssh` so git passes the port; `url.<x>.insteadOf` would change what
   `git remote -v` shows).

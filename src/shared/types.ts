@@ -1,7 +1,7 @@
 // Domain types shared by the main process (git backend), the dev HTTP bridge
 // and the renderer. Everything here must be JSON-serialisable.
 
-import type { BitbucketServer, GitlabServer } from './hosting'
+import type { AzureOrganization, BitbucketServer, GithubServer, GitlabServer } from './hosting'
 
 /** Unix timestamp in seconds (as git reports it). */
 export type UnixSeconds = number
@@ -566,6 +566,8 @@ export interface AppSettings {
   defaultPullMode: PullMode
   /** Load Gravatar avatars (needs network). Initials are used otherwise. */
   gravatar: boolean
+  /** Authors' pictures from GitHub, GitLab or Bitbucket for repositories whose pull requests are on (after Gravatar). */
+  providerAvatars: boolean
   dateFormat: 'relative' | 'absolute'
   diffViewMode: DiffViewMode
   /** Show the whole file instead of only the changed hunks (applies to both layouts). */
@@ -614,7 +616,9 @@ export interface AppSettings {
   /** Adar version that last ran with these settings ('' = none recorded): a newer one shows What's new once. */
   lastRunVersion: string
   /** GitHub pull requests: off (''), with the GitHub CLI's sign-in ('gh') or a stored personal access token. */
-  githubAuth: '' | 'gh' | 'token'
+  githubAuth: '' | 'gh' | 'token' | 'browser'
+  /** GitHub Enterprise servers pull requests are on for (auth: the GitHub CLI's sign-in or a stored token). */
+  githubServers: GithubServer[]
   /** Bitbucket Cloud pull requests: off ('') or on with an API token stored encrypted ('token'). */
   bitbucketAuth: '' | 'token'
   /** The Atlassian account email Bitbucket Cloud's API token goes with. */
@@ -623,6 +627,8 @@ export interface AppSettings {
   bitbucketServers: BitbucketServer[]
   /** GitLab instances merge requests are on for, gitlab.com included (their personal access tokens are stored encrypted). */
   gitlabServers: GitlabServer[]
+  /** Azure DevOps organizations pull requests are on for (their personal access tokens are stored encrypted). */
+  azureServers: AzureOrganization[]
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -630,6 +636,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   autoFetchMinutes: 5,
   defaultPullMode: 'ff-only',
   gravatar: false,
+  providerAvatars: true,
   dateFormat: 'relative',
   diffViewMode: 'unified',
   diffFullFile: false,
@@ -662,7 +669,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   bitbucketAuth: '',
   bitbucketEmail: '',
   bitbucketServers: [],
-  gitlabServers: []
+  gitlabServers: [],
+  azureServers: [],
+  githubServers: []
 }
 
 export interface AppInfo {

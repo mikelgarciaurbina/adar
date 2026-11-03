@@ -4,6 +4,7 @@
 import { AdarError } from '@shared/errors'
 import { buildRuns, pageValues, serverCommits, serverMergeChecks, serverMergeMethods, serverProtected, serverPull } from '@shared/bitbucket'
 import { sameCommit, type PullCheck, type PullRequest, type RepoPullRequests } from '@shared/hosting'
+import { serverCommitAvatar } from './avatars'
 import { BoundedCache, mapLimit, type ApiClient } from './http'
 import { changedSinceLooked, invalid, unlessRefused, type HostingRemote, type PullProvider } from './provider'
 
@@ -131,6 +132,17 @@ export function bitbucketServerProvider(api: ApiClient, at: HostingRemote, serve
       // Branch permissions are shown only to repository admins; anyone else gets a 401 or a 403.
       const path = `/rest/branch-permissions/2.0/projects/${encodeURIComponent(project)}/repos/${encodeURIComponent(at.name)}/restrictions?limit=100`
       return unlessRefused(async () => serverProtected(await api.json('GET', path)), ['AUTH_FAILED', 'INVALID_ARGUMENT', 'NOT_FOUND'])
-    }
+    },
+
+    async avatars(authors) {
+      const out = new Map<string, string>()
+      await mapLimit(authors, 4, async (a) => {
+        const url = serverCommitAvatar(await unlessRefused(() => api.json('GET', `${repoPath}/commits/${a.sha}?avatarSize=64`)), a.email, api.base)
+        if (url) out.set(a.email, url)
+      })
+      return out
+    },
+
+    image: (url) => api.image(url)
   }
 }

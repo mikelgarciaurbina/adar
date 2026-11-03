@@ -237,7 +237,7 @@ export function FileHistoryView({ tab, path }: { tab: RepoTab; path: string }) {
                       }}
                       title={`${c.subject}\n${c.authorName} <${c.authorEmail}>\n${absoluteTime(c.authorDate)}`}
                     >
-                      <Avatar name={c.authorName} email={c.authorEmail} size={26} />
+                      <Avatar name={c.authorName} email={c.authorEmail} sha={c.sha} size={26} />
                       <div className="diff-hl-text">
                         <div className="diff-hl-subject">{c.subject || '(no message)'}</div>
                         <div className="diff-hl-meta">
@@ -332,7 +332,7 @@ function CommitFileDiff({
   return (
     <div className="diff-hd">
       <div className="diff-hd-header">
-        <Avatar name={commit.authorName} email={commit.authorEmail} size={28} />
+        <Avatar name={commit.authorName} email={commit.authorEmail} sha={commit.sha} size={28} />
         <div className="diff-hd-info">
           <div className="diff-hd-subject selectable" title={commit.subject}>
             {commit.subject || '(no message)'}

@@ -386,6 +386,13 @@
   flex-direction: column;
   gap: 14px;
 }
+.pr-org {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  color: var(--text-0);
+}
+
 .pr-lead {
   margin: 0;
   font-size: var(--fs-md);
@@ -479,6 +486,35 @@
 }
 .pr-token {
   margin-left: 2px;
+}
+.pr-device {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 18px 14px 16px;
+  border-radius: var(--radius-lg);
+  background: var(--bg-2);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+.pr-device-code {
+  font-family: var(--font-mono);
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: var(--text-0);
+  user-select: all;
+}
+.pr-device-actions {
+  display: flex;
+  gap: 8px;
+}
+.pr-device-wait {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: var(--fs-sm);
+  color: var(--text-2);
 }
 .pr-privacy,
 .pr-notice {

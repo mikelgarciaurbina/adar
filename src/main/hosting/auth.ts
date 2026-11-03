@@ -1,5 +1,5 @@
-// How Adar signs in to GitHub and Bitbucket: the GitHub CLI's own sign-in (asked for each time,
-// never stored by Adar) or tokens kept encrypted with the system keychain (Electron safeStorage).
+// How Adar signs in to the hosting services: the GitHub CLI's and GitLab CLI's own sign-ins (asked for
+// each time, never stored by Adar) or tokens kept encrypted with the system keychain (Electron safeStorage).
 // Tokens are never logged, sent to the renderer or written in clear.
 
 import { execFile } from 'node:child_process'
@@ -35,13 +35,13 @@ export function ghConfigDir(env: NodeJS.ProcessEnv = process.env, platform = pro
   return path.join(home, '.config', 'gh')
 }
 
-/** The `user:` of the github.com entry in gh's hosts.yml, or null. */
-export function ghUserFromHosts(yaml: string): string | null {
+/** The `user:` of a host's entry (github.com by default) in gh's hosts.yml, or null. */
+export function ghUserFromHosts(yaml: string, host = 'github.com'): string | null {
   let inHost = false
   for (const line of yaml.split(/\r?\n/)) {
     if (!line.trim() || line.trimStart().startsWith('#')) continue
     if (!/^\s/.test(line)) {
-      inHost = /^"?github\.com"?:\s*$/.test(line)
+      inHost = /^"?([^"]+?)"?:\s*$/.exec(line)?.[1] === host
       continue
     }
     const m = inHost ? /^\s+user:\s*"?([A-Za-z0-9-]{1,39})"?\s*$/.exec(line) : null
@@ -50,43 +50,97 @@ export function ghUserFromHosts(yaml: string): string | null {
   return null
 }
 
-/** The GitHub CLI (`gh`), when it is installed and signed in to github.com. */
+/** The GitHub CLI (`gh`), when it is installed and signed in to github.com or a GitHub Enterprise host. */
 export class GhCli {
-  private cached: { token: string; at: number } | null = null
+  private readonly cached = new Map<string, { token: string; at: number }>()
 
   /** `ready` resolves once the login-shell PATH is in place (gh usually lives in /opt/homebrew/bin). */
   constructor(private readonly ready: Promise<void>) {}
 
-  /** gh's token for github.com, or null when gh is missing or signed out. */
-  async token(): Promise<string | null> {
-    if (this.cached && Date.now() - this.cached.at < GH_TOKEN_TTL_MS) return this.cached.token
+  /** gh's token for a host (github.com by default), or null when gh is missing or signed out there. */
+  async token(host = 'github.com'): Promise<string | null> {
+    const hit = this.cached.get(host)
+    if (hit && Date.now() - hit.at < GH_TOKEN_TTL_MS) return hit.token
     await this.ready
+    if (!/^[a-z0-9.-]+(:\d+)?$/i.test(host)) return null
     try {
-      const { stdout } = await execFileP('gh', ['auth', 'token', '--hostname', 'github.com'], {
+      const { stdout } = await execFileP('gh', ['auth', 'token', '--hostname', host], {
         timeout: 10_000,
         windowsHide: true,
         env: { ...process.env, GH_PROMPT_DISABLED: '1', GH_NO_UPDATE_NOTIFIER: '1' }
       })
       const token = stdout.trim()
       if (!isPlausibleToken(token)) return null
-      this.cached = { token, at: Date.now() }
+      this.cached.set(host, { token, at: Date.now() })
       return token
     } catch {
-      this.cached = null
+      this.cached.delete(host)
       return null
     }
   }
 
-  /** gh's github.com user ('' when gh is signed in but does not say who), or null when it is not signed in. */
-  async login(): Promise<string | null> {
-    if (!(await this.token())) return null
+  /** gh's user on a host ('' when gh is signed in but does not say who), or null when it is not signed in there. */
+  async login(host = 'github.com'): Promise<string | null> {
+    if (!(await this.token(host))) return null
     const yaml = await fs.readFile(path.join(ghConfigDir(), 'hosts.yml'), 'utf8').catch(() => '')
-    return ghUserFromHosts(yaml) ?? ''
+    return ghUserFromHosts(yaml, host) ?? ''
   }
 
-  forget(): void {
-    this.cached = null
+  forget(host?: string): void {
+    if (host) this.cached.delete(host)
+    else this.cached.clear()
   }
+}
+
+/**
+ * The GitLab CLI (`glab`), when it is installed and signed in to a GitLab host: its token is asked for each time and
+ * never stored by Adar. `glab config get token` answers when the token is in glab's config file; newer versions keep
+ * it in the system keychain, which `glab auth status --show-token` reads.
+ */
+export class GlabCli {
+  private readonly cached = new Map<string, { token: string; at: number }>()
+
+  constructor(private readonly ready: Promise<void>) {}
+
+  async token(host: string): Promise<string | null> {
+    const hit = this.cached.get(host)
+    if (hit && Date.now() - hit.at < GH_TOKEN_TTL_MS) return hit.token
+    await this.ready
+    if (!/^[a-z0-9.-]+(:\d+)?$/i.test(host)) return null
+    const fromConfig = (await glab(['config', 'get', 'token', '--host', host])).stdout.trim()
+    const token = isPlausibleToken(fromConfig) ? fromConfig : glabStatusToken(await glab(['auth', 'status', '--hostname', host, '--show-token']))
+    if (!token) {
+      this.cached.delete(host)
+      return null
+    }
+    this.cached.set(host, { token, at: Date.now() })
+    return token
+  }
+
+  forget(host?: string): void {
+    if (host) this.cached.delete(host)
+    else this.cached.clear()
+  }
+}
+
+/** Runs glab without prompts; its output even when it fails (auth status exits 1 when any host is signed out). */
+async function glab(args: string[]): Promise<{ stdout: string; stderr: string }> {
+  try {
+    return await execFileP('glab', args, {
+      timeout: 15_000,
+      windowsHide: true,
+      env: { ...process.env, NO_PROMPT: '1', GLAB_CHECK_UPDATE: 'false', NO_COLOR: '1' }
+    })
+  } catch (err) {
+    const e = err as { stdout?: unknown; stderr?: unknown }
+    return { stdout: typeof e.stdout === 'string' ? e.stdout : '', stderr: typeof e.stderr === 'string' ? e.stderr : '' }
+  }
+}
+
+/** The token in `glab auth status --show-token` ("✓ Token: glpat-…", on stderr), or null. */
+export function glabStatusToken(out: { stdout: string; stderr: string }): string | null {
+  const token = /\bToken(?: found)?:\s*(\S+)/i.exec(`${out.stderr}\n${out.stdout}`)?.[1] ?? ''
+  return isPlausibleToken(token) && !/^\*+$/.test(token) ? token : null
 }
 
 /** A token, encrypted at rest in <userData>/<fileName> (github-token.json, bitbucket-token.json…). */
