@@ -186,6 +186,22 @@
   flex: 1 1 0;
   max-width: none;
 }
+/* In a group the active tab takes the group's colour: a wash that fades into the toolbar (so the tab
+   still runs into it), edges and icon in the group's colour. */
+.tb-group .tb-tab-active,
+.tb-group .tb-tab-active:hover {
+  background: linear-gradient(color-mix(in srgb, var(--tb-group) 14%, var(--bg-2)), var(--bg-2));
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--tb-group) 50%, var(--border)),
+    inset 1px 0 0 color-mix(in srgb, var(--tb-group) 30%, var(--border)),
+    inset -1px 0 0 color-mix(in srgb, var(--tb-group) 30%, var(--border));
+}
+.tb-group .tb-tab-active:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--focus);
+}
+.tb-group .tb-tab-active .tb-tab-icon {
+  color: var(--tb-group-ink);
+}
 /* Narrow tabs drop the folder hint, then the icon and the close button (⌘W, middle-click and the
    tab's menu still close it), keeping as much of the name as fits. */
 @container (max-width: 120px) {
