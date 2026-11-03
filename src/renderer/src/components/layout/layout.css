@@ -629,6 +629,10 @@
 .tb-tool:active:not(:disabled) {
   background: var(--bg-4);
 }
+.tb-tool.tb-tool-on {
+  background: var(--bg-4);
+  color: var(--text-0);
+}
 .tb-tool:disabled,
 .tb-tool.tb-tool-dim {
   opacity: 0.38;

@@ -12,6 +12,9 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
   API, plus `API_METHODS`), `errors.ts` (`AdarError`, `describeError`, `errorDetail`), `update.ts` (updater types and
   pure helpers), `patch.ts` (partial-staging patch builder), `menubar.ts` (the menu bar panel's calls and limits),
   `hosting.ts` (provider-neutral pull request types, GitHub's GraphQL query and the pure mapping of its answers),
+  `review.ts` (reviewing a pull request in Adar: threads, reviews, Viewed marks, the timeline, GitHub's review query and
+  changes, `parseReviewAction`/`parsePullNotice` for what the renderer sends, and `PullActivity`: the signed-in user's
+  part in each open pull request, read by the list query, for the blue dots and notifications),
   `bitbucket.ts` / `gitlab.ts` / `azure.ts` (pure mapping of Bitbucket Cloud and Data Center answers / of GitLab's merge
   requests / of Azure DevOps' pull requests, votes and branch policies), `remoteUrl.ts` (remote URL → web page, provider;
   `hostingOf`/`pickHostingRemote` find GitHub — github.com, signed-in GitHub Enterprise servers and github.* hosts —,
@@ -51,7 +54,11 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
     github.com from the browser (OAuth device flow with Adar's OAuth app, `GITHUB_OAUTH_CLIENT_ID`; not offered while it
     is empty); the device code stays in the main process and the renderer polls `checkGithubSignIn`. `avatars.ts` maps
     what each provider knows about an author's picture (`getAuthorAvatars`: GitHub by commit, GitLab by public email,
-    Bitbucket by commit; Azure DevOps none), returned as data: URLs and cached. `index.ts` picks the repository's remote and provider, and
+    Bitbucket by commit; Azure DevOps none), returned as data: URLs and cached. `index.ts` picks the repository's remote and provider;
+    the providers' `review`/`reviewAction` (GitHub only) read and change a review, `preparePullReview` fetches a pull
+    request's commits without making branches and says where its changes start and how it moved on since a commit (an
+    ancestor, the same changes rebased — `git range-diff` —, rewritten, or only merges), and `notifyPullRequest` shows a
+    notification through `PlatformAdapter.notify` (a click sends an `open-pull` event). `index.ts` also
     makes the local branch for checking a pull request out (forks: `pr/<n>` from `refs/pull/<n>/head` on GitHub or
     `refs/pull-requests/<n>/from` on Data Center, `mr/<n>` from `refs/merge-requests/<n>/head` on GitLab). Nothing talks
     to a service while its pull requests are off, and tokens never reach the renderer or the logs. The UI uses each
@@ -89,8 +96,20 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
   - `actions/groups.tsx` — tab groups (open/close a group, group a folder's repositories, the grouping suggestion);
     groups are saved in `settings.tabGroups`, pure helpers in `lib/tabGroups.ts`.
   - `actions/pulls.tsx` — pull request actions (turn on, create after pushing, check out, merge, clean up, bring the base
-    branch in); `components/pulls/` — the store and its sync (`pullStore.ts`: after each fetch, on focus, at most once a
-    minute otherwise), the chip on branch labels, the details panel and the dialogs; pure helpers in `lib/pulls.ts`.
+    branch in); `components/pulls/` — the store and its sync (`pullStore.ts`: the active repository after each fetch, on
+    focus, at most once a minute; every open one every three minutes), the chip on branch labels, the details panel and
+    the dialogs; pure helpers in `lib/pulls.ts`.
+  - `actions/review.tsx` — reviewing in Adar and keeping up: `openReview` (GitHub; other services open their page),
+    `openInbox`, loading what the review shows, line comments kept for the review (`components/review/reviewStore.ts`,
+    in localStorage until submitted), replies, resolve, Viewed marks, `submitReview`; `markSeen` and `setFollowing`
+    (`settings.pullsSeen`, `pullsFollowed`, `pullsUnfollowed`). `components/review/` — the review view (a centre view:
+    files with Viewed marks, all changes or since the last review, one file's diff with its threads in `ReviewDiff.tsx`,
+    the conversation and the commits; Esc goes back) and `ReviewPanel.tsx` (the right panel while reviewing: the kept
+    comments, verdict, summary, Submit, reviewers, checks); pure helpers in `model.ts`. What changed since the user
+    looked is pure in `lib/following.ts` (`pullNews`: the blue dot and its words); `components/pulls/InboxView.tsx` is
+    the inbox of every open repository (a centre view; `inbox.ts` sorts it, `needsYou` is the toolbar's Reviews badge),
+    `PullNews.tsx` the dot's chip in the left panel and on branch chips and the graph's marks (`useReviewMarks`), and
+    `notices.ts` the notifications after each refresh while Adar is not in front (more than three become one).
   - `commands.ts` — command registry shared by the native menu, shortcuts and the command palette.
   - `menubar/` — the menu bar panel (its own entry, `menubar.html`): `MenuBarPanel.tsx` (project switcher, branch with
     Pull/Push, mini graph reusing `components/graph`), pure helpers in `model.ts`.
@@ -128,8 +147,8 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
 ## Conventions
 - CSS class prefixes per module: `app-` shell, `ui-` common, `tb-`/`wl-` toolbar, tabs, status bar, welcome, `sb-` left
   panel, `gr-` graph, `det-` right panel, `diff-` diff/blame/history, `cf-` conflicts, `rb-` rebase, `md-` modals,
-  `pal-` palette/console, `up-` updates, `mb-` menu bar panel, `pr-` pull requests, `rl-` reflog. Each module imports its own `.css`
-  file.
+  `pal-` palette/console, `up-` updates, `mb-` menu bar panel, `pr-` pull requests, `rl-` reflog, `rv-` review, `ib-` pull
+  request inbox. Each module imports its own `.css` file.
 - Icons: `lucide-react`. Virtualised lists: `@tanstack/react-virtual`. Syntax highlighting: `highlight.js`.
 - Do not add npm dependencies without discussing it first.
 
@@ -150,7 +169,9 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
 - Real app, scripted: `scripts/e2e.sh <workdir> <steps.json> [--no-build]` builds into `<workdir>/out` (parallel-safe),
   launches Electron with `<workdir>/ud` as user data and saves screenshots to `<workdir>/shots`. Steps: `{"size":[w,h]}`,
   `{"wait":ms}`, `{"js":"expr"}`, `{"jsFile":"/abs/file.js"}`, `{"shot":"name"}`; the menu bar panel: `{"panel":true}` opens
-  it, `{"panelJs":"expr"}` runs in it, `{"panelShot":"name"}` captures it. Load `scripts/e2e-helpers.js` first for
+  it, `{"panelJs":"expr"}` runs in it, `{"panelShot":"name"}` captures it. Notifications are only logged
+  (`[capture] notify …`); `{"clickNotice":true}` clicks the last one. A step can stub `document.hasFocus = () => false`
+  so pull request notifications are sent. Load `scripts/e2e-helpers.js` first for
   `window.e2e` (click/type/key/drag/contextMenu/menuItem/waitFor/state/errors). `window.__adar = { store, api, updates }`.
   Seed `<workdir>/ud/settings.json` with `{"openTabs":["/abs/repo"],"activeTab":"/abs/repo","autoFetchMinutes":0}`.
 - Fixtures: `scripts/make-fixture-repo.sh <dir> [--conflict]` (demo repo + bare origin),

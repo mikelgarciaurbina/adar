@@ -13,6 +13,7 @@ import {
   FolderOpen,
   GitBranchPlus,
   History,
+  Inbox,
   Network,
   Redo2,
   RefreshCw,
@@ -27,8 +28,10 @@ import { isMac } from '@renderer/api/client'
 import * as git from '@renderer/actions/git'
 import { openReflog } from '@renderer/actions/reflog'
 import { selectPull } from '@renderer/actions/pulls'
+import { openInbox } from '@renderer/actions/review'
+import { useNeedsYou } from '@renderer/components/pulls/InboxView'
 import { PullChip } from '@renderer/components/pulls/PullChip'
-import { usePullForRefs } from '@renderer/components/pulls/pullStore'
+import { anyPullsOn, usePullForRefs, usePulls } from '@renderer/components/pulls/pullStore'
 import { Spinner } from '@renderer/components/common/Button'
 import { showContextMenu, showMenuBelow, type MenuItem } from '@renderer/components/common/ContextMenu'
 import { getCommand, runCommand } from '@renderer/commands'
@@ -101,6 +104,27 @@ function undoMenu(repo: string, last: string | null): MenuItem[] {
     { type: 'separator' },
     { label: 'Recover lost commits…', icon: <History size={14} />, onClick: () => openReflog(repo, 'lost') }
   ]
+}
+
+/** The pull requests of every open repository, with how many need the user; hidden while pull requests are off everywhere. */
+function ReviewsButton({ repo }: { repo: string }) {
+  const count = useNeedsYou()
+  const on = usePulls((s) => anyPullsOn(s))
+  const shown = useApp((s) => s.tabs.find((t) => t.path === repo)?.center.kind === 'inbox')
+  if (!on) return null
+  return (
+    <>
+      <span className="tb-tool-sep" aria-hidden="true" />
+      <ToolButton
+        icon={<Inbox size={18} />}
+        label="Reviews"
+        title={withShortcut(count ? `${count === 1 ? 'One pull request needs' : `${count} pull requests need`} you: waiting for your review or changed since you looked` : 'Pull requests of every open repository', 'pull-requests')}
+        badge={badgeCount(count)}
+        className={shown ? 'tb-tool-on' : undefined}
+        onClick={() => (shown ? git.showGraph(repo) : openInbox())}
+      />
+    </>
+  )
 }
 
 function UtilityButton({ icon, title, onClick, active }: { icon: ReactNode; title: string; onClick: () => void; active?: boolean }) {
@@ -290,6 +314,7 @@ export function Toolbar({ tab }: { tab: RepoTab }) {
           badge={stashCount > 1 ? badgeCount(stashCount) : undefined}
           onClick={() => void git.popStash(repo)}
         />
+        <ReviewsButton repo={repo} />
       </div>
 
       <div className="tb-toolbar-right">

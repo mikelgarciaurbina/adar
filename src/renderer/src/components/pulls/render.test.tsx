@@ -152,7 +152,11 @@ describe('pull request panel', () => {
     expect(html).toContain('ane:fix')
     expect(html).toContain('Your review is requested')
     expect(html).toContain('Check out')
-    expect(html).toContain('Review on GitHub')
+    // GitHub's are reviewed in Adar: the main button while the review is asked for.
+    expect(html).toContain('ui-btn-primary ui-btn-md pr-review-main')
+    expect(html).toContain('Review changes')
+    expect(html).not.toContain('Review on GitHub')
+    expect(html).toContain('>Follow<')
     expect(html).not.toContain('Squash and merge')
   })
 

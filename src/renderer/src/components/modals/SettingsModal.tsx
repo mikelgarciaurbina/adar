@@ -241,11 +241,34 @@ function GeneralSection() {
             <Switch label="Menu bar icon" checked={s.menuBarIcon} onChange={(menuBarIcon) => update({ menuBarIcon })} />
           </SettingRow>
         )}
+      </SettingGroup>
+      <SettingGroup title="Notifications">
         {desktop && (
           <SettingRow label="Notify about new commits" description="A notification when a fetch, auto-fetch included, brings new commits to the checked-out branch's upstream.">
             <Switch label="Notify about new commits" checked={s.notifyNewCommits} onChange={(notifyNewCommits) => update({ notifyNewCommits })} />
           </SettingRow>
         )}
+        {desktop && (
+          <SettingRow label="Review requests" description="Someone asks for your review, or asks again after pushing.">
+            <Switch label="Review requests" checked={s.notifyReviewRequests} onChange={(notifyReviewRequests) => update({ notifyReviewRequests })} />
+          </SettingRow>
+        )}
+        {desktop && (
+          <SettingRow label="Pull requests you follow" description="New commits after your review or comment, and replies to you.">
+            <Switch label="Pull requests you follow" checked={s.notifyFollowedPulls} onChange={(notifyFollowedPulls) => update({ notifyFollowedPulls })} />
+          </SettingRow>
+        )}
+        {desktop && (
+          <SettingRow label="Your pull requests" description="A review or a comment, a failed check, or ready to merge.">
+            <Switch label="Your pull requests" checked={s.notifyOwnPulls} onChange={(notifyOwnPulls) => update({ notifyOwnPulls })} />
+          </SettingRow>
+        )}
+        <SettingRow
+          label="Follow what you review or comment on"
+          description="Pull requests you reviewed or commented on get a blue dot when they change. Off: only those you follow with the bell."
+        >
+          <Switch label="Follow what you review or comment on" checked={s.followParticipated} onChange={(followParticipated) => update({ followParticipated })} />
+        </SettingRow>
       </SettingGroup>
       <UpdateSettings />
     </>

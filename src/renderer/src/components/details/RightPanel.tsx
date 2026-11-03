@@ -6,6 +6,7 @@ import { Component, type ErrorInfo, type ReactNode } from 'react'
 import { MousePointerClick } from 'lucide-react'
 import { EmptyState } from '@renderer/components/common/Button'
 import { PullPanel } from '@renderer/components/pulls/PullPanel'
+import { ReviewPanel } from '@renderer/components/review/ReviewPanel'
 import type { RepoTab } from '@renderer/store/appStore'
 import { CommitPanel } from './CommitPanel'
 import { ComparePanel } from './ComparePanel'
@@ -16,6 +17,7 @@ import { wantsWipPanel, WipPanel } from './WipPanel'
 import './details.css'
 
 function PanelContent({ tab }: { tab: RepoTab }) {
+  if (tab.center.kind === 'review') return <ReviewPanel key={tab.center.number} tab={tab} number={tab.center.number} />
   const sel = tab.selection
   switch (sel.kind) {
     case 'wip':
@@ -69,6 +71,7 @@ class PanelErrorBoundary extends Component<{ resetKey: string; children: ReactNo
 }
 
 function selectionKey(tab: RepoTab): string {
+  if (tab.center.kind === 'review') return `${tab.path}\u0000review\u0000${tab.center.number}`
   const s = tab.selection
   return `${tab.path}\u0000${s.kind}\u0000${'sha' in s ? s.sha : 'number' in s ? s.number : ''}\u0000${tab.multiSelect.join(',')}`
 }

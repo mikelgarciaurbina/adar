@@ -60,6 +60,7 @@ import type {
   PullRequest,
   RepoPullRequests
 } from './hosting'
+import type { PullNotice, PullReviewData, ReviewAction, ReviewRange } from './review'
 
 export interface AdarApi {
   // ── App / system ────────────────────────────────────────────────────────
@@ -348,6 +349,18 @@ export interface AdarApi {
    * or pr/<number> (GitLab: mr/<number>) for one from a fork (created or fast-forwarded). Resolves to the branch name.
    */
   pullRequestBranch(repo: string, number: number): Promise<string>
+  /** What the review view shows of a pull request: Viewed marks, line comment threads, reviews, the conversation (GitHub). */
+  getPullReview(repo: string, number: number): Promise<PullReviewData>
+  /** Comment, reply, resolve a thread, mark a file viewed or submit a review on the pull request's service. */
+  pullReviewAction(repo: string, number: number, action: ReviewAction): Promise<void>
+  /**
+   * Make sure the repository has the pull request's commits (fetching them if needed, without creating branches) and
+   * say where its changes start (`baseSha`: the base branch's last commit on the service, fetched when missing);
+   * with `since` (the commit last reviewed), how the pull request moved on from it.
+   */
+  preparePullReview(repo: string, number: number, opts: { head: string; baseRef: string; baseSha?: string | null; since?: string | null }): Promise<ReviewRange>
+  /** A system notification about a pull request; clicking it opens the pull request in Adar (an 'open-pull' event). */
+  notifyPullRequest(repo: string, notice: PullNotice): Promise<void>
 
   // ── Escape hatch ────────────────────────────────────────────────────────
   /** Run an arbitrary git command (used by the Git console). args exclude the leading "git". */
@@ -471,6 +484,10 @@ export const API_METHODS = [
   'createPullRequest',
   'mergePullRequest',
   'pullRequestBranch',
+  'getPullReview',
+  'pullReviewAction',
+  'preparePullReview',
+  'notifyPullRequest',
   'runGit'
 ] as const satisfies readonly AdarApiMethod[]
 

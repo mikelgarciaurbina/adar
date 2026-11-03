@@ -30,6 +30,7 @@ import {
   MIN_MSG_HIDE_W
 } from './geometry'
 import { GraphHeader } from './GraphHeader'
+import { useReviewMarks } from '@renderer/components/pulls/PullNews'
 import { GraphRow } from './GraphRow'
 import { GraphSearch } from './GraphSearch'
 import { computeGraph, type LayoutRow } from './layout'
@@ -158,6 +159,9 @@ export function CommitGraph({ tab }: { tab: RepoTab }) {
 
   // ── View model ──────────────────────────────────────────────────────────
   const commits = useStableCommits(tab.commits)
+
+  // Followed pull requests: the commits added since the user looked, and the one they saw.
+  const reviewMarks = useReviewMarks(path, commits)
 
   // Commits that appear on top of the graph (a commit, pull or fetch) grow into their lane for a moment.
   const prevTop = useRef<{ path: string; sha: string | null }>({ path, sha: null })
@@ -655,6 +659,7 @@ export function CommitGraph({ tab }: { tab: RepoTab }) {
                   now={now}
                   wip={row.kind === 'wip' ? wipInfo : undefined}
                   fresh={!!sha && fresh.has(sha)}
+                  mark={sha ? reviewMarks.get(sha) : undefined}
                   ctx={ctx}
                 />
               )

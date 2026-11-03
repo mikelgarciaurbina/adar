@@ -788,3 +788,27 @@
 .gr-search-count.gr-none {
   color: var(--danger);
 }
+
+/* Followed pull requests: commits added since the user looked (sea wash) and the commit they last saw. */
+.gr-row-new {
+  background: color-mix(in srgb, var(--lane-3) 7%, transparent);
+}
+.gr-row-seen {
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--lane-3) 60%, transparent);
+}
+.gr-seen {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  height: 18px;
+  margin-left: auto;
+  padding: 0 6px;
+  border-radius: var(--radius-sm);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--lane-3) 45%, transparent);
+  color: var(--lane-3-ink);
+  font-size: 10.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+}

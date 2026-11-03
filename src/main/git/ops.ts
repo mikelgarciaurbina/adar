@@ -89,7 +89,11 @@ export const HOSTING_METHODS = [
   'getAuthorAvatars',
   'createPullRequest',
   'mergePullRequest',
-  'pullRequestBranch'
+  'pullRequestBranch',
+  'getPullReview',
+  'pullReviewAction',
+  'preparePullReview',
+  'notifyPullRequest'
 ] as const satisfies readonly (keyof AdarApi)[]
 
 export type HostingMethod = (typeof HOSTING_METHODS)[number]

@@ -46,11 +46,46 @@ deleted branch, a detached HEAD or a rewrite left behind, grouped from the reflo
 branch back, restore the branch, or a new branch), every move of HEAD or a branch in words, and a deeper search for
 dropped stashes · Azure DevOps pull requests (a personal access token per organization), with their checks, votes and
 branch policies · GitHub Enterprise servers, through the GitHub CLI or a token · GitLab through `glab` or the token git
-already keeps for it, before asking for one · authors' pictures from GitHub, GitLab or Bitbucket when Gravatar has none.
+already keeps for it, before asking for one · authors' pictures from GitHub, GitLab or Bitbucket when Gravatar has none ·
+GitHub pull requests reviewed in Adar (GitHub Enterprise too): the files with GitHub's Viewed marks, only what changed
+since your review (a rebase with the same changes or a merge of main told apart), line comments, replies and suggested
+changes, approve or request changes, the conversation and the commits, with the agents that co-wrote them · an inbox of
+the pull requests of every open repository (waiting for your review, the ones you follow, yours), a blue dot on what
+changed since you looked, also in the left panel and on the branch where the commit you reviewed is marked, and
+notifications for review requests, new commits or replies, and reviews or failed checks on yours.
 
 ---
 
-## Next (0.2 – 0.4)
+## Next (0.19 – 0.22)
+
+### Supervise AI agents and the team
+Code and commits are more and more written by AI agents. Adar is where people see what the agents did, review it,
+and keep up with their colleagues' branches and pull requests.
+- [ ] **Review pull requests in Adar on GitLab, Bitbucket and Azure DevOps** too, as on GitHub; and their activity
+      (reviews, comments) for the inbox's blue dots, which elsewhere only know what you looked at in Adar.
+- [ ] **Agents at work**: live activity of the worktrees and branches AI agents work in (files changing now, time since
+      the last change, new commits), with a notification when an agent commits or pushes, or has been idle for a while.
+- [ ] **Since I last looked**: mark a point of a branch as reviewed and see only what came after it, with files you can
+      tick as viewed.
+- [ ] **Diffs for large changes**: a file tree with the lines added and removed, lockfiles and generated files folded
+      away, whitespace changes hidden on demand, and keyboard navigation through files and changes.
+- [ ] **AI-authored commits**: recognise `Co-Authored-By` trailers (Claude, Copilot, Codex, Cursor…) and show a badge in
+      the graph and the commit details, with a human / AI filter.
+- [ ] **Review a conflict resolution**: for a merge commit, show only what the resolution changed compared with git's
+      own automatic merge (`git show --remerge-diff`).
+- [ ] **After a force push**: compare the old and the new version of a branch an agent or a colleague rewrote
+      (`git range-diff`, from the remote-tracking branch's reflog).
+- [ ] **Team view** for a tab group: each repository's branch, changes and ahead/behind, colleagues' remote branches by
+      author with their last activity, open pull requests, and what reached main since yesterday; batch pull.
+- [ ] Notifications for every branch with an upstream (not only the checked-out one), and when a pull request is merged.
+- [ ] **Blame → pull request**: from a line to the pull request that brought it in, with its conversation.
+
+### Diffs and history
+- [ ] Compare any two refs or files ("Compare with…"), and browse the repository tree at any commit.
+- [ ] **Commit signing** (GPG / SSH) and "verified" badges in the graph and commit details: who, or what, made each
+      commit.
+- [ ] Word-wrap toggle and keyboard line cursor for line staging. *(good first issue)*
+- [ ] Blame: honour `.git-blame-ignore-revs`, "blame previous revision", paging for very long file histories.
 
 ### Localization (i18n)
 - [ ] Lightweight translation layer (`t()` + JSON catalogs, `Intl` for plurals, dates and numbers); a test that flags
@@ -64,22 +99,6 @@ already keeps for it, before asking for one · authors' pictures from GitHub, Gi
 ### Hosting integrations (opt-in)
 - [ ] GitHub: sign in from the browser (device flow; built, waiting for Adar's OAuth app).
 
-### Everyday workflow
-- [ ] **Commit signing** (GPG / SSH) and "verified" badges in the graph and commit details.
-- [ ] Commit message helpers: templates (`commit.template`), Conventional Commits prefixes, `Co-authored-by` picker.
-- [ ] Readable output for failing hooks (pre-commit, commit-msg) instead of a raw error.
-- [ ] `fixup!` commits from the staging area and autosquash in the interactive rebase screen.
-- [ ] Partial stash (selected files or hunks), rename stash, compare a stash with the working tree.
-- [ ] Tags: sort by date, folder grouping, release-style annotated tag editor. *(good first issue)*
-- [ ] Clone dialog options: shallow, single branch, partial clone, sparse checkout; cancel a running clone.
-
-### Diffs, blame and conflicts
-- [ ] Merge tool: line-level selection, optional base (ancestor) pane, syntax highlighting in the output editor.
-- [ ] External diff / merge tools (VS Code, Kaleidoscope, FileMerge, Beyond Compare).
-- [ ] Word-wrap toggle and keyboard line cursor for line staging. *(good first issue)*
-- [ ] Compare any two refs or files ("Compare with…"), and browse the repository tree at any commit.
-- [ ] Blame: honour `.git-blame-ignore-revs`, "blame previous revision", paging for very long file histories.
-
 ---
 
 ## Later
@@ -92,6 +111,15 @@ Windows and Linux builds shipped in 0.6.0 as a beta. Still to do:
   desktops (GNOME, KDE).
 - [ ] **Windows and Linux**: install updates from inside the app (today **Download** opens the release page), and the
   `adar` command-line tool (macOS only for now).
+
+### Git workflow
+Less pressing now that agents make most commits, merges and stashes themselves.
+- [ ] Partial stash (selected files or hunks), rename stash, compare a stash with the working tree.
+- [ ] Readable output for failing hooks (pre-commit, commit-msg) instead of a raw error.
+- [ ] Tags: sort by date, folder grouping, release-style annotated tag editor. *(good first issue)*
+- [ ] Clone dialog options: shallow, single branch, partial clone, sparse checkout; cancel a running clone.
+- [ ] Merge tool: line-level selection, optional base (ancestor) pane, syntax highlighting in the output editor.
+- [ ] External diff / merge tools (VS Code, Kaleidoscope, FileMerge, Beyond Compare).
 
 ### Power features
 - [ ] **Bisect UI**: mark good / bad / skip from the graph, show the remaining range.
@@ -110,22 +138,11 @@ Windows and Linux builds shipped in 0.6.0 as a beta. Still to do:
 ### Experience
 - [ ] Customizable keyboard shortcuts.
 - [ ] Custom themes (theme files), font and density options, high-contrast theme.
-- [ ] Workspaces: a dashboard for a tab group (branch, changes and ahead/behind of each repository) with batch pull,
-  and favourites. (Tab groups and Fetch All for a group are done.)
 - [ ] App menu: once the `adar` command is installed, show **Uninstall Command Line Tool…** instead of *Install…*
   (rebuild the menu after installing or uninstalling, and check at startup). Today uninstalling is only in
   Settings → Integrations and the command palette. *(good first issue)*
-- [ ] New-commit notifications for every branch with an upstream, not only the checked-out one (today's notifications
-  and the menu bar dot follow the checked-out branch).
 - [ ] Accessibility pass: screen-reader labels, full keyboard navigation, reduced motion.
 - [ ] First-run tour.
-
-### Opt-in AI assistance
-Bring-your-own-key or local models only, disabled by default, and never sending code without an explicit action:
-- [ ] Draft a commit message from the staged diff.
-- [ ] Draft a pull request description from a branch.
-- [ ] Explain a commit or a diff.
-- [ ] Suggest a resolution for a merge conflict (always reviewed by the user).
 
 ### Project and quality
 - [ ] DOM interaction tests (Testing Library) and end-to-end tests of the packaged app in CI, with screenshot diffs.

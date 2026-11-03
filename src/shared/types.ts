@@ -611,6 +611,20 @@ export interface AppSettings {
   menuBarIcon: boolean
   /** A system notification when a fetch brings new commits to the checked-out branch's upstream. */
   notifyNewCommits: boolean
+  /** A notification when someone asks for the user's review (or asks again). */
+  notifyReviewRequests: boolean
+  /** A notification when a pull request the user follows gets commits after their review or comment, or a reply. */
+  notifyFollowedPulls: boolean
+  /** A notification when the user's own pull request is reviewed or commented on, fails a check or can be merged. */
+  notifyOwnPulls: boolean
+  /** Follow the pull requests the user reviews or comments on (else only those followed with the bell). */
+  followParticipated: boolean
+  /** Pull requests followed with the bell ("host/owner/name#12"). */
+  pullsFollowed: string[]
+  /** Pull requests the user stopped following ("host/owner/name#12"). */
+  pullsUnfollowed: string[]
+  /** What the user last looked at in each pull request: its head then, and when ("host/owner/name#12" → mark). */
+  pullsSeen: Record<string, PullSeen>
   /** Version the user chose to skip ('' = none). */
   skippedUpdateVersion: string
   /** Adar version that last ran with these settings ('' = none recorded): a newer one shows What's new once. */
@@ -630,6 +644,16 @@ export interface AppSettings {
   /** Azure DevOps organizations pull requests are on for (their personal access tokens are stored encrypted). */
   azureServers: AzureOrganization[]
 }
+
+/** A pull request as the user last looked at it in Adar (its review, or Mark as seen). */
+export interface PullSeen {
+  head: string
+  /** ISO time. */
+  at: string
+}
+
+/** Pull requests remembered as seen at most (the oldest are forgotten). */
+export const MAX_PULLS_SEEN = 400
 
 export const DEFAULT_SETTINGS: AppSettings = {
   theme: 'dark',
@@ -663,6 +687,13 @@ export const DEFAULT_SETTINGS: AppSettings = {
   checkForUpdates: true,
   menuBarIcon: true,
   notifyNewCommits: true,
+  notifyReviewRequests: true,
+  notifyFollowedPulls: true,
+  notifyOwnPulls: true,
+  followParticipated: true,
+  pullsFollowed: [],
+  pullsUnfollowed: [],
+  pullsSeen: {},
   skippedUpdateVersion: '',
   lastRunVersion: '',
   githubAuth: '',
@@ -767,6 +798,13 @@ export type AdarEvent =
       /** Sent to the menu bar panel each time it opens, so it reloads its project. */
       type: 'menubar-shown'
     }
+  | {
+      /** A pull request notification was clicked: show the pull request (its review or conversation) or the inbox. */
+      type: 'open-pull'
+      repo: string
+      number: number
+      view: 'review' | 'conversation' | 'inbox'
+    }
 
 export const MENU_COMMANDS = [
   'open-repo',
@@ -788,6 +826,8 @@ export const MENU_COMMANDS = [
   'redo',
   'recover-lost-commits',
   'show-reflog',
+  'pull-requests',
+  'review-pull-request',
   'refresh',
   'toggle-left-panel',
   'toggle-right-panel',

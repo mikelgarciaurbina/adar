@@ -4,6 +4,7 @@
 import { memo, type ReactNode } from 'react'
 import { Archive, Box, BrushCleaning, Check, ChevronRight, Cloud, Crosshair, ExternalLink, Eye, EyeOff, Folder, FolderGit2, FolderOpen, GitBranch, GitMerge, GitPullRequest, Lock, Plus, RefreshCw, Tag, Trash2, TriangleAlert } from 'lucide-react'
 import { ChecksGlyph, PullStateIcon } from '@renderer/components/pulls/PullChip'
+import { NewsChip } from '@renderer/components/pulls/PullNews'
 import { pullTitle } from '@renderer/lib/pulls'
 import { laneColor } from '@renderer/lib/colors'
 import { relativeTime, shortSha } from '@renderer/lib/format'
@@ -397,6 +398,7 @@ export const RowView = memo(function RowView(props: RowViewProps) {
           </span>
           <span className="sb-spacer" />
           {pr.reviewRequested && <span className="sb-review">Review</span>}
+          <NewsChip pr={pr} />
           <ChecksGlyph pr={pr} />
           <span className="sb-count sb-count-dim">{pr.number}</span>
         </div>

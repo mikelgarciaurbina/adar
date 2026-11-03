@@ -1,6 +1,6 @@
 import { copyFileSync, existsSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
-import { app, BrowserWindow, dialog, ipcMain, Menu, net, safeStorage, shell, type MenuItemConstructorOptions } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, net, Notification, safeStorage, shell, type MenuItemConstructorOptions } from 'electron'
 import { IPC_EVENT_CHANNEL, IPC_INVOKE_CHANNEL, type InvokeResponse } from '@shared/api'
 import { MENUBAR_METHODS, PANEL_API_METHODS, type MenuBarMethod } from '@shared/menubar'
 import type { AppSettings, MenuCommand, AdarEvent, RepoInfo } from '@shared/types'
@@ -80,6 +80,11 @@ app.on('open-file', (e, file) => {
   focusMainWindow()
 })
 for (const p of parseOpenRepoArgs(process.argv)) requestOpen(p)
+
+/** Pull request notifications on screen. */
+const notices = new Set<Notification>()
+/** Scripted runs: what clicking the last pull request notification would do. */
+let lastNotice: (() => void) | null = null
 
 function emit(event: AdarEvent): void {
   // A credential prompt for an operation started from the menu bar panel is answered in Adar's window.
@@ -169,6 +174,27 @@ const platform: PlatformAdapter = {
   async showInFolder(path) {
     shell.showItemInFolder(path)
   },
+  notify(repo, notice) {
+    const open = () => {
+      openInAdar(repo)
+      emit({ type: 'open-pull', repo, number: notice.number, view: notice.open })
+    }
+    // Scripted runs show nothing; a {"clickNotice": true} step clicks the last one.
+    if (CAPTURE_MODE) {
+      console.log(`[capture] notify ${notice.title} · ${notice.subtitle} · ${notice.body}`)
+      lastNotice = open
+      return
+    }
+    if (!Notification.isSupported()) return
+    const mac = process.platform === 'darwin'
+    const n = new Notification({ title: notice.title, ...(mac ? { subtitle: notice.subtitle } : {}), body: mac ? notice.body : `${notice.subtitle}\n${notice.body}` })
+    n.on('click', open)
+    // Kept until clicked or closed, so its click still arrives.
+    notices.add(n)
+    n.on('close', () => notices.delete(n))
+    if (notices.size > 30) notices.delete(notices.values().next().value!)
+    n.show()
+  },
   fetch: (input, init) => net.fetch(input, init),
   // Development only (scripted e2e runs): a fake GitHub API on this machine.
   githubApi: !app.isPackaged && /^http:\/\/127\.0\.0\.1:\d+$/.test(process.env['ADAR_GITHUB_API'] ?? '') ? process.env['ADAR_GITHUB_API'] : undefined,
@@ -244,7 +270,7 @@ function createWindow(): void {
 async function runCaptureSteps(file: string): Promise<void> {
   const fs = await import('node:fs/promises')
   const outDir = process.env['ADAR_CAPTURE_DIR'] || process.cwd()
-  type Step = { wait?: number; js?: string; jsFile?: string; shot?: string; size?: [number, number]; panel?: boolean; panelJs?: string; panelShot?: string }
+  type Step = { wait?: number; js?: string; jsFile?: string; shot?: string; size?: [number, number]; panel?: boolean; panelJs?: string; panelShot?: string; clickNotice?: boolean }
   try {
     const list = JSON.parse(await fs.readFile(file, 'utf8')) as Step[]
     for (const step of list) {
@@ -252,6 +278,10 @@ async function runCaptureSteps(file: string): Promise<void> {
       if (!win) break
       if (step.size) win.setContentSize(step.size[0], step.size[1])
       if (step.wait) await new Promise((r) => setTimeout(r, step.wait))
+      if (step.clickNotice) {
+        console.log(lastNotice ? '[capture] notice clicked' : '[capture] no notice to click')
+        lastNotice?.()
+      }
       if (step.jsFile) step.js = await fs.readFile(step.jsFile, 'utf8')
       if (step.js) {
         try {
@@ -402,6 +432,9 @@ function buildMenu(): void {
         item('Redo Git Action', 'redo'),
         item('Recover Lost Commits…', 'recover-lost-commits'),
         item('Show Reflog', 'show-reflog'),
+        { type: 'separator' },
+        item('Pull Requests', 'pull-requests', 'CmdOrCtrl+Shift+R'),
+        item('Review Pull Request', 'review-pull-request'),
         { type: 'separator' },
         item('Open in Terminal', 'open-in-terminal', 'CmdOrCtrl+Alt+T'),
         item(isMac ? 'Reveal in Finder' : 'Show in Folder', 'open-in-finder', 'CmdOrCtrl+Alt+R'),

@@ -25,6 +25,8 @@ import { UpdateNotice } from '@renderer/components/update/UpdateNotice'
 import { showWhatsNewAfterUpdate } from '@renderer/components/update/WhatsNew'
 import { usePullRequestSync } from '@renderer/components/pulls/pullStore'
 import { ReflogView } from '@renderer/components/reflog/ReflogView'
+import { ReviewView } from '@renderer/components/review/ReviewView'
+import { InboxView } from '@renderer/components/pulls/InboxView'
 import { LeftPanel } from '@renderer/components/sidebar/LeftPanel'
 import { useAutoFetch, useBackendEvents, useGlobalShortcuts, useOpenRequests, useRefreshOnFocus, useTheme } from '@renderer/hooks/useAppEffects'
 import { useActiveTab, useApp, type RepoTab } from '@renderer/store/appStore'
@@ -44,6 +46,10 @@ function CenterPanel({ tab }: { tab: RepoTab }) {
       return <BlameView key={`${view.path}@${view.rev ?? ''}`} tab={tab} path={view.path} rev={view.rev} />
     case 'reflog':
       return <ReflogView tab={tab} mode={view.mode} />
+    case 'review':
+      return <ReviewView key={view.number} tab={tab} view={view} />
+    case 'inbox':
+      return <InboxView tab={tab} />
     default:
       return <CommitGraph tab={tab} />
   }
@@ -55,12 +61,15 @@ function RepoWorkspace({ tab }: { tab: RepoTab }) {
   const leftWidth = useApp((s) => s.settings.leftPanelWidth)
   const rightWidth = useApp((s) => s.settings.rightPanelWidth)
   const updateSettings = useApp((s) => s.updateSettings)
+  // A review has its own file list on the left; the inbox spans the window.
+  const left = !leftCollapsed && tab.center.kind !== 'review' && tab.center.kind !== 'inbox'
+  const right = !rightCollapsed && tab.center.kind !== 'inbox'
 
   return (
     <>
       <Toolbar tab={tab} />
       <div className="app-main">
-        {!leftCollapsed && (
+        {left && (
           <>
             <div className="app-left" style={{ width: leftWidth }}>
               <ErrorBoundary area="the left panel" resetKey={tab.path}>
@@ -78,7 +87,7 @@ function RepoWorkspace({ tab }: { tab: RepoTab }) {
             </ErrorBoundary>
           </div>
         </div>
-        {!rightCollapsed && (
+        {right && (
           <>
             <Resizer side="right" width={rightWidth} min={280} max={720} onResize={(w) => void updateSettings({ rightPanelWidth: w })} />
             <div className="app-right" style={{ width: rightWidth }}>

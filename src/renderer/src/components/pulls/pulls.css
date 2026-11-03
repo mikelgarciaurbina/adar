@@ -658,3 +658,83 @@
   margin-top: 2px;
   color: var(--danger);
 }
+
+/* What changed since the user looked: sea blue (the blue dot of the inbox). */
+.pr-new {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 16px;
+  padding: 0 5px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--lane-3) 16%, transparent);
+  color: var(--lane-3-ink);
+  font: 600 10px var(--font-mono);
+}
+.pr-chip-new {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  align-self: stretch;
+  margin: 0 -6px 0 2px;
+  padding: 0 6px;
+  background: color-mix(in srgb, var(--lane-3) 18%, transparent);
+  color: var(--lane-3-ink);
+  font-weight: 600;
+}
+.pr-chip-new i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--lane-3);
+}
+
+/* Details panel: following, what changed since the user looked, reviewing in Adar. */
+.pr-follow {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  margin-right: 4px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+  color: var(--text-2);
+  font: inherit;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  cursor: pointer;
+}
+.pr-follow-on {
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px var(--accent-line);
+  color: var(--accent);
+}
+.pr-news {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 11px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--lane-3) 8%, var(--bg-1));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--lane-3) 35%, transparent);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--text-0);
+}
+.pr-news span {
+  flex: 1;
+  min-width: 0;
+}
+.pr-news .ui-link {
+  flex: none;
+  font-weight: 500;
+}
+.pr-review-main {
+  width: 100%;
+  justify-content: center;
+}

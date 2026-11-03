@@ -4,7 +4,9 @@
 import type { MouseEvent } from 'react'
 import { Check, GitMerge, GitPullRequest, GitPullRequestClosed, GitPullRequestDraft, X } from 'lucide-react'
 import { pullTitle } from '@renderer/lib/pulls'
+import { useApp } from '@renderer/store/appStore'
 import type { PullRequest, PullState } from '@shared/hosting'
+import { usePullNews } from './PullNews'
 import './pulls.css'
 
 export function PullStateIcon({ state, size = 12 }: { state: PullState; size?: number }) {
@@ -54,6 +56,20 @@ export function PullChip({ pr, onClick, hash = false }: { pr: PullRequest; onCli
         {pr.number}
       </span>
       {(pr.state === 'open' || pr.state === 'draft') && <ChecksGlyph pr={pr} />}
+      <NewSegment pr={pr} />
     </button>
+  )
+}
+
+/** "● 2" after the number when the pull request changed since the user looked (new commits, else just the dot). */
+function NewSegment({ pr }: { pr: PullRequest }) {
+  const repo = useApp((s) => s.activePath)
+  const news = usePullNews(repo, pr)
+  if (!news?.updated) return null
+  return (
+    <span className="pr-chip-new" title={news.label ?? 'Changed since you looked'} aria-label={news.label ?? 'Changed since you looked'}>
+      <i />
+      {news.newCommits || ''}
+    </span>
   )
 }

@@ -13,6 +13,7 @@ import {
   GITLAB_COM,
   MAX_BODY,
   MAX_TITLE,
+  PROVIDER_NAMES,
   isSafeBranchName,
   type AuthorAsk,
   type AzureConnections,
@@ -28,6 +29,7 @@ import {
   type RepoPullRequests
 } from '@shared/hosting'
 import { pickHostingRemote } from '@shared/remoteUrl'
+import { parsePullNotice, parseReviewAction, rangeDiffChanged, rangeDiffSame, type ReviewRange } from '@shared/review'
 import type { AppSettings } from '@shared/types'
 import type { GitContext } from '../git/context'
 import type { HostingOps } from '../git/ops'
@@ -460,6 +462,61 @@ export function createHostingOps(ctx: GitContext, services: Pick<SystemServices,
     if (typeof number !== 'number' || !Number.isSafeInteger(number) || number <= 0) throw invalid('Invalid pull request number')
   }
 
+  const fullSha = (v: unknown): string | null => (typeof v === 'string' && /^[0-9a-f]{40}$/i.test(v) ? v.toLowerCase() : null)
+
+  /** Where the repository has a pull request's changes, fetching what it lacks (no branches are created). */
+  const prepareReview = async (repo: string, number: number, head: string, baseRef: string, baseSha: string | null, since: string | null): Promise<ReviewRange> => {
+    const { at, provider } = await requireProvider(repo)
+    const run = (args: string[]) => ctx.git(repo, args, { allowFailure: true })
+    const has = async (sha: string) => (await run(['cat-file', '-e', `${sha}^{commit}`])).code === 0
+    const baseTracking = `refs/remotes/${at.remote}/${baseRef}`
+    const hasBase = async () => (await run(['show-ref', '--verify', '--quiet', baseTracking])).code === 0
+
+    // The base branch as the service has it now (the local one may be behind: the changes would include its commits).
+    const baseBehind = async () => !(await hasBase()) || (!!baseSha && !(await has(baseSha)))
+    if (!(await has(head)) || (await baseBehind())) {
+      await ctx.exclusive(repo, async () => {
+        if (await baseBehind()) await ctx.gitNetwork(repo, ['fetch', at.remote, `+refs/heads/${baseRef}:${baseTracking}`])
+        if (await has(head)) return
+        const src = await provider.source(number)
+        if (src.fork) {
+          if (src.fork.from.startsWith('-')) throw invalid('Invalid fork address')
+          // Only FETCH_HEAD is written: the commits are here, no branch is made.
+          await ctx.gitNetwork(repo, ['fetch', src.fork.from, src.fork.ref])
+        } else {
+          if (!isSafeBranchName(src.headRef)) throw invalid('The pull request has an unusable branch name')
+          await ctx.gitNetwork(repo, ['fetch', at.remote, `+refs/heads/${src.headRef}:refs/remotes/${at.remote}/${src.headRef}`])
+        }
+      })
+      if (!(await has(head))) throw new AdarError({ message: 'The pull request moved on since Adar last looked. Refresh it and try again.', code: 'NOT_FOUND' })
+    }
+
+    const baseRev = baseSha && (await has(baseSha)) ? baseSha : baseTracking
+    const mb = await run(['merge-base', head, baseRev])
+    const base = mb.code === 0 && mb.stdout.trim() ? mb.stdout.trim() : (await ctx.git(repo, ['rev-parse', '--verify', `${baseRev}^{commit}`])).stdout.trim()
+    const range: ReviewRange = { base, head, since: null, sinceState: since ? 'missing' : 'none', sinceCommits: 0, onlyMerges: false }
+    if (!since || since === head) return since ? { ...range, since, sinceState: 'ancestor' } : range
+
+    // The commit last reviewed may be gone from the branch (a force push): services still serve it by its id.
+    if (!(await has(since))) await ctx.exclusive(repo, () => ctx.gitNetwork(repo, ['fetch', at.remote, since], { allowFailure: true }))
+    if (!(await has(since))) return range
+    range.since = since
+    if ((await run(['merge-base', '--is-ancestor', since, head])).code === 0) {
+      const firsts = (await ctx.git(repo, ['rev-list', '--first-parent', '--parents', `${since}..${head}`])).stdout.split('\n').filter(Boolean)
+      range.sinceState = 'ancestor'
+      range.sinceCommits = firsts.length
+      range.onlyMerges = firsts.length > 0 && firsts.every((l) => l.trim().split(' ').length > 2)
+      return range
+    }
+    // Rewritten: compared commit by commit with the version reviewed.
+    const oldBase = await run(['merge-base', since, baseRev])
+    const from = oldBase.code === 0 && oldBase.stdout.trim() ? oldBase.stdout.trim() : base
+    const rd = await run(['range-diff', '--no-color', '-s', `${from}..${since}`, `${base}..${head}`])
+    range.sinceState = rd.code === 0 && rangeDiffSame(rd.stdout) ? 'same-changes' : 'rewritten'
+    range.sinceCommits = rd.code === 0 ? rangeDiffChanged(rd.stdout) : 0
+    return range
+  }
+
   return {
     getGithubConnection,
 
@@ -745,6 +802,43 @@ export function createHostingOps(ctx: GitContext, services: Pick<SystemServices,
       if (typeof opts.headSha !== 'string' || !/^[0-9a-f]{7,40}$/i.test(opts.headSha)) throw invalid('Invalid commit')
       const { provider } = await requireProvider(repo)
       await provider.merge(number, opts.method, opts.headSha.toLowerCase())
+    },
+
+    async getPullReview(repo, number) {
+      await assertRepo(ctx, repo)
+      checkNumber(number)
+      const { at, provider } = await requireProvider(repo)
+      if (!provider.review) throw invalid(`Adar reviews GitHub pull requests for now. Review this one on ${PROVIDER_NAMES[at.provider]}.`)
+      return provider.review(number)
+    },
+
+    async pullReviewAction(repo, number, raw) {
+      await assertRepo(ctx, repo)
+      checkNumber(number)
+      const action = parseReviewAction(raw)
+      if (!action) throw invalid('Invalid review action')
+      const { at, provider } = await requireProvider(repo)
+      if (!provider.reviewAction) throw invalid(`Adar reviews GitHub pull requests for now. Review this one on ${PROVIDER_NAMES[at.provider]}.`)
+      await provider.reviewAction(number, action)
+    },
+
+    async preparePullReview(repo, number, opts) {
+      await assertRepo(ctx, repo)
+      checkNumber(number)
+      const head = fullSha(opts?.head)
+      if (!head) throw invalid('Invalid commit')
+      if (!isSafeBranchName(opts.baseRef)) throw invalid('Invalid branch name')
+      const since = opts.since == null ? null : fullSha(opts.since)
+      const baseSha = opts.baseSha == null ? null : fullSha(opts.baseSha)
+      if ((opts.since != null && !since) || (opts.baseSha != null && !baseSha)) throw invalid('Invalid commit')
+      return prepareReview(repo, number, head, opts.baseRef, baseSha, since)
+    },
+
+    async notifyPullRequest(repo, raw) {
+      await assertRepo(ctx, repo)
+      const notice = parsePullNotice(raw)
+      if (!notice) throw invalid('Invalid notification')
+      platform.notify?.(repo, notice)
     },
 
     async pullRequestBranch(repo, number): Promise<string> {

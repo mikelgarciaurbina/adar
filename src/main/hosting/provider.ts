@@ -4,6 +4,7 @@
 import { AdarError } from '@shared/errors'
 import type { AuthorAsk, CreatePullOptions, MergeChecks, MergeMethod, PullCommit, PullRequest, RepoPullRequests } from '@shared/hosting'
 import type { RemoteHosting } from '@shared/remoteUrl'
+import type { PullReviewData, ReviewAction } from '@shared/review'
 
 /** A repository's remote with a supported hosting. */
 export type HostingRemote = RemoteHosting & {
@@ -35,6 +36,10 @@ export interface PullProvider {
   avatars?(authors: readonly AuthorAsk[]): Promise<Map<string, string>>
   /** A picture on the service's own host, fetched with the sign-in, as a data: URL (see ApiClient.image). */
   image?(url: string): Promise<string | null>
+  /** What the review view shows: Viewed marks, line comment threads, reviews and the conversation (GitHub only). */
+  review?(number: number): Promise<PullReviewData>
+  /** Comment, reply, resolve, mark a file viewed or submit a review (validated by the caller). */
+  reviewAction?(number: number, action: ReviewAction): Promise<void>
 }
 
 export const invalid = (message: string) => new AdarError({ message, code: 'INVALID_ARGUMENT' })

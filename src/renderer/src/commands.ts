@@ -8,7 +8,8 @@ import { openBranchCleanup, openKeptBranches } from '@renderer/actions/cleanup'
 import { openReflog } from '@renderer/actions/reflog'
 import { newWorktree } from '@renderer/actions/worktrees'
 import { openConnect, selectPull, startPullRequest, turnOffPullRequests } from '@renderer/actions/pulls'
-import { hostingOn, pullIndexOf, repoHosting, usePulls } from '@renderer/components/pulls/pullStore'
+import { openInbox, openReview } from '@renderer/actions/review'
+import { anyPullsOn, hostingOn, pullIndexOf, repoHosting, usePulls } from '@renderer/components/pulls/pullStore'
 import { currentBranch } from '@renderer/lib/refs'
 import { isElectron } from '@renderer/api/client'
 import { FOCUS_FILTER_EVENT } from '@renderer/components/sidebar/LeftPanel'
@@ -44,6 +45,19 @@ const currentPull = () => {
   if (!tab || !cur) return undefined
   const pr = pullIndexOf(usePulls.getState().repos[tab.path]?.data, tab.refs).byLocal.get(cur.name)
   return pr && (pr.state === 'open' || pr.state === 'draft') ? pr : undefined
+}
+
+/** The pull request to review: the one shown in the right panel, else the checked-out branch's. */
+const reviewTarget = () => {
+  const tab = getActiveTab()
+  if (!tab) return undefined
+  const data = usePulls.getState().repos[tab.path]?.data
+  if (tab.selection.kind === 'pull') {
+    const n = tab.selection.number
+    const pr = data?.pulls.find((p) => p.number === n)
+    if (pr && (pr.state === 'open' || pr.state === 'draft')) return pr
+  }
+  return currentPull()
 }
 
 const ZOOM_STEPS = [0.67, 0.75, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2]
@@ -105,6 +119,17 @@ export const COMMANDS: Command[] = [
     run: withRepo((r) => {
       const pr = currentPull()
       if (pr) selectPull(r, pr.number)
+    })
+  },
+  { id: 'pull-requests', label: 'Pull Requests', group: 'Remote', shortcut: 'Mod+Shift+R', when: () => hasRepo() && anyPullsOn(), run: () => openInbox() },
+  {
+    id: 'review-pull-request',
+    label: 'Review Pull Request',
+    group: 'Remote',
+    when: () => !!reviewTarget(),
+    run: withRepo((r) => {
+      const pr = reviewTarget()
+      if (pr) openReview(r, pr.number)
     })
   },
   {

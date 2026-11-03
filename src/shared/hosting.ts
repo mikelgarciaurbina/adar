@@ -1,7 +1,9 @@
 // Pull requests (opt-in) from GitHub, GitLab (merge requests), Bitbucket Cloud, Bitbucket Data Center
 // and Azure DevOps: types shared by the backend (src/main/hosting) and the renderer (components/pulls),
 // GitHub's GraphQL query and the pure mapping of its answer. Bitbucket's answers are mapped in
-// bitbucket.ts, GitLab's in gitlab.ts, Azure DevOps' in azure.ts.
+// bitbucket.ts, GitLab's in gitlab.ts, Azure DevOps' in azure.ts. Reviewing one in Adar: review.ts.
+
+import { ACTIVITY_FIELDS, activityOf, type PullActivity } from './review'
 
 export const GITHUB_API = 'https://api.github.com'
 export const BITBUCKET_API = 'https://api.bitbucket.org/2.0'
@@ -78,6 +80,8 @@ export interface PullRequest {
   viewerIsAuthor: boolean
   /** Open tasks (Bitbucket); 0 elsewhere. */
   openTasks: number
+  /** The signed-in user's part in it and what others did (GitHub's open ones); absent elsewhere. */
+  activity?: PullActivity | null
 }
 
 /** A commit of a pull request, as the provider lists it. */
@@ -257,7 +261,7 @@ export const PULLS_QUERY = `query AdarPulls($owner: String!, $name: String!) {
           } } } } }
         }
         reviewRequests(first: 20) { nodes { requestedReviewer { __typename ... on User { login } ... on Team { name } ... on Bot { login } } } }
-        latestReviews(first: 30) { nodes { author { login } state } }
+        latestReviews(first: 30) { nodes { author { login } state } }${ACTIVITY_FIELDS}
       }
     }
     done: pullRequests(states: [MERGED, CLOSED], first: 30, orderBy: { field: UPDATED_AT, direction: DESC }) {
@@ -429,7 +433,8 @@ export function pullFromNode(node: unknown, viewer: string): PullRequest | null 
     mergeable: mergeable === 'MERGEABLE' ? 'clean' : mergeable === 'CONFLICTING' ? 'conflicts' : 'unknown',
     mergeBlocked: str(node.mergeStateStatus) === 'BLOCKED',
     viewerIsAuthor: node.viewerDidAuthor === true || (!!viewer && str(author.login).toLowerCase() === viewer.toLowerCase()),
-    openTasks: 0
+    openTasks: 0,
+    ...(open && ('recent' in node || 'viewerLatestReview' in node) ? { activity: activityOf(node, viewer, node.baseRefName as string) } : {})
   }
 }
 

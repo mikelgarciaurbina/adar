@@ -3,8 +3,9 @@
 // the shared geometry changes.
 
 import { memo, type CSSProperties, type ReactNode } from 'react'
-import { AlertTriangle, Minus, Pencil, Plus } from 'lucide-react'
+import { AlertTriangle, Eye, Minus, Pencil, Plus } from 'lucide-react'
 import { Avatar } from '@renderer/components/common/Avatar'
+import type { ReviewMark } from '@renderer/components/pulls/PullNews'
 import { absoluteTime, relativeTime } from '@renderer/lib/format'
 import { colorOf, inkOf } from './geometry'
 import { GraphCell } from './GraphCell'
@@ -38,6 +39,8 @@ export interface GraphRowProps {
   wip?: WipInfo
   /** Just arrived on top of the graph: its node grows into the lane. */
   fresh?: boolean
+  /** Part of a followed pull request: added since the user looked, or the commit they last saw. */
+  mark?: ReviewMark
   ctx: GraphCtx
 }
 
@@ -96,7 +99,7 @@ function dateText(ts: number, mode: 'relative' | 'absolute', now: number): strin
 }
 
 export const GraphRow = memo(function GraphRow(props: GraphRowProps) {
-  const { row, index, start, h, graphWidth, pinWidth, pills, selected, multi, match, dim, hl, hlField, dateMode, now, wip, fresh, ctx } = props
+  const { row, index, start, h, graphWidth, pinWidth, pills, selected, multi, match, dim, hl, hlField, dateMode, now, wip, fresh, mark, ctx } = props
   const color = colorOf(row.color)
   const head = row.kind === 'commit' && !!pills?.some((p) => p.isHead || p.kind === 'detached')
   const cls =
@@ -108,7 +111,8 @@ export const GraphRow = memo(function GraphRow(props: GraphRowProps) {
     (dim ? ' gr-dim' : '') +
     (row.kind === 'commit' && row.isMerge ? ' gr-row-merge' : '') +
     (head ? ' gr-row-head' : '') +
-    (fresh ? ' gr-row-fresh' : '')
+    (fresh ? ' gr-row-fresh' : '') +
+    (mark?.kind === 'new' ? ' gr-row-new' : mark?.kind === 'seen' ? ' gr-row-seen' : '')
 
   let message: ReactNode = null
   let author: ReactNode = null
@@ -164,7 +168,14 @@ export const GraphRow = memo(function GraphRow(props: GraphRowProps) {
       onDoubleClick={(e) => ctx.onRowDoubleClick(e, row)}
       onContextMenu={(e) => ctx.onRowContextMenu(e, row)}
     >
-      <div className="gr-cell gr-c-refs">{row.kind === 'commit' && <RefPills pills={pills} ctx={ctx} color={color} />}</div>
+      <div className="gr-cell gr-c-refs">
+        {row.kind === 'commit' && <RefPills pills={pills} ctx={ctx} color={color} />}
+        {mark?.kind === 'seen' && !pills?.length && (
+          <span className="gr-seen" title={mark.title}>
+            <Eye size={11} /> {mark.label}
+          </span>
+        )}
+      </div>
       <div className="gr-cell gr-c-graph">
         <GraphCell row={row} h={h} width={graphWidth} connector={row.kind === 'commit' && !!pills?.length} head={head} pinWidth={pinWidth} />
       </div>

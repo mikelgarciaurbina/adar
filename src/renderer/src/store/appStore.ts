@@ -48,6 +48,13 @@ export type CenterView =
   | { kind: 'blame'; path: string; rev?: string }
   /** Lost commits (grouped by what left them behind) or every move of HEAD or a branch. */
   | { kind: 'reflog'; mode: 'lost' | 'moves' }
+  /** A pull request's review: its changes (all, or since the user last reviewed), its conversation or its commits. */
+  | { kind: 'review'; number: number; mode: ReviewMode; tab: ReviewTab; path?: string }
+  /** The pull requests of every open repository, what waits for the user first. */
+  | { kind: 'inbox' }
+
+export type ReviewMode = 'all' | 'since'
+export type ReviewTab = 'files' | 'conversation' | 'commits'
 
 export interface HeadSnapshot {
   sha: string | null

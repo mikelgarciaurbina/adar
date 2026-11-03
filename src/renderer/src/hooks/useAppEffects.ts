@@ -4,6 +4,7 @@
 import { useEffect } from 'react'
 import { cli, isElectron, onAdarEvent } from '@renderer/api/client'
 import { openRepoAt, silentFetch } from '@renderer/actions/git'
+import { openFromNotice } from '@renderer/actions/review'
 import { runCommand } from '@renderer/commands'
 import { isEditableTarget, isMod } from '@renderer/lib/keys'
 import { getActiveTab, useApp, type RefreshScope } from '@renderer/store/appStore'
@@ -55,6 +56,9 @@ export function useBackendEvents(): void {
           case 'menu':
             runCommand(ev.command)
             break
+          case 'open-pull':
+            openFromNotice(ev.repo, ev.number, ev.view)
+            break
           case 'settings-changed':
             // Changed outside this window (the menu bar panel's menu): already saved.
             useApp.setState((st) => ({ settings: { ...st.settings, ...ev.patch } }))
@@ -94,6 +98,7 @@ const BINDINGS: Binding[] = [
   { key: 'ArrowDown', mod: true, shift: true, command: 'pull', browserOnly: true },
   { key: 'ArrowUp', mod: true, shift: true, command: 'push', browserOnly: true },
   { key: ',', mod: true, command: 'settings', browserOnly: true },
+  { key: 'r', mod: true, shift: true, command: 'pull-requests', browserOnly: true },
   { key: '`', ctrl: true, command: 'git-console', inInputs: true, browserOnly: true }
 ]
 

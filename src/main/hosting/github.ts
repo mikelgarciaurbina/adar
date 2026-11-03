@@ -52,4 +52,13 @@ export class GithubClient {
     }
     return res?.data ?? null
   }
+
+  /** A GraphQL change: any error GitHub reports fails it (a query may answer in part, a change may not). */
+  async mutate(query: string, variables: Record<string, unknown>): Promise<unknown> {
+    const res = (await this.api.json('POST', '/graphql', { query, variables })) as { data?: unknown; errors?: unknown }
+    if (Array.isArray(res?.errors) && res.errors.length) {
+      throw new AdarError({ message: `GitHub: ${githubErrorMessage({ errors: res.errors }, 'GitHub refused the change')}`, code: 'UNKNOWN' })
+    }
+    return res?.data ?? null
+  }
 }

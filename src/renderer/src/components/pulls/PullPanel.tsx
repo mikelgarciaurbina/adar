@@ -5,6 +5,8 @@
 import { useEffect, useState } from 'react'
 import {
   ArrowRight,
+  Bell,
+  BellOff,
   ChevronDown,
   ChevronRight,
   CircleCheck,
@@ -13,6 +15,7 @@ import {
   Clock,
   ExternalLink,
   Eye,
+  FileDiff,
   FolderGit2,
   GitMerge,
   ListTodo,
@@ -31,7 +34,9 @@ import {
   openWebPage,
   preferredMergeMethod
 } from '@renderer/actions/pulls'
+import { markSeen, openReview, REVIEW_PAGE, reviewsInAdar, setFollowing } from '@renderer/actions/review'
 import { changesText, finishWorktree, mainWorktreeOf, openWorktree, useWorktrees, worktreeForPull } from '@renderer/actions/worktrees'
+import { isFollowing, marksOf, pullKey } from '@renderer/lib/following'
 import { folderName } from '@renderer/lib/tabGroups'
 import { api } from '@renderer/api/client'
 import { Avatar } from '@renderer/components/common/Avatar'
@@ -43,17 +48,14 @@ import { ReleaseNotes } from '@renderer/components/update/ReleaseNotes'
 import { pluralize, relativeTime } from '@renderer/lib/format'
 import { checksLabel, localBranchFor, mergeBlocker, mergeChecksText, providerName, pullNoun, PullNoun, pullRef, reviewLabel, stateLabel } from '@renderer/lib/pulls'
 import { useApp, type RepoTab } from '@renderer/store/appStore'
-import type { HostingProvider, MergeChecks, MergeMethod, PullCommit, PullRequest, RepoPullRequests } from '@shared/hosting'
+import type { MergeChecks, MergeMethod, PullCommit, PullRequest, RepoPullRequests } from '@shared/hosting'
 import { PullStateIcon } from './PullChip'
+import { usePullNews } from './PullNews'
 import { repoHosting, usePullIndex, usePulls } from './pullStore'
 import './pulls.css'
 
 /** Merged pull requests whose Clean up the user turned down (this session). */
 const keptBranches = new Set<string>()
-
-/** Where each provider shows a pull request's changes. */
-/** The page with a pull request's changes, after its own address. */
-const REVIEW_PAGE: Record<HostingProvider, string> = { github: '/files', gitlab: '/diffs', 'bitbucket-cloud': '/diff', 'bitbucket-server': '/diff', azure: '?_a=files' }
 
 const ago = (iso: string | null) => (iso ? relativeTime(Math.floor(Date.parse(iso) / 1000)) : '')
 
@@ -83,6 +85,9 @@ function PullDetails({ tab, pr, data }: { tab: RepoTab; pr: PullRequest; data: R
   const open = pr.state === 'open' || pr.state === 'draft'
   const local = localBranchFor(pr, tab.refs, data.remote)
   const fork = pr.headFork ? `${pr.headFork.split('/')[0]}:` : ''
+  const news = usePullNews(repo, pr)
+  const settings = useApp((s) => s.settings)
+  const following = isFollowing(pr, marksOf(settings, pullKey(data, pr.number)))
   return (
     <div className="det-panel pr-panel">
       <div className="ui-panel-header det-header">
@@ -91,6 +96,18 @@ function PullDetails({ tab, pr, data }: { tab: RepoTab; pr: PullRequest; data: R
         <span className="det-sha selectable">{pullRef(pr)}</span>
         <CopyButton text={pr.url} label={`Copy link to the ${pullNoun(pr.provider)}`} what={`Copied the link to ${pullRef(pr)}`} />
         <span className="det-spacer" />
+        {open && !pr.viewerIsAuthor && (
+          <button
+            type="button"
+            className={`pr-follow${following ? ' pr-follow-on' : ''}`}
+            aria-pressed={following}
+            title={following ? 'Following: a dot and a notification when it changes after your review or comment. Click to stop.' : 'Follow it: a dot and a notification when it changes'}
+            onClick={() => setFollowing(repo, pr, !following)}
+          >
+            {following ? <Bell size={12} /> : <BellOff size={12} />}
+            {following ? 'Following' : 'Follow'}
+          </button>
+        )}
         <button type="button" className="ui-link pr-open-link" onClick={() => openWebPage(pr.url)}>
           Open on {providerName(pr)} <ExternalLink size={12} />
         </button>
@@ -124,6 +141,15 @@ function PullDetails({ tab, pr, data }: { tab: RepoTab; pr: PullRequest; data: R
           </div>
         </div>
 
+        {open && news?.updated && news.label && (
+          <div className="pr-news">
+            <span>{news.label}</span>
+            <button type="button" className="ui-link" onClick={() => markSeen(repo, pr)}>
+              Mark as seen
+            </button>
+          </div>
+        )}
+
         {open ? (
           <PullStatus pr={pr} data={data} />
         ) : (
@@ -146,7 +172,16 @@ function PullDetails({ tab, pr, data }: { tab: RepoTab; pr: PullRequest; data: R
       </div>
 
       {open && (
-        <PullActions tab={tab} pr={pr} data={data} hasLocal={!!local} localName={local?.name ?? null} isCheckedOut={!!local?.isHead} elsewhere={local?.worktree ?? null} />
+        <PullActions
+          tab={tab}
+          pr={pr}
+          data={data}
+          news={news}
+          hasLocal={!!local}
+          localName={local?.name ?? null}
+          isCheckedOut={!!local?.isHead}
+          elsewhere={local?.worktree ?? null}
+        />
       )}
       {pr.state === 'merged' &&
         local &&
@@ -358,6 +393,7 @@ function PullActions(props: {
   tab: RepoTab
   pr: PullRequest
   data: RepoPullRequests
+  news: ReturnType<typeof usePullNews>
   hasLocal: boolean
   localName: string | null
   isCheckedOut: boolean
@@ -399,15 +435,28 @@ function PullActions(props: {
         Bring {pr.baseRef} in…
       </Button>
     ),
-    !pr.viewerIsAuthor && (
+    !pr.viewerIsAuthor && !reviewsInAdar(pr) && (
       <Button key="review" icon={<ExternalLink size={13} />} onClick={() => openWebPage(`${pr.url}${REVIEW_PAGE[pr.provider]}`)}>
         Review on {providerName(pr)}
       </Button>
     )
   ].filter(Boolean)
+  // Reviewing in Adar: the main button while the user's review is wanted or the pull request changed since they looked.
+  const reviewFirst = reviewsInAdar(pr) && !pr.viewerIsAuthor && (pr.reviewRequested || !!props.news?.updated)
 
   return (
     <div className="pr-actions">
+      {reviewsInAdar(pr) && (
+        <Button
+          variant={reviewFirst ? 'primary' : 'default'}
+          className="pr-review-main"
+          icon={<FileDiff size={14} />}
+          title="Review its changes here: comment on lines, approve or request changes"
+          onClick={() => openReview(repo, pr.number)}
+        >
+          Review changes
+        </Button>
+      )}
       {canMerge && (
         <>
           <div className="pr-merge">

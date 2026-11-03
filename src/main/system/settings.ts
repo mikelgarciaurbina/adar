@@ -10,8 +10,10 @@ import { normalizeHexColor } from '@shared/groupColor'
 import {
   DEFAULT_SETTINGS,
   LEGACY_GROUP_COLORS,
+  MAX_PULLS_SEEN,
   TAB_GROUP_COLORS,
   type AppSettings,
+  type PullSeen,
   type CustomGroupColor,
   type GroupColor,
   type RecentRepo,
@@ -118,6 +120,23 @@ export function sanitizeServers(raw: unknown): HostingServer[] | null {
  * Keep only known keys whose value has the same shape as the default.
  * Unknown keys and wrongly-typed values are ignored (the default/current value wins).
  */
+/** "host/owner/name#12" (GitLab groups may nest: owner has slashes). */
+const PULL_KEY = /^[a-z0-9.:-]{1,200}\/[^\s#]{1,400}#\d{1,9}$/i
+
+/** Pull requests last looked at: valid keys and marks only, the most recent MAX_PULLS_SEEN. */
+export function sanitizePullsSeen(raw: unknown): Record<string, PullSeen> | null {
+  if (!isPlainObject(raw)) return null
+  const marks: Array<[string, PullSeen]> = []
+  for (const [key, v] of Object.entries(raw)) {
+    if (!PULL_KEY.test(key) || !isPlainObject(v)) continue
+    const { head, at } = v as Record<string, unknown>
+    if (typeof head !== 'string' || !/^[0-9a-f]{7,40}$/i.test(head) || typeof at !== 'string' || Number.isNaN(Date.parse(at))) continue
+    marks.push([key, { head: head.toLowerCase(), at }])
+  }
+  marks.sort((a, b) => Date.parse(b[1].at) - Date.parse(a[1].at))
+  return Object.fromEntries(marks.slice(0, MAX_PULLS_SEEN))
+}
+
 export function sanitizeSettings(base: AppSettings, rawPatch: unknown): AppSettings {
   const out: AppSettings = structuredClone(base)
   if (!isPlainObject(rawPatch)) return out
@@ -146,6 +165,15 @@ export function sanitizeSettings(base: AppSettings, rawPatch: unknown): AppSetti
     if (key === 'recentGroupColors') {
       const colors = sanitizeRecentGroupColors(value)
       if (colors) target[key] = colors
+      continue
+    }
+    if (key === 'pullsSeen') {
+      const seen = sanitizePullsSeen(value)
+      if (seen) target[key] = seen
+      continue
+    }
+    if (key === 'pullsFollowed' || key === 'pullsUnfollowed') {
+      if (Array.isArray(value)) target[key] = [...new Set(value.filter((v): v is string => typeof v === 'string' && PULL_KEY.test(v)))].slice(-MAX_PULLS_SEEN)
       continue
     }
     if (key === 'bitbucketServers' || key === 'gitlabServers' || key === 'azureServers' || key === 'githubServers') {

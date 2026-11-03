@@ -10,10 +10,13 @@ import { useApp, type RepoTab } from '@renderer/store/appStore'
 import { describeError } from '@shared/errors'
 import type { AzureConnections, BitbucketConnections, GithubConnection, GitlabConnections, KnownServers, PullRequest, RepoPullRequests } from '@shared/hosting'
 import { pickHostingRemote, type RemoteHosting } from '@shared/remoteUrl'
+import { noticePulls } from './notices'
 import type { AppSettings, Ref, RefsResult } from '@shared/types'
 
 /** Pull requests are asked for again after this long when nothing forces it. */
 const STALE_MS = 60_000
+/** Every open repository's pull requests are refreshed this often in the background (the inbox, its badge, notifications). */
+const BACKGROUND_MS = 3 * 60_000
 
 export interface RepoPulls {
   data: RepoPullRequests | null
@@ -167,6 +170,7 @@ export const usePulls = create<PullsState>()((set, get) => ({
       .getPullRequests(repo)
       .then((data) => {
         patch({ data, error: null, loading: false, at: Date.now() })
+        if (data) noticePulls(repo, data, !prev?.data)
         return data
       })
       .catch((err) => {
@@ -231,11 +235,31 @@ export function useActiveHostingOn(): boolean {
   return usePulls((s) => !!key && hostingOn(repoHosting(tabAt(useApp.getState().activePath ?? '')), s))
 }
 
-/** Keeps the active repository's pull requests fresh (App mounts it once). */
+/** Pull requests are on for at least one service or server. */
+export const anyPullsOn = (s: Connections = usePulls.getState()) =>
+  !!s.connection?.method || !!s.connection?.servers.length || !!s.gitlab?.servers.length || !!s.bitbucket?.cloud || !!s.bitbucket?.servers.length || !!s.azure?.organizations.length
+
+/** Keeps the active repository's pull requests fresh, and every open one's in the background (App mounts it once). */
 export function usePullRequestSync(): void {
   const activePath = useApp((s) => s.activePath)
   const lastFetch = useApp((s) => s.tabs.find((t) => t.path === s.activePath)?.lastFetch ?? null)
   const on = useActiveHostingOn()
+  const anyOn = usePulls((s) => anyPullsOn(s))
+  const tabCount = useApp((s) => s.tabs.length)
+
+  useEffect(() => {
+    if (!anyOn) return
+    const loadAll = () => {
+      for (const t of useApp.getState().tabs) if (hostingOn(repoHosting(t))) void usePulls.getState().load(t.path)
+    }
+    loadAll()
+    const timer = setInterval(loadAll, BACKGROUND_MS)
+    window.addEventListener('focus', loadAll)
+    return () => {
+      clearInterval(timer)
+      window.removeEventListener('focus', loadAll)
+    }
+  }, [anyOn, tabCount])
 
   useEffect(() => {
     void usePulls.getState().loadConnection()
