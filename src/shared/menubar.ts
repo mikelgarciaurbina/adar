@@ -4,13 +4,14 @@
 // repositories Adar opened (its tabs, or one the panel opened through menuBarUseRepo, which checks trust).
 
 import type { AdarApiMethod } from './api'
+import type { AgentOpen } from './agents'
 import type { RepoInfo } from './types'
 
-export const MENUBAR_METHODS = ['menuBarState', 'menuBarUseRepo', 'menuBarOpenInAdar', 'menuBarHide', 'menuBarShowMenu', 'menuBarSetHeight'] as const
+export const MENUBAR_METHODS = ['menuBarState', 'menuBarUseRepo', 'menuBarOpenInAdar', 'menuBarOpenAgent', 'menuBarHide', 'menuBarShowMenu', 'menuBarSetHeight'] as const
 export type MenuBarMethod = (typeof MENUBAR_METHODS)[number]
 
 /** Backend methods the panel window may call: reading a repository, plus fetch, pull and push. */
-export const PANEL_API_METHODS: readonly AdarApiMethod[] = ['getSettings', 'getRecentRepos', 'getRefs', 'getStatus', 'getLog', 'fetch', 'pull', 'push']
+export const PANEL_API_METHODS: readonly AdarApiMethod[] = ['getSettings', 'getRecentRepos', 'getRefs', 'getStatus', 'getLog', 'fetch', 'pull', 'push', 'getAgentWorktrees']
 
 export interface MenuBarState {
   /** Repository path → when Adar last fetched it (ms since epoch), for fetches since the app started. */
@@ -23,6 +24,8 @@ export interface MenuBarApi {
   menuBarUseRepo(repo: string): Promise<RepoInfo>
   /** Bring Adar's window to the front (opening the window if needed) and switch to `repo` when given. */
   menuBarOpenInAdar(repo: string | null): Promise<void>
+  /** Bring Adar's window to the front on a worktree (Agents at work: the panel's "At work" list) or the Agents view. */
+  menuBarOpenAgent(open: AgentOpen): Promise<void>
   menuBarHide(): Promise<void>
   /** The panel's "…" menu: notifications, Settings…, Quit. */
   menuBarShowMenu(): Promise<void>

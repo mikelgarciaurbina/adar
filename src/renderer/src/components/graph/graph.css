@@ -812,3 +812,59 @@
   white-space: nowrap;
   overflow: hidden;
 }
+
+/* Agents at work: another worktree's work in progress (a dashed row, a click opens it) and its branch's chip. */
+.gr-row-agent {
+  cursor: pointer;
+}
+.gr-row-agent .gr-c-msg {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.gr-agent-label {
+  flex: none;
+  font-style: italic;
+  color: var(--text-1);
+}
+.gr-agent-label b {
+  font-weight: 500;
+}
+.gr-agent-meta {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-3);
+}
+.gr-agent-mark {
+  flex: none;
+  color: var(--lane-4-ink);
+}
+.gr-agent-working {
+  color: var(--success);
+}
+.gr-agent-quiet {
+  color: var(--warning);
+}
+.gr-agent-chip {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 5px;
+  font: 500 10.5px / 1 var(--font-ui);
+  white-space: nowrap;
+}
+.gr-agent-chip-working {
+  color: var(--success);
+  background: color-mix(in srgb, var(--success) 12%, var(--bg-0));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--success) 35%, transparent);
+}
+.gr-agent-chip-quiet {
+  color: var(--warning);
+  background: color-mix(in srgb, var(--warning) 12%, var(--bg-0));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--warning) 35%, transparent);
+}

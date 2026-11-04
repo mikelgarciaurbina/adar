@@ -12,6 +12,10 @@ import { localForRemote } from '@renderer/lib/refs'
 import type { Ref, RefsResult } from '@shared/types'
 import { remoteWebUrl } from '@shared/remoteUrl'
 import { splitMatch, type Row, type SectionId } from './tree'
+import { useAgents } from '@renderer/components/agents/agentStore'
+import { stateOf } from '@renderer/components/agents/model'
+import { AgentMark, NewChip, StateLabel, useWorktreeState } from '@renderer/components/agents/parts'
+import { useApp } from '@renderer/store/appStore'
 import { pullRef } from '@renderer/lib/pulls'
 
 export type HiddenState = 'none' | 'some' | 'all'
@@ -161,6 +165,96 @@ function EyeToggle({ state, onToggle, what }: { state: HiddenState; onToggle: ()
   )
 }
 
+type WorktreeRowData = Extract<Row, { kind: 'worktree' }>
+
+/** A worktree: its folder and what it is doing now (Agents at work), then its branch, agent and new commits. */
+function WorktreeRow({ row, common, classes, pending, q, h }: { row: WorktreeRowData; common: Record<string, unknown>; classes: string[]; pending?: boolean; q: string; h: RowHandlers }) {
+  const wt = row.node.worktree
+  const merged = row.node.merged
+  const live = useWorktreeState(wt.missing ? null : wt.path)
+  const cls = [...classes]
+  if (wt.isCurrent) cls.push('sb-worktree-current')
+  if (wt.missing) cls.push('sb-worktree-missing')
+  const title = live
+    ? `${live.title}\n${wt.path}`
+    : [wt.path, wt.branch ? `Branch ${wt.branch}` : 'Detached HEAD', wt.isMain ? 'The main folder' : null, wt.locked ? 'Locked' : null].filter(Boolean).join('\n')
+  return (
+    <div {...common} className={cls.join(' ')} title={title}>
+      <span className="sb-chevron-space" />
+      <span className="sb-icon sb-icon-worktree">{pending ? <span className="ui-spinner ui-spinner-sm" /> : <FolderGit2 size={13} />}</span>
+      <span className="sb-worktree-lines">
+        <span className="sb-worktree-line">
+          <span className="sb-name sb-worktree-name">
+            <Highlight text={row.node.label} q={q} />
+          </span>
+          <span className="sb-spacer" />
+          {wt.locked && (
+            <span className="sb-worktree-note" title="Locked: git keeps it even when its folder is away">
+              <Lock size={11} />
+            </span>
+          )}
+          {wt.missing ? (
+            <span className="sb-worktree-gone">folder missing</span>
+          ) : wt.isCurrent ? (
+            live && live.state !== 'idle' ? <StateLabel state={live.state} label={live.label} /> : <span className="sb-worktree-note">this tab</span>
+          ) : live ? (
+            <StateLabel state={live.state} label={live.label} />
+          ) : (
+            !!wt.changes && (
+              <span className="sb-worktree-dirty" title={`${wt.changes} ${wt.changes === 1 ? 'file has' : 'files have'} changes`}>
+                ● {wt.changes}
+              </span>
+            )
+          )}
+        </span>
+        <span className="sb-worktree-line sb-worktree-sub">
+          {merged ? (
+            <span className="sb-worktree-merged" title={`${pullRef(merged)} ${merged.title} was merged: the worktree can go`}>
+              <GitMerge size={10} />
+              merged
+            </span>
+          ) : (
+            <span className="sb-worktree-branch">
+              <GitBranch size={10} />
+              {wt.branch ?? 'detached HEAD'}
+            </span>
+          )}
+          {live?.agent && <AgentMark name={live.agent} compact={live.fresh.length > 0} />}
+          {live && <NewChip count={live.fresh.length} title={`${live.fresh.length} new since you last looked: ${live.fresh.map((c) => c.subject).slice(0, 3).join(' · ')}`} />}
+        </span>
+      </span>
+      {wt.missing ? (
+        <ActionButton label="Forget missing worktrees" onClick={() => h.worktreeAction(row, 'forget')}>
+          <Trash2 size={12} />
+        </ActionButton>
+      ) : (
+        !wt.isCurrent &&
+        (merged ? (
+          <button type="button" className="sb-worktree-remove" onClick={(e) => (e.stopPropagation(), h.worktreeAction(row, 'finish'))}>
+            Remove
+          </button>
+        ) : (
+          <span className="sb-actions">
+            <ActionButton label="Open in a new tab" onClick={() => h.worktreeAction(row, 'open')}>
+              <ExternalLink size={12} />
+            </ActionButton>
+          </span>
+        ))
+      )}
+    </div>
+  )
+}
+
+/** "● 2 working" on the Worktrees section. */
+function WorkingCount() {
+  const worktrees = useAgents((s) => s.worktrees)
+  const now = useAgents((s) => s.now)
+  const settings = useApp((s) => s.settings)
+  const working = Object.values(worktrees).filter((w) => stateOf(w, now, settings) === 'working').length
+  if (!working) return null
+  return <StateLabel state="working" label={`${working} working`} />
+}
+
 export const RowView = memo(function RowView(props: RowViewProps) {
   const { row, h, q } = props
   const indent = 4 + row.depth * 12
@@ -226,6 +320,7 @@ export const RowView = memo(function RowView(props: RowViewProps) {
               {props.cleanup}
             </button>
           )}
+          {row.id === 'worktrees' && <WorkingCount />}
           {!(row.id === 'pulls' && props.addDisabled) && <span className="sb-count">{row.count}</span>}
         </div>
       )
@@ -405,70 +500,8 @@ export const RowView = memo(function RowView(props: RowViewProps) {
       )
     }
 
-    case 'worktree': {
-      const wt = row.node.worktree
-      const merged = row.node.merged
-      if (wt.isCurrent) classes.push('sb-worktree-current')
-      if (wt.missing) classes.push('sb-worktree-missing')
-      const title = [wt.path, wt.branch ? `Branch ${wt.branch}` : 'Detached HEAD', wt.isMain ? 'The main folder' : null, wt.locked ? 'Locked' : null]
-        .filter(Boolean)
-        .join('\n')
-      return (
-        <div {...common} className={classes.join(' ')} title={title}>
-          <span className="sb-chevron-space" />
-          <span className="sb-icon sb-icon-worktree">{props.pending ? <span className="ui-spinner ui-spinner-sm" /> : <FolderGit2 size={13} />}</span>
-          <span className="sb-name sb-worktree-name">
-            <Highlight text={row.node.label} q={q} />
-          </span>
-          {merged ? (
-            <span className="sb-worktree-merged" title={`${pullRef(merged)} ${merged.title} was merged: the worktree can go`}>
-              <GitMerge size={10} />
-              merged
-            </span>
-          ) : (
-            wt.branch && (
-              <span className="sb-worktree-branch">
-                <GitBranch size={10} />
-                {wt.branch}
-              </span>
-            )
-          )}
-          <span className="sb-spacer" />
-          {wt.locked && (
-            <span className="sb-worktree-note" title="Locked: git keeps it even when its folder is away">
-              <Lock size={11} />
-            </span>
-          )}
-          {wt.missing ? (
-            <>
-              <span className="sb-worktree-gone">folder missing</span>
-              <ActionButton label="Forget missing worktrees" onClick={() => h.worktreeAction(row, 'forget')}>
-                <Trash2 size={12} />
-              </ActionButton>
-            </>
-          ) : wt.isCurrent ? (
-            <span className="sb-worktree-note">this tab</span>
-          ) : (
-            <>
-              {!!wt.changes && (
-                <span className="sb-worktree-dirty" title={`${wt.changes} ${wt.changes === 1 ? 'file has' : 'files have'} changes`}>
-                  ● {wt.changes}
-                </span>
-              )}
-              {merged ? (
-                <button type="button" className="sb-worktree-remove" onClick={(e) => (e.stopPropagation(), h.worktreeAction(row, 'finish'))}>
-                  Remove
-                </button>
-              ) : (
-                <ActionButton label="Open in a new tab" onClick={() => h.worktreeAction(row, 'open')}>
-                  <ExternalLink size={12} />
-                </ActionButton>
-              )}
-            </>
-          )}
-        </div>
-      )
-    }
+    case 'worktree':
+      return <WorktreeRow row={row} common={common} classes={classes} pending={props.pending} q={q} h={h} />
 
     case 'pull-prompt':
       return (

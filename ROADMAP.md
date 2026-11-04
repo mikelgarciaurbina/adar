@@ -52,19 +52,21 @@ since your review (a rebase with the same changes or a merge of main told apart)
 changes, approve or request changes, the conversation and the commits, with the agents that co-wrote them · an inbox of
 the pull requests of every open repository (waiting for your review, the ones you follow, yours), a blue dot on what
 changed since you looked, also in the left panel and on the branch where the commit you reviewed is marked, and
-notifications for review requests, new commits or replies, and reviews or failed checks on yours.
+notifications for review requests, new commits or replies, and reviews or failed checks on yours · agents at work: the
+worktrees of the open repositories as they work (working, quiet with work left — it may be waiting for an answer — or
+idle), with the files changing now, the last 30 minutes and which agent (Co-Authored-By trailers, the branch prefix or
+the folder), in the left panel, the tabs, the graph (a dashed row for each worktree's work in progress), an Agents view
+and the menu bar panel, and notifications when an agent commits, pushes or goes quiet.
 
 ---
 
-## Next (0.19 – 0.22)
+## Next (0.21 – 0.24)
 
 ### Supervise AI agents and the team
 Code and commits are more and more written by AI agents. Adar is where people see what the agents did, review it,
 and keep up with their colleagues' branches and pull requests.
 - [ ] **Review pull requests in Adar on GitLab, Bitbucket and Azure DevOps** too, as on GitHub; and their activity
       (reviews, comments) for the inbox's blue dots, which elsewhere only know what you looked at in Adar.
-- [ ] **Agents at work**: live activity of the worktrees and branches AI agents work in (files changing now, time since
-      the last change, new commits), with a notification when an agent commits or pushes, or has been idle for a while.
 - [ ] **Since I last looked**: mark a point of a branch as reviewed and see only what came after it, with files you can
       tick as viewed.
 - [ ] **Diffs for large changes**: a file tree with the lines added and removed, lockfiles and generated files folded

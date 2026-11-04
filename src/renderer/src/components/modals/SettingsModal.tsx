@@ -2,7 +2,7 @@
 // (persisted, debounced, by the store). The Git section edits the global identity.
 
 import { useEffect, useId, useRef, useState } from 'react'
-import { Download, FileDiff, GitBranch, GitGraph, Plug, RefreshCw, Settings, SlidersHorizontal } from 'lucide-react'
+import { Download, FileDiff, GitBranch, GitGraph, Plug, Plus, RefreshCw, Settings, SlidersHorizontal, X } from 'lucide-react'
 import { api, cli, isElectron } from '@renderer/api/client'
 import { installCliCommand, uninstallCliCommand } from '@renderer/actions/cli'
 import { openConnect, turnOffAzure, turnOffBitbucket, turnOffGithubServer, turnOffGitlab, turnOffPullRequests } from '@renderer/actions/pulls'
@@ -17,6 +17,7 @@ import { checkForUpdatesNow, installUpdate, startUpdate } from '@renderer/compon
 import { useUpdates } from '@renderer/components/update/updateStore'
 import { useApp, useSettings } from '@renderer/store/appStore'
 import type { AppSettings, DiffViewMode, Identity, PullMode, ThemeSetting } from '@shared/types'
+import { QUIET_MINUTES, type AgentPrefix } from '@shared/agents'
 import { closeIfTopmost, Segmented, Select, SettingGroup, SettingRow, Switch } from './controls'
 import { validateIdentity } from './identity'
 import { describeUpdateStatus, type UpdateAction } from './updates'
@@ -270,8 +271,103 @@ function GeneralSection() {
           <Switch label="Follow what you review or comment on" checked={s.followParticipated} onChange={(followParticipated) => update({ followParticipated })} />
         </SettingRow>
       </SettingGroup>
+      <AgentsSettings desktop={desktop} />
       <UpdateSettings />
     </>
+  )
+}
+
+/** Agents at work: the live state of the worktrees, what is watched, its notifications and how agents are named. */
+function AgentsSettings({ desktop }: { desktop: boolean }) {
+  const s = useSettings()
+  const quietId = useId()
+  return (
+    <SettingGroup title="Agents at work">
+      <SettingRow label="Show what agents are doing" description="Live state of the worktrees of the open repositories: the left panel, the tabs, the graph and the Agents view.">
+        <Switch label="Show what agents are doing" checked={s.agentsOn} onChange={(agentsOn) => update({ agentsOn })} />
+      </SettingRow>
+      <SettingRow label="Watch" description="Choose the second when agents also work in a repository's own folder.">
+        <Segmented
+          ariaLabel="Watch"
+          disabled={!s.agentsOn}
+          value={s.agentsWatchMain ? 'all' : 'worktrees'}
+          onChange={(v) => update({ agentsWatchMain: v === 'all' })}
+          options={[
+            { value: 'worktrees', label: 'Worktrees' },
+            { value: 'all', label: 'Worktrees and each repository’s folder' }
+          ]}
+        />
+      </SettingRow>
+      {desktop && (
+        <SettingRow label="Notify when an agent commits or pushes" description="Not for commits or pushes made from Adar.">
+          <Switch label="Notify when an agent commits or pushes" disabled={!s.agentsOn} checked={s.notifyAgentCommits} onChange={(notifyAgentCommits) => update({ notifyAgentCommits })} />
+        </SettingRow>
+      )}
+      <SettingRow
+        label="When an agent goes quiet"
+        description="It stopped with changes not committed or commits not pushed: it may be waiting for an answer. Its tab and the Agents button turn sun after this long."
+        htmlFor={quietId}
+      >
+        <span className="md-inline">
+          <Select id={quietId} disabled={!s.agentsOn} value={s.agentQuietMinutes} onChange={(e) => update({ agentQuietMinutes: Number(e.target.value) })}>
+            {QUIET_MINUTES.map((m) => (
+              <option key={m} value={m}>
+                after {m} min
+              </option>
+            ))}
+          </Select>
+          {desktop && <Switch label="Notify when an agent goes quiet" disabled={!s.agentsOn} checked={s.notifyAgentQuiet} onChange={(notifyAgentQuiet) => update({ notifyAgentQuiet })} />}
+        </span>
+      </SettingRow>
+      <SettingRow label="Agent branch prefixes" description="With the Co-Authored-By trailers of its commits, how Adar tells which agent works in a worktree." stacked>
+        <PrefixEditor value={s.agentPrefixes} disabled={!s.agentsOn} />
+      </SettingRow>
+    </SettingGroup>
+  )
+}
+
+function PrefixEditor({ value, disabled }: { value: AgentPrefix[]; disabled: boolean }) {
+  const [adding, setAdding] = useState(false)
+  const [prefix, setPrefix] = useState('')
+  const [name, setName] = useState('')
+  const set = (agentPrefixes: AgentPrefix[]) => update({ agentPrefixes })
+  const ok = prefix.trim() && name.trim() && !prefix.trim().startsWith('-') && !value.some((p) => p.prefix === prefix.trim())
+  const add = () => {
+    if (!ok) return
+    set([...value, { prefix: prefix.trim(), name: name.trim() }])
+    setPrefix('')
+    setName('')
+    setAdding(false)
+  }
+  return (
+    <div className="md-prefixes">
+      {value.map((p) => (
+        <span key={p.prefix} className="md-prefix">
+          <code>{p.prefix}</code> → {p.name}
+          <button type="button" aria-label={`Remove ${p.prefix}`} disabled={disabled} onClick={() => set(value.filter((x) => x.prefix !== p.prefix))}>
+            <X size={11} />
+          </button>
+        </span>
+      ))}
+      {adding ? (
+        <span className="md-prefix-add">
+          <input className="ui-input" autoFocus placeholder="devin/" aria-label="Branch prefix" value={prefix} onChange={(e) => setPrefix(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && add()} />
+          <span>→</span>
+          <input className="ui-input" placeholder="Devin" aria-label="Agent name" value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && add()} />
+          <Button size="sm" variant="primary" disabled={!ok} onClick={add}>
+            Add
+          </Button>
+          <Button size="sm" onClick={() => setAdding(false)}>
+            Cancel
+          </Button>
+        </span>
+      ) : (
+        <button type="button" className="md-prefix md-prefix-new" disabled={disabled} onClick={() => setAdding(true)}>
+          <Plus size={11} /> Add
+        </button>
+      )}
+      {value.length === 0 && !adding && <span className="md-prefix-none">None: only the trailers and the folder name the agent.</span>}
+    </div>
   )
 }
 

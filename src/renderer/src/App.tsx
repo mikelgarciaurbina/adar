@@ -27,6 +27,8 @@ import { usePullRequestSync } from '@renderer/components/pulls/pullStore'
 import { ReflogView } from '@renderer/components/reflog/ReflogView'
 import { ReviewView } from '@renderer/components/review/ReviewView'
 import { InboxView } from '@renderer/components/pulls/InboxView'
+import { AgentsView } from '@renderer/components/agents/AgentsView'
+import { useAgentSync } from '@renderer/components/agents/agentStore'
 import { LeftPanel } from '@renderer/components/sidebar/LeftPanel'
 import { useAutoFetch, useBackendEvents, useGlobalShortcuts, useOpenRequests, useRefreshOnFocus, useTheme } from '@renderer/hooks/useAppEffects'
 import { useActiveTab, useApp, type RepoTab } from '@renderer/store/appStore'
@@ -50,6 +52,8 @@ function CenterPanel({ tab }: { tab: RepoTab }) {
       return <ReviewView key={view.number} tab={tab} view={view} />
     case 'inbox':
       return <InboxView tab={tab} />
+    case 'agents':
+      return <AgentsView tab={tab} />
     default:
       return <CommitGraph tab={tab} />
   }
@@ -61,9 +65,10 @@ function RepoWorkspace({ tab }: { tab: RepoTab }) {
   const leftWidth = useApp((s) => s.settings.leftPanelWidth)
   const rightWidth = useApp((s) => s.settings.rightPanelWidth)
   const updateSettings = useApp((s) => s.updateSettings)
-  // A review has its own file list on the left; the inbox spans the window.
-  const left = !leftCollapsed && tab.center.kind !== 'review' && tab.center.kind !== 'inbox'
-  const right = !rightCollapsed && tab.center.kind !== 'inbox'
+  // A review has its own file list on the left; the inbox and the Agents view span the window.
+  const wide = tab.center.kind === 'inbox' || tab.center.kind === 'agents'
+  const left = !leftCollapsed && tab.center.kind !== 'review' && !wide
+  const right = !rightCollapsed && !wide
 
   return (
     <>
@@ -119,6 +124,7 @@ export function App() {
   useOpenRequests()
   useTheme()
   usePullRequestSync()
+  useAgentSync()
 
   return (
     <div className="app">

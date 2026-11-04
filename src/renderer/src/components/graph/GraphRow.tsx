@@ -3,7 +3,7 @@
 // the shared geometry changes.
 
 import { memo, type CSSProperties, type ReactNode } from 'react'
-import { AlertTriangle, Eye, Minus, Pencil, Plus } from 'lucide-react'
+import { AlertTriangle, Eye, Minus, Pencil, Plus, Sparkle } from 'lucide-react'
 import { Avatar } from '@renderer/components/common/Avatar'
 import type { ReviewMark } from '@renderer/components/pulls/PullNews'
 import { absoluteTime, relativeTime } from '@renderer/lib/format'
@@ -11,7 +11,8 @@ import { colorOf, inkOf } from './geometry'
 import { GraphCell } from './GraphCell'
 import { highlightRanges, type DisplayRow, type Pill } from './model'
 import { RefPills } from './RefPills'
-import type { GraphCtx, WipInfo } from './types'
+import type { AgentRowInfo, GraphCtx, WipInfo } from './types'
+import { StateDot } from '@renderer/components/agents/parts'
 
 export interface GraphRowProps {
   row: DisplayRow
@@ -37,6 +38,8 @@ export interface GraphRowProps {
   /** Minute tick so relative dates refresh. */
   now: number
   wip?: WipInfo
+  /** Another worktree's work in progress (Agents at work). */
+  agent?: AgentRowInfo
   /** Just arrived on top of the graph: its node grows into the lane. */
   fresh?: boolean
   /** Part of a followed pull request: added since the user looked, or the commit they last saw. */
@@ -99,7 +102,7 @@ function dateText(ts: number, mode: 'relative' | 'absolute', now: number): strin
 }
 
 export const GraphRow = memo(function GraphRow(props: GraphRowProps) {
-  const { row, index, start, h, graphWidth, pinWidth, pills, selected, multi, match, dim, hl, hlField, dateMode, now, wip, fresh, mark, ctx } = props
+  const { row, index, start, h, graphWidth, pinWidth, pills, selected, multi, match, dim, hl, hlField, dateMode, now, wip, agent, fresh, mark, ctx } = props
   const color = colorOf(row.color)
   const head = row.kind === 'commit' && !!pills?.some((p) => p.isHead || p.kind === 'detached')
   const cls =
@@ -148,6 +151,30 @@ export const GraphRow = memo(function GraphRow(props: GraphRowProps) {
     )
     date = <span title={absoluteTime(s.date)}>{dateText(s.date, dateMode, now)}</span>
     sha = s.sha.slice(0, 7)
+  } else if (row.kind === 'agent') {
+    if (agent) {
+      message = (
+        <>
+          <StateDot state={agent.state} />
+          <span className="gr-agent-label">
+            {agent.state === 'working' ? 'Working now in ' : 'Quiet in '}
+            <b>{agent.name}</b>
+          </span>
+          <span className="gr-agent-meta">
+            {' · '}
+            {agent.files} {agent.files === 1 ? 'file' : 'files'}, +{agent.added} −{agent.removed}, not committed
+          </span>
+        </>
+      )
+      author = agent.agent ? (
+        <>
+          <Sparkle size={12} className="gr-agent-mark" />
+          <span className="gr-author-name">{agent.agent}</span>
+        </>
+      ) : null
+      date = <span className={`gr-agent-ago gr-agent-${agent.state}`}>{agent.ago}</span>
+      title = agent.title
+    }
   } else {
     message = (
       <>

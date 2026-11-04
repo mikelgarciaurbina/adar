@@ -621,11 +621,34 @@ mark.sb-match {
   color: var(--text-3);
   text-decoration: line-through;
 }
-/* The folder name keeps its width first; the branch and merged chips give way. */
-.sb-worktree-name {
-  flex: 0 0 auto;
-  max-width: 55%;
+/* Two lines: the folder and what it is doing (Agents at work), then its branch, agent and new commits. */
+.sb-worktree-lines {
+  flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+}
+.sb-worktree-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.sb-worktree-sub .sb-worktree-branch,
+.sb-worktree-sub .sb-worktree-merged {
+  margin-left: 0;
+}
+.sb-worktree-line .ag-state {
+  margin-right: 4px;
+}
+/* The folder name keeps its width first; the state gives way. */
+.sb-worktree-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .sb-worktree-branch {
   display: inline-flex;
@@ -696,4 +719,10 @@ mark.sb-match {
 .sb-worktree-remove:hover {
   background: var(--bg-4);
   color: var(--text-0);
+}
+.sb-section .ag-state {
+  margin-right: 6px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
 }

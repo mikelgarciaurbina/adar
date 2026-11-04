@@ -19,6 +19,8 @@ import {
   stashKey,
   wipCounts,
   WIP_KEY,
+  agentKey,
+  type AgentInput,
   type CommitRow,
   type DisplayModel
 } from './model'
@@ -43,13 +45,14 @@ function stash(index: number, sha: string, baseSha: string): Stash {
   return { index, ref: `stash@{${index}}`, sha, baseSha, message: `WIP ${index}`, date: 0 }
 }
 
-function model(commits: Commit[], opts: { headSha?: string | null; showWip?: boolean; stashes?: Stash[] } = {}): DisplayModel {
+function model(commits: Commit[], opts: { headSha?: string | null; showWip?: boolean; stashes?: Stash[]; agents?: AgentInput[] } = {}): DisplayModel {
   return buildDisplayRows({
     commits,
     layout: computeGraph(commits),
     headSha: opts.headSha ?? null,
     showWip: opts.showWip ?? false,
-    stashes: opts.stashes ?? []
+    stashes: opts.stashes ?? [],
+    agents: opts.agents
   })
 }
 
@@ -95,6 +98,29 @@ describe('buildDisplayRows', () => {
     expect(edgesOf(m, 1)).toEqual(['o0>0', 'p1*'])
     expect(edgesOf(m, 2)).toEqual(['i1>1*', 'o1>1', 'p0'])
     expect(m.rows[0].color).toBe(m.rows[2].color)
+    assertContinuity(m)
+  })
+
+  it('puts other worktrees’ work in progress under the WIP row, joined to their tips (Agents at work)', () => {
+    // main (lane 0) with the WIP on M2; an agent works in a worktree on the feature tip F (lane 1).
+    const commits = [commit('M2', 'M1'), commit('F', 'M1'), commit('M1')]
+    const m = model(commits, { headSha: 'M2', showWip: true, agents: [{ path: '/wt/claude', tip: 'F' }, { path: '/wt/gone', tip: 'X' }] })
+    expect(m.rows.map((r) => r.key)).toEqual([WIP_KEY, agentKey('/wt/claude'), 'M2', 'F', 'M1'])
+    const agent = m.rows[1]
+    expect(agent).toMatchObject({ kind: 'agent', path: '/wt/claude', tip: 'F', lane: 1, color: m.rows[3].color })
+    // The WIP line passes through the agent's row to M2; the agent's line runs down lane 1 into F.
+    expect(edgesOf(m, 1)).toEqual(['o1>1*', 'p0*'])
+    expect(edgesOf(m, 3)).toEqual(['i1>1*', 'o1>1', 'p0'])
+    expect(rowSelection(agent)).toEqual({ kind: 'none' })
+    assertContinuity(m)
+  })
+
+  it('nests several worktrees’ rows, the nearest tip first', () => {
+    const commits = [commit('C', 'B'), commit('B', 'A'), commit('A')]
+    const m = model(commits, { agents: [{ path: '/wt/a', tip: 'A' }, { path: '/wt/c', tip: 'C' }] })
+    expect(m.rows.map((r) => r.key)).toEqual([agentKey('/wt/c'), agentKey('/wt/a'), 'C', 'B', 'A'])
+    expect(m.rows[0].lane).toBe(0)
+    expect(m.rows[1].lane).toBe(1)
     assertContinuity(m)
   })
 

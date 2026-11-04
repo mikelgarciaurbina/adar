@@ -12,6 +12,9 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
   API, plus `API_METHODS`), `errors.ts` (`AdarError`, `describeError`, `errorDetail`), `update.ts` (updater types and
   pure helpers), `patch.ts` (partial-staging patch builder), `menubar.ts` (the menu bar panel's calls and limits),
   `hosting.ts` (provider-neutral pull request types, GitHub's GraphQL query and the pure mapping of its answers),
+  `agents.ts` (Agents at work: what a watched worktree is doing — `AgentWorktree`, `AgentEvent` — and the rules both
+  sides share: `agentState` working / quiet / idle, `agentOf` from Co-Authored-By trailers, the branch prefix or the
+  folder, the 30-minute strip, `newSince`, the settings sanitizers and `parseAgentNotice`),
   `review.ts` (reviewing a pull request in Adar: threads, reviews, Viewed marks, the timeline, GitHub's review query and
   changes, `parseReviewAction`/`parsePullNotice` for what the renderer sends, and `PullActivity`: the signed-in user's
   part in each open pull request, read by the list query, for the blue dots and notifications),
@@ -29,7 +32,12 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
   - `git/runner.ts` spawns git (argument arrays only, deterministic env); `git/context.ts` (`GitContext`: `git`,
     `gitNetwork`, `exclusive`, `gitDir`, `operationState`); `git/ops.ts` (read/write split).
   - `system/` — settings/recents/trusted repos store, askpass bridge (credential prompts → UI), file watcher with
-    polling fallback, login-shell `PATH` fix.
+    polling fallback, login-shell `PATH` fix. `activity.ts` is Agents at work's `ActivityTracker`: a WatcherManager of
+    its own on the linked worktrees of the open tabs (and each repository's folder with `agentsWatchMain`), a look at a
+    worktree when it changes (`git/read/activity.ts`: status, numstat, its own commits, all with GIT_OPTIONAL_LOCKS=0),
+    files dated by their modification time, commits and pushes (`own` when they happen during or just after an
+    operation Adar ran there: `backend.ts` wraps `exclusive` and `gitNetwork`), quiet once per stop, all sent as
+    'agents' events; `watchAgents`, `getAgentWorktrees` and `notifyAgent` (a click sends 'open-agent').
   - `menuBar.ts` — macOS menu bar extra: the tray icon (template images in `resources/tray`, drawn by
     `scripts/render-tray-icons.cjs`: at rest, a dot for new commits, four fetch-animation frames), the panel window
     (`src/renderer/menubar.html`) and new-commit notifications after a fetch (every platform). The panel's window may
@@ -99,6 +107,14 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
     branch in); `components/pulls/` — the store and its sync (`pullStore.ts`: the active repository after each fetch, on
     focus, at most once a minute; every open one every three minutes), the chip on branch labels, the details panel and
     the dialogs; pure helpers in `lib/pulls.ts`.
+  - `actions/agents.tsx` — Agents at work: opening a worktree on its changes or a commit (`showWorktree`), the Agents
+    view, marking a worktree as seen (`settings.worktreesSeen`), silencing its quiet notifications. `components/agents/`
+    — `agentStore.ts` (the watched worktrees from the main process, the clock, which tabs are watched, seen marks,
+    notifications), `model.ts` (pure: labels, the tab dot, the view's columns, `noticesFor`), `parts.tsx` (mark, state,
+    strip), `AgentsView.tsx` (a centre view: working, quiet and idle cards, the tab group in front or every repository),
+    `graph.ts` (the graph's dashed rows for other worktrees' work in progress, `AgentRow` in `graph/model.ts`, and the
+    commits new since the user looked). Worktree rows in the left panel have two lines; the tab bar, the toolbar
+    (Agents, ⇧⌘E) and the menu bar panel ("At work", `menuBarOpenAgent`) show the state too.
   - `actions/review.tsx` — reviewing in Adar and keeping up: `openReview` (GitHub; other services open their page),
     `openInbox`, loading what the review shows, line comments kept for the review (`components/review/reviewStore.ts`,
     in localStorage until submitted), replies, resolve, Viewed marks, `submitReview`; `markSeen` and `setFollowing`
@@ -150,7 +166,7 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
 - CSS class prefixes per module: `app-` shell, `ui-` common, `tb-`/`wl-` toolbar, tabs, status bar, welcome, `sb-` left
   panel, `gr-` graph, `det-` right panel, `diff-` diff/blame/history, `cf-` conflicts, `rb-` rebase, `md-` modals,
   `pal-` palette/console, `up-` updates, `mb-` menu bar panel, `pr-` pull requests, `rl-` reflog, `rv-` review, `ib-` pull
-  request inbox. Each module imports its own `.css` file.
+  request inbox, `ag-` agents at work. Each module imports its own `.css` file.
 - Icons: `lucide-react`. Virtualised lists: `@tanstack/react-virtual`. Syntax highlighting: `highlight.js`.
 - Do not add npm dependencies without discussing it first.
 

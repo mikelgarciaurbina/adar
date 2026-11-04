@@ -10,6 +10,9 @@ import { closeGroup, fetchGroup, newGroup, openGroup, renameGroup, setGroupColor
 import { showContextMenu, showMenuBelow, type MenuItem } from '@renderer/components/common/ContextMenu'
 import { getCommand } from '@renderer/commands'
 import { useUpdates } from '@renderer/components/update/updateStore'
+import { useAgents } from '@renderer/components/agents/agentStore'
+import { tabDot } from '@renderer/components/agents/model'
+import { StateDot } from '@renderer/components/agents/parts'
 import { customColorsInUse, GROUP_COLOR_LABELS, groupLine } from '@renderer/lib/groupColors'
 import { isMod, shortcutLabel } from '@renderer/lib/keys'
 import { dropPlacement, groupOf, tabSegments } from '@renderer/lib/tabGroups'
@@ -396,6 +399,7 @@ export function TabBar() {
           {tab.name}
           {hints.has(tab.path) && <span className="tb-tab-hint">{hints.get(tab.path)}</span>}
         </span>
+        <TabAgentDot path={tab.path} mainWorktree={tab.mainWorktree ?? null} />
         {tab.mainWorktree && (
           <span className="tb-tab-worktree" aria-label="Worktree">
             <GitBranch size={10} />
@@ -506,5 +510,20 @@ export function TabBar() {
         />
       )}
     </div>
+  )
+}
+
+/** Agents at work on a tab: green while its worktree (or one of its repository's) works, sun when it went quiet. */
+function TabAgentDot({ path, mainWorktree }: { path: string; mainWorktree: string | null }) {
+  const worktrees = useAgents((s) => s.worktrees)
+  const now = useAgents((s) => s.now)
+  const quietMinutes = useApp((s) => s.settings.agentQuietMinutes)
+  const state = tabDot({ path, mainWorktree }, Object.values(worktrees), now, { agentQuietMinutes: quietMinutes })
+  if (!state) return null
+  const title = state === 'working' ? (worktrees[path] ? 'An agent is working here' : 'An agent is working in one of its worktrees') : 'The agent here went quiet with work left: it may be waiting for you'
+  return (
+    <span className="ag-tab-dot" title={title} aria-label={title}>
+      <StateDot state={state} />
+    </span>
   )
 }

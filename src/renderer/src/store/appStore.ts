@@ -52,6 +52,8 @@ export type CenterView =
   | { kind: 'review'; number: number; mode: ReviewMode; tab: ReviewTab; path?: string }
   /** The pull requests of every open repository, what waits for the user first. */
   | { kind: 'inbox' }
+  /** Agents at work: what the worktrees of the open repositories (or the tab group in front) are doing. */
+  | { kind: 'agents' }
 
 export type ReviewMode = 'all' | 'since'
 export type ReviewTab = 'files' | 'conversation' | 'commits'

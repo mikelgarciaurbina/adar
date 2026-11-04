@@ -86,6 +86,25 @@ const notices = new Set<Notification>()
 /** Scripted runs: what clicking the last pull request notification would do. */
 let lastNotice: (() => void) | null = null
 
+/** A system notification (pull requests, agents); a click runs `open`. */
+function showNotice(notice: { title: string; subtitle: string; body: string }, open: () => void): void {
+  // Scripted runs show nothing; a {"clickNotice": true} step clicks the last one.
+  if (CAPTURE_MODE) {
+    console.log(`[capture] notify ${notice.title} · ${notice.subtitle} · ${notice.body}`)
+    lastNotice = open
+    return
+  }
+  if (!Notification.isSupported()) return
+  const mac = process.platform === 'darwin'
+  const n = new Notification({ title: notice.title, ...(mac ? { subtitle: notice.subtitle } : {}), body: mac ? notice.body : `${notice.subtitle}\n${notice.body}` })
+  n.on('click', open)
+  // Kept until clicked or closed, so its click still arrives.
+  notices.add(n)
+  n.on('close', () => notices.delete(n))
+  if (notices.size > 30) notices.delete(notices.values().next().value!)
+  n.show()
+}
+
 function emit(event: AdarEvent): void {
   // A credential prompt for an operation started from the menu bar panel is answered in Adar's window.
   if (event.type === 'credential-request' && menuBar?.panelOperationRunning) {
@@ -100,7 +119,11 @@ function emit(event: AdarEvent): void {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send(IPC_EVENT_CHANNEL, event)
   }
-  if (event.type === 'repo-changed') menuBar?.sendToPanel(event)
+  if (event.type === 'repo-changed' || event.type === 'agents') menuBar?.sendToPanel(event)
+  if (event.type === 'agents') {
+    const quiet = event.events.filter((e) => e.kind === 'quiet').map((e) => e.path)
+    if (quiet.length) menuBar?.agentsQuiet(quiet)
+  }
 }
 
 /** The renderer is listening again (it asked for the open requests): deliver what waited for it. */
@@ -175,25 +198,16 @@ const platform: PlatformAdapter = {
     shell.showItemInFolder(path)
   },
   notify(repo, notice) {
-    const open = () => {
+    showNotice(notice, () => {
       openInAdar(repo)
       emit({ type: 'open-pull', repo, number: notice.number, view: notice.open })
-    }
-    // Scripted runs show nothing; a {"clickNotice": true} step clicks the last one.
-    if (CAPTURE_MODE) {
-      console.log(`[capture] notify ${notice.title} · ${notice.subtitle} · ${notice.body}`)
-      lastNotice = open
-      return
-    }
-    if (!Notification.isSupported()) return
-    const mac = process.platform === 'darwin'
-    const n = new Notification({ title: notice.title, ...(mac ? { subtitle: notice.subtitle } : {}), body: mac ? notice.body : `${notice.subtitle}\n${notice.body}` })
-    n.on('click', open)
-    // Kept until clicked or closed, so its click still arrives.
-    notices.add(n)
-    n.on('close', () => notices.delete(n))
-    if (notices.size > 30) notices.delete(notices.values().next().value!)
-    n.show()
+    })
+  },
+  notifyAgent(notice) {
+    showNotice(notice, () => {
+      openInAdar(null)
+      emit({ type: 'open-agent', ...notice.open })
+    })
   },
   fetch: (input, init) => net.fetch(input, init),
   // Development only (scripted e2e runs): a fake GitHub API on this machine.
@@ -435,6 +449,7 @@ function buildMenu(): void {
         { type: 'separator' },
         item('Pull Requests', 'pull-requests', 'CmdOrCtrl+Shift+R'),
         item('Review Pull Request', 'review-pull-request'),
+        item('Agents at Work', 'agents', 'CmdOrCtrl+Shift+E'),
         { type: 'separator' },
         item('Open in Terminal', 'open-in-terminal', 'CmdOrCtrl+Alt+T'),
         item(isMac ? 'Reveal in Finder' : 'Show in Folder', 'open-in-finder', 'CmdOrCtrl+Alt+R'),
@@ -497,7 +512,8 @@ app.whenReady().then(() => {
         return menuBar.handle(method as MenuBarMethod, a).then((value) => ({ ok: true, value: value ?? null }), (err) => ({ ok: false, error: toErrorPayload(err) }))
       }
       if (typeof method === 'string' && PANEL_API_SET.has(method)) {
-        if (method !== 'getSettings' && method !== 'getRecentRepos' && !menuBar.isAdmitted(a[0])) {
+        // Agents at work lists only the worktrees of the tabs Adar opened.
+        if (method !== 'getSettings' && method !== 'getRecentRepos' && method !== 'getAgentWorktrees' && !menuBar.isAdmitted(a[0])) {
           return { ok: false, error: { message: 'Adar has not opened this repository', code: 'INVALID_ARGUMENT' } }
         }
         return invokeBackend(method, args, true)

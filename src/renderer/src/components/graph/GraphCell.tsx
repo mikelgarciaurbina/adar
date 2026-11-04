@@ -39,7 +39,7 @@ export const GraphCell = memo(function GraphCell({ row, h, width, connector, hea
   const isRing = row.kind === 'commit' && !row.isMerge
   const nodeR = isMerge ? MERGE_R : isRing ? RING_R : NODE_R
   const nodeStyle = { left: x - NODE_R, top: mid - NODE_R }
-  const pinKind = isRing ? (head ? 'head' : 'commit') : row.kind === 'stash' ? 'stash' : row.kind === 'wip' ? 'wip' : 'merge'
+  const pinKind = isRing ? (head ? 'head' : 'commit') : row.kind === 'stash' ? 'stash' : row.kind === 'wip' || row.kind === 'agent' ? 'wip' : 'merge'
 
   return (
     <>
@@ -53,7 +53,7 @@ export const GraphCell = memo(function GraphCell({ row, h, width, connector, hea
           {!pinned && isRing && !head && <circle className="gr-node-halo" cx={x} cy={mid} r={HALO_R - 1.5} style={{ stroke: color }} />}
           {!pinned && isRing && <circle className={head ? 'gr-head-node' : 'gr-commit-node'} cx={x} cy={mid} r={head ? RING_R + 1 : RING_R} style={head ? { fill: color } : { stroke: color }} />}
           {!pinned && isMerge && <circle className="gr-merge-dot" cx={x} cy={mid} r={MERGE_R} style={{ fill: color }} />}
-          {!pinned && row.kind === 'wip' && <circle className="gr-wip-node" cx={x} cy={mid} r={WIP_R} style={{ stroke: color }} />}
+          {!pinned && (row.kind === 'wip' || row.kind === 'agent') && <circle className="gr-wip-node" cx={x} cy={mid} r={WIP_R} style={{ stroke: color }} />}
         </svg>
         {!pinned && row.kind === 'stash' && (
           <span className="gr-node gr-node-stash" style={nodeStyle} title={row.stash.ref}>

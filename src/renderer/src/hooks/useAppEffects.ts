@@ -99,6 +99,7 @@ const BINDINGS: Binding[] = [
   { key: 'ArrowUp', mod: true, shift: true, command: 'push', browserOnly: true },
   { key: ',', mod: true, command: 'settings', browserOnly: true },
   { key: 'r', mod: true, shift: true, command: 'pull-requests', browserOnly: true },
+  { key: 'e', mod: true, shift: true, command: 'agents', browserOnly: true },
   { key: '`', ctrl: true, command: 'git-console', inInputs: true, browserOnly: true }
 ]
 

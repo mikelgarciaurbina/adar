@@ -14,6 +14,7 @@ import { createWriteOps } from './git/write'
 import { createHostingOps } from './hosting'
 import type { PlatformAdapter } from './platform'
 import { createSystemServices, type SystemOptions } from './system'
+import type { ActivityTracker } from './system/activity'
 
 export interface BackendDeps {
   platform: PlatformAdapter
@@ -42,6 +43,20 @@ function gateContext(ctx: GitContext, ready: Promise<void>): GitContext {
   }
 }
 
+/** Tell the agents tracker about every operation Adar runs that may commit, move a branch or push. */
+function ownContext(ctx: GitContext, activity: ActivityTracker): GitContext {
+  const mark = <T>(repo: string | null | undefined, run: () => Promise<T>): Promise<T> => {
+    if (!repo) return run()
+    activity.ownStart(repo)
+    return run().finally(() => activity.ownEnd(repo))
+  }
+  return {
+    ...ctx,
+    exclusive: (repo, fn) => mark(repo, () => ctx.exclusive(repo, fn)),
+    gitNetwork: (repo, args, opts) => mark(repo ?? opts?.cwd, () => ctx.gitNetwork(repo, args, opts))
+  }
+}
+
 /** Copy methods bound to their owner (works for object literals and class instances alike). */
 function bindMethods<T extends object, K extends keyof T & string>(obj: T, keys: readonly K[]): Pick<T, K> {
   const out = {} as Pick<T, K>
@@ -66,6 +81,9 @@ const NON_REPO_METHODS: ReadonlySet<string> = new Set([
   'removeRecentRepo',
   'findRepositories',
   'answerCredentialRequest',
+  'watchAgents',
+  'getAgentWorktrees',
+  'notifyAgent',
   'openRepo',
   'trustRepo',
   'closeRepo',
@@ -121,8 +139,10 @@ export function createBackend(deps: BackendDeps): Backend {
   const ctx = gateContext(base, services.ready)
 
   const read: ReadOps = createReadOps(ctx, services)
-  const write = createWriteOps(ctx)
-  const hosting = createHostingOps(ctx, services)
+  // What Adar itself commits or pushes is not news about an agent (Agents at work).
+  const own = ownContext(ctx, services.activity)
+  const write = createWriteOps(own)
+  const hosting = createHostingOps(own, services)
 
   let disposed: Promise<void> | null = null
   const backend: Backend = {

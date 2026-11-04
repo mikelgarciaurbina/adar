@@ -5,6 +5,7 @@
 import * as git from '@renderer/actions/git'
 import { installCliCommand, uninstallCliCommand } from '@renderer/actions/cli'
 import { openBranchCleanup, openKeptBranches } from '@renderer/actions/cleanup'
+import { openAgents } from '@renderer/actions/agents'
 import { openReflog } from '@renderer/actions/reflog'
 import { newWorktree } from '@renderer/actions/worktrees'
 import { openConnect, selectPull, startPullRequest, turnOffPullRequests } from '@renderer/actions/pulls'
@@ -122,6 +123,7 @@ export const COMMANDS: Command[] = [
     })
   },
   { id: 'pull-requests', label: 'Pull Requests', group: 'Remote', shortcut: 'Mod+Shift+R', when: () => hasRepo() && anyPullsOn(), run: () => openInbox() },
+  { id: 'agents', label: 'Agents at Work', group: 'Repository', shortcut: 'Mod+Shift+E', when: () => hasRepo() && useApp.getState().settings.agentsOn, run: () => openAgents() },
   {
     id: 'review-pull-request',
     label: 'Review Pull Request',

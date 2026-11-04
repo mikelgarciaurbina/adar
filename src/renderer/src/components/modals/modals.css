@@ -1261,3 +1261,76 @@
   width: 100%;
   min-width: 0;
 }
+
+/* Settings → General → Agents at work: the quiet delay beside its switch, and the agent branch prefixes. */
+.md-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.md-prefixes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.md-prefix {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 4px 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--bg-2);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+  color: var(--text-1);
+  font: inherit;
+  font-size: var(--fs-sm);
+}
+.md-prefix code {
+  font: 500 11.5px var(--font-mono);
+  color: var(--text-0);
+}
+.md-prefix button {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-3);
+  cursor: pointer;
+}
+.md-prefix button:hover:not(:disabled) {
+  background: var(--bg-4);
+  color: var(--text-0);
+}
+.md-prefix-new {
+  padding: 0 8px;
+  color: var(--accent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent);
+  cursor: pointer;
+}
+.md-prefix-new:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.md-prefix-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-3);
+}
+.md-prefix-add .ui-input {
+  width: 110px;
+  height: 26px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.md-prefix-none {
+  font-size: var(--fs-sm);
+  color: var(--text-3);
+}

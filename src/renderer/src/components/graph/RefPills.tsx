@@ -5,6 +5,7 @@
 import { memo, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
 import { Check, CircleDot, Cloud, FolderGit2, Monitor, Tag } from 'lucide-react'
+import { StateDot, useWorktreeState } from '@renderer/components/agents/parts'
 import { PullChip } from '@renderer/components/pulls/PullChip'
 import { usePullForRefs } from '@renderer/components/pulls/pullStore'
 import { getRefDragData, hasRefDragData, setRefDragData } from '@renderer/lib/dnd'
@@ -240,6 +241,19 @@ function branchRefs(pills: readonly Pill[]) {
   return out
 }
 
+/** A branch checked out in another worktree carries what that worktree is doing (Agents at work). */
+function WorktreeStateChip({ path }: { path: string }) {
+  const live = useWorktreeState(path)
+  if (!live || live.state === 'idle') return null
+  const text = live.state === 'working' ? (live.w.fileCount ? `${live.w.fileCount} ${live.w.fileCount === 1 ? 'file' : 'files'}` : 'working') : live.label
+  return (
+    <span className={`gr-agent-chip gr-agent-chip-${live.state}`} title={live.title}>
+      <StateDot state={live.state} />
+      {text}
+    </span>
+  )
+}
+
 export const RefPills = memo(function RefPills({ pills, ctx, color }: RefPillsProps) {
   const pr = usePullForRefs(branchRefs(pills ?? NO_PILLS))
   if (!pills || pills.length === 0) return null
@@ -247,6 +261,7 @@ export const RefPills = memo(function RefPills({ pills, ctx, color }: RefPillsPr
   return (
     <div className="gr-refs">
       <PillView pill={first} ctx={ctx} />
+      {first.kind === 'branch' && first.ref.worktree && <WorktreeStateChip path={first.ref.worktree} />}
       {pr && <PullChip pr={pr} onClick={() => ctx.onPullClick(pr.number)} />}
       {rest.length > 0 && <MoreBadge pills={rest} ctx={ctx} color={color} />}
       <span className="gr-refs-line" />

@@ -10,6 +10,7 @@ import { createHistoryOps } from './history'
 import { createReflogOps } from './reflog'
 import { createRefsOps } from './refs'
 import { createWorktreeReadOps } from './worktrees'
+import { createAgentOps } from '../../system/activity'
 import { createRepoOps } from './repo'
 import { createStatusOps } from './status'
 
@@ -35,6 +36,7 @@ export function createReadOps(ctx: GitContext, services: SystemServices): ReadOp
     ...createRefsOps(rctx),
     ...createReflogOps(rctx),
     ...createWorktreeReadOps(rctx),
+    ...createAgentOps(services),
     ...createStatusOps(rctx),
     ...createDiffOps(rctx),
     ...createContentOps(rctx)

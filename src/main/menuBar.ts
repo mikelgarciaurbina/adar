@@ -131,6 +131,14 @@ export class MenuBar {
     if (this.settings?.notifyNewCommits) this.notify(repo, now.branch, now.remote, added)
   }
 
+  /** Agents went quiet (Agents at work): the icon carries the dot too, unless the user turned that off. */
+  agentsQuiet(paths: readonly string[]): void {
+    const s = this.settings
+    if (!s?.notifyAgentQuiet || !paths.some((p) => !s.agentsQuietMuted.includes(p))) return
+    this.unseen = true
+    this.updateIcon()
+  }
+
   private async readUpstream(repo: string): Promise<(Upstream & { remote: string }) | null> {
     try {
       const refs = await this.deps.backend.getRefs(repo)
@@ -324,6 +332,17 @@ export class MenuBar {
         this.hidePanel()
         this.deps.openInAdar(typeof args[0] === 'string' && path.isAbsolute(args[0]) ? args[0] : null)
         return null
+      case 'menuBarOpenAgent': {
+        const open = args[0] as Record<string, unknown> | null
+        const abs = (v: unknown): v is string => typeof v === 'string' && path.isAbsolute(v)
+        if (!open || !abs(open.repo) || (open.path !== null && !abs(open.path)) || (open.view !== 'changes' && open.view !== 'agents')) {
+          throw new AdarError({ code: 'INVALID_ARGUMENT', message: 'Expected a worktree' })
+        }
+        this.hidePanel()
+        this.deps.openInAdar(null)
+        this.deps.emit({ type: 'open-agent', path: open.path, repo: open.repo, view: open.view })
+        return null
+      }
       case 'menuBarHide':
         this.hidePanel()
         return null

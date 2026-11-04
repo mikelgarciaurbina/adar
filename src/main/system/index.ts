@@ -4,11 +4,13 @@
 import { createHash } from 'node:crypto'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
+import type { AgentNotice } from '@shared/agents'
 import type { AdarEvent } from '@shared/types'
 import type { GitContext } from '../git/context'
 import { parseStatusV2 } from '../git/parsers/status'
 import { runGit } from '../git/runner'
 import type { PlatformAdapter } from '../platform'
+import { ActivityTracker } from './activity'
 import { AskpassService } from './askpass'
 import { SettingsStore } from './settings'
 import { fixShellPath } from './shellEnv'
@@ -28,6 +30,10 @@ export interface SystemServices {
   ready: Promise<void>
   settings: SettingsStore
   watcher: WatcherManager
+  /** Agents at work: what the open repositories' worktrees are doing. */
+  activity: ActivityTracker
+  /** Show an agent notification (none where the host has no notifications). */
+  notifyAgent(notice: AgentNotice): void
   askpass: AskpassService | null
   /** "2.54.0 (Apple Git-157)", or '' when git is not installed. */
   gitVersion(): Promise<string>
@@ -94,6 +100,12 @@ export function createSystemServices(
     worktreeSignature: (target) => worktreeSignature(target.repoPath),
     ignoredPaths
   })
+  const activity = new ActivityTracker({
+    ctx,
+    emit,
+    settings: () => settings.getSettings(),
+    watcher: { worktreeSignature: (target) => worktreeSignature(target.repoPath), ignoredPaths }
+  })
   const askpass = opts.askpass ? new AskpassService(path.join(platform.userDataDir, 'askpass'), emit) : null
 
   const pathReady = opts.fixShellPath ? fixShellPath(opts.shellPathTimeoutMs) : Promise.resolve()
@@ -133,10 +145,13 @@ export function createSystemServices(
     ready,
     settings,
     watcher,
+    activity,
+    notifyAgent: (notice) => platform.notifyAgent?.(notice),
     askpass,
     gitVersion,
     async dispose() {
       watcher.stopAll()
+      activity.dispose()
       await Promise.allSettled([askpass?.dispose(), settings.flush()])
     }
   }

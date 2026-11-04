@@ -17,6 +17,20 @@ export interface GraphCtx {
   onPullClick(number: number): void
 }
 
+/** What another worktree's dashed row says (Agents at work). */
+export interface AgentRowInfo {
+  name: string
+  state: 'working' | 'quiet' | 'idle'
+  files: number
+  added: number
+  removed: number
+  /** The agent working there, when Adar can tell. */
+  agent: string | null
+  /** "now", "6 min". */
+  ago: string
+  title: string
+}
+
 export interface WipInfo {
   counts: WipCounts
   /** Draft commit summary shown instead of "// WIP" when typed. */

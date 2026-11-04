@@ -10,6 +10,7 @@
 //    rejecting when the only problem is conflicts.
 //  - `opId` (optional) lets the renderer correlate 'progress' events.
 
+import type { AgentNotice, AgentWorktree } from './agents'
 import type {
   AppInfo,
   AppSettings,
@@ -120,6 +121,12 @@ export interface AdarApi {
   findDanglingCommits(repo: string): Promise<DanglingCommit[]>
   /** The repository's worktrees (the main one first), with their branch and changed files. */
   getWorktrees(repo: string): Promise<Worktree[]>
+  /** Agents at work: watch the worktrees of these repositories (the open tabs); an empty list stops watching. */
+  watchAgents(repos: string[]): Promise<void>
+  /** What each watched worktree is doing now; changes follow as 'agents' events. */
+  getAgentWorktrees(): Promise<AgentWorktree[]>
+  /** A system notification about an agent; clicking it sends an 'open-agent' event. */
+  notifyAgent(notice: AgentNotice): Promise<void>
   getCommitDetails(repo: string, sha: string): Promise<CommitDetails>
   /** Files changed between two revisions (from..to). */
   getCompareFiles(repo: string, from: string, to: string): Promise<CommitDetails['files']>
@@ -396,6 +403,9 @@ export const API_METHODS = [
   'getLostCommits',
   'findDanglingCommits',
   'getWorktrees',
+  'watchAgents',
+  'getAgentWorktrees',
+  'notifyAgent',
   'getCommitDetails',
   'getCompareFiles',
   'getFileHistory',

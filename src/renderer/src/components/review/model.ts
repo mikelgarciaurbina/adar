@@ -35,30 +35,7 @@ export function isGenerated(path: string): boolean {
   return /(^|\/)(dist|build|vendor|node_modules|__generated__|generated)\//.test(path)
 }
 
-/** Coding agents named in Co-Authored-By trailers (the name before the address), in the order first seen. */
-const AGENTS: Array<[RegExp, string]> = [
-  [/\bclaude\b/i, 'Claude'],
-  [/\bcopilot\b/i, 'Copilot'],
-  [/\bcodex\b|\bchatgpt\b|\bopenai\b/i, 'Codex'],
-  [/\bcursor\b/i, 'Cursor'],
-  [/\bgemini\b|\bjules\b/i, 'Gemini'],
-  [/\bdevin\b/i, 'Devin'],
-  [/\baider\b/i, 'Aider'],
-  [/\bamp\b/i, 'Amp']
-]
-
-export function coAuthorAgents(messages: readonly string[]): string[] {
-  const out: string[] = []
-  for (const m of messages) {
-    for (const line of m.split('\n')) {
-      const t = /^co-authored-by:\s*(.+)$/i.exec(line.trim())
-      if (!t) continue
-      const who = t[1]
-      for (const [re, name] of AGENTS) if (re.test(who) && !out.includes(name)) out.push(name)
-    }
-  }
-  return out
-}
+export { coAuthorAgents } from '@shared/agents'
 
 export interface FileGroups {
   /** In "since" mode: the files changed since the review; else every file that is not generated. */

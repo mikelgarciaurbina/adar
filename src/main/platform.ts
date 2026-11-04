@@ -1,6 +1,7 @@
 // Host capabilities that differ between Electron and the browser dev bridge.
 // The git backend only talks to the host through this interface.
 
+import type { AgentNotice } from '@shared/agents'
 import type { PullNotice } from '@shared/review'
 import type { SecretBox } from './hosting/auth'
 
@@ -14,6 +15,8 @@ export interface PlatformAdapter {
   showInFolder(path: string): Promise<void>
   /** A system notification about a pull request of `repo`; a click opens it in Adar. Absent where there are none (browser). */
   notify?(repo: string, notice: PullNotice): void
+  /** A system notification about an agent (Agents at work); a click sends an 'open-agent' event. */
+  notifyAgent?(notice: AgentNotice): void
   /** HTTP client for web APIs (Electron's net.fetch follows the system proxy). Default: the global fetch. */
   fetch?: (input: string, init?: RequestInit) => Promise<Response>
   /** Encryption with a key the operating system protects, for tokens kept on disk; absent when unsupported. */

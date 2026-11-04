@@ -16,6 +16,8 @@ import { buildDisplayRows, hasWorkingChanges, lanesInRange, type DisplayModel, t
 import { colorOf, graphContentWidth } from '@renderer/components/graph/geometry'
 import { GraphCell } from '@renderer/components/graph/GraphCell'
 import { badgesOf, fetchedLabel, groupOf, incomingShas, pickProject, projectSections, shortAge, type ProjectBadges } from './model'
+import type { AgentWorktree } from '@shared/agents'
+import { agentName, newCommits, stateLabel, stateOf, stateTitle } from '@renderer/components/agents/model'
 
 const PINNED_KEY = 'adar-menubar-project'
 /** Commits loaded per project and rows shown (the WIP row counts). */
@@ -77,6 +79,7 @@ export function MenuBarPanel() {
   const [lastFetch, setLastFetch] = useState<Record<string, number>>({})
   const [switching, setSwitching] = useState(false)
   const [now, setNow] = useState(Date.now)
+  const [agents, setAgents] = useState<AgentWorktree[]>([])
   const request = useRef(0)
   const rootRef = useRef<HTMLDivElement>(null)
 
@@ -84,8 +87,9 @@ export function MenuBarPanel() {
   const reload = useCallback(async (pin: string | null) => {
     const id = ++request.current
     try {
-      const [s, r, state] = await Promise.all([api.getSettings(), api.getRecentRepos(), menuBar.menuBarState()])
+      const [s, r, state, worktrees] = await Promise.all([api.getSettings(), api.getRecentRepos(), menuBar.menuBarState(), api.getAgentWorktrees().catch(() => [])])
       if (id !== request.current) return
+      setAgents(worktrees)
       const full = { ...DEFAULT_SETTINGS, ...s }
       applyTheme(full.theme)
       setSettings(full)
@@ -128,6 +132,9 @@ export function MenuBarPanel() {
         setSwitching(false)
         setNote(null)
         void reload(loadPinned())
+      } else if (ev.type === 'agents') {
+        setNow(Date.now())
+        setAgents((list) => [...list.filter((w) => !ev.removed.includes(w.path) && !ev.worktrees.some((x) => x.path === w.path)), ...ev.worktrees])
       } else if (ev.type === 'repo-changed' && ev.repoPath === projectRepo.current) {
         window.clearTimeout(reloadTimer.current)
         reloadTimer.current = window.setTimeout(() => void reload(loadPinned()), 300)
@@ -273,6 +280,7 @@ export function MenuBarPanel() {
               ))}
             </div>
           )}
+          {settings?.agentsOn && repo && <AtWork agents={agents} repo={repo} settings={settings} now={now} />}
           {project && model ? (
             <MiniGraph project={project} model={model.display} upstreamSha={upstream?.sha ?? null} upstreamName={upstream?.name ?? null} now={now} />
           ) : (
@@ -368,6 +376,54 @@ function BranchBar({ project, color, upstreamName, behind, ahead, busy, onPull, 
           </button>
         </>
       )}
+    </div>
+  )
+}
+
+// ── At work ────────────────────────────────────────────────────────────────
+
+/** Agents at work in the project's group (or the project): the worktrees working or quiet, a click opens one in Adar. */
+function AtWork({ agents, repo, settings, now }: { agents: AgentWorktree[]; repo: string; settings: AppSettings; now: number }) {
+  const repos = settings.tabGroups.find((g) => g.repos.includes(repo))?.repos ?? [repo]
+  const list = agents
+    .filter((w) => repos.includes(w.repo) || repos.includes(w.path))
+    .map((w) => ({ w, state: stateOf(w, now, settings) }))
+    .filter((x) => x.state !== 'idle')
+    .sort((a, b) => (a.state === b.state ? (b.w.lastChange ?? 0) - (a.w.lastChange ?? 0) : a.state === 'quiet' ? -1 : 1))
+  if (!list.length) return null
+  const open = (w: AgentWorktree | null) => void menuBar.menuBarOpenAgent({ path: w?.path ?? null, repo: w?.repo ?? repo, view: w ? 'changes' : 'agents' }).catch(() => undefined)
+  return (
+    <div className="mb-agents">
+      <div className="mb-agents-head">
+        <span>
+          At work <b>{list.length}</b>
+        </span>
+        <button type="button" className="mb-link" onClick={() => open(null)}>
+          Show all
+        </button>
+      </div>
+      {list.slice(0, 5).map(({ w, state }) => {
+        const agent = agentName(w, settings)
+        const fresh = newCommits(w, settings.worktreesSeen).length
+        const other = w.repo !== repo && w.repo !== repo.replace(/\/+$/, '')
+        return (
+          <button key={w.path} type="button" className="mb-agent" title={stateTitle(w, state, now, agent)} onClick={() => open(w)}>
+            <i className={`mb-agent-dot mb-agent-${state}`} aria-hidden="true" />
+            <span className="mb-agent-text">
+              <span className="mb-agent-name">
+                {w.name}
+                {agent && <span className="mb-agent-mark">✦ {agent}</span>}
+                {fresh > 0 && <span className="mb-agent-new">● {fresh} new</span>}
+              </span>
+              <span className="mb-agent-branch">
+                {other ? `${basename(w.repo)} · ` : ''}
+                {w.branch ?? 'detached HEAD'}
+              </span>
+            </span>
+            <span className={`mb-agent-state mb-agent-${state}`}>{stateLabel(w, state, now)}</span>
+          </button>
+        )
+      })}
     </div>
   )
 }

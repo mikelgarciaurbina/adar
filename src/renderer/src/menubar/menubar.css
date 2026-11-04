@@ -477,3 +477,121 @@ body.mb-body #root {
   width: 7px;
   height: 7px;
 }
+
+/* At work (Agents at work): the worktrees working or quiet in the project's group. */
+.mb-agents {
+  display: flex;
+  flex-direction: column;
+  margin: 0 10px 8px;
+  padding: 4px 0;
+  border-radius: 10px;
+  background: var(--bg-2);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+.mb-agents-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 24px;
+  padding: 0 12px;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+.mb-agents-head b {
+  margin-left: 4px;
+  font: 500 11px var(--font-mono);
+  letter-spacing: 0;
+  color: var(--text-3);
+}
+.mb-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--link);
+  font: inherit;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  cursor: pointer;
+}
+.mb-agent {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 6px 12px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.mb-agent:hover {
+  background: var(--bg-3);
+}
+.mb-agent-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+.mb-agent-dot.mb-agent-working {
+  background: var(--success);
+}
+.mb-agent-dot.mb-agent-quiet {
+  background: var(--warning);
+}
+.mb-agent-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.mb-agent-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  color: var(--text-0);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.mb-agent-mark {
+  flex: none;
+  padding: 0 4px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--lane-4-ink);
+  background: color-mix(in srgb, var(--lane-4) 13%, transparent);
+}
+.mb-agent-new {
+  flex: none;
+  font: 600 10px var(--font-mono);
+  color: var(--lane-3-ink);
+}
+.mb-agent-branch {
+  font: 11px var(--font-mono);
+  color: var(--text-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mb-agent-state {
+  flex: none;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.mb-agent-state.mb-agent-working {
+  color: var(--success);
+}
+.mb-agent-state.mb-agent-quiet {
+  color: var(--warning);
+}

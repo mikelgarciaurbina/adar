@@ -37,7 +37,24 @@ export interface CommitRow extends RowBase {
   commit: Commit
   isMerge: boolean
 }
-export type DisplayRow = WipRow | StashRow | CommitRow
+/** Work in progress in another worktree (Agents at work), joined to its branch's tip. */
+export interface AgentRow extends RowBase {
+  kind: 'agent'
+  /** The worktree's folder. */
+  path: string
+  tip: string
+}
+export type DisplayRow = WipRow | StashRow | CommitRow | AgentRow
+
+/** A worktree with work in progress: its folder and the commit its HEAD is on. */
+export interface AgentInput {
+  path: string
+  tip: string
+}
+
+export function agentKey(path: string): string {
+  return `agent:${path}`
+}
 
 export interface DisplayModel {
   rows: DisplayRow[]
@@ -57,6 +74,8 @@ export interface DisplayInput {
   stashes: readonly Stash[]
   /** Cache of untouched commit rows so their identity survives rebuilds (memoised rendering). */
   cache?: WeakMap<LayoutRow, CommitRow>
+  /** Other worktrees with work in progress (Agents at work): a dashed row each, under the WIP row. */
+  agents?: readonly AgentInput[]
 }
 
 function commitRow(lr: LayoutRow, commit: Commit, edges: readonly Edge[] = lr.edges): CommitRow {
@@ -192,9 +211,51 @@ export function buildDisplayRows(input: DisplayInput): DisplayModel {
     if (lane + 1 > maxLanes) maxLanes = lane + 1
   }
 
+  if (input.agents?.length) maxLanes = addAgentRows(rows, input.agents, showWip ? 1 : 0, maxLanes)
+
   const index = new Map<string, number>()
   for (let i = 0; i < rows.length; i++) index.set(rows[i].key, i)
   return { rows, maxLanes: Math.max(maxLanes, rows.length ? 1 : 0), index }
+}
+
+/**
+ * The work in progress of other worktrees: a row each at the top (under this worktree's WIP row), the nearest tip
+ * first, with a dashed line down to the commit its HEAD is on through lanes free all the way, like the WIP row's.
+ */
+function addAgentRows(rows: DisplayRow[], agents: readonly AgentInput[], at: number, maxLanes: number): number {
+  const indexOf = () => {
+    const m = new Map<string, number>()
+    rows.forEach((r, i) => m.set(r.key, i))
+    return m
+  }
+  let index = indexOf()
+  const list = agents.filter((a) => index.has(a.tip)).sort((a, b) => index.get(a.tip)! - index.get(b.tip)!)
+  for (let j = 0; j < list.length; j++) {
+    const a = list[j]
+    const pos = at + j
+    // Lines crossing the place the row goes pass through it.
+    const gap: Edge[] = []
+    for (const e of rows[pos]?.edges ?? []) if (e.type === 'pass' || e.type === 'in') gap.push({ type: 'pass', from: e.from, to: e.from, color: e.color, dashed: e.dashed })
+    const placeholder: AgentRow = { kind: 'agent', key: agentKey(a.path), lane: 0, color: 0, edges: gap, path: a.path, tip: a.tip }
+    rows.splice(pos, 0, placeholder)
+    index = indexOf()
+    const tipIdx = index.get(a.tip)!
+    const tip = rows[tipIdx]
+    const busy = new Set<number>(gap.map((e) => e.from))
+    for (let r = pos + 1; r < tipIdx; r++) touchedLanes(rows[r], busy)
+    for (const l of topLanesOf(tip.edges)) busy.add(l)
+    let lane = tip.lane
+    if (busy.has(lane)) {
+      lane = 0
+      while (busy.has(lane)) lane++
+    }
+    const dash = (e: Omit<Edge, 'color' | 'dashed'>): Edge => ({ ...e, color: tip.color, dashed: true })
+    rows[pos] = { ...placeholder, lane, color: tip.color, edges: [...gap, dash({ type: 'out', from: lane, to: lane })] }
+    for (let r = pos + 1; r < tipIdx; r++) rows[r] = { ...rows[r], edges: [...rows[r].edges, dash({ type: 'pass', from: lane, to: lane })] } as DisplayRow
+    rows[tipIdx] = { ...tip, edges: [...tip.edges, dash({ type: 'in', from: lane, to: tip.lane })] } as DisplayRow
+    if (lane + 1 > maxLanes) maxLanes = lane + 1
+  }
+  return maxLanes
 }
 
 /**
@@ -250,6 +311,8 @@ export function rowSelection(row: DisplayRow): Selection {
       return { kind: 'wip' }
     case 'stash':
       return { kind: 'stash', index: row.stash.index, sha: row.stash.sha }
+    case 'agent':
+      return { kind: 'none' }
     default:
       return { kind: 'commit', sha: row.commit.sha }
   }

@@ -5,6 +5,7 @@
 import { randomBytes } from 'node:crypto'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
+import { MAX_WORKTREES_SEEN, QUIET_MINUTES, sanitizeAgentPrefixes, sanitizeWorktreesSeen } from '@shared/agents'
 import type { HostingServer, ServerAuth } from '@shared/hosting'
 import { normalizeHexColor } from '@shared/groupColor'
 import {
@@ -174,6 +175,24 @@ export function sanitizeSettings(base: AppSettings, rawPatch: unknown): AppSetti
     }
     if (key === 'pullsFollowed' || key === 'pullsUnfollowed') {
       if (Array.isArray(value)) target[key] = [...new Set(value.filter((v): v is string => typeof v === 'string' && PULL_KEY.test(v)))].slice(-MAX_PULLS_SEEN)
+      continue
+    }
+    if (key === 'agentPrefixes') {
+      const prefixes = sanitizeAgentPrefixes(value)
+      if (prefixes) target[key] = prefixes
+      continue
+    }
+    if (key === 'worktreesSeen') {
+      const seen = sanitizeWorktreesSeen(value)
+      if (seen) target[key] = seen
+      continue
+    }
+    if (key === 'agentsQuietMuted') {
+      if (Array.isArray(value)) target[key] = [...new Set(value.filter((v): v is string => typeof v === 'string' && path.isAbsolute(v)))].slice(-MAX_WORKTREES_SEEN)
+      continue
+    }
+    if (key === 'agentQuietMinutes') {
+      if ((QUIET_MINUTES as readonly unknown[]).includes(value)) target[key] = value
       continue
     }
     if (key === 'bitbucketServers' || key === 'gitlabServers' || key === 'azureServers' || key === 'githubServers') {

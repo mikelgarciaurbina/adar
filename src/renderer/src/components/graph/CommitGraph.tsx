@@ -7,7 +7,7 @@
 import './graph.css'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { AlertTriangle, EyeOff, Focus, GitCommitHorizontal } from 'lucide-react'
+import { AlertTriangle, ArrowUpRight, EyeOff, FileDiff, Focus, GitCommitHorizontal } from 'lucide-react'
 import * as git from '@renderer/actions/git'
 import { Button, EmptyState, Spinner } from '@renderer/components/common/Button'
 import { showContextMenu } from '@renderer/components/common/ContextMenu'
@@ -31,6 +31,8 @@ import {
 } from './geometry'
 import { GraphHeader } from './GraphHeader'
 import { useReviewMarks } from '@renderer/components/pulls/PullNews'
+import { useAgentRows, useWorktreeMarks } from '@renderer/components/agents/graph'
+import { showWorktree } from '@renderer/actions/agents'
 import { GraphRow } from './GraphRow'
 import { GraphSearch } from './GraphSearch'
 import { computeGraph, type LayoutRow } from './layout'
@@ -160,8 +162,13 @@ export function CommitGraph({ tab }: { tab: RepoTab }) {
   // ── View model ──────────────────────────────────────────────────────────
   const commits = useStableCommits(tab.commits)
 
-  // Followed pull requests: the commits added since the user looked, and the one they saw.
-  const reviewMarks = useReviewMarks(path, commits)
+  // Followed pull requests: the commits added since the user looked, and the one they saw; and the commits made in
+  // the repository's worktrees since the user looked at them (Agents at work).
+  const repoMain = tab.info?.mainWorktree ?? path
+  const pullMarks = useReviewMarks(path, commits)
+  const worktreeMarks = useWorktreeMarks(repoMain, commits)
+  const reviewMarks = useMemo(() => (worktreeMarks.size ? new Map([...worktreeMarks, ...pullMarks]) : pullMarks), [pullMarks, worktreeMarks])
+  const agentRows = useAgentRows(repoMain, path)
 
   // Commits that appear on top of the graph (a commit, pull or fetch) grow into their lane for a moment.
   const prevTop = useRef<{ path: string; sha: string | null }>({ path, sha: null })
@@ -188,8 +195,8 @@ export function CommitGraph({ tab }: { tab: RepoTab }) {
   const showWip = hasWorkingChanges(tab.status) || (!!tab.status && !tab.error && tab.info?.state === 'merge')
   const stashes = useStableStashes(settings.graphShowStashes ? (tab.refs?.stashes ?? NO_STASHES) : NO_STASHES)
   const model: DisplayModel = useMemo(
-    () => buildDisplayRows({ commits, layout, headSha, showWip, stashes, cache: rowCache }),
-    [commits, layout, headSha, showWip, stashes, rowCache]
+    () => buildDisplayRows({ commits, layout, headSha, showWip, stashes, cache: rowCache, agents: agentRows.inputs }),
+    [commits, layout, headSha, showWip, stashes, rowCache, agentRows.inputs]
   )
   // Branch dots in the left panel take the colour of their tip's lane.
   const tipColors = useMemo(() => branchTipColors(model.rows, tab.refs), [model.rows, tab.refs])
@@ -445,7 +452,8 @@ export function CommitGraph({ tab }: { tab: RepoTab }) {
     return {
       onRowClick(e, row) {
         if (e.button !== 0) return
-        if (row.kind === 'commit') {
+        if (row.kind === 'agent') void showWorktree(row.path, latest.current.tab.info?.mainWorktree ?? repo())
+        else if (row.kind === 'commit') {
           const additive = isMod(e)
           st().select(repo(), rowSelection(row), { additive, range: !additive && e.shiftKey })
         } else st().select(repo(), rowSelection(row))
@@ -472,6 +480,12 @@ export function CommitGraph({ tab }: { tab: RepoTab }) {
         } else if (row.kind === 'stash') {
           st().select(t.path, rowSelection(row))
           showContextMenu(e, stashMenu(t.path, row.stash))
+        } else if (row.kind === 'agent') {
+          const main = t.info?.mainWorktree ?? t.path
+          showContextMenu(e, [
+            { label: 'Open', icon: <ArrowUpRight size={14} />, onClick: () => void showWorktree(row.path, main) },
+            { label: 'See changes', icon: <FileDiff size={14} />, onClick: () => void showWorktree(row.path, main, 'changes') }
+          ])
         } else {
           st().select(t.path, { kind: 'wip' })
           showContextMenu(e, wipMenu(t.path))
@@ -528,6 +542,10 @@ export function CommitGraph({ tab }: { tab: RepoTab }) {
     // Shift extends a commit range from the anchor; WIP / stash rows are skipped.
     const range = e.shiftKey && cur.selection.kind === 'commit'
     if (range) next = nearestCommitRow(m.rows, next, next >= at ? 1 : -1)
+    // Other worktrees' rows open their tab on a click; the arrows step over them.
+    const step = next >= at ? 1 : -1
+    while (next >= 0 && next < m.rows.length && m.rows[next].kind === 'agent') next += step
+    if (next >= m.rows.length) next = -1
     if (next < 0 || next === at) {
       if (at >= 0) scrollToRow(at)
       return
@@ -658,6 +676,7 @@ export function CommitGraph({ tab }: { tab: RepoTab }) {
                   dateMode={settings.dateFormat}
                   now={now}
                   wip={row.kind === 'wip' ? wipInfo : undefined}
+                  agent={row.kind === 'agent' ? agentRows.infos.get(row.path) : undefined}
                   fresh={!!sha && fresh.has(sha)}
                   mark={sha ? reviewMarks.get(sha) : undefined}
                   ctx={ctx}

@@ -62,7 +62,7 @@ export function loadAllPulls(force = false): void {
 }
 
 /** A colour per repository: its tab group's, else one of the lanes. */
-function repoColour(repo: string, name: string): string {
+export function repoColour(repo: string, name: string): string {
   const group = groupOf(useApp.getState().settings.tabGroups, repo)
   if (group) return groupLine(group.color)
   let h = 0

@@ -75,6 +75,9 @@ import {
 
 const ROW_H = 24
 const SECTION_H = 26
+/** Worktree rows have two lines: the folder and what it is doing, then its branch (Agents at work). */
+const WORKTREE_H = 38
+const heightOf = (r: Row | undefined) => (r?.kind === 'section' ? SECTION_H : r?.kind === 'worktree' ? WORKTREE_H : ROW_H)
 const EMPTY_REMOTES: RemoteInfo[] = []
 const FILTER_PLACEHOLDER = isMac ? 'Filter (⌥⌘F)' : 'Filter (Ctrl+Alt+F)'
 /** Window event that focuses the branch filter (for commands; the panel must be visible). */
@@ -331,14 +334,14 @@ export function LeftPanel({ tab }: { tab: RepoTab }) {
     [stickyIndexes]
   )
   const getItemKey = useCallback((i: number) => rows[i]?.key ?? i, [rows])
-  const estimateSize = useCallback((i: number) => (rows[i]?.kind === 'section' ? SECTION_H : ROW_H), [rows])
+  const estimateSize = useCallback((i: number) => heightOf(rows[i]), [rows])
   // Row offsets (sizes are fixed) so the sticky header can be pushed up by the next one.
   const rowStarts = useMemo(() => {
     const out = new Float64Array(rows.length)
     let y = 0
     rows.forEach((r, i) => {
       out[i] = y
-      y += r.kind === 'section' ? SECTION_H : ROW_H
+      y += heightOf(r)
     })
     return out
   }, [rows])

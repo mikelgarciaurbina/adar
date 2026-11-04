@@ -8,6 +8,7 @@ import {
   ArrowDownToLine,
   ArrowUpFromLine,
   Archive,
+  Bot,
   ChevronDown,
   Code,
   FolderOpen,
@@ -29,6 +30,9 @@ import * as git from '@renderer/actions/git'
 import { openReflog } from '@renderer/actions/reflog'
 import { selectPull } from '@renderer/actions/pulls'
 import { openInbox } from '@renderer/actions/review'
+import { openAgents } from '@renderer/actions/agents'
+import { useAgents } from '@renderer/components/agents/agentStore'
+import { stateOf } from '@renderer/components/agents/model'
 import { useNeedsYou } from '@renderer/components/pulls/InboxView'
 import { PullChip } from '@renderer/components/pulls/PullChip'
 import { anyPullsOn, usePullForRefs, usePulls } from '@renderer/components/pulls/pullStore'
@@ -73,10 +77,12 @@ interface ToolButtonProps {
   dim?: boolean
   busy?: boolean
   badge?: string
+  /** A small dot instead of a count (an agent is working). */
+  dot?: boolean
   className?: string
 }
 
-function ToolButton({ icon, label, title, onClick, onContextMenu, disabled, dim, busy, badge, className }: ToolButtonProps) {
+function ToolButton({ icon, label, title, onClick, onContextMenu, disabled, dim, busy, badge, dot, className }: ToolButtonProps) {
   return (
     <button
       className={`tb-tool${dim ? ' tb-tool-dim' : ''}${className ? ' ' + className : ''}`}
@@ -89,6 +95,7 @@ function ToolButton({ icon, label, title, onClick, onContextMenu, disabled, dim,
       <span className="tb-tool-icon">
         {busy ? <Spinner size="md" /> : icon}
         {badge && !busy && <span className="tb-badge">{badge}</span>}
+        {dot && !badge && !busy && <span className="tb-badge-dot" />}
       </span>
       <span className="tb-tool-label">{label}</span>
     </button>
@@ -122,6 +129,39 @@ function ReviewsButton({ repo }: { repo: string }) {
         badge={badgeCount(count)}
         className={shown ? 'tb-tool-on' : undefined}
         onClick={() => (shown ? git.showGraph(repo) : openInbox())}
+      />
+    </>
+  )
+}
+
+/** Agents at work: shown while worktrees are watched; its badge counts the quiet ones, a dot says one is working. */
+function AgentsButton({ repo }: { repo: string }) {
+  const settings = useApp((s) => s.settings)
+  const worktrees = useAgents((s) => s.worktrees)
+  const now = useAgents((s) => s.now)
+  const shown = useApp((s) => s.tabs.find((t) => t.path === repo)?.center.kind === 'agents')
+  const afterReviews = usePulls((s) => anyPullsOn(s))
+  const list = Object.values(worktrees)
+  if (!settings.agentsOn || !list.length) return null
+  const states = list.map((w) => stateOf(w, now, settings))
+  const quiet = states.filter((s) => s === 'quiet').length
+  const working = states.filter((s) => s === 'working').length
+  const title = quiet
+    ? `${quiet === 1 ? 'An agent went' : `${quiet} agents went`} quiet with work left: it may be waiting for you`
+    : working
+      ? `${working === 1 ? 'An agent is' : `${working} agents are`} working`
+      : 'What the agents in your worktrees are doing'
+  return (
+    <>
+      {!afterReviews && <span className="tb-tool-sep" aria-hidden="true" />}
+      <ToolButton
+        icon={<Bot size={18} />}
+        label="Agents"
+        title={withShortcut(title, 'agents')}
+        badge={badgeCount(quiet)}
+        dot={working > 0}
+        className={`${shown ? 'tb-tool-on' : ''}${quiet ? ' tb-tool-quiet' : ''}`.trim() || undefined}
+        onClick={() => (shown ? git.showGraph(repo) : openAgents())}
       />
     </>
   )
@@ -315,6 +355,7 @@ export function Toolbar({ tab }: { tab: RepoTab }) {
           onClick={() => void git.popStash(repo)}
         />
         <ReviewsButton repo={repo} />
+        <AgentsButton repo={repo} />
       </div>
 
       <div className="tb-toolbar-right">

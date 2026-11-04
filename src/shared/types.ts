@@ -1,6 +1,7 @@
 // Domain types shared by the main process (git backend), the dev HTTP bridge
 // and the renderer. Everything here must be JSON-serialisable.
 
+import { DEFAULT_AGENT_PREFIXES, DEFAULT_QUIET_MINUTES, type AgentEvent, type AgentOpen, type AgentPrefix, type AgentWorktree, type WorktreeSeen } from './agents'
 import type { AzureOrganization, BitbucketServer, GithubServer, GitlabServer } from './hosting'
 
 /** Unix timestamp in seconds (as git reports it). */
@@ -625,6 +626,22 @@ export interface AppSettings {
   pullsUnfollowed: string[]
   /** What the user last looked at in each pull request: its head then, and when ("host/owner/name#12" → mark). */
   pullsSeen: Record<string, PullSeen>
+  /** Agents at work: the live state of the open repositories' worktrees (left panel, tabs, graph, Agents view). */
+  agentsOn: boolean
+  /** Also watch each repository's own folder, for agents that work there rather than in a worktree. */
+  agentsWatchMain: boolean
+  /** A notification when an agent commits or pushes (not for what Adar itself does). */
+  notifyAgentCommits: boolean
+  /** A notification when an agent goes quiet with work left (it may be waiting for an answer). */
+  notifyAgentQuiet: boolean
+  /** Minutes without a change before a worktree with work left counts as quiet. */
+  agentQuietMinutes: number
+  /** Branch prefixes that name the agent working on a branch ("claude/" → Claude), after Co-Authored-By trailers. */
+  agentPrefixes: AgentPrefix[]
+  /** Worktrees (paths) whose going quiet is never notified. */
+  agentsQuietMuted: string[]
+  /** What the user last saw of each worktree: its HEAD then, and when (path → mark). */
+  worktreesSeen: Record<string, WorktreeSeen>
   /** Version the user chose to skip ('' = none). */
   skippedUpdateVersion: string
   /** Adar version that last ran with these settings ('' = none recorded): a newer one shows What's new once. */
@@ -694,6 +711,14 @@ export const DEFAULT_SETTINGS: AppSettings = {
   pullsFollowed: [],
   pullsUnfollowed: [],
   pullsSeen: {},
+  agentsOn: true,
+  agentsWatchMain: false,
+  notifyAgentCommits: true,
+  notifyAgentQuiet: true,
+  agentQuietMinutes: DEFAULT_QUIET_MINUTES,
+  agentPrefixes: DEFAULT_AGENT_PREFIXES.map((p) => ({ ...p })),
+  agentsQuietMuted: [],
+  worktreesSeen: {},
   skippedUpdateVersion: '',
   lastRunVersion: '',
   githubAuth: '',
@@ -805,6 +830,17 @@ export type AdarEvent =
       number: number
       view: 'review' | 'conversation' | 'inbox'
     }
+  | {
+      /** Agents at work: worktrees looked at again (or no longer watched), and what happened in them. */
+      type: 'agents'
+      worktrees: AgentWorktree[]
+      removed: string[]
+      events: AgentEvent[]
+    }
+  | ({
+      /** An agent notification was clicked: open the worktree (on its changes or a commit) or the Agents view. */
+      type: 'open-agent'
+    } & AgentOpen)
 
 export const MENU_COMMANDS = [
   'open-repo',
@@ -828,6 +864,7 @@ export const MENU_COMMANDS = [
   'show-reflog',
   'pull-requests',
   'review-pull-request',
+  'agents',
   'refresh',
   'toggle-left-panel',
   'toggle-right-panel',
