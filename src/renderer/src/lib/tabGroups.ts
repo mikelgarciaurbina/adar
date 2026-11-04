@@ -85,6 +85,25 @@ export function dropPlacement(
   return { to: splice(after ? members[members.length - 1] + 1 : members[0]), groupId: null }
 }
 
+/**
+ * Tabs with group `groupId`'s open tabs moved, as one run, before or after the place of tab `over` in the bar: that
+ * tab, or the whole run of the group it belongs to (a group never lands inside another). Returns the same array when
+ * nothing moves.
+ */
+export function moveGroupTabs<T extends PathLike>(tabs: readonly T[], groups: readonly TabGroup[], groupId: string, over: number, after: boolean): T[] {
+  const g = groups.find((x) => x.id === groupId)
+  const target = tabs[over]
+  if (!g || !target || g.repos.includes(target.path)) return tabs as T[]
+  const moving = tabs.filter((t) => g.repos.includes(t.path))
+  if (!moving.length) return tabs as T[]
+  const tg = groupOf(groups, target.path)
+  const run = tg ? tabs.filter((t) => tg.repos.includes(t.path)) : [target]
+  const rest = tabs.filter((t) => !g.repos.includes(t.path))
+  const at = after ? rest.indexOf(run[run.length - 1]) + 1 : rest.indexOf(run[0])
+  const out = [...rest.slice(0, at), ...moving, ...rest.slice(at)]
+  return out.every((t, i) => t === tabs[i]) ? (tabs as T[]) : out
+}
+
 /** Groups with `path` moved into group `groupId` (null: out of any group); groups left empty are dropped. */
 export function withMembership(groups: readonly TabGroup[], path: string, groupId: string | null): TabGroup[] {
   return groups

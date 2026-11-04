@@ -102,7 +102,8 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
     in another worktree carry `Ref.worktree`; a linked worktree's tab has `RepoInfo.mainWorktree`. Backend:
     `git/read/worktrees.ts`, `git/write/worktrees.ts`.
   - `actions/groups.tsx` — tab groups (open/close a group, group a folder's repositories, the grouping suggestion);
-    groups are saved in `settings.tabGroups`, pure helpers in `lib/tabGroups.ts`.
+    groups are saved in `settings.tabGroups`, pure helpers in `lib/tabGroups.ts`
+    (dragging a group's label, or Move Group Left/Right on its menu, moves the whole group: `moveGroupTabs`).
   - `actions/pulls.tsx` — pull request actions (turn on, create after pushing, check out, merge, clean up, bring the base
     branch in); `components/pulls/` — the store and its sync (`pullStore.ts`: the active repository after each fetch, on
     focus, at most once a minute; every open one every three minutes), the chip on branch labels, the details panel and

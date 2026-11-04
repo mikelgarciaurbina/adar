@@ -178,6 +178,10 @@
   box-shadow: inset 0 2px 0 var(--tb-group);
   transition: background 0.12s var(--ease), box-shadow 0.12s var(--ease);
 }
+/* A group being dragged by its label fades where it was. */
+.tb-group-dragging {
+  opacity: 0.45;
+}
 .tb-group-drop {
   background: color-mix(in srgb, var(--tb-group) 18%, transparent);
   box-shadow: inset 0 2px 0 var(--tb-group), inset 0 0 0 1px color-mix(in srgb, var(--tb-group) 50%, transparent);

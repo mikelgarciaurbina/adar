@@ -3,7 +3,7 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
-import { ChevronDown, CircleArrowUp, Copy, Download, FolderGit2, FolderInput, FolderOpen, FolderPlus, GitBranch, Layers, Plus, RefreshCw, SquareTerminal, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, ChevronDown, CircleArrowUp, Copy, Download, FolderGit2, FolderInput, FolderOpen, FolderPlus, GitBranch, Layers, Plus, RefreshCw, SquareTerminal, X } from 'lucide-react'
 import { isElectron, isMac } from '@renderer/api/client'
 import * as git from '@renderer/actions/git'
 import { closeGroup, fetchGroup, newGroup, openGroup, renameGroup, setGroupColor } from '@renderer/actions/groups'
@@ -25,6 +25,8 @@ import { useWindowFullscreen } from './hooks'
 import './layout.css'
 
 const TAB_MIME = 'application/x-adar-tab'
+/** A group dragged by its label: it moves with all its tabs. */
+const GROUP_MIME = 'application/x-adar-tab-group'
 /** Tabs share the bar: they start at this width, grow to TAB_MAX_W and shrink down to an icon. */
 const TAB_BASIS_W = 200
 const TAB_MAX_W = 220
@@ -122,6 +124,9 @@ export function TabBar() {
   const [colourPreview, setColourPreview] = useState<{ id: string; color: GroupColor } | null>(null)
   const colourGroup = colourEdit ? (groups.find((g) => g.id === colourEdit.id) ?? null) : null
   const dragFrom = useRef<number | null>(null)
+  /** The group dragged by its label, and where it would land: before or after an ungrouped tab or another group. */
+  const [groupDrag, setGroupDrag] = useState<string | null>(null)
+  const [groupDrop, setGroupDrop] = useState<{ key: string; after: boolean } | null>(null)
 
   // Keep the active tab visible.
   useEffect(() => {
@@ -240,6 +245,31 @@ export function TabBar() {
     if (to !== from || (groupOf(groups, tabs[from]?.path ?? '')?.id ?? null) !== groupId) useApp.getState().moveTabTo(from, to, groupId)
   }
 
+  const isGroupDrag = (e: React.DragEvent) => Array.from(e.dataTransfer.types).includes(GROUP_MIME)
+  const halfAfter = (e: React.DragEvent) => {
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
+    return e.clientX > r.left + r.width / 2
+  }
+
+  /** A dragged group over an ungrouped tab or another group (key "tab:<path>" or "group:<id>"): lands on the nearer side. */
+  const onGroupOver = (e: React.DragEvent, key: string) => {
+    if (key === `group:${groupDrag}`) return
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    const after = halfAfter(e)
+    setGroupDrop((d) => (d && d.key === key && d.after === after ? d : { key, after }))
+  }
+
+  /** Drop a dragged group before or after tab `over` (an ungrouped tab, or the first tab of another group). */
+  const onGroupDrop = (e: React.DragEvent, over: number) => {
+    e.preventDefault()
+    const id = e.dataTransfer.getData(GROUP_MIME) || groupDrag
+    const after = halfAfter(e)
+    setGroupDrop(null)
+    setGroupDrag(null)
+    if (id) useApp.getState().moveGroup(id, over, after)
+  }
+
   /** A tab dropped on a group's chip joins the group (at its end). */
   const onChipDrop = (e: React.DragEvent, group: TabGroup) => {
     if (!Array.from(e.dataTransfer.types).includes(TAB_MIME)) return
@@ -276,6 +306,22 @@ export function TabBar() {
       if (segments[i + 1]?.kind === 'tab') items.push({ type: 'separator' })
     })
     return items
+  }
+
+  /** Move Group Left / Right: past the ungrouped tab or the group beside it (also what dragging the label does). */
+  const moveItems = (group: TabGroup): MenuItem[] => {
+    const at = segments.findIndex((x) => x.kind === 'group' && x.group.id === group.id)
+    if (at < 0 || segments.length < 2) return []
+    const first = (i: number) => {
+      const seg = segments[i]
+      return seg ? (seg.kind === 'tab' ? seg.index : seg.tabs[0].index) : null
+    }
+    const left = first(at - 1)
+    const right = first(at + 1)
+    return [
+      { label: 'Move Group Left', icon: <ArrowLeft size={14} />, disabled: left === null, onClick: () => left !== null && useApp.getState().moveGroup(group.id, left, false) },
+      { label: 'Move Group Right', icon: <ArrowRight size={14} />, disabled: right === null, onClick: () => right !== null && useApp.getState().moveGroup(group.id, right, true) }
+    ]
   }
 
   const onChipContextMenu = (e: React.MouseEvent, group: TabGroup) => {
@@ -317,6 +363,7 @@ export function TabBar() {
         ]
       },
       { label: group.collapsed ? 'Expand' : 'Collapse', onClick: () => st.updateGroup(group.id, { collapsed: !group.collapsed }) },
+      ...moveItems(group),
       ...(openCount < group.repos.length ? [{ label: 'Open All Repositories', onClick: () => void openGroup(group.id) }] : []),
       {
         label: openCount > 1 ? `Fetch All (${openCount} repositories)` : 'Fetch All',
@@ -342,7 +389,16 @@ export function TabBar() {
   const renderTab = (tab: TabLite, i: number, group: TabGroup | null) => {
     const active = tab.path === activePath
     const isBusy = busyRepos.has(tab.path)
-    const indicator = drop && drop.index === i && !drop.chip ? (drop.after ? ' tb-drop-after' : ' tb-drop-before') : ''
+    const groupHere = !group && groupDrop?.key === `tab:${tab.path}` ? groupDrop : null
+    const indicator = groupHere
+      ? groupHere.after
+        ? ' tb-drop-after'
+        : ' tb-drop-before'
+      : drop && drop.index === i && !drop.chip
+        ? drop.after
+          ? ' tb-drop-after'
+          : ' tb-drop-before'
+        : ''
     return (
       <div
         key={tab.path}
@@ -363,11 +419,20 @@ export function TabBar() {
           .join('\n')}
         draggable
         onDragStart={(e) => onDragStart(e, i)}
-        onDragOver={(e) => onDragOver(e, i)}
-        onDragLeave={(e) => {
-          if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) setDrop((d) => (d?.index === i ? null : d))
+        onDragOver={(e) => {
+          // A dragged group is handled here only beside an ungrouped tab; over a group's tab, by its tray.
+          if (isGroupDrag(e)) return group ? undefined : onGroupOver(e, `tab:${tab.path}`)
+          onDragOver(e, i)
         }}
-        onDrop={(e) => onDrop(e, i)}
+        onDragLeave={(e) => {
+          if ((e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) return
+          setDrop((d) => (d?.index === i ? null : d))
+          setGroupDrop((d) => (d?.key === `tab:${tab.path}` ? null : d))
+        }}
+        onDrop={(e) => {
+          if (isGroupDrag(e)) return group ? undefined : onGroupDrop(e, i)
+          onDrop(e, i)
+        }}
         onDragEnd={() => {
           setDrop(null)
           setChipDrop(null)
@@ -443,21 +508,36 @@ export function TabBar() {
           return (
             <div
               key={`group:${group.id}`}
-              className={`tb-group${group.collapsed ? ' tb-group-collapsed' : ''}${chipDrop === group.id ? ' tb-group-drop' : ''}${drop?.chip === group.id ? ' tb-drop-before' : ''}`}
+              className={`tb-group${group.collapsed ? ' tb-group-collapsed' : ''}${chipDrop === group.id ? ' tb-group-drop' : ''}${drop?.chip === group.id || (groupDrop?.key === `group:${group.id}` && !groupDrop.after) ? ' tb-drop-before' : ''}${groupDrop?.key === `group:${group.id}` && groupDrop.after ? ' tb-drop-after' : ''}${groupDrag === group.id ? ' tb-group-dragging' : ''}`}
               style={{
                 ...groupStyle(colourPreview?.id === group.id ? colourPreview.color : group.color),
                 // The tray shares the bar like its tabs would on their own (its tabs split the tray).
                 flex: shown.length ? `${shown.length} 1 ${shown.length * TAB_BASIS_W + CHIP_BASIS_W}px` : 'none',
                 maxWidth: shown.length ? shown.length * TAB_MAX_W + CHIP_MAX_W : undefined
               }}
+              onDragOver={(e) => isGroupDrag(e) && onGroupOver(e, `group:${group.id}`)}
+              onDragLeave={(e) => {
+                if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) setGroupDrop((d) => (d?.key === `group:${group.id}` ? null : d))
+              }}
+              onDrop={(e) => isGroupDrag(e) && groupDrag !== group.id && onGroupDrop(e, seg.tabs[0].index)}
             >
               <button
                 className="tb-group-chip"
-                title={`${label}: ${seg.tabs.map((x) => x.tab.name).join(', ')}\nClick to ${group.collapsed ? 'expand' : 'collapse'}, right-click for options`}
+                title={`${label}: ${seg.tabs.map((x) => x.tab.name).join(', ')}\nClick to ${group.collapsed ? 'expand' : 'collapse'}, drag to move the group, right-click for options`}
                 aria-expanded={!group.collapsed}
                 aria-label={`Group ${label}, ${seg.tabs.length} ${seg.tabs.length === 1 ? 'tab' : 'tabs'}`}
                 onClick={() => useApp.getState().updateGroup(group.id, { collapsed: !group.collapsed })}
                 onContextMenu={(e) => onChipContextMenu(e, group)}
+                draggable
+                onDragStart={(e) => {
+                  e.dataTransfer.setData(GROUP_MIME, group.id)
+                  e.dataTransfer.effectAllowed = 'move'
+                  setGroupDrag(group.id)
+                }}
+                onDragEnd={() => {
+                  setGroupDrag(null)
+                  setGroupDrop(null)
+                }}
                 onDragOver={(e) => {
                   if (!Array.from(e.dataTransfer.types).includes(TAB_MIME)) return
                   e.preventDefault()

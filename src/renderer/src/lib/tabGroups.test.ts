@@ -6,6 +6,7 @@ import {
   folderName,
   groupForFolder,
   groupSuggestion,
+  moveGroupTabs,
   nextGroupColor,
   parentFolder,
   syncGroupOrder,
@@ -73,6 +74,27 @@ describe('dropPlacement', () => {
   it('leaves the group when dropped next to an ungrouped tab', () => {
     expect(dropPlacement(tabs, groups, 2, 4, true)).toEqual({ to: 4, groupId: null })
     expect(dropPlacement(tabs, groups, 2, 0, false)).toEqual({ to: 0, groupId: null })
+  })
+})
+
+describe('moveGroupTabs', () => {
+  // [a: a1 a2] x [b: b1] y [c: c1 c2]
+  const tabs = t('/a/1', '/a/2', '/x', '/b/1', '/y', '/c/1', '/c/2')
+  const groups = [group('a', ['/a/1', '/a/2']), group('b', ['/b/1']), group('c', ['/c/1', '/c/2'])]
+
+  it('moves a whole group past ungrouped tabs and other groups, never inside one', () => {
+    expect(paths(moveGroupTabs(tabs, groups, 'a', 4, true))).toEqual(['/x', '/b/1', '/y', '/a/1', '/a/2', '/c/1', '/c/2'])
+    expect(paths(moveGroupTabs(tabs, groups, 'a', 6, true))).toEqual(['/x', '/b/1', '/y', '/c/1', '/c/2', '/a/1', '/a/2'])
+    // Over the second tab of group c, before it: before the whole of c.
+    expect(paths(moveGroupTabs(tabs, groups, 'a', 6, false))).toEqual(['/x', '/b/1', '/y', '/a/1', '/a/2', '/c/1', '/c/2'])
+    expect(paths(moveGroupTabs(tabs, groups, 'c', 0, false))).toEqual(['/c/1', '/c/2', '/a/1', '/a/2', '/x', '/b/1', '/y'])
+    expect(paths(moveGroupTabs(tabs, groups, 'b', 2, false))).toEqual(['/a/1', '/a/2', '/b/1', '/x', '/y', '/c/1', '/c/2'])
+  })
+
+  it('returns the same array when nothing moves', () => {
+    expect(moveGroupTabs(tabs, groups, 'a', 2, false)).toBe(tabs)
+    expect(moveGroupTabs(tabs, groups, 'a', 1, true)).toBe(tabs)
+    expect(moveGroupTabs(tabs, groups, 'missing', 2, true)).toBe(tabs)
   })
 })
 

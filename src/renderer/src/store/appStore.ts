@@ -24,7 +24,7 @@ import {
   type TabGroup,
   type WorkingStatus
 } from '@shared/types'
-import { arrangeTabs, newGroupId, nextGroupColor, syncGroupOrder, withMembership } from '@renderer/lib/tabGroups'
+import { arrangeTabs, moveGroupTabs, newGroupId, nextGroupColor, syncGroupOrder, withMembership } from '@renderer/lib/tabGroups'
 import type { HostingProvider } from '@shared/hosting'
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -193,6 +193,8 @@ export interface AppState {
   deleteGroup(id: string): void
   /** Tab bar drag & drop: move tab `from` to index `to` (splice semantics) and into group `groupId`. */
   moveTabTo(from: number, to: number, groupId: string | null): void
+  /** Tab bar drag & drop: move a whole group before or after tab `over` (or before or after that tab's group). */
+  moveGroup(groupId: string, over: number, after: boolean): void
 
   // data loading
   refresh(path: string, what?: RefreshScope[]): Promise<void>
@@ -492,6 +494,11 @@ export const useApp = create<AppState>()((set, get) => {
       if (!moved) return
       tabs.splice(Math.max(0, Math.min(to, tabs.length)), 0, moved)
       applyGroups(withMembership(get().settings.tabGroups, moved.path, groupId), tabs)
+    },
+
+    moveGroup(groupId, over, after) {
+      const tabs = moveGroupTabs(get().tabs, get().settings.tabGroups, groupId, over, after)
+      if (tabs !== get().tabs) applyGroups(get().settings.tabGroups, tabs)
     },
 
     async refresh(path, what = ['info', 'refs', 'log', 'status']) {
