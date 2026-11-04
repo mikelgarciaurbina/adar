@@ -2,7 +2,7 @@
 // (persisted, debounced, by the store). The Git section edits the global identity.
 
 import { useEffect, useId, useRef, useState } from 'react'
-import { Download, FileDiff, GitBranch, GitGraph, Plug, Plus, RefreshCw, Settings, SlidersHorizontal, X } from 'lucide-react'
+import { Bot, Download, FileDiff, GitBranch, GitGraph, Plug, Plus, RefreshCw, Settings, SlidersHorizontal, X } from 'lucide-react'
 import { api, cli, isElectron } from '@renderer/api/client'
 import { installCliCommand, uninstallCliCommand } from '@renderer/actions/cli'
 import { openConnect, turnOffAzure, turnOffBitbucket, turnOffGithubServer, turnOffGitlab, turnOffPullRequests } from '@renderer/actions/pulls'
@@ -22,12 +22,13 @@ import { closeIfTopmost, Segmented, Select, SettingGroup, SettingRow, Switch } f
 import { validateIdentity } from './identity'
 import { describeUpdateStatus, type UpdateAction } from './updates'
 
-type SectionId = 'general' | 'graph' | 'diff' | 'integrations' | 'git'
+type SectionId = 'general' | 'graph' | 'diff' | 'agents' | 'integrations' | 'git'
 
 const SECTIONS: Array<{ id: SectionId; label: string; icon: React.ReactNode }> = [
   { id: 'general', label: 'General', icon: <SlidersHorizontal size={15} /> },
   { id: 'graph', label: 'Graph', icon: <GitGraph size={15} /> },
   { id: 'diff', label: 'Diff', icon: <FileDiff size={15} /> },
+  { id: 'agents', label: 'Agents at work', icon: <Bot size={15} /> },
   { id: 'integrations', label: 'Integrations', icon: <Plug size={15} /> },
   { id: 'git', label: 'Git', icon: <GitBranch size={15} /> }
 ]
@@ -93,6 +94,7 @@ export function SettingsModal({ section }: { section?: string }) {
           {active === 'general' && <GeneralSection />}
           {active === 'graph' && <GraphSection />}
           {active === 'diff' && <DiffSection />}
+          {active === 'agents' && <AgentsSection />}
           {active === 'integrations' && <IntegrationsSection />}
           {active === 'git' && <GitSection />}
         </div>
@@ -271,44 +273,40 @@ function GeneralSection() {
           <Switch label="Follow what you review or comment on" checked={s.followParticipated} onChange={(followParticipated) => update({ followParticipated })} />
         </SettingRow>
       </SettingGroup>
-      <AgentsSettings desktop={desktop} />
       <UpdateSettings />
     </>
   )
 }
 
 /** Agents at work: the live state of the worktrees, what is watched, its notifications and how agents are named. */
-function AgentsSettings({ desktop }: { desktop: boolean }) {
+function AgentsSection() {
   const s = useSettings()
+  const appInfo = useApp((st) => st.appInfo)
+  const desktop = appInfo?.isElectron ?? isElectron
   const quietId = useId()
   return (
-    <SettingGroup title="Agents at work">
-      <SettingRow label="Show what agents are doing" description="Live state of the worktrees of the open repositories: the left panel, the tabs, the graph and the Agents view.">
-        <Switch label="Show what agents are doing" checked={s.agentsOn} onChange={(agentsOn) => update({ agentsOn })} />
-      </SettingRow>
-      <SettingRow label="Watch" description="Choose the second when agents also work in a repository's own folder.">
-        <Segmented
-          ariaLabel="Watch"
-          disabled={!s.agentsOn}
-          value={s.agentsWatchMain ? 'all' : 'worktrees'}
-          onChange={(v) => update({ agentsWatchMain: v === 'all' })}
-          options={[
-            { value: 'worktrees', label: 'Worktrees' },
-            { value: 'all', label: 'Worktrees and each repository’s folder' }
-          ]}
-        />
-      </SettingRow>
-      {desktop && (
-        <SettingRow label="Notify when an agent commits or pushes" description="Not for commits or pushes made from Adar.">
-          <Switch label="Notify when an agent commits or pushes" disabled={!s.agentsOn} checked={s.notifyAgentCommits} onChange={(notifyAgentCommits) => update({ notifyAgentCommits })} />
+    <>
+      <SettingGroup title="Watching">
+        <SettingRow label="Show what agents are doing" description="Live state of the worktrees of the open repositories: the left panel, the tabs, the graph and the Agents view (⇧⌘E).">
+          <Switch label="Show what agents are doing" checked={s.agentsOn} onChange={(agentsOn) => update({ agentsOn })} />
         </SettingRow>
-      )}
-      <SettingRow
-        label="When an agent goes quiet"
-        description="It stopped with changes not committed or commits not pushed: it may be waiting for an answer. Its tab and the Agents button turn sun after this long."
-        htmlFor={quietId}
-      >
-        <span className="md-inline">
+        <SettingRow label="Watch" description="Choose the second when agents also work in a repository's own folder, not only in worktrees of their own.">
+          <Segmented
+            ariaLabel="Watch"
+            disabled={!s.agentsOn}
+            value={s.agentsWatchMain ? 'all' : 'worktrees'}
+            onChange={(v) => update({ agentsWatchMain: v === 'all' })}
+            options={[
+              { value: 'worktrees', label: 'Worktrees' },
+              { value: 'all', label: 'Worktrees and each repository’s folder' }
+            ]}
+          />
+        </SettingRow>
+        <SettingRow
+          label="When an agent goes quiet"
+          description="It stopped with changes not committed or commits not pushed: it may be waiting for an answer. Its tab and the Agents button turn sun after this long."
+          htmlFor={quietId}
+        >
           <Select id={quietId} disabled={!s.agentsOn} value={s.agentQuietMinutes} onChange={(e) => update({ agentQuietMinutes: Number(e.target.value) })}>
             {QUIET_MINUTES.map((m) => (
               <option key={m} value={m}>
@@ -316,13 +314,28 @@ function AgentsSettings({ desktop }: { desktop: boolean }) {
               </option>
             ))}
           </Select>
-          {desktop && <Switch label="Notify when an agent goes quiet" disabled={!s.agentsOn} checked={s.notifyAgentQuiet} onChange={(notifyAgentQuiet) => update({ notifyAgentQuiet })} />}
-        </span>
-      </SettingRow>
-      <SettingRow label="Agent branch prefixes" description="With the Co-Authored-By trailers of its commits, how Adar tells which agent works in a worktree." stacked>
-        <PrefixEditor value={s.agentPrefixes} disabled={!s.agentsOn} />
-      </SettingRow>
-    </SettingGroup>
+        </SettingRow>
+      </SettingGroup>
+      {desktop && (
+        <SettingGroup title="Notifications">
+          <SettingRow label="An agent goes quiet" description="Once per stop, after the time above.">
+            <Switch label="Notify when an agent goes quiet" disabled={!s.agentsOn} checked={s.notifyAgentQuiet} onChange={(notifyAgentQuiet) => update({ notifyAgentQuiet })} />
+          </SettingRow>
+          <SettingRow label="An agent commits or pushes" description="Not for commits or pushes made from Adar.">
+            <Switch label="Notify when an agent commits or pushes" disabled={!s.agentsOn} checked={s.notifyAgentCommits} onChange={(notifyAgentCommits) => update({ notifyAgentCommits })} />
+          </SettingRow>
+        </SettingGroup>
+      )}
+      <SettingGroup title="Naming agents">
+        <SettingRow
+          label="Agent branch prefixes"
+          description="How Adar tells which agent works in a worktree, with the Co-Authored-By trailers of its commits and the folder (.claude, .codex, .cursor)."
+          stacked
+        >
+          <PrefixEditor value={s.agentPrefixes} disabled={!s.agentsOn} />
+        </SettingRow>
+      </SettingGroup>
+    </>
   )
 }
 

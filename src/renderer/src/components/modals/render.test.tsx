@@ -171,9 +171,15 @@ describe('ModalHost', () => {
 
   it('renders every settings section entry and the general controls', () => {
     const html = render({ kind: 'settings' })
-    for (const s of ['General', 'Graph', 'Diff', 'Integrations', 'Git']) expect(html).toContain(`>${s}<`)
+    for (const s of ['General', 'Graph', 'Diff', 'Agents at work', 'Integrations', 'Git']) expect(html).toContain(`>${s}<`)
     expect(html).toContain('Auto-fetch')
     expect(html).toContain('Every 5 minutes')
+    expect(html).not.toContain('Agent branch prefixes')
+    const agents = render({ kind: 'settings', section: 'agents' })
+    expect(agents).toContain('Show what agents are doing')
+    expect(agents).toContain('Worktrees and each repository’s folder')
+    expect(agents).toContain('after 5 min')
+    expect(agents).toContain('Agent branch prefixes')
     expect(render({ kind: 'settings', section: 'integrations' })).toContain('Ghostty')
     expect(render({ kind: 'settings', section: 'graph' })).toContain('Commits per page')
     const diff = render({ kind: 'settings', section: 'diff' })

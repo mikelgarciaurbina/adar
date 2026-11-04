@@ -1262,12 +1262,7 @@
   min-width: 0;
 }
 
-/* Settings → General → Agents at work: the quiet delay beside its switch, and the agent branch prefixes. */
-.md-inline {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-}
+/* Settings → Agents at work: the agent branch prefixes. */
 .md-prefixes {
   display: flex;
   flex-wrap: wrap;
