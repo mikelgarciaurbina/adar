@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_SETTINGS } from '@shared/types'
 import type { AgentEvent, AgentWorktree } from '@shared/agents'
-import { aheadText, boardOf, noticesFor, shortAgo, stateLabel, stateOf, tabDot } from './model'
+import { aheadText, boardOf, noticesFor, scopeOf, shortAgo, stateLabel, stateOf, tabDot } from './model'
 
 const MIN = 60_000
 const NOW = Date.UTC(2026, 10, 3, 17, 42, 30)
@@ -59,6 +59,40 @@ describe('tabDot', () => {
     expect(tabDot({ path: '/p/booking-web', mainWorktree: null }, [working, quiet], NOW, S)).toBe('working')
     expect(tabDot({ path: '/p/booking-web', mainWorktree: null }, [quiet], NOW, S)).toBeNull()
     expect(tabDot({ path: '/p/other', mainWorktree: null }, [working], NOW, S)).toBeNull()
+  })
+})
+
+describe('scopeOf', () => {
+  const rooms = wt()
+  const main = wt({ path: '/p/booking-web', name: 'booking-web', isMain: true, branch: 'main' })
+  const api = wt({ path: '/p/api-codex', repo: '/p/booking-api', name: 'api-codex', branch: 'codex/rates' })
+  const other = wt({ path: '/p/blog-claude', repo: '/p/blog', name: 'blog-claude' })
+  const all = [rooms, main, api, other]
+  const groups = [{ id: 'g', name: 'booking', color: 'ember' as const, repos: ['/p/booking-web', '/p/booking-api'], collapsed: false }]
+  const mainOf = (p: string) => (p === '/p/claude-rooms' ? '/p/booking-web' : p)
+  const paths = (s: { list: AgentWorktree[] }) => s.list.map((w) => w.path)
+
+  it("shows the active repository's worktrees, the main folder included, from its tab or a worktree's", () => {
+    const tab = { path: '/p/booking-web', mainWorktree: null }
+    expect(paths(scopeOf(all, tab, 'repo', groups, mainOf))).toEqual(['/p/claude-rooms', '/p/booking-web'])
+    const fromWorktree = scopeOf(all, { path: '/p/claude-rooms', mainWorktree: '/p/booking-web' }, 'repo', groups, mainOf)
+    expect(paths(fromWorktree)).toEqual(['/p/claude-rooms', '/p/booking-web'])
+    expect(fromWorktree.repo).toBe('/p/booking-web')
+  })
+
+  it("shows its tab group's or every open tab's", () => {
+    const tab = { path: '/p/booking-web', mainWorktree: null }
+    const group = scopeOf(all, tab, 'group', groups, mainOf)
+    expect(paths(group)).toEqual(['/p/claude-rooms', '/p/booking-web', '/p/api-codex'])
+    expect(group.group?.name).toBe('booking')
+    expect(paths(scopeOf(all, tab, 'all', groups, mainOf))).toHaveLength(4)
+  })
+
+  it('falls back to the repository for a tab outside any group', () => {
+    const s = scopeOf(all, { path: '/p/blog', mainWorktree: null }, 'group', groups, mainOf)
+    expect(s.scope).toBe('repo')
+    expect(s.group).toBeNull()
+    expect(paths(s)).toEqual(['/p/blog-claude'])
   })
 })
 

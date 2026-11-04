@@ -111,7 +111,8 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
     view, marking a worktree as seen (`settings.worktreesSeen`), silencing its quiet notifications. `components/agents/`
     — `agentStore.ts` (the watched worktrees from the main process, the clock, which tabs are watched, seen marks,
     notifications), `model.ts` (pure: labels, the tab dot, the view's columns, `noticesFor`), `parts.tsx` (mark, state,
-    strip), `AgentsView.tsx` (a centre view: working, quiet and idle cards, the tab group in front or every repository),
+    strip), `AgentsView.tsx` (a centre view: working, quiet and idle cards of the active repository's worktrees, its tab
+    group's or every open tab's — `settings.agentsScope`, which the toolbar's badge follows too),
     `graph.ts` (the graph's dashed rows for other worktrees' work in progress, `AgentRow` in `graph/model.ts`, and the
     commits new since the user looked). Worktree rows in the left panel have two lines; the tab bar, the toolbar
     (Agents, ⇧⌘E) and the menu bar panel ("At work", `menuBarOpenAgent`) show the state too.

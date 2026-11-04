@@ -5,7 +5,7 @@
 import { randomBytes } from 'node:crypto'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
-import { MAX_WORKTREES_SEEN, QUIET_MINUTES, sanitizeAgentPrefixes, sanitizeWorktreesSeen } from '@shared/agents'
+import { AGENT_SCOPES, MAX_WORKTREES_SEEN, QUIET_MINUTES, sanitizeAgentPrefixes, sanitizeWorktreesSeen } from '@shared/agents'
 import type { HostingServer, ServerAuth } from '@shared/hosting'
 import { normalizeHexColor } from '@shared/groupColor'
 import {
@@ -38,7 +38,8 @@ const ENUMS: Partial<Record<keyof AppSettings, readonly string[]>> = {
   diffViewMode: ['unified', 'split'],
   imageDiffMode: ['side', 'swipe', 'onion', 'difference'],
   githubAuth: ['', 'gh', 'token', 'browser'],
-  bitbucketAuth: ['', 'token']
+  bitbucketAuth: ['', 'token'],
+  agentsScope: AGENT_SCOPES
 }
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {

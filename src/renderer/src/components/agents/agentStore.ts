@@ -2,13 +2,13 @@
 // events), a clock for the states and "4 s ago", the open tabs as the repositories to watch, the commits counted as
 // seen (the worktree's tab in front, or marked) and the notifications for what agents did.
 
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import { create } from 'zustand'
-import type { AgentEvent, AgentWorktree } from '@shared/agents'
+import type { AgentEvent, AgentsScope, AgentWorktree } from '@shared/agents'
 import { api, onAdarEvent } from '@renderer/api/client'
 import { openFromAgentNotice } from '@renderer/actions/agents'
 import { useApp } from '@renderer/store/appStore'
-import { noticesFor } from './model'
+import { noticesFor, scopeOf, type AgentScope } from './model'
 
 interface AgentsState {
   /** Watched worktrees by path. */
@@ -32,6 +32,21 @@ export const useAgents = create<AgentsState>()((set) => ({
 }))
 
 /** A watched worktree, by path (undefined while Agents at work is off or it is not watched). */
+/** A tab's Agents scope (settings.agentsScope), the worktrees in it, and how many are watched in all. */
+export function useAgentScope(path: string, scope?: AgentsScope): AgentScope & { total: number } {
+  const worktrees = useAgents((s) => s.worktrees)
+  const tabs = useApp((s) => s.tabs)
+  const groups = useApp((s) => s.settings.tabGroups)
+  const saved = useApp((s) => s.settings.agentsScope)
+  const want = scope ?? saved
+  return useMemo(() => {
+    const all = Object.values(worktrees)
+    const mainOf = (p: string) => tabs.find((t) => t.path === p)?.info?.mainWorktree ?? p
+    const mainWorktree = tabs.find((t) => t.path === path)?.info?.mainWorktree ?? null
+    return { ...scopeOf(all, { path, mainWorktree }, want, groups, mainOf), total: all.length }
+  }, [worktrees, tabs, groups, want, path])
+}
+
 export function useAgentWorktree(path: string | null | undefined): AgentWorktree | undefined {
   return useAgents((s) => (path ? s.worktrees[path] : undefined))
 }

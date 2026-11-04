@@ -244,6 +244,9 @@ describe('settings', () => {
     expect(s.autoFetchMinutes).toBe(DEFAULT_SETTINGS.autoFetchMinutes)
     expect(sanitizeSettings(DEFAULT_SETTINGS, 'garbage')).toEqual(DEFAULT_SETTINGS)
     expect(sanitizeSettings(DEFAULT_SETTINGS, { theme: 'purple', diffViewMode: 'split' })).toMatchObject({ theme: 'dark', diffViewMode: 'split' })
+    expect(DEFAULT_SETTINGS.agentsScope).toBe('repo')
+    expect(sanitizeSettings(DEFAULT_SETTINGS, { agentsScope: 'all' })).toMatchObject({ agentsScope: 'all' })
+    expect(sanitizeSettings(DEFAULT_SETTINGS, { agentsScope: 'everything' as never })).toMatchObject({ agentsScope: 'repo' })
     expect(DEFAULT_SETTINGS).toMatchObject({ imageDiffMode: 'side', imageDiffIgnoreAntialiasing: true })
     expect(sanitizeSettings(DEFAULT_SETTINGS, { imageDiffMode: 'difference', imageDiffIgnoreAntialiasing: false })).toMatchObject({
       imageDiffMode: 'difference',

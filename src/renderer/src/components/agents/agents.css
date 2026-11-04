@@ -168,6 +168,20 @@
   gap: 8px;
   min-width: 0;
 }
+/* Whose worktrees: the active repository, its tab group (with the group's colour) or every open tab. */
+.ag-scope-group {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+.ag-empty-actions {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
 .ag-title > svg {
   flex: none;
   color: var(--accent);

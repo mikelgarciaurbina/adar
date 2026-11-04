@@ -1,20 +1,21 @@
-// The Agents view (a centre view): every watched worktree of the open repositories, or of the tab group in front,
-// as it works — working, quiet (it stopped with work left: it may be waiting for an answer) and idle — with the
-// files changing now, the last 30 minutes, where its commits stand and what is new since the user looked.
+// The Agents view (a centre view): the watched worktrees of the active repository, of its tab group or of every open
+// tab (settings.agentsScope), as they work — working, quiet (it stopped with work left: it may be waiting for an
+// answer) and idle — with the files changing now, the last 30 minutes, where its commits stand and what is new since
+// the user looked.
 
 import { useEffect, useMemo, useState, type MouseEvent } from 'react'
 import { ArrowLeft, ArrowUp, ArrowUpRight, Bell, BellOff, Bot, CheckCheck, ChevronDown, ChevronRight, FileDiff, FolderGit2, GitCommitHorizontal, MessageCircleQuestion, Moon, Settings, Sparkle } from 'lucide-react'
-import { pendingWork, type AgentState, type AgentWorktree } from '@shared/agents'
+import { pendingWork, type AgentsScope, type AgentState, type AgentWorktree } from '@shared/agents'
 import * as git from '@renderer/actions/git'
 import { markWorktreeSeen, setQuietMuted, showWorktree } from '@renderer/actions/agents'
 import { Button, EmptyState, IconButton } from '@renderer/components/common/Button'
 import { showContextMenu, type MenuItem } from '@renderer/components/common/ContextMenu'
 import { pluralize } from '@renderer/lib/format'
 import { isEditableTarget } from '@renderer/lib/keys'
-import { groupOf } from '@renderer/lib/tabGroups'
+import { groupLine } from '@renderer/lib/groupColors'
 import { useApp, type RepoTab } from '@renderer/store/appStore'
 import { repoColour } from '@renderer/components/pulls/InboxView'
-import { useAgents } from './agentStore'
+import { useAgentScope, useAgents } from './agentStore'
 import { agentName, agoText, aheadText, boardOf, newCommits, shortAgo, stateOf, whenText } from './model'
 import { StateDot, Strip } from './parts'
 import '@renderer/components/review/review.css'
@@ -28,28 +29,40 @@ const COLUMNS: Array<{ state: AgentState; title: string; hint: string }> = [
   { state: 'idle', title: 'Idle', hint: 'nothing for 30 min' }
 ]
 
-/** The repositories the view shows: the tab group in front, else every open repository. */
-function useScope(tab: RepoTab): { list: AgentWorktree[]; repos: number; group: string | null } {
-  const worktrees = useAgents((s) => s.worktrees)
-  const tabs = useApp((s) => s.tabs)
-  const groups = useApp((s) => s.settings.tabGroups)
-  return useMemo(() => {
-    const group = groupOf(groups, tab.path)
-    const all = Object.values(worktrees)
-    let list = all
-    if (group) {
-      const mains = new Set(group.repos.map((p) => tabs.find((t) => t.path === p)?.info?.mainWorktree ?? p))
-      list = all.filter((w) => mains.has(w.repo) || group.repos.includes(w.path))
-    }
-    return { list, repos: new Set(list.map((w) => w.repo)).size, group: group ? group.name || 'this group' : null }
-  }, [worktrees, tabs, groups, tab.path])
+/** Which worktrees the view shows (settings.agentsScope), with how many each choice has. */
+function ScopeSwitch({ tab }: { tab: RepoTab }) {
+  const current = useAgentScope(tab.path)
+  const repo = useAgentScope(tab.path, 'repo')
+  const group = useAgentScope(tab.path, 'group')
+  const name = repoName(current.repo)
+  const groupName = current.group ? current.group.name || 'Its group' : null
+  const options: Array<{ value: AgentsScope; label: string; title: string; n: number }> = [
+    { value: 'repo', label: name, title: `The worktrees of ${name}`, n: repo.list.length },
+    ...(groupName ? [{ value: 'group' as const, label: groupName, title: `The worktrees of the repositories in the ${groupName} tab group`, n: group.list.length }] : []),
+    { value: 'all', label: 'All tabs', title: 'The worktrees of every open tab', n: current.total }
+  ]
+  return (
+    <div className="rv-seg ag-scope" role="group" aria-label="Show the worktrees of">
+      {options.map((o) => (
+        <button key={o.value} type="button" aria-pressed={current.scope === o.value} title={o.title} onClick={() => setScope(o.value)}>
+          {o.value === 'group' && current.group && <i className="ag-scope-group" style={{ background: groupLine(current.group.color) }} aria-hidden="true" />}
+          {o.label} <span>{o.n}</span>
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function setScope(agentsScope: AgentsScope) {
+  void useApp.getState().updateSettings({ agentsScope })
 }
 
 export function AgentsView({ tab }: { tab: RepoTab }) {
   const on = useApp((s) => s.settings.agentsOn)
   const settings = useApp((s) => s.settings)
   const now = useAgents((s) => s.now)
-  const { list, repos, group } = useScope(tab)
+  const { list, scope, repo, total } = useAgentScope(tab.path)
+  const repos = useMemo(() => new Set(list.map((w) => w.repo)).size, [list])
   const [filter, setFilter] = useState<Filter>('all')
   const [showFolded, setShowFolded] = useState(false)
   const board = useMemo(() => boardOf(list, now, settings), [list, now, settings])
@@ -69,7 +82,7 @@ export function AgentsView({ tab }: { tab: RepoTab }) {
   const counts = { working: board.working.length, quiet: board.quiet.length, idle: board.idle.length + board.folded.length }
   const anyNew = list.some((w) => newCommits(w, settings.worktreesSeen).length > 0)
   const columns = COLUMNS.filter((c) => filter === 'all' || c.state === filter)
-  const openSettings = () => useApp.getState().openModal({ kind: 'settings' })
+  const openSettings = () => useApp.getState().openModal({ kind: 'settings', section: 'agents' })
 
   return (
     <div className="ag-view">
@@ -82,11 +95,12 @@ export function AgentsView({ tab }: { tab: RepoTab }) {
           <span>
             <b>Agents at work</b>
             <small>
-              {pluralize(list.length, 'worktree')} in {pluralize(repos, 'repository', 'repositories')}
-              {group ? ` · the ${group} group` : ''}
+              {pluralize(list.length, 'worktree')}
+              {scope === 'repo' ? '' : ` in ${pluralize(repos, 'repository', 'repositories')}`}
             </small>
           </span>
         </span>
+        <ScopeSwitch tab={tab} />
         <span className="rv-spacer" />
         <div className="rv-seg" role="group" aria-label="Show">
           {(['all', 'working', 'quiet', 'idle'] as const).map((f) => (
@@ -102,17 +116,29 @@ export function AgentsView({ tab }: { tab: RepoTab }) {
       <div className="ag-body">
         {!on ? (
           <EmptyState icon={<Bot size={28} />} title="Agents at work is off">
-            <p>Turn on “Show what agents are doing” in Settings → General to see what the worktrees of the open repositories are doing.</p>
+            <p>Turn on “Show what agents are doing” in Settings → Agents at work to see what the worktrees of the open repositories are doing.</p>
             <Button size="sm" icon={<Settings size={14} />} onClick={openSettings}>
               Open Settings
             </Button>
           </EmptyState>
         ) : !list.length ? (
-          <EmptyState icon={<FolderGit2 size={28} />} title="No worktrees to watch">
+          <EmptyState icon={<FolderGit2 size={28} />} title={total && scope !== 'all' ? `No worktrees to watch in ${scope === 'repo' ? repoName(repo) : 'this group'}` : 'No worktrees to watch'}>
             <p>
               Give each agent its own worktree (New worktree in the left panel's Worktrees section) and it shows up here as it works.
-              {settings.agentsWatchMain ? '' : ' Agents that work in a repository’s own folder show up once Settings → General → Watch includes it.'}
+              {settings.agentsWatchMain ? '' : ' Agents that work in a repository’s own folder show up once Watch includes it in Settings → Agents at work.'}
             </p>
+            <span className="ag-empty-actions">
+              {total > 0 && scope !== 'all' && (
+                <Button size="sm" variant="primary" onClick={() => setScope('all')}>
+                  Show all tabs ({total})
+                </Button>
+              )}
+              {!settings.agentsWatchMain && (
+                <Button size="sm" icon={<Settings size={14} />} onClick={openSettings}>
+                  Open Settings
+                </Button>
+              )}
+            </span>
           </EmptyState>
         ) : (
           <div className={`ag-columns ag-columns-${columns.length}`}>

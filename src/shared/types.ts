@@ -1,7 +1,7 @@
 // Domain types shared by the main process (git backend), the dev HTTP bridge
 // and the renderer. Everything here must be JSON-serialisable.
 
-import { DEFAULT_AGENT_PREFIXES, DEFAULT_QUIET_MINUTES, type AgentEvent, type AgentOpen, type AgentPrefix, type AgentWorktree, type WorktreeSeen } from './agents'
+import { DEFAULT_AGENT_PREFIXES, DEFAULT_QUIET_MINUTES, type AgentEvent, type AgentsScope, type AgentOpen, type AgentPrefix, type AgentWorktree, type WorktreeSeen } from './agents'
 import type { AzureOrganization, BitbucketServer, GithubServer, GitlabServer } from './hosting'
 
 /** Unix timestamp in seconds (as git reports it). */
@@ -630,6 +630,8 @@ export interface AppSettings {
   agentsOn: boolean
   /** Also watch each repository's own folder, for agents that work there rather than in a worktree. */
   agentsWatchMain: boolean
+  /** What the Agents view and the toolbar's Agents button show: the active repository's worktrees, its tab group's or every open tab's. */
+  agentsScope: AgentsScope
   /** A notification when an agent commits or pushes (not for what Adar itself does). */
   notifyAgentCommits: boolean
   /** A notification when an agent goes quiet with work left (it may be waiting for an answer). */
@@ -713,6 +715,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   pullsSeen: {},
   agentsOn: true,
   agentsWatchMain: false,
+  agentsScope: 'repo',
   notifyAgentCommits: true,
   notifyAgentQuiet: true,
   agentQuietMinutes: DEFAULT_QUIET_MINUTES,

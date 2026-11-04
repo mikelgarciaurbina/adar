@@ -11,12 +11,14 @@ import {
   type AgentCommit,
   type AgentEvent,
   type AgentNotice,
+  type AgentsScope,
   type AgentState,
   type AgentWorktree,
   type WorktreeSeen
 } from '@shared/agents'
-import type { AppSettings } from '@shared/types'
+import type { AppSettings, TabGroup } from '@shared/types'
 import { pluralize } from '@renderer/lib/format'
+import { groupOf } from '@renderer/lib/tabGroups'
 
 export type AgentSettings = Pick<AppSettings, 'agentQuietMinutes' | 'agentPrefixes' | 'worktreesSeen'>
 
@@ -110,6 +112,37 @@ export function tabDot(tab: { path: string; mainWorktree: string | null }, list:
   }
   if (tab.mainWorktree) return null
   return list.some((w) => w.repo === tab.path && w.path !== tab.path && stateOf(w, now, s) === 'working') ? 'working' : null
+}
+
+export interface AgentScope {
+  list: AgentWorktree[]
+  /** The scope in effect: 'group' is 'repo' for a tab outside any group. */
+  scope: AgentsScope
+  /** The repository whose worktrees 'repo' shows: the tab's main worktree. */
+  repo: string
+  /** The tab's group, when it is in one. */
+  group: TabGroup | null
+}
+
+/**
+ * The worktrees a tab's Agents view shows: its repository's (every worktree of it, the main folder included, as in
+ * the left panel), its tab group's or every open tab's. mainOf gives an open tab's main worktree.
+ */
+export function scopeOf(
+  all: readonly AgentWorktree[],
+  tab: { path: string; mainWorktree: string | null },
+  scope: AgentsScope,
+  groups: readonly TabGroup[],
+  mainOf: (path: string) => string
+): AgentScope {
+  const group = groupOf(groups, tab.path) ?? null
+  const repo = tab.mainWorktree ?? tab.path
+  if (scope === 'all') return { list: [...all], scope, repo, group }
+  if (scope === 'group' && group) {
+    const mains = new Set(group.repos.map(mainOf))
+    return { list: all.filter((w) => mains.has(w.repo) || group.repos.includes(w.path)), scope, repo, group }
+  }
+  return { list: all.filter((w) => w.repo === repo || w.path === tab.path), scope: 'repo', repo, group }
 }
 
 export interface Board {

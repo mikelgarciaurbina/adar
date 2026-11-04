@@ -31,7 +31,7 @@ import { openReflog } from '@renderer/actions/reflog'
 import { selectPull } from '@renderer/actions/pulls'
 import { openInbox } from '@renderer/actions/review'
 import { openAgents } from '@renderer/actions/agents'
-import { useAgents } from '@renderer/components/agents/agentStore'
+import { useAgentScope, useAgents } from '@renderer/components/agents/agentStore'
 import { stateOf } from '@renderer/components/agents/model'
 import { useNeedsYou } from '@renderer/components/pulls/InboxView'
 import { PullChip } from '@renderer/components/pulls/PullChip'
@@ -134,15 +134,17 @@ function ReviewsButton({ repo }: { repo: string }) {
   )
 }
 
-/** Agents at work: shown while worktrees are watched; its badge counts the quiet ones, a dot says one is working. */
+/**
+ * Agents at work: shown while worktrees are watched; its badge counts the quiet ones, a dot says one is working —
+ * among the worktrees the Agents view shows (the active repository's, its group's or every open tab's).
+ */
 function AgentsButton({ repo }: { repo: string }) {
   const settings = useApp((s) => s.settings)
-  const worktrees = useAgents((s) => s.worktrees)
+  const { list, total } = useAgentScope(repo)
   const now = useAgents((s) => s.now)
   const shown = useApp((s) => s.tabs.find((t) => t.path === repo)?.center.kind === 'agents')
   const afterReviews = usePulls((s) => anyPullsOn(s))
-  const list = Object.values(worktrees)
-  if (!settings.agentsOn || !list.length) return null
+  if (!settings.agentsOn || !total) return null
   const states = list.map((w) => stateOf(w, now, settings))
   const quiet = states.filter((s) => s === 'quiet').length
   const working = states.filter((s) => s === 'working').length

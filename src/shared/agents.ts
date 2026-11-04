@@ -102,6 +102,10 @@ export const IDLE_MS = 30 * 60_000
 /** Idle for a day or more: folded in the Agents view. */
 export const FOLD_MS = 24 * 3600_000
 export const QUIET_MINUTES = [2, 5, 10, 15] as const
+
+/** Which worktrees the Agents view shows: the active repository's (the default), its tab group's or every open tab's. */
+export type AgentsScope = 'repo' | 'group' | 'all'
+export const AGENT_SCOPES: readonly AgentsScope[] = ['repo', 'group', 'all']
 export const DEFAULT_QUIET_MINUTES = 5
 
 /** Coding agents named in Co-Authored-By trailers (the name before the address). */
