@@ -6,7 +6,7 @@ import type { Locale } from './config';
 const en = {
   meta: {
     title: 'Adar with AI agents — review what they push',
-    description: 'How to work with AI coding agents and Adar: one worktree per agent, a review of only what changed since you last looked, and a ping when they push again.',
+    description: 'How to work with AI coding agents and Adar: one worktree per agent, what each one is doing right now, a review of only what changed since you last looked, and a ping when they push or stop.',
     ogTitle: 'Your agents write the code. You stay in the loop.',
     ogDescription: 'Adar is where you see what your AI agents did, review it, and keep up while they keep going.',
   },
@@ -28,7 +28,7 @@ const en = {
     text: 'The same loop whether one agent is fixing a bug or three are building a feature each.',
     items: [
       ['One agent, one worktree', 'Give each agent its own folder and branch, so none steps on another’s files. Make them in Adar or let your agent tool do it: each opens as a tab in the project’s group, side by side.', 'New Worktree…'],
-      ['Watch them work', 'Every tab shows its branch growing and its uncommitted changes as a live node. Background fetch brings in what they push, and the commits an agent co-wrote carry its name from their <code>Co-Authored-By</code> line.', '// WIP'],
+      ['Watch them work', 'Each worktree says what its agent is doing: <i>working</i>, <i>quiet</i> — it stopped with work left and may be waiting for you — or idle, with the files changing now, on its tab, in the left panel and in the <i>Agents</i> view. A notification tells you when one commits, pushes or goes quiet, and the commits an agent co-wrote carry its name from their <code>Co-Authored-By</code> line.', 'Agents ⇧⌘E'],
       ['Review what they pushed', 'When an agent opens a pull request, review it in Adar: the files with GitHub’s <i>Viewed</i> marks, lockfiles folded away, comment threads on their lines. Comment, suggest a change, request changes. The agent reads your review where it always does, on GitHub.', 'Review changes'],
       ['Only what’s new', 'Second round? <i>Since your review</i> shows just the commits pushed after it, and says when the branch was rebased with the same changes or only had main merged in. No rereading a whole pull request to find the two lines that moved.', 'Since your review'],
       ['Know when to look', '<i>Reviews</i> lists the pull requests waiting for you, the ones you follow and yours, across every open repository. A blue dot marks what changed since you looked, and a notification tells you while you’re doing something else.', 'Reviews ⇧⌘R'],
@@ -50,7 +50,7 @@ const en = {
     tag: 'next',
     title: 'What comes next, <span class="serif">in the open.</span>',
     items: [
-      ['Agents at work', 'Live activity of the worktrees your agents work in: files changing now, time since the last change, and a ping when one commits, pushes or goes quiet.'],
+      ['Team view', 'A tab group at a glance: each repository’s branch and changes, colleagues’ branches by author, open pull requests and what reached main since yesterday.'],
       ['AI-authored commits in the graph', 'A mark on every commit an agent co-wrote, with a human / AI filter.'],
       ['After a force push', 'The old and the new version of a branch an agent rewrote, side by side, and what a merge’s conflict resolution changed.'],
       ['Every service', 'Reviewing on GitLab, Bitbucket and Azure DevOps too, as on GitHub today.'],
@@ -70,7 +70,7 @@ type AgentsCopy = typeof en;
 const es: AgentsCopy = {
   meta: {
     title: 'Adar con agentes de IA: revisa lo que suben',
-    description: 'Cómo trabajar con agentes de IA que programan y con Adar: un worktree por agente, una revisión de solo lo que ha cambiado desde que miraste y un aviso cuando vuelven a subir.',
+    description: 'Cómo trabajar con agentes de IA que programan y con Adar: un worktree por agente, qué está haciendo cada uno ahora mismo, una revisión de solo lo que ha cambiado desde que miraste y un aviso cuando suben cambios o se paran.',
     ogTitle: 'Tus agentes escriben el código. Tú sigues al mando.',
     ogDescription: 'Adar es donde ves lo que han hecho tus agentes de IA, lo revisas y te mantienes al día mientras siguen trabajando.',
   },
@@ -92,7 +92,7 @@ const es: AgentsCopy = {
     text: 'El mismo ciclo, tanto si un agente arregla un fallo como si tres construyen una función cada uno.',
     items: [
       ['Un agente, un worktree', 'Dale a cada agente su propia carpeta y su rama, para que ninguno pise los archivos de otro. Créalos en Adar o deja que lo haga tu herramienta de agentes: cada uno se abre como una pestaña en el grupo del proyecto, uno al lado del otro.', 'New Worktree…'],
-      ['Míralos trabajar', 'Cada pestaña muestra su rama creciendo y sus cambios sin commit como un nodo en vivo. El fetch en segundo plano trae lo que suben, y los commits que escribió un agente llevan su nombre, sacado de su línea <code>Co-Authored-By</code>.', '// WIP'],
+      ['Míralos trabajar', 'Cada worktree dice qué está haciendo su agente: <i>working</i>, <i>quiet</i> —se paró con trabajo pendiente y puede estar esperándote— o inactivo, con los archivos que cambia ahora, en su pestaña, en el panel izquierdo y en la vista <i>Agents</i>. Un aviso te dice cuándo uno hace commit, sube cambios o se queda parado, y los commits que escribió un agente llevan su nombre, sacado de su línea <code>Co-Authored-By</code>.', 'Agents ⇧⌘E'],
       ['Revisa lo que han subido', 'Cuando un agente abre un pull request, revísalo en Adar: los archivos con las marcas de <i>Viewed</i> de GitHub, los lockfiles plegados, los hilos de comentarios en sus líneas. Comenta, sugiere un cambio, pide cambios. El agente lee tu revisión donde siempre, en GitHub.', 'Review changes'],
       ['Solo lo nuevo', '¿Segunda ronda? <i>Since your review</i> muestra solo los commits subidos después, y te dice si la rama se rebaseó con los mismos cambios o si solo se mergeó main. Sin releer un pull request entero para encontrar las dos líneas que se movieron.', 'Since your review'],
       ['Sabe cuándo mirar', '<i>Reviews</i> reúne los pull requests que esperan tu revisión, los que sigues y los tuyos, de todos tus repositorios abiertos. Un punto azul marca lo que ha cambiado desde que miraste, y un aviso te lo dice mientras haces otra cosa.', 'Reviews ⇧⌘R'],
@@ -114,7 +114,7 @@ const es: AgentsCopy = {
     tag: 'próximo',
     title: 'Lo que viene, <span class="serif">en abierto.</span>',
     items: [
-      ['Agentes trabajando', 'La actividad en vivo de los worktrees donde trabajan tus agentes: archivos cambiando ahora, tiempo desde el último cambio y un aviso cuando uno hace commit, sube cambios o se queda parado.'],
+      ['Vista de equipo', 'Un grupo de pestañas de un vistazo: la rama y los cambios de cada repositorio, las ramas de tus compañeros por autor, los pull requests abiertos y lo que llegó a main desde ayer.'],
       ['Commits escritos por IA en el grafo', 'Una marca en cada commit que escribió un agente, con un filtro humano / IA.'],
       ['Después de un force push', 'La versión vieja y la nueva de una rama que un agente reescribió, lado a lado, y lo que cambió la resolución de conflictos de un merge.'],
       ['Todos los servicios', 'Revisar también en GitLab, Bitbucket y Azure DevOps, como hoy en GitHub.'],
@@ -132,7 +132,7 @@ const es: AgentsCopy = {
 const eu: AgentsCopy = {
   meta: {
     title: 'Adar AA agenteekin: berrikusi igotzen dutena',
-    description: 'Nola lan egin programatzen duten AA agenteekin eta Adarrekin: worktree bat agente bakoitzeko, begiratu zenuenetik aldatu dena bakarrik berrikusteko aukera eta abisu bat berriro igotzen dutenean.',
+    description: 'Nola lan egin programatzen duten AA agenteekin eta Adarrekin: worktree bat agente bakoitzeko, bakoitza une honetan zertan ari den, begiratu zenuenetik aldatu dena bakarrik berrikusteko aukera eta abisu bat aldaketak igotzen dituztenean edo gelditzen direnean.',
     ogTitle: 'Zure agenteek kodea idazten dute. Zuk agintzen duzu.',
     ogDescription: 'Adar da zure AA agenteek egin dutena ikusteko, berrikusteko eta lanean jarraitzen duten bitartean egunean egoteko tokia.',
   },
@@ -154,7 +154,7 @@ const eu: AgentsCopy = {
     text: 'Ziklo bera, agente batek akats bat konpontzen duenean zein hiruk funtzio bana eraikitzen dutenean.',
     items: [
       ['Agente bat, worktree bat', 'Eman agente bakoitzari bere karpeta eta bere adarra, bat ere ez dadin bestearen fitxategien gainean ibili. Sortu Adarren edo utzi zure agente-tresnari egiten: bakoitza fitxa gisa irekitzen da proiektuaren taldean, bata bestearen ondoan.', 'New Worktree…'],
-      ['Ikusi lanean', 'Fitxa bakoitzak bere adarra hazten erakusten du, eta commit gabeko aldaketak zuzeneko nodo gisa. Atzeko planoko fetch-ak igotzen dutena ekartzen du, eta agente batek idatzitako commitek haren izena daramate, beren <code>Co-Authored-By</code> lerrotik.', '// WIP'],
+      ['Ikusi lanean', 'Worktree bakoitzak bere agentea zertan ari den esaten du: <i>working</i>, <i>quiet</i> —lana amaitu gabe gelditu da eta zure zain egon daiteke— edo geldirik, orain aldatzen ari diren fitxategiekin, bere fitxan, ezkerreko panelean eta <i>Agents</i> ikuspegian. Abisu batek esaten dizu batek commit egiten duenean, aldaketak igotzen dituenean edo geldirik geratzen denean, eta agente batek idatzitako commitek haren izena daramate, beren <code>Co-Authored-By</code> lerrotik.', 'Agents ⇧⌘E'],
       ['Berrikusi igo dutena', 'Agente batek pull request bat irekitzen duenean, berrikusi Adarren: fitxategiak GitHub-en <i>Viewed</i> markekin, lockfileak tolestuta, iruzkin-hariak beren lerroetan. Iruzkindu, iradoki aldaketa bat, eskatu aldaketak. Agenteak betiko tokian irakurtzen du zure berrikuspena, GitHub-en.', 'Review changes'],
       ['Berria bakarrik', 'Bigarren txanda? <i>Since your review</i> aukerak ondoren igotako commitak bakarrik erakusten ditu, eta esaten dizu adarra aldaketa berberekin rebaseatu den edo main bakarrik mergeatu den. Pull request oso bat berriro irakurri gabe mugitu ziren bi lerroak aurkitzeko.', 'Since your review'],
       ['Jakin noiz begiratu', '<i>Reviews</i> aukerak zure berrikuspenaren zain dauden pull requestak, jarraitzen dituzunak eta zureak biltzen ditu, irekita dituzun biltegi guztietakoak. Puntu urdin batek begiratu zenuenetik aldatu dena markatzen du, eta jakinarazpen batek beste zerbaitetan zabiltzanean esaten dizu.', 'Reviews ⇧⌘R'],
@@ -176,7 +176,7 @@ const eu: AgentsCopy = {
     tag: 'hurrengoa',
     title: 'Datorrena, <span class="serif">agerian.</span>',
     items: [
-      ['Agenteak lanean', 'Zure agenteek lan egiten duten worktreeen zuzeneko jarduera: orain aldatzen ari diren fitxategiak, azken aldaketatik igarotako denbora, eta abisu bat batek commit egiten duenean, aldaketak igotzen dituenean edo geldirik geratzen denean.'],
+      ['Taldearen ikuspegia', 'Fitxa-talde bat begirada batean: errepositorio bakoitzaren adarra eta aldaketak, lankideen adarrak egilearen arabera, pull request irekiak eta atzotik mainera iritsi dena.'],
       ['AAk idatzitako commitak grafoan', 'Marka bat agente batek idatzitako commit bakoitzean, gizaki / AA iragazki batekin.'],
       ['Force push baten ondoren', 'Agente batek berridatzitako adar baten bertsio zaharra eta berria, alboz albo, eta merge baten gatazken konponketak zer aldatu zuen.'],
       ['Zerbitzu guztiak', 'GitLab, Bitbucket eta Azure DevOpsen ere berrikustea, gaur GitHub-en bezala.'],
