@@ -196,19 +196,19 @@ function PullDetails({ tab, pr, data }: { tab: RepoTab; pr: PullRequest; data: R
   )
 }
 
-/** Commits shown at most; the rest are on GitHub. */
+/** Commits shown at most; the rest are on the service. */
 const MAX_COMMITS = 20
 
 interface CommitList {
   commits: PullCommit[]
-  /** In this repository (a click selects the commit in the graph), else only on GitHub (a click opens it there). */
+  /** In this repository (a click selects the commit in the graph), else only on the service (a click opens it there). */
   local: boolean
 }
 
 // Per pull request and head: switching between pull requests does not ask again.
 const commitCache = new Map<string, CommitList>()
 
-/** The pull request's commits: from this repository when its head is here, else from GitHub. */
+/** The pull request's commits: from this repository when its head is here, else from the service. */
 function usePullCommits(repo: string, pr: PullRequest, remote: string): CommitList | 'loading' | 'failed' {
   const key = `${repo}\0${pr.number}\0${pr.headSha}`
   const [list, setList] = useState<CommitList | 'loading' | 'failed'>(() => commitCache.get(key) ?? 'loading')
@@ -266,7 +266,7 @@ function PullCommits({ repo, pr, remote }: { repo: string; pr: PullRequest; remo
           key={c.sha}
           type="button"
           className="pr-commit-row"
-          title={typeof list === 'object' && list.local ? `${c.subject}\nSelect it in the graph` : `${c.subject}\nOpen it on GitHub`}
+          title={typeof list === 'object' && list.local ? `${c.subject}\nSelect it in the graph` : `${c.subject}\nOpen it on ${providerName(pr)}`}
           onClick={() => open(c)}
         >
           <span className="pr-sha">{c.sha.slice(0, 7)}</span>
@@ -275,7 +275,7 @@ function PullCommits({ repo, pr, remote }: { repo: string; pr: PullRequest; remo
       ))}
       {commits.length > MAX_COMMITS && (
         <button type="button" className="ui-link pr-commits-more" onClick={() => openWebPage(`${pr.url}/commits`)}>
-          {pluralize(commits.length - MAX_COMMITS, 'more commit')} on GitHub
+          {pluralize(commits.length - MAX_COMMITS, 'more commit')} on {providerName(pr)}
         </button>
       )}
     </div>

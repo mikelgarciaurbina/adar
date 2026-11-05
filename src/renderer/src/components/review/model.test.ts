@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { PullReviewData, ReviewRange, ReviewThread } from '@shared/review'
-import { coAuthorAgents, conversation, fileGroups, isGenerated, sinceBanner, threadCounts, threadsOf } from './model'
+import { GITHUB_FEATURES, type PullReviewData, type ReviewRange, type ReviewThread } from '@shared/review'
+import { coAuthorAgents, conversation, fileGroups, isGenerated, settleReview, sinceBanner, threadCounts, threadsOf } from './model'
 
 const sha = (c: string) => c.repeat(40)
 
@@ -79,5 +79,67 @@ describe('Review view helpers', () => {
     } as unknown as PullReviewData
     // A bare line-comment review is left to its threads.
     expect(conversation(data, '2026-11-01T08:00:00Z').map((e) => e.kind)).toEqual(['description', 'event', 'comment', 'review'])
+  })
+})
+
+describe('The review at its head', () => {
+  const thread = (id: string, path: string, writtenOn: string | null, outdated = false): ReviewThread => ({
+    id,
+    path,
+    side: 'RIGHT',
+    line: outdated ? null : 12,
+    startLine: outdated ? null : 10,
+    originalLine: 12,
+    resolved: false,
+    outdated,
+    canResolve: true,
+    canReply: true,
+    comments: [],
+    writtenOn
+  })
+  const data = (viewed: 'service' | 'adar', threads: ReviewThread[]): PullReviewData => ({
+    number: 7,
+    nodeId: '7',
+    features: { ...GITHUB_FEATURES, viewed },
+    viewer: 'mikel',
+    title: '',
+    body: '',
+    author: 'ane',
+    headSha: sha('h'),
+    baseSha: '',
+    viewed: viewed === 'service' ? { 'a.ts': 'viewed' } : {},
+    threads,
+    reviews: [],
+    comments: [],
+    timeline: [],
+    reviewers: [],
+    pendingOnService: null
+  })
+
+  it('keeps Adar’s Viewed marks while their file stays the same, asking git once per commit', async () => {
+    const asked: string[] = []
+    const changed = async (from: string) => {
+      asked.push(from)
+      return from === sha('g') ? null : new Set(['b.ts', 'old/c.ts'])
+    }
+    const r = await settleReview(data('adar', []), sha('h'), { 'a.ts': sha('h'), 'b.ts': sha('e'), 'd.ts': sha('e'), 'old/c.ts': sha('e'), 'e.ts': sha('g') }, changed)
+    expect(r.viewed).toEqual({ 'a.ts': 'viewed', 'b.ts': 'changed', 'd.ts': 'viewed', 'old/c.ts': 'changed', 'e.ts': 'changed' })
+    expect(asked.sort()).toEqual([sha('e'), sha('g')])
+    // The service's own marks are left alone.
+    expect((await settleReview(data('service', []), sha('h'), { 'b.ts': sha('e') }, changed)).viewed).toEqual({ 'a.ts': 'viewed' })
+  })
+
+  it('shows a thread written on an earlier version as outdated once its file changed', async () => {
+    const threads = [thread('1', 'a.ts', sha('h').slice(0, 12)), thread('2', 'a.ts', sha('e').slice(0, 12)), thread('3', 'b.ts', sha('e').slice(0, 12)), thread('4', 'c.ts', null), thread('5', 'd.ts', sha('g'))]
+    const r = await settleReview(data('service', threads), sha('h'), {}, async (from) => (from === sha('g') ? null : new Set(['b.ts'])))
+    expect(r.threads.map((t) => [t.id, t.outdated, t.line])).toEqual([
+      ['1', false, 12],
+      ['2', false, 12],
+      ['3', true, null],
+      ['4', false, 12],
+      ['5', true, null]
+    ])
+    const same = data('service', [thread('4', 'c.ts', null)])
+    expect(await settleReview(same, sha('h'), {}, async () => null)).toBe(same)
   })
 })

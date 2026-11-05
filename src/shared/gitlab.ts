@@ -17,6 +17,20 @@ import {
   type PullState,
   type ReviewState
 } from './hosting'
+import {
+  MAX_ACTIVITY_COMMITS,
+  MAX_TEXT,
+  isBaseMerge,
+  isSafePath,
+  type ConversationComment,
+  type PullActivity,
+  type PullReviewData,
+  type ReviewFeatures,
+  type ReviewSummary,
+  type ReviewThread,
+  type ReviewVerdict,
+  type TimelineEvent
+} from './review'
 
 type Obj = Record<string, unknown>
 
@@ -258,3 +272,243 @@ export function gitlabMergeChecks(mr: unknown): MergeChecks {
 export function gitlabProtected(json: unknown): string[] {
   return keepPatterns(arr(json).map((b) => b.name))
 }
+
+// ── Reviewing a merge request in Adar ────────────────────────────────────────
+
+/** GitLab keeps no Viewed marks Adar can read (Adar keeps them); comments span lines; suggestions are ```suggestion:-N+0. */
+export const GITLAB_FEATURES: ReviewFeatures = { viewed: 'adar', multiLine: true, suggestions: 'gitlab', events: ['comment', 'approve', 'request-changes'] }
+
+/** What Adar reads to show a merge request's review. */
+export interface GitlabReviewAnswers {
+  /** GET /projects/:id/merge_requests/:iid */
+  mr: unknown
+  /** GET …/discussions: line threads, the conversation and GitLab's system notes. */
+  discussions: unknown
+  /** GET …/reviewers: each reviewer's state. */
+  reviewers: unknown
+  /** GET …/approvals */
+  approvals: unknown
+  /** GET …/draft_notes: the signed-in user's comments of a review started on GitLab's website. */
+  drafts: unknown
+  /** GET …/commits (newest first): the commits system notes name by their short id. */
+  commits: unknown
+  viewer: GitlabUser | null
+}
+
+const unescapeHtml = (s: string) => s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&')
+const lineNumber = (v: unknown): number | null => (typeof v === 'number' && Number.isSafeInteger(v) && v > 0 ? v : null)
+
+/** A reviewer's state (GET …/reviewers) in Adar's words; null when they have not said anything yet. */
+function reviewerVerdict(state: string): ReviewVerdict | 'requested' {
+  if (state === 'approved') return 'approved'
+  if (state === 'requested_changes') return 'changes-requested'
+  if (state === 'reviewed') return 'commented'
+  return 'requested' // unreviewed, review_started, unapproved
+}
+
+/** What a system note says happened, for the conversation (GitLab writes them in English). */
+function systemEvent(body: string): { kind: 'approved' | 'changes' | 'ready' | 'requested' | 'commits'; reviewers?: string[] } | null {
+  const first = body.split('\n')[0].trim()
+  if (/^approved this merge request$/i.test(first)) return { kind: 'approved' }
+  if (/^requested changes\b/i.test(first)) return { kind: 'changes' }
+  if (/^marked this merge request as \*\*ready\*\*$/i.test(first)) return { kind: 'ready' }
+  const asked = /^requested review from (.+)$/i.exec(first)
+  if (asked) {
+    const reviewers = asked[1]
+      .split(/,\s*|\s+and\s+/)
+      .map((r) => r.trim().replace(/^@/, ''))
+      .filter((r) => /^[\w.-]+$/.test(r))
+    return reviewers.length ? { kind: 'requested', reviewers } : null
+  }
+  if (/^added \d+ (?:new )?commits?\b/i.test(first)) return { kind: 'commits' }
+  return null
+}
+
+/** The commits an "added N commits" note lists (`<li>1a2b3c4d - Subject</li>`), resolved to full ids where known. */
+function noteCommits(body: string, known: ReadonlyArray<{ sha: string; subject: string }>): Array<{ sha: string; subject: string }> {
+  const out: Array<{ sha: string; subject: string }> = []
+  for (const m of body.matchAll(/<li>([0-9a-f]{7,40}) - (.*?)<\/li>/g)) {
+    const hit = known.find((c) => c.sha.startsWith(m[1].toLowerCase()))
+    if (hit) out.push({ sha: hit.sha, subject: hit.subject || unescapeHtml(m[2]).slice(0, 300) })
+  }
+  return out
+}
+
+/** A merge request's review as Adar shows it, or null when the answer is not a merge request. */
+export function gitlabReview(a: GitlabReviewAnswers): PullReviewData | null {
+  if (!isObj(a.mr)) return null
+  const mr = a.mr
+  const number = num(mr.iid)
+  if (!number) return null
+  const viewer = a.viewer?.username ?? ''
+  const me = viewer.toLowerCase()
+  const author = gitlabUser(mr.author)?.username ?? ''
+  const refs = obj(mr.diff_refs)
+  const headSha = hexSha(refs.head_sha) || hexSha(mr.sha)
+  const userOf = (v: unknown) => gitlabUser(v)?.username ?? ''
+  const mine = (who: string) => !!me && who.toLowerCase() === me
+  const text = (v: unknown) => str(v).slice(0, MAX_TEXT)
+
+  const known = arr(a.commits)
+    .filter((c) => hexSha(c.id))
+    .map((c) => ({ sha: hexSha(c.id), subject: (str(c.title) || str(c.message).split('\n')[0]).slice(0, 300), author: str(c.author_name), at: str(c.created_at) || str(c.committed_date) }))
+
+  const threads: ReviewThread[] = []
+  const comments: ConversationComment[] = []
+  const reviews: ReviewSummary[] = []
+  const timeline: TimelineEvent[] = []
+  const pushed = new Set<string>()
+  for (const d of arr(a.discussions)) {
+    const notes = arr(d.notes)
+    const id = str(d.id)
+    if (!notes.length || !id) continue
+    const first = notes[0]
+    if (first.system === true) {
+      const at = str(first.created_at)
+      const who = userOf(first.author)
+      const ev = systemEvent(str(first.body))
+      if (!ev) continue
+      if (ev.kind === 'approved' || ev.kind === 'changes') {
+        reviews.push({ id: `note-${num(first.id)}`, author: who, verdict: ev.kind === 'approved' ? 'approved' : 'changes-requested', body: '', submittedAt: at, commit: null, comments: 0 })
+      } else if (ev.kind === 'ready') timeline.push({ kind: 'ready', at, actor: who })
+      else if (ev.kind === 'requested') for (const reviewer of ev.reviewers ?? []) timeline.push({ kind: 'review-requested', at, actor: who, reviewer })
+      else {
+        const list = noteCommits(str(first.body), known)
+        for (const c of list) pushed.add(c.sha)
+        if (list.length) timeline.push({ kind: 'commits', at, author: who, commits: list })
+      }
+      continue
+    }
+    const said = notes.filter((n) => n.system !== true && num(n.id) > 0)
+    const position = obj(first.position)
+    if (first.type === 'DiffNote') {
+      // Comments on an image's pixels have no line to sit on.
+      if (str(position.position_type || 'text') !== 'text') continue
+      const path = str(position.new_path) || str(position.old_path)
+      if (!isSafePath(path) || !said.length) continue
+      const newLine = lineNumber(position.new_line)
+      const oldLine = lineNumber(position.old_line)
+      const side = newLine ? 'RIGHT' : 'LEFT'
+      const line = newLine ?? oldLine
+      const range = obj(position.line_range)
+      const start = obj(range.start)
+      const startNo = side === 'RIGHT' ? lineNumber(start.new_line) : lineNumber(start.old_line)
+      // GitLab moves a thread to each new version while its lines stay the same; one left behind is outdated.
+      const outdated = !!headSha && hexSha(position.head_sha) !== headSha
+      threads.push({
+        id,
+        path,
+        side,
+        line: outdated ? null : line,
+        startLine: !outdated && startNo && line && startNo < line ? startNo : null,
+        originalLine: line,
+        resolved: first.resolved === true,
+        outdated,
+        canResolve: first.resolvable === true,
+        canReply: true,
+        comments: said.map((n) => ({ id: num(n.id), author: userOf(n.author), body: text(n.body), createdAt: str(n.created_at), viewerDidAuthor: mine(userOf(n.author)) }))
+      })
+      continue
+    }
+    // Comments on the merge request itself (threads started there read in order).
+    for (const n of said) comments.push({ id: num(n.id), author: userOf(n.author), body: text(n.body), createdAt: str(n.created_at), viewerDidAuthor: mine(userOf(n.author)) })
+  }
+
+  // The commits it was opened with: no note lists them.
+  const opening = known.filter((c) => !pushed.has(c.sha)).reverse()
+  if (opening.length) timeline.push({ kind: 'commits', at: str(mr.created_at) || opening[0].at, author, commits: opening.map((c) => ({ sha: c.sha, subject: c.subject })) })
+  timeline.sort((x, y) => (x.at < y.at ? -1 : x.at > y.at ? 1 : 0))
+
+  const reviewers: PullReviewData['reviewers'] = []
+  const put = (login: string, verdict: ReviewVerdict | 'requested') => {
+    if (!login || login === author) return
+    const had = reviewers.find((r) => r.login === login)
+    if (had) had.verdict = verdict
+    else reviewers.push({ login, verdict })
+  }
+  for (const r of arr(a.reviewers)) put(userOf(r.user), reviewerVerdict(str(r.state)))
+  for (const u of gitlabApprovers(a.approvals)) put(u.username, 'approved')
+
+  const drafts = arr(a.drafts).length
+  return {
+    number,
+    nodeId: String(num(mr.id) || number),
+    features: GITLAB_FEATURES,
+    viewer,
+    title: str(mr.title),
+    body: text(mr.description),
+    author,
+    headSha,
+    // The target branch's tip this version was compared with: its merge base with the head is where the changes start.
+    baseSha: hexSha(refs.start_sha) || hexSha(refs.base_sha),
+    viewed: {},
+    threads,
+    reviews: reviews.sort((x, y) => (x.submittedAt < y.submittedAt ? -1 : x.submittedAt > y.submittedAt ? 1 : 0)),
+    comments,
+    timeline,
+    reviewers,
+    pendingOnService: drafts ? { id: 'drafts', comments: drafts } : null
+  }
+}
+
+// ── What changed since the user looked (the list's dots and notifications) ──
+
+/** What Adar reads of an open merge request for its dots: GET …/notes (newest first), …/commits and …/versions. */
+export interface GitlabActivityAnswers {
+  notes: unknown
+  commits: unknown
+  versions: unknown
+}
+
+/** The signed-in user's part in a merge request and what others said, as GitLab's notes, commits and versions tell. */
+export function gitlabActivity(a: GitlabActivityAnswers, viewer: GitlabUser | null, baseRef: string): PullActivity {
+  const me = viewer?.username.toLowerCase() ?? ''
+  const mine = (who: string) => !!me && who.toLowerCase() === me
+  // Each push makes a version: the head at a given time is the last version's before it.
+  const versions = arr(a.versions)
+    .map((v) => ({ head: hexSha(v.head_commit_sha), at: str(v.created_at) }))
+    .filter((v) => v.head && v.at)
+    .sort((x, y) => (x.at < y.at ? -1 : 1))
+  const headAt = (at: string) => versions.filter((v) => v.at <= at).at(-1)?.head ?? null
+
+  let viewerReview: PullActivity['viewerReview'] = null
+  let viewerCommentAt: string | null = null
+  const others: PullActivity['others'] = []
+  const review = (r: NonNullable<PullActivity['viewerReview']>) => {
+    if (!viewerReview || r.at > viewerReview.at) viewerReview = r
+  }
+  for (const n of arr(a.notes)) {
+    const who = gitlabUser(n.author)?.username ?? ''
+    const at = str(n.created_at)
+    if (!who || !at) continue
+    if (n.system === true) {
+      const ev = systemEvent(str(n.body))
+      if (ev?.kind !== 'approved' && ev?.kind !== 'changes') continue
+      const verdict: ReviewVerdict = ev.kind === 'approved' ? 'approved' : 'changes-requested'
+      if (mine(who)) review({ commit: headAt(at), at, verdict })
+      else others.push({ who, at, kind: 'review', verdict })
+      continue
+    }
+    if (!mine(who)) {
+      others.push({ who, at, kind: 'comment' })
+      continue
+    }
+    // A comment on a line is part of a review of the version it was written on; others are on the conversation.
+    const pos = obj(n.position)
+    if (n.type === 'DiffNote') review({ commit: hexSha(pos.head_sha) || headAt(at), at, verdict: 'commented' })
+    else if (!viewerCommentAt || at > viewerCommentAt) viewerCommentAt = at
+  }
+  others.sort((x, y) => (x.at < y.at ? -1 : x.at > y.at ? 1 : 0))
+
+  const listed = arr(a.commits).filter((c) => hexSha(c.id))
+  const commits = listed
+    .slice(0, MAX_ACTIVITY_COMMITS)
+    .reverse()
+    .map((c) => ({
+      sha: hexSha(c.id),
+      at: str(c.committed_date) || str(c.created_at),
+      baseMerge: Array.isArray(c.parent_ids) && c.parent_ids.length > 1 && isBaseMerge(str(c.title) || str(c.message).split('\n')[0], baseRef)
+    }))
+  return { viewerReview, viewerCommentAt, commits, moreCommits: listed.length > MAX_ACTIVITY_COMMITS, others }
+}
+

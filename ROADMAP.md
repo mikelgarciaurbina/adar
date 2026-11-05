@@ -56,7 +56,11 @@ notifications for review requests, new commits or replies, and reviews or failed
 worktrees of the open repositories as they work (working, quiet with work left — it may be waiting for an answer — or
 idle), with the files changing now, the last 30 minutes and which agent (Co-Authored-By trailers, the branch prefix or
 the folder), in the left panel, the tabs, the graph (a dashed row for each worktree's work in progress), an Agents view
-and the menu bar panel, and notifications when an agent commits, pushes or goes quiet.
+and the menu bar panel, and notifications when an agent commits, pushes or goes quiet · moving a whole tab group, by
+its label or from its menu · pull requests reviewed in Adar on GitLab, Bitbucket (Cloud and Data Center) and Azure
+DevOps too, with their own reviews (GitLab's draft notes, Bitbucket Data Center's pending comments), approvals or votes,
+threads to resolve, suggested changes where the service has them and Viewed marks Adar keeps where it has none; and
+their activity (reviews, comments, pushes) for the inbox's blue dots and the notifications.
 
 ---
 
@@ -65,8 +69,6 @@ and the menu bar panel, and notifications when an agent commits, pushes or goes 
 ### Supervise AI agents and the team
 Code and commits are more and more written by AI agents. Adar is where people see what the agents did, review it,
 and keep up with their colleagues' branches and pull requests.
-- [ ] **Review pull requests in Adar on GitLab, Bitbucket and Azure DevOps** too, as on GitHub; and their activity
-      (reviews, comments) for the inbox's blue dots, which elsewhere only know what you looked at in Adar.
 - [ ] **Since I last looked**: mark a point of a branch as reviewed and see only what came after it, with files you can
       tick as viewed.
 - [ ] **Diffs for large changes**: a file tree with the lines added and removed, lockfiles and generated files folded

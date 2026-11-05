@@ -8,12 +8,12 @@ import { Avatar } from '@renderer/components/common/Avatar'
 import { Button, IconButton } from '@renderer/components/common/Button'
 import { ReleaseNotes } from '@renderer/components/update/ReleaseNotes'
 import { relativeTime } from '@renderer/lib/format'
-import type { DraftComment, ReviewComment, ReviewThread } from '@shared/review'
+import { suggestionBlock, type DraftComment, type ReviewComment, type ReviewFeatures, type ReviewThread } from '@shared/review'
 import { useReview } from './reviewStore'
 
 export const ago = (iso: string) => (iso ? relativeTime(Math.floor(Date.parse(iso) / 1000)) : '')
 
-/** Markdown of a comment: fenced code blocks (```suggestion as a suggested change) and the rest as text. */
+/** Markdown of a comment: fenced code blocks (```suggestion, GitLab's ```suggestion:-1+0, as a suggested change) and the rest as text. */
 export function CommentBody({ body }: { body: string }) {
   const parts = body.split(/^```/m)
   if (parts.length < 3) return <div className="rv-md selectable">{body.trim() ? <ReleaseNotes markdown={body} /> : <span className="rv-muted">No description.</span>}</div>
@@ -24,7 +24,7 @@ export function CommentBody({ body }: { body: string }) {
         const nl = p.indexOf('\n')
         const lang = (nl < 0 ? p : p.slice(0, nl)).trim()
         const code = (nl < 0 ? '' : p.slice(nl + 1)).replace(/\n$/, '')
-        return lang === 'suggestion' ? (
+        return /^suggestion(?::-\d+\+\d+)?$/.test(lang) ? (
           <div key={i} className="rv-suggestion">
             <div className="rv-suggestion-head">
               <FileDiffIcon size={12} /> Suggested change
@@ -98,7 +98,7 @@ export function Thread({ repo, number, thread, canAct }: { repo: string; number:
   const send = async () => {
     if (!body.trim() || busy) return
     setBusy(true)
-    const ok = await replyTo(repo, number, thread.comments.at(-1)!.id, body)
+    const ok = await replyTo(repo, number, thread.id, thread.comments.at(-1)!.id, body)
     setBusy(false)
     if (ok) {
       setBody('')
@@ -166,7 +166,8 @@ export function Composer({
   number,
   pull,
   lines,
-  againstHead
+  againstHead,
+  features
 }: {
   repo: string
   number: number
@@ -175,6 +176,7 @@ export function Composer({
   lines: string[]
   /** Comments can be posted at once (the diff ends at the pull request's head). */
   againstHead: boolean
+  features: ReviewFeatures
 }) {
   const c = useReview((s) => s.composer)
   const ref = useRef<HTMLTextAreaElement>(null)
@@ -199,14 +201,15 @@ export function Composer({
     if (ok) close()
   }
   const suggest = () => {
-    const block = `\`\`\`suggestion\n${lines.join('\n')}\n\`\`\``
+    if (!features.suggestions) return
+    const block = suggestionBlock(features.suggestions, lines)
     set(c.body ? `${c.body}\n${block}` : block)
   }
   return (
     <div className="rv-compose">
       <div className="rv-compose-label">
         Comment on <code>{linesLabel(c.side, c.line, c.startLine)}</code>
-        <span className="rv-muted">· Shift-click another line’s + for several</span>
+        {features.multiLine && <span className="rv-muted">· Shift-click another line’s + for several</span>}
       </div>
       <textarea
         ref={ref}
@@ -217,7 +220,7 @@ export function Composer({
         onKeyDown={textKeys(add, close)}
       />
       <div className="rv-row">
-        {c.side === 'RIGHT' && lines.length > 0 && (
+        {c.side === 'RIGHT' && lines.length > 0 && features.suggestions && (
           <IconButton label="Suggest a change" size="sm" onClick={suggest}>
             <FileDiffIcon size={14} />
           </IconButton>

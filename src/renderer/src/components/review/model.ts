@@ -1,8 +1,9 @@
 // Pure helpers for the review view: which files are generated (folded away), which agents co-wrote the commits,
 // how the file list groups (changed since the review, already reviewed, generated), where each comment thread
-// sits in a diff, what the "since your review" banner says and the conversation's timeline in order.
+// sits in a diff, what the "since your review" banner says, the conversation's timeline in order, and the review as
+// the repository says it is at its head (Adar's own Viewed marks, threads left on lines that changed).
 
-import type { ConversationComment, PullReviewData, ReviewRange, ReviewSummary, ReviewThread, TimelineEvent } from '@shared/review'
+import type { ConversationComment, FileViewed, PullReviewData, ReviewRange, ReviewSummary, ReviewThread, TimelineEvent } from '@shared/review'
 import type { FileChange } from '@shared/types'
 import { pluralize } from '@renderer/lib/format'
 
@@ -130,4 +131,50 @@ export function conversation(data: PullReviewData, createdAt: string): Conversat
   for (const e of data.timeline) out.push({ kind: 'event', at: e.at, event: e })
   const first = out.shift()!
   return [first, ...out.sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0))]
+}
+
+/**
+ * The review as the repository says it is at `head`. `changedSince(sha)` gives the files changed between a commit
+ * and head (null when that commit is gone: everything may have changed); each commit is asked once.
+ * - Adar's own Viewed marks (path → the head it was viewed at), for services that keep none it can read: a file is
+ *   "changed" when it changed since.
+ * - Threads a service keeps on the lines of the version they were written on (Bitbucket Cloud): outdated once their
+ *   file changed since.
+ */
+export async function settleReview(
+  data: PullReviewData,
+  head: string,
+  marks: Readonly<Record<string, string>>,
+  changedSince: (sha: string) => Promise<Set<string> | null>
+): Promise<PullReviewData> {
+  const asks = new Map<string, Promise<Set<string> | null>>()
+  const changed = (sha: string) => {
+    if (head.startsWith(sha)) return Promise.resolve(new Set<string>())
+    let ask = asks.get(sha)
+    if (!ask) asks.set(sha, (ask = changedSince(sha)))
+    return ask
+  }
+  let out = data
+  if (data.features.viewed === 'adar') {
+    const viewed: Record<string, FileViewed> = {}
+    await Promise.all(
+      Object.entries(marks).map(async ([path, sha]) => {
+        const files = await changed(sha)
+        viewed[path] = files && !files.has(path) ? 'viewed' : 'changed'
+      })
+    )
+    out = { ...out, viewed }
+  }
+  const moved = (t: ReviewThread) => !!t.writtenOn && !t.outdated && !head.startsWith(t.writtenOn)
+  if (data.threads.some(moved)) {
+    const threads = await Promise.all(
+      data.threads.map(async (t) => {
+        if (!moved(t)) return t
+        const files = await changed(t.writtenOn!)
+        return files && !files.has(t.path) ? t : { ...t, outdated: true, line: null, startLine: null }
+      })
+    )
+    out = { ...out, threads }
+  }
+  return out
 }

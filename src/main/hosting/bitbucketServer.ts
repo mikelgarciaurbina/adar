@@ -1,23 +1,34 @@
 // Bitbucket Data Center pull requests of one repository (REST 1.0 on the company's server, HTTP
-// access token). Builds are read per commit (cached once they finished); merge checks on demand.
+// access token). Builds are read per commit (cached once they finished); merge checks on demand; each open pull
+// request's activities and commits for the dots, until it changes. Reviews: pending comments finished together with
+// a status (PUT …/review); servers without reviews get the comments one by one, then the status.
 
 import { AdarError } from '@shared/errors'
-import { buildRuns, pageValues, serverCommits, serverMergeChecks, serverMergeMethods, serverProtected, serverPull } from '@shared/bitbucket'
+import { buildRuns, pageValues, serverActivity, serverCommits, serverMergeChecks, serverMergeMethods, serverProtected, serverPull, serverReview } from '@shared/bitbucket'
 import { sameCommit, type PullCheck, type PullRequest, type RepoPullRequests } from '@shared/hosting'
+import { MAX_ACTIVITY_COMMITS, type DraftComment, type PullActivity } from '@shared/review'
 import { serverCommitAvatar } from './avatars'
 import { BoundedCache, mapLimit, type ApiClient } from './http'
-import { changedSinceLooked, invalid, unlessRefused, type HostingRemote, type PullProvider } from './provider'
+import { changedSinceLooked, invalid, unlessRefused, type HostingRemote, type PullProvider, type ReviewRepo } from './provider'
 
 export interface ServerCaches {
   /** Finished builds by commit. */
   builds: BoundedCache<PullCheck[]>
+  /** What changed in each open pull request, by "<repo>#<id>", until it changes again. */
+  activity: BoundedCache<{ key: string; value: PullActivity }>
 }
 
-export const newServerCaches = (): ServerCaches => ({ builds: new BoundedCache() })
+export const newServerCaches = (): ServerCaches => ({ builds: new BoundedCache(), activity: new BoundedCache() })
+
+/** Pages of activities read at most (100 each). */
+const MAX_PAGES = 5
 
 type Obj = Record<string, unknown>
 const obj = (v: unknown): Obj => (typeof v === 'object' && v !== null && !Array.isArray(v) ? (v as Obj) : {})
 const str = (v: unknown): string => (typeof v === 'string' ? v : '')
+const num = (v: unknown): number => (typeof v === 'number' && Number.isSafeInteger(v) ? v : 0)
+const arr = (v: unknown): Obj[] => (Array.isArray(v) ? v.map(obj) : [])
+const SHA = /^[0-9a-f]{40}$/i
 
 /** The repository's web page on the server (personal repositories live under /users/<name>). */
 export function serverRepoUrl(server: string, project: string, repo: string): string {
@@ -54,6 +65,67 @@ export function bitbucketServerProvider(api: ApiClient, at: HostingRemote, serve
 
   const strategies = async () => serverMergeMethods(await api.json('GET', `${repoPath}/settings/pull-requests`).catch(() => null))
 
+  /** Every page of a paged answer (start/limit), up to `max` pages. */
+  const pages = async (path: string, max = MAX_PAGES): Promise<Obj[]> => {
+    const out: Obj[] = []
+    let start = 0
+    for (let i = 0; i < max; i++) {
+      const page = obj(await api.json('GET', `${path}${path.includes('?') ? '&' : '?'}limit=100&start=${start}`))
+      out.push(...pageValues(page))
+      if (page.isLastPage !== false || typeof page.nextPageStart !== 'number') break
+      start = page.nextPageStart
+    }
+    return out
+  }
+
+  /** What changed in an open pull request (activities and commits), read again only once it changed. */
+  const activity = async (p: Obj, who: string): Promise<PullActivity> => {
+    const id = `${at.owner}/${at.name}#${String(p.id)}`
+    const states = arr(p.reviewers).map((r) => `${str(obj(r.user).slug)}:${str(r.status)}`).sort().join(',')
+    const key = [String(p.updatedDate), String(p.version), str(obj(p.fromRef).latestCommit), states].join('|')
+    const cached = caches.activity.get(id)
+    if (cached?.key === key) return cached.value
+    const path = `${repoPath}/pull-requests/${String(p.id)}`
+    const [events, commits] = await Promise.all([pages(`${path}/activities`, 1), api.json('GET', `${path}/commits?limit=${MAX_ACTIVITY_COMMITS + 1}`)])
+    const value = serverActivity(events, pageValues(commits), who, str(obj(p.toRef).displayId), MAX_ACTIVITY_COMMITS)
+    caches.activity.set(id, { key, value })
+    return value
+  }
+
+  /** The pull request, while its head is still the one the comments were written on. */
+  const current = async (number: number, commit: string): Promise<Obj> => {
+    const pr = await read(number)
+    if (!sameCommit(str(obj(pr.fromRef).latestCommit), commit)) throw changedSinceLooked('Bitbucket')
+    return pr
+  }
+
+  /** Where a comment goes on the pull request's diff: Bitbucket wants the line's kind and its number on that side. */
+  const anchorOf = async (pr: Obj, c: DraftComment, repo: ReviewRepo): Promise<Obj> => {
+    const head = str(obj(pr.fromRef).latestCommit).toLowerCase()
+    const target = str(obj(pr.toRef).latestCommit).toLowerCase()
+    if (!SHA.test(head) || !SHA.test(target)) throw invalid('Bitbucket did not say which commits the pull request compares')
+    const base = await repo.mergeBase(target, head)
+    const l = (await repo.lines(base, head, c.path)).at(c.side, c.line)
+    const lineType = l.oldLine === null ? 'ADDED' : l.newLine === null ? 'REMOVED' : 'CONTEXT'
+    return {
+      diffType: 'EFFECTIVE',
+      line: lineType === 'REMOVED' ? l.oldLine : l.newLine,
+      lineType,
+      fileType: lineType === 'REMOVED' ? 'FROM' : 'TO',
+      path: l.newPath,
+      ...(l.oldPath !== l.newPath ? { srcPath: l.oldPath } : {}),
+      fromHash: base,
+      toHash: head
+    }
+  }
+
+  /** The signed-in user's slug, as the pull request names them (else their name). */
+  const slugOf = (pr: Obj, who: string): string => {
+    const me = who.toLowerCase()
+    const user = [...arr(pr.reviewers), ...arr(pr.participants)].map((r) => obj(r.user)).find((u) => [str(u.name), str(u.slug)].some((n) => n.toLowerCase() === me))
+    return str(user?.slug) || me
+  }
+
   return {
     async list(): Promise<RepoPullRequests> {
       const [open, merged, declined, who, methods, def] = await Promise.all([
@@ -67,7 +139,9 @@ export function bitbucketServerProvider(api: ApiClient, at: HostingRemote, serve
       const openList = pageValues(open)
       const withBuilds = await mapLimit(openList, 6, async (p) => {
         const sha = str(obj(p.fromRef).latestCommit)
-        return serverPull(p, who, /^[0-9a-f]{40}$/i.test(sha) ? await builds(sha.toLowerCase()) : [], repoUrl)
+        const pr = serverPull(p, who, /^[0-9a-f]{40}$/i.test(sha) ? await builds(sha.toLowerCase()) : [], repoUrl)
+        if (!pr || (pr.state !== 'open' && pr.state !== 'draft')) return pr
+        return { ...pr, activity: await activity(p, who).catch(() => null) }
       })
       const closed = [...pageValues(merged), ...pageValues(declined)].map((p) => serverPull(p, who, null, repoUrl))
       return {
@@ -143,6 +217,69 @@ export function bitbucketServerProvider(api: ApiClient, at: HostingRemote, serve
       return out
     },
 
-    image: (url) => api.image(url)
+    image: (url) => api.image(url),
+
+    async review(number) {
+      const p = `${repoPath}/pull-requests/${number}`
+      const [pr, activities, commits, pending, who] = await Promise.all([
+        read(number),
+        pages(`${p}/activities`),
+        api.json('GET', `${p}/commits?limit=100`).catch(() => null),
+        // Servers older than reviews (before 8.x) have no …/review: null.
+        unlessRefused(async () => pageValues(await api.json('GET', `${p}/review?limit=100`))),
+        viewer()
+      ])
+      const data = serverReview({ pr, activities, commits: pageValues(commits), pending, viewer: who })
+      if (!data) throw new AdarError({ message: `Pull request #${number} was not found on Bitbucket`, code: 'NOT_FOUND' })
+      return data
+    },
+
+    async reviewAction(number, action, repo) {
+      const p = `${repoPath}/pull-requests/${number}`
+      const post = async (body: Obj) => num(obj(await api.json('POST', `${p}/comments`, body)).id)
+      switch (action.kind) {
+        case 'comment': {
+          const pr = await current(number, action.commit)
+          await post({ text: action.comment.body, anchor: await anchorOf(pr, action.comment, repo) })
+          return
+        }
+        case 'reply':
+          await post({ text: action.body, parent: { id: action.commentId } })
+          return
+        case 'resolve': {
+          if (!/^\d+$/.test(action.threadId)) throw invalid('Invalid thread')
+          const c = obj(await api.json('GET', `${p}/comments/${action.threadId}`))
+          await api.json('PUT', `${p}/comments/${action.threadId}`, { version: num(c.version), threadResolved: action.resolved })
+          return
+        }
+        case 'conversation':
+          await post({ text: action.body })
+          return
+        case 'viewed':
+          throw invalid('Bitbucket keeps no Viewed marks Adar can change: Adar keeps them on this computer')
+        case 'submit': {
+          const pr = await current(number, action.commit)
+          const head = str(obj(pr.fromRef).latestCommit).toLowerCase()
+          const reviews = (await unlessRefused(() => api.json('GET', `${p}/review?limit=1`))) !== null
+          const status = action.event === 'approve' ? 'APPROVED' : action.event === 'request-changes' ? 'NEEDS_WORK' : null
+          const made: number[] = []
+          try {
+            for (const c of action.comments) made.push(await post({ text: c.body, anchor: await anchorOf(pr, c, repo), ...(reviews ? { state: 'PENDING' } : {}) }))
+            if (reviews) {
+              // The review: the pending comments (the user's from the website too) published with the summary and the status.
+              await api.json('PUT', `${p}/review`, { ...(action.body.trim() ? { commentText: action.body } : {}), lastReviewedCommit: head, ...(status ? { participantStatus: status } : {}) })
+            } else {
+              if (action.body.trim()) made.push(await post({ text: action.body }))
+              if (status) await api.json('PUT', `${p}/participants/${encodeURIComponent(slugOf(pr, await viewer()))}`, { status, lastReviewedCommit: head })
+            }
+          } catch (err) {
+            // Nothing half sent stays behind.
+            await Promise.all(made.filter(Boolean).map((id) => api.json('DELETE', `${p}/comments/${id}?version=0`).catch(() => undefined)))
+            throw err
+          }
+          return
+        }
+      }
+    }
   }
 }

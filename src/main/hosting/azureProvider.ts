@@ -1,11 +1,15 @@
 // Azure DevOps pull requests of one repository (Azure Repos REST API 7.1 at https://dev.azure.com/<org>, personal
-// access token). Open pull requests are read with their statuses and branch policy evaluations; completing one
-// waits a moment for Azure DevOps, which merges in the background.
+// access token). Open pull requests are read with their statuses and branch policy evaluations, and for the dots
+// their threads, iterations and commits (again after a push or a vote, else every few minutes); completing one
+// waits a moment for Azure DevOps, which merges in the background. Reviews: threads posted one by one (Azure DevOps
+// publishes no drafts), then the user's vote.
 
 import { AdarError } from '@shared/errors'
 import {
   AZURE_API_VERSION,
   AZURE_MERGE_STRATEGY,
+  AZURE_VOTES,
+  azureActivity,
   azureChecks,
   azureCommits,
   azureMergeChecks,
@@ -13,12 +17,14 @@ import {
   azureProtected,
   azurePull,
   azureRepo,
+  azureReview,
   type AzureRepo,
   type AzureUser
 } from '@shared/azure'
 import { sameCommit, type PullRequest, type RepoPullRequests } from '@shared/hosting'
-import { mapLimit, type ApiClient } from './http'
-import { changedSinceLooked, invalid, unlessRefused, type HostingRemote, type PullProvider } from './provider'
+import { MAX_ACTIVITY_COMMITS, type DraftComment, type PullActivity } from '@shared/review'
+import { BoundedCache, mapLimit, type ApiClient } from './http'
+import { changedSinceLooked, invalid, unlessRefused, type HostingRemote, type PullProvider, type ReviewRepo } from './provider'
 
 /** Open pull requests read in full (statuses, policies) per update; the rest show without them. */
 const MAX_DETAILED = 30
@@ -34,12 +40,23 @@ const list = (v: unknown): Obj[] => {
 }
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 const enc = encodeURIComponent
+const num = (v: unknown): number => (typeof v === 'number' && Number.isSafeInteger(v) ? v : 0)
+
+/** Azure DevOps says nothing cheap about new comments: each open pull request's activity is read again at least this often. */
+const ACTIVITY_TTL_MS = 5 * 60_000
+
+export interface AzureCaches {
+  /** What changed in each open pull request, by "<org>/<project>/<repo>!<id>": read again after a push, a vote or ACTIVITY_TTL_MS. */
+  activity: BoundedCache<{ key: string; at: number; value: PullActivity }>
+}
+
+export const newAzureCaches = (): AzureCaches => ({ activity: new BoundedCache() })
 
 /**
  * `api` is the organization's client (base https://dev.azure.com/<org>); `orgUrl` its web address, which links are
  * built from (the same, except while testing).
  */
-export function azureProvider(api: ApiClient, at: HostingRemote, orgUrl: string, viewer: () => Promise<AzureUser | null>): PullProvider {
+export function azureProvider(api: ApiClient, at: HostingRemote, orgUrl: string, viewer: () => Promise<AzureUser | null>, caches: AzureCaches = newAzureCaches()): PullProvider {
   const project = at.owner
   const repoPath = `/${enc(project)}/_apis/git/repositories/${enc(at.name)}`
   const repoUrl = `${orgUrl}/${enc(project)}/_git/${enc(at.name)}`
@@ -58,13 +75,63 @@ export function azureProvider(api: ApiClient, at: HostingRemote, orgUrl: string,
   const configurations = () => api.json('GET', v(`/${enc(project)}/_apis/policy/configurations`))
   const buildsUrl = `${orgUrl}/${enc(project)}/_build/results`
 
+  /** What changed in an open pull request (threads, iterations, commits), read again after a push, a vote or a few minutes. */
+  const activity = async (pr: Obj, who: AzureUser | null): Promise<PullActivity> => {
+    const number = num(pr.pullRequestId)
+    const id = `${api.base}/${project}/${at.name}!${number}`
+    const votes = (Array.isArray(pr.reviewers) ? pr.reviewers.map(obj) : []).map((r) => `${str(r.id)}:${String(r.vote)}`).sort().join(',')
+    const key = `${str(obj(pr.lastMergeSourceCommit).commitId)}|${votes}`
+    const cached = caches.activity.get(id)
+    if (cached && cached.key === key && Date.now() - cached.at < ACTIVITY_TTL_MS) return cached.value
+    const p = `${repoPath}/pullRequests/${number}`
+    const [threads, iterations, commits] = await Promise.all([
+      api.json('GET', v(`${p}/threads`)),
+      api.json('GET', v(`${p}/iterations`)),
+      api.json('GET', v(`${p}/commits?$top=${MAX_ACTIVITY_COMMITS + 1}`))
+    ])
+    const value = azureActivity(threads, iterations, commits, who, str(pr.targetRefName).replace(/^refs\/heads\//, ''), MAX_ACTIVITY_COMMITS)
+    caches.activity.set(id, { key, at: Date.now(), value })
+    return value
+  }
+
   const detailed = async (listed: Obj, repo: AzureRepo, who: AzureUser | null): Promise<PullRequest | null> => {
     const number = Number(listed.pullRequestId)
     const [statuses, evals] = await Promise.all([
       api.json('GET', v(`${repoPath}/pullRequests/${number}/statuses`)).catch(() => null),
       evaluations(repo, number).catch(() => null)
     ])
-    return azurePull(listed, who?.id ?? '', { checks: azureChecks(statuses, evals, buildsUrl), evaluations: evals }, repoUrl)
+    const pr = azurePull(listed, who?.id ?? '', { checks: azureChecks(statuses, evals, buildsUrl), evaluations: evals }, repoUrl)
+    if (!pr || (pr.state !== 'open' && pr.state !== 'draft')) return pr
+    return { ...pr, activity: await activity(listed, who).catch(() => null) }
+  }
+
+  /** The pull request, while its head is still the one the comments were written on. */
+  const current = async (number: number, commit: string): Promise<Obj> => {
+    const pr = await read(number)
+    if (!sameCommit(str(obj(pr.lastMergeSourceCommit).commitId), commit)) throw changedSinceLooked('Azure DevOps')
+    return pr
+  }
+
+  /** Where a new thread goes: the file and its lines (with the end of the last one), on the latest push compared with the base. */
+  const threadOn = async (number: number, pr: Obj, c: DraftComment, repo: ReviewRepo): Promise<Obj> => {
+    const head = str(obj(pr.lastMergeSourceCommit).commitId).toLowerCase()
+    const target = str(obj(pr.lastMergeTargetCommit).commitId).toLowerCase()
+    const at = c.side === 'RIGHT' ? head : await repo.mergeBase(target, head)
+    const first = c.startLine && c.startLine < c.line ? c.startLine : c.line
+    const end = (await repo.lineLength(at, c.path, c.line)) + 1
+    const iterations = list(await api.json('GET', v(`${repoPath}/pullRequests/${number}/iterations`)))
+    const latest = Math.max(0, ...iterations.map((i) => num(i.id)))
+    // The file's id across pushes, so Azure DevOps keeps the thread on its lines as the pull request moves on.
+    const changes = latest ? await api.json('GET', v(`${repoPath}/pullRequests/${number}/iterations/${latest}/changes?$compareTo=0&$top=2000`)).catch(() => null) : null
+    const entry = (Array.isArray(obj(changes).changeEntries) ? (obj(changes).changeEntries as unknown[]).map(obj) : []).find((e) => str(obj(e.item).path) === `/${c.path}`)
+    const range = { start: { line: first, offset: 1 }, end: { line: c.line, offset: Math.max(1, end) } }
+    return {
+      threadContext:
+        c.side === 'RIGHT'
+          ? { filePath: `/${c.path}`, rightFileStart: range.start, rightFileEnd: range.end }
+          : { filePath: `/${c.path}`, leftFileStart: range.start, leftFileEnd: range.end },
+      ...(latest ? { pullRequestThreadContext: { iterationContext: { firstComparingIteration: latest, secondComparingIteration: latest }, ...(entry ? { changeTrackingId: num(entry.changeTrackingId) } : {}) } } : {})
+    }
   }
 
   return {
@@ -175,6 +242,56 @@ export function azureProvider(api: ApiClient, at: HostingRemote, orgUrl: string,
     async protectedBranches() {
       const repo = await repository()
       return unlessRefused(async () => azureProtected(await configurations(), repo.id))
+    },
+
+    async review(number) {
+      const p = `${repoPath}/pullRequests/${number}`
+      const [pr, threads, iterations, who] = await Promise.all([read(number), api.json('GET', v(`${p}/threads`)), api.json('GET', v(`${p}/iterations?includeCommits=true`)), viewer()])
+      const data = azureReview({ pr, threads, iterations, viewer: who })
+      if (!data) throw new AdarError({ message: `Pull request !${number} was not found on Azure DevOps`, code: 'NOT_FOUND' })
+      return data
+    },
+
+    async reviewAction(number, action, repo) {
+      const p = `${repoPath}/pullRequests/${number}`
+      const text = (content: string) => ({ comments: [{ parentCommentId: 0, content, commentType: 1 }], status: 1 })
+      const thread = async (body: Obj) => num(obj(await api.json('POST', v(`${p}/threads`), body)).id)
+      switch (action.kind) {
+        case 'comment': {
+          const pr = await current(number, action.commit)
+          await thread({ ...text(action.comment.body), ...(await threadOn(number, pr, action.comment, repo)) })
+          return
+        }
+        case 'reply':
+          if (!/^\d+$/.test(action.threadId)) throw invalid('Invalid thread')
+          await api.json('POST', v(`${p}/threads/${action.threadId}/comments`), { content: action.body, parentCommentId: action.commentId, commentType: 1 })
+          return
+        case 'resolve':
+          if (!/^\d+$/.test(action.threadId)) throw invalid('Invalid thread')
+          await api.json('PATCH', v(`${p}/threads/${action.threadId}`), { status: action.resolved ? 'fixed' : 'active' })
+          return
+        case 'conversation':
+          await thread(text(action.body))
+          return
+        case 'viewed':
+          throw invalid('Azure DevOps keeps no Viewed marks Adar can change: Adar keeps them on this computer')
+        case 'submit': {
+          const pr = await current(number, action.commit)
+          const who = await viewer()
+          if (action.event !== 'comment' && !who) throw new AdarError({ message: 'Azure DevOps did not say who the token belongs to', code: 'AUTH_FAILED' })
+          // Azure DevOps publishes no drafts: each thread goes now; if anything fails, the ones sent are taken back.
+          const made: number[] = []
+          try {
+            for (const c of action.comments) made.push(await thread({ ...text(c.body), ...(await threadOn(number, pr, c, repo)) }))
+            if (action.body.trim()) made.push(await thread(text(action.body)))
+            if (action.event !== 'comment' && who) await api.json('PUT', v(`${p}/reviewers/${enc(who.id)}`), { vote: AZURE_VOTES[action.event], id: who.id })
+          } catch (err) {
+            await Promise.all(made.filter(Boolean).map((id) => api.json('DELETE', v(`${p}/threads/${id}/comments/1`)).catch(() => undefined)))
+            throw err
+          }
+          return
+        }
+      }
     }
   }
 }

@@ -1,5 +1,5 @@
-// What every pull request provider (GitHub, GitLab, Bitbucket Cloud, Bitbucket Data Center) does for one
-// repository. index.ts picks the provider from the repository's remote and the user's sign-ins.
+// What every pull request provider (GitHub, GitLab, Bitbucket Cloud, Bitbucket Data Center, Azure DevOps) does for
+// one repository. index.ts picks the provider from the repository's remote and the user's sign-ins.
 
 import { AdarError } from '@shared/errors'
 import type { AuthorAsk, CreatePullOptions, MergeChecks, MergeMethod, PullCommit, PullRequest, RepoPullRequests } from '@shared/hosting'
@@ -36,10 +36,39 @@ export interface PullProvider {
   avatars?(authors: readonly AuthorAsk[]): Promise<Map<string, string>>
   /** A picture on the service's own host, fetched with the sign-in, as a data: URL (see ApiClient.image). */
   image?(url: string): Promise<string | null>
-  /** What the review view shows: Viewed marks, line comment threads, reviews and the conversation (GitHub only). */
+  /** What the review view shows: Viewed marks, line comment threads, reviews and the conversation. */
   review?(number: number): Promise<PullReviewData>
   /** Comment, reply, resolve, mark a file viewed or submit a review (validated by the caller). */
-  reviewAction?(number: number, action: ReviewAction): Promise<void>
+  reviewAction?(number: number, action: ReviewAction, repo: ReviewRepo): Promise<void>
+}
+
+/** What a provider may ask the local repository while acting on a review. */
+export interface ReviewRepo {
+  /** Where the lines of a file sit on both sides of base..head (services that place a comment by both line numbers). */
+  lines(base: string, head: string, path: string): Promise<FileLines>
+  /** Where the changes between two commits the repository has start. */
+  mergeBase(a: string, b: string): Promise<string>
+  /** How many characters a line of a file has at a commit (0 when it cannot be read). */
+  lineLength(commit: string, path: string, line: number): Promise<number>
+}
+
+/** A line of a pull request's diff on both sides. */
+export interface PlacedLine {
+  /** The file's path in the base (its old path when it was renamed) and in the head. */
+  oldPath: string
+  newPath: string
+  /** Its number in the base, null for an added line; in the head, null for a removed line. */
+  oldLine: number | null
+  newLine: number | null
+  /** The numbers a unified diff shows next to it: for an added line the old line that follows it, for a removed one the new line. */
+  oldPos: number
+  newPos: number
+}
+
+export interface FileLines {
+  oldPath: string
+  newPath: string
+  at(side: 'LEFT' | 'RIGHT', line: number): PlacedLine
 }
 
 export const invalid = (message: string) => new AdarError({ message, code: 'INVALID_ARGUMENT' })

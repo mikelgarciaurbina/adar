@@ -8,7 +8,7 @@ import { keyOf, removeDraft, submitReview } from '@renderer/actions/review'
 import { Avatar } from '@renderer/components/common/Avatar'
 import { Button, IconButton } from '@renderer/components/common/Button'
 import { usePulls } from '@renderer/components/pulls/pullStore'
-import { checksLabel, pullRef } from '@renderer/lib/pulls'
+import { checksLabel, providerName, pullRef } from '@renderer/lib/pulls'
 import { useApp, type RepoTab } from '@renderer/store/appStore'
 import type { ReviewEvent } from '@shared/review'
 import { linesLabel } from './parts'
@@ -56,7 +56,7 @@ export function ReviewPanel({ tab, number }: { tab: RepoTab; number: number }) {
         <span className="det-spacer" />
         {pr && (
           <button type="button" className="ui-link pr-open-link" onClick={() => openWebPage(pr.url)}>
-            Open on GitHub <ExternalLink size={12} />
+            Open on {providerName(pr)} <ExternalLink size={12} />
           </button>
         )}
       </div>
@@ -74,7 +74,7 @@ export function ReviewPanel({ tab, number }: { tab: RepoTab; number: number }) {
                       <small>
                         {d.path.split('/').pop()} · {linesLabel(d.side, d.line, d.startLine)}
                       </small>
-                      <span>{d.body.split('\n')[0]}</span>
+                      <span>{/^```suggestion/.test(d.body) ? 'Suggested change' : d.body.split('\n')[0]}</span>
                     </button>
                     <IconButton label="Delete" size="sm" onClick={() => pull && removeDraft(pull, i)}>
                       <Trash2 size={13} />
@@ -86,14 +86,14 @@ export function ReviewPanel({ tab, number }: { tab: RepoTab; number: number }) {
               <p className="rv-hint">Click + next to a line to comment on it. Comments added to the review are sent together when you submit it.</p>
             )}
             <div className="rv-verdict" role="radiogroup" aria-label="Verdict">
-              {VERDICTS.map((v) => {
+              {VERDICTS.filter((v) => !entry.data || entry.data.features.events.includes(v.event)).map((v) => {
                 const disabled = own && v.event !== 'comment'
                 return (
                   <label key={v.event} className={`rv-vo${event === v.event ? ' rv-vo-on' : ''}${disabled ? ' rv-vo-off' : ''}`} title={disabled ? 'Not on your own pull request' : undefined}>
                     <input type="radio" name={`verdict-${number}`} checked={event === v.event} disabled={disabled} onChange={() => setEvent(v.event)} />
                     <span>
                       {v.label}
-                      <small>{v.hint}</small>
+                      <small>{pr?.provider === 'azure' && v.event !== 'comment' ? `Votes “${v.event === 'approve' ? 'Approved' : 'Waiting for author'}”` : v.hint}</small>
                     </span>
                   </label>
                 )

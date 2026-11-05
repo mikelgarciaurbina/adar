@@ -190,7 +190,8 @@ describe('What the renderer may ask for', () => {
       comment: { path: 'src/a.ts', side: 'RIGHT', line: 12, startLine: 10, body: 'Why?' }
     })
     expect(parseReviewAction({ kind: 'submit', commit: sha('b'), event: 'approve', body: '', comments: [] })).not.toBeNull()
-    expect(parseReviewAction({ kind: 'reply', commentId: 101, body: 'ok' })).not.toBeNull()
+    expect(parseReviewAction({ kind: 'reply', threadId: 'PRRT_1', commentId: 101, body: 'ok' })).not.toBeNull()
+    expect(parseReviewAction({ kind: 'reply', threadId: 'd'.repeat(40), commentId: 101, body: 'ok' })).not.toBeNull()
     expect(parseReviewAction({ kind: 'resolve', threadId: 'PRRT_kwDOAbc-12', resolved: true })).not.toBeNull()
     for (const bad of [
       null,
@@ -201,7 +202,9 @@ describe('What the renderer may ask for', () => {
       { kind: 'comment', commit: sha('b'), comment: { ...draft, line: 0 } },
       { kind: 'comment', commit: sha('b'), comment: { ...draft, startLine: 20 } },
       { kind: 'comment', commit: sha('b'), comment: { ...draft, body: '   ' } },
-      { kind: 'reply', commentId: -1, body: 'x' },
+      { kind: 'reply', threadId: 'T1', commentId: -1, body: 'x' },
+      { kind: 'reply', commentId: 101, body: 'x' },
+      { kind: 'reply', threadId: '../x', commentId: 101, body: 'x' },
       { kind: 'resolve', threadId: 'a b', resolved: true },
       { kind: 'viewed', path: 'a', viewed: 'yes' },
       // Asking for changes needs something said.
@@ -299,7 +302,7 @@ describe('Reviewing on GitHub', () => {
       url: 'https://api.github.com/repos/acme/widgets/pulls/42/comments',
       body: { body: 'Why?', commit_id: sha('b'), path: 'src/a.ts', line: 12, side: 'RIGHT', start_line: 10, start_side: 'RIGHT' }
     })
-    await ops.pullReviewAction(repo, 42, { kind: 'reply', commentId: 102, body: 'Thanks' })
+    await ops.pullReviewAction(repo, 42, { kind: 'reply', threadId: 'T1', commentId: 102, body: 'Thanks' })
     expect(calls.at(-1)?.url).toBe('https://api.github.com/repos/acme/widgets/pulls/42/comments/102/replies')
     await ops.pullReviewAction(repo, 42, { kind: 'conversation', body: 'Looks good' })
     expect(calls.at(-1)?.url).toBe('https://api.github.com/repos/acme/widgets/issues/42/comments')

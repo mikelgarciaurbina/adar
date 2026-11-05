@@ -187,7 +187,7 @@ describe('Bitbucket pull requests', () => {
     expect(html).toContain('>Merge<')
   })
 
-  it('names Data Center reviews and offers to review on Bitbucket', () => {
+  it('names Data Center reviews and reviews it in Adar', () => {
     seed(
       data([pr({ provider: 'bitbucket-server', viewerIsAuthor: false, review: 'changes-requested', changesRequestedBy: ['Ane Etxeberria'], mergeable: 'conflicts' })], {
         provider: 'bitbucket-server',
@@ -198,7 +198,8 @@ describe('Bitbucket pull requests', () => {
     const html = renderToStaticMarkup(<PullPanel tab={tab} number={42} />)
     expect(html).toContain('Ane Etxeberria marked it as needing work')
     expect(html).toContain('Conflicts with main')
-    expect(html).toContain('Review on Bitbucket')
+    expect(html).toContain('Review changes')
+    expect(html).not.toContain('Review on Bitbucket')
   })
 
   it('says Declined and offers to delete the branch here', () => {
@@ -252,7 +253,9 @@ describe('GitLab merge requests', () => {
     expect(html).toContain('Open on GitLab')
     expect(html).toContain('1 of 2 jobs running')
     expect(html).toContain('No conflicts with main')
-    expect(html).toContain('Review on GitLab')
+    // Reviewed in Adar, as on GitHub.
+    expect(html).toContain('Review changes')
+    expect(html).not.toContain('Review on GitLab')
     expect(html).toContain('Squash and merge')
     expect(renderToStaticMarkup(<PullPanel tab={tab} number={7} />)).toContain('Merge request !7 is not among this repository&#x27;s recent merge requests.')
   })

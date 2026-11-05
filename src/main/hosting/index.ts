@@ -37,7 +37,7 @@ import { assertRepo } from '../git/read/common'
 import type { SystemServices } from '../system'
 import { normalizeServerUrl } from '../system/settings'
 import { GhCli, GlabCli, TokenStore, isPlausibleToken } from './auth'
-import { azureProvider } from './azureProvider'
+import { azureProvider, newAzureCaches } from './azureProvider'
 import { bitbucketCloudProvider, newCloudCaches } from './bitbucketCloud'
 import { bitbucketServerProvider, newServerCaches, serverWhoAmI } from './bitbucketServer'
 import { MAX_AVATAR_ASKS, PUBLIC_AVATAR_HOSTS } from './avatars'
@@ -46,6 +46,7 @@ import { GITHUB_OAUTH_CLIENT_ID, GithubDeviceFlow } from './githubDevice'
 import { githubProvider } from './githubProvider'
 import { gitlabProvider, newGitlabCaches } from './gitlabProvider'
 import { ApiClient, BoundedCache, mapLimit, publicImage } from './http'
+import { fileLines, lineLength, mergeBase } from './place'
 import { invalid, type HostingRemote, type PullProvider } from './provider'
 
 export interface HostingOptions {
@@ -89,7 +90,7 @@ export function createHostingOps(ctx: GitContext, services: Pick<SystemServices,
     new TokenStore(platform.userDataDir, platform.secrets, `azure-${createHash('sha256').update(url).digest('hex').slice(0, 16)}.json`)
   const fetchFn = platform.fetch ?? ((input: string, init?: RequestInit) => fetch(input, init))
   const userAgent = `Adar/${platform.appVersion}`
-  const caches = { cloud: newCloudCaches(), server: newServerCaches(), gitlab: newGitlabCaches() }
+  const caches = { cloud: newCloudCaches(), server: newServerCaches(), gitlab: newGitlabCaches(), azure: newAzureCaches() }
   const device = new GithubDeviceFlow({
     fetch: fetchFn,
     userAgent,
@@ -443,7 +444,7 @@ export function createHostingOps(ctx: GitContext, services: Pick<SystemServices,
       const org = s.azureServers.find((x) => x.url === at.server)
       if (!org) return { at, provider: null }
       const api = azureClient(org.url, await azureToken(org.url))
-      return { at, provider: azureProvider(api, at, org.url, () => azureWho(api, org.url).catch(() => null)) }
+      return { at, provider: azureProvider(api, at, org.url, () => azureWho(api, org.url).catch(() => null), caches.azure) }
     }
     const server = s.bitbucketServers.find((x) => x.url === at.server)
     if (!server) return { at, provider: null }
@@ -808,7 +809,7 @@ export function createHostingOps(ctx: GitContext, services: Pick<SystemServices,
       await assertRepo(ctx, repo)
       checkNumber(number)
       const { at, provider } = await requireProvider(repo)
-      if (!provider.review) throw invalid(`Adar reviews GitHub pull requests for now. Review this one on ${PROVIDER_NAMES[at.provider]}.`)
+      if (!provider.review) throw invalid(`Adar does not review pull requests on ${PROVIDER_NAMES[at.provider]} yet. Review this one there.`)
       return provider.review(number)
     },
 
@@ -818,8 +819,12 @@ export function createHostingOps(ctx: GitContext, services: Pick<SystemServices,
       const action = parseReviewAction(raw)
       if (!action) throw invalid('Invalid review action')
       const { at, provider } = await requireProvider(repo)
-      if (!provider.reviewAction) throw invalid(`Adar reviews GitHub pull requests for now. Review this one on ${PROVIDER_NAMES[at.provider]}.`)
-      await provider.reviewAction(number, action)
+      if (!provider.reviewAction) throw invalid(`Adar does not review pull requests on ${PROVIDER_NAMES[at.provider]} yet. Review this one there.`)
+      await provider.reviewAction(number, action, {
+        lines: (base, head, path) => fileLines(ctx, repo, base, head, path),
+        mergeBase: (a, b) => mergeBase(ctx, repo, a, b),
+        lineLength: (commit, path, line) => lineLength(ctx, repo, commit, path, line)
+      })
     },
 
     async preparePullReview(repo, number, opts) {

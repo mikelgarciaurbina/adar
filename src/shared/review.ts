@@ -1,8 +1,8 @@
-// Reviewing a pull request in Adar (GitHub and GitHub Enterprise): what the review view shows (files viewed, line
-// comment threads, reviews, the conversation and its timeline), what it can do on the service, GitHub's GraphQL
-// query and the pure mapping of its answer. The diff itself comes from the local repository (preparePullReview).
-// Also what the pull request list says about the signed-in user's part in each one (PullActivity), for the dots
-// and notifications of what changed since they looked.
+// Reviewing a pull request in Adar: what the review view shows (files viewed, line comment threads, reviews, the
+// conversation and its timeline) whatever the service, what each service lets it do (ReviewFeatures), what it can
+// do on the service, GitHub's GraphQL query and the pure mapping of its answer (GitLab's is in gitlab.ts). The diff
+// itself comes from the local repository (preparePullReview). Also what the pull request list says about the
+// signed-in user's part in each one (PullActivity), for the dots and notifications of what changed since they looked.
 
 // hosting.ts imports this module (the list query's activity fields): nothing is imported back from it.
 
@@ -40,6 +40,11 @@ export interface ReviewThread {
   canResolve: boolean
   canReply: boolean
   comments: ReviewComment[]
+  /**
+   * The commit it was written on, when the service keeps its line as of that version (Bitbucket Cloud): once its file
+   * changed since, the line may be another one, and the review view shows the thread as outdated.
+   */
+  writtenOn?: string | null
 }
 
 export interface ReviewSummary {
@@ -71,10 +76,31 @@ export type TimelineEvent =
   | { kind: 'ready'; at: string; actor: string }
   | { kind: 'merged' | 'closed' | 'reopened'; at: string; actor: string }
 
+/** What a service lets a review in Adar do. */
+export interface ReviewFeatures {
+  /** Viewed marks kept by the service (GitHub's), or by Adar on this computer for services that keep none. */
+  viewed: 'service' | 'adar'
+  /** A comment may cover several lines. */
+  multiLine: boolean
+  /** How the service writes a suggested change: GitHub's ```suggestion, GitLab's ```suggestion:-N+0; null: none. */
+  suggestions: 'github' | 'gitlab' | null
+  /** The verdicts a review can be submitted with. */
+  events: ReviewEvent[]
+}
+
+export const GITHUB_FEATURES: ReviewFeatures = { viewed: 'service', multiLine: true, suggestions: 'github', events: ['comment', 'approve', 'request-changes'] }
+
+/** A suggested change replacing `lines` (the commented lines, last one anchored), as `kind` writes it. */
+export function suggestionBlock(kind: NonNullable<ReviewFeatures['suggestions']>, lines: readonly string[]): string {
+  const open = kind === 'gitlab' ? `\`\`\`suggestion:-${Math.max(0, lines.length - 1)}+0` : '```suggestion'
+  return `${open}\n${lines.join('\n')}\n\`\`\``
+}
+
 export interface PullReviewData {
   number: number
-  /** The service's id of the pull request (for its GraphQL changes). */
+  /** The service's id of the pull request (GitHub: for its GraphQL changes). */
   nodeId: string
+  features: ReviewFeatures
   viewer: string
   title: string
   body: string
@@ -107,7 +133,8 @@ export interface DraftComment {
 export type ReviewAction =
   /** A line comment posted at once ("Comment now"). */
   | { kind: 'comment'; commit: string; comment: DraftComment }
-  | { kind: 'reply'; commentId: number; body: string }
+  /** A reply in a thread, after its comment `commentId` (GitHub answers the comment, GitLab the thread). */
+  | { kind: 'reply'; threadId: string; commentId: number; body: string }
   | { kind: 'resolve'; threadId: string; resolved: boolean }
   | { kind: 'viewed'; path: string; viewed: boolean }
   /** The review: its verdict, summary and the comments kept for it (added to a review started on the website). */
@@ -132,7 +159,7 @@ export interface ReviewRange {
 
 export const MAX_COMMENT = 65_000
 /** Longest text kept from the service (descriptions, comments). */
-const MAX_TEXT = 20_000
+export const MAX_TEXT = 20_000
 export const MAX_DRAFTS = 200
 
 // ── GraphQL ──────────────────────────────────────────────────────────────────
@@ -287,6 +314,20 @@ function timelineOf(items: Obj[], prAuthor: string): TimelineEvent[] {
   return out
 }
 
+/** Commits (oldest first) as pushes: in a row by the same person, made close together, they read as one. */
+export function commitsTimeline(commits: ReadonlyArray<{ sha: string; subject: string; author: string; at: string }>): TimelineEvent[] {
+  const out: TimelineEvent[] = []
+  for (const c of commits) {
+    const last = out[out.length - 1]
+    const entry = { sha: c.sha, subject: c.subject.slice(0, 300) }
+    if (last?.kind === 'commits' && last.author === c.author && Math.abs(Date.parse(c.at) - Date.parse(last.at)) <= PUSH_GAP_MS) {
+      last.commits.push(entry)
+      last.at = c.at || last.at
+    } else out.push({ kind: 'commits', at: c.at, author: c.author, commits: [entry] })
+  }
+  return out
+}
+
 /** The answer of REVIEW_QUERY (its `data`) as PullReviewData, or null when the pull request is missing. */
 export function reviewFromQuery(data: unknown): PullReviewData | null {
   if (!isObj(data) || !isObj(data.repository) || !isObj(data.repository.pullRequest)) return null
@@ -377,6 +418,7 @@ export function reviewFromQuery(data: unknown): PullReviewData | null {
   return {
     number,
     nodeId,
+    features: GITHUB_FEATURES,
     viewer,
     title: str(pr.title),
     body: text(pr.body),
@@ -394,6 +436,9 @@ export function reviewFromQuery(data: unknown): PullReviewData | null {
 }
 
 // ── What the list says about the signed-in user's part (dots and notifications) ──
+
+/** Commits of each pull request the dots look at (as many as GitHub's list gives). */
+export const MAX_ACTIVITY_COMMITS = 30
 
 /** Fields added to each open pull request of the list query. */
 export const ACTIVITY_FIELDS = `
@@ -483,6 +528,8 @@ export interface PullNotice {
 const SHA = /^[0-9a-f]{40}$/i
 const posInt = (v: unknown): v is number => typeof v === 'number' && Number.isSafeInteger(v) && v > 0
 const commentBody = (v: unknown): string | null => (typeof v === 'string' && v.trim() && v.length <= MAX_COMMENT ? v : null)
+/** A thread's id: GitHub's node id, GitLab's discussion id, a number. */
+const isThreadId = (v: unknown): v is string => typeof v === 'string' && /^[\w=-]{1,200}$/.test(v)
 
 function parseDraft(raw: unknown): DraftComment | null {
   if (!isObj(raw)) return null
@@ -502,10 +549,10 @@ export function parseReviewAction(raw: unknown): ReviewAction | null {
     }
     case 'reply': {
       const body = commentBody(raw.body)
-      return body && posInt(raw.commentId) ? { kind: 'reply', commentId: raw.commentId, body } : null
+      return body && posInt(raw.commentId) && isThreadId(raw.threadId) ? { kind: 'reply', threadId: raw.threadId, commentId: raw.commentId, body } : null
     }
     case 'resolve':
-      return typeof raw.threadId === 'string' && /^[\w=-]{1,200}$/.test(raw.threadId) && typeof raw.resolved === 'boolean'
+      return isThreadId(raw.threadId) && typeof raw.resolved === 'boolean'
         ? { kind: 'resolve', threadId: raw.threadId, resolved: raw.resolved }
         : null
     case 'viewed':

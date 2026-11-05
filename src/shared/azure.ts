@@ -18,6 +18,20 @@ import {
   type PullState,
   type ReviewState
 } from './hosting'
+import {
+  MAX_TEXT,
+  isBaseMerge,
+  isSafePath,
+  type ConversationComment,
+  type PullActivity,
+  type PullReviewData,
+  type ReviewComment,
+  type ReviewFeatures,
+  type ReviewSummary,
+  type ReviewThread,
+  type ReviewVerdict,
+  type TimelineEvent
+} from './review'
 
 type Obj = Record<string, unknown>
 
@@ -304,4 +318,191 @@ export function azureProtected(configurations: unknown, repoId: string): string[
     }
   }
   return keepPatterns(patterns)
+}
+
+// ── Reviewing a pull request in Adar ─────────────────────────────────────────
+
+/** Azure DevOps keeps no Viewed marks Adar can read; comments span lines; suggested changes are ```suggestion. */
+export const AZURE_FEATURES: ReviewFeatures = { viewed: 'adar', multiLine: true, suggestions: 'github', events: ['comment', 'approve', 'request-changes'] }
+
+/** The votes Adar casts: Approved, and Waiting for author for changes. */
+export const AZURE_VOTES = { approve: 10, 'request-changes': -5 } as const
+
+/** What Adar reads to show a pull request's review. */
+export interface AzureReviewAnswers {
+  /** GET …/pullrequests/{id} */
+  pr: unknown
+  /** GET …/pullRequests/{id}/threads */
+  threads: unknown
+  /** GET …/pullRequests/{id}/iterations?includeCommits=true: each push, with its commits. */
+  iterations: unknown
+  viewer: AzureUser | null
+}
+
+const lineOf = (v: unknown): number | null => {
+  const n = num(obj(v).line)
+  return Number.isSafeInteger(n) && n > 0 ? n : null
+}
+const prop = (t: Obj, key: string): string => {
+  const p = obj(obj(t.properties)[key])
+  return p.$value === undefined ? '' : String(p.$value)
+}
+/** Thread states that count as resolved (fixed, won't fix, closed, by design). */
+const RESOLVED = new Set(['fixed', 'wontFix', 'closed', 'byDesign', '2', '3', '4', '5'])
+const byTime = <T extends { at: string }>(a: T, b: T) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0)
+
+/** Each iteration (push): when, by whom, its head and its commits. */
+function azureIterations(json: unknown): Array<{ id: number; at: string; author: string; head: string; commits: Array<{ sha: string; subject: string }> }> {
+  return values(json)
+    .map((i) => ({
+      id: num(i.id),
+      at: str(i.createdDate),
+      author: str(obj(i.author).displayName) || str(obj(i.author).uniqueName),
+      head: hexSha(obj(i.sourceRefCommit).commitId),
+      commits: values(i.commits)
+        .filter((c) => hexSha(c.commitId))
+        .map((c) => ({ sha: hexSha(c.commitId), subject: str(c.comment).split('\n')[0].slice(0, 300) }))
+        .reverse()
+    }))
+    .filter((i) => i.id > 0)
+    .sort((a, b) => a.id - b.id)
+}
+
+/** A vote as a review verdict (10, 5: approved; -5, -10: changes requested; 0: none). */
+const voteVerdict = (vote: number): ReviewVerdict | null => (vote >= 5 ? 'approved' : vote <= -5 ? 'changes-requested' : null)
+
+/** A pull request's review as Adar shows it, or null when the answer is not a pull request. */
+export function azureReview(a: AzureReviewAnswers): PullReviewData | null {
+  if (!isObj(a.pr)) return null
+  const pr = a.pr
+  const number = num(pr.pullRequestId)
+  if (!number) return null
+  const viewer = a.viewer
+  const isViewer = (u: unknown) => !!viewer && str(obj(u).id).toLowerCase() === viewer.id.toLowerCase()
+  const who = (u: unknown) => str(obj(u).displayName) || str(obj(u).uniqueName)
+  const iterations = azureIterations(a.iterations)
+  const headOf = new Map(iterations.map((i) => [i.id, i.head]))
+  const comment = (c: Obj): ReviewComment => ({ id: num(c.id), author: who(c.author), body: str(c.content).slice(0, MAX_TEXT), createdAt: str(c.publishedDate), viewerDidAuthor: isViewer(c.author) })
+
+  const threads: ReviewThread[] = []
+  const comments: ConversationComment[] = []
+  const reviews: ReviewSummary[] = []
+  const timeline: TimelineEvent[] = []
+  for (const t of values(a.threads)) {
+    if (t.isDeleted === true || !num(t.id)) continue
+    const said = values(t.comments).filter((c) => c.isDeleted !== true && num(c.id) > 0)
+    if (!said.length) continue
+    if (str(said[0].commentType) === 'system') {
+      const at = str(said[0].publishedDate)
+      const type = prop(t, 'CodeReviewThreadType')
+      if (type === 'VoteUpdate') {
+        const verdict = voteVerdict(Number(prop(t, 'CodeReviewVoteResult')))
+        if (verdict && at) reviews.push({ id: `t${num(t.id)}`, author: who(said[0].author), verdict, body: '', submittedAt: at, commit: null, comments: 0 })
+      }
+      continue
+    }
+    const context = obj(t.threadContext)
+    const path = str(context.filePath).replace(/^\//, '')
+    if (!path) {
+      for (const c of said) comments.push(comment(c))
+      continue
+    }
+    if (!isSafePath(path)) continue
+    const right = isObj(context.rightFileStart)
+    const side = right ? 'RIGHT' : 'LEFT'
+    const start = lineOf(right ? context.rightFileStart : context.leftFileStart)
+    const end = lineOf(right ? context.rightFileEnd : context.leftFileEnd) ?? start
+    if (!end) {
+      // On a whole file: the conversation.
+      for (const c of said) comments.push(comment(c))
+      continue
+    }
+    const iteration = num(obj(obj(t.pullRequestThreadContext).iterationContext).secondComparingIteration)
+    threads.push({
+      id: String(num(t.id)),
+      path,
+      side,
+      line: end,
+      startLine: start && start < end ? start : null,
+      originalLine: end,
+      resolved: RESOLVED.has(str(t.status)),
+      outdated: false,
+      canResolve: true,
+      canReply: true,
+      comments: said.map(comment),
+      // Azure DevOps keeps a thread's lines as of the push it was written on.
+      writtenOn: headOf.get(iteration) ?? null
+    })
+  }
+  for (const i of iterations) if (i.commits.length) timeline.push({ kind: 'commits', at: i.at, author: i.author, commits: i.commits })
+
+  const author = who(pr.createdBy)
+  const reviewers: PullReviewData['reviewers'] = values(pr.reviewers)
+    .filter((r) => r.isContainer !== true && who(r) && who(r) !== author)
+    .map((r) => ({ login: who(r), verdict: voteVerdict(num(r.vote)) ?? 'requested' }))
+  return {
+    number,
+    nodeId: String(number),
+    features: AZURE_FEATURES,
+    viewer: viewer?.name ?? '',
+    title: str(pr.title),
+    body: str(pr.description).slice(0, MAX_TEXT),
+    author,
+    headSha: hexSha(obj(pr.lastMergeSourceCommit).commitId),
+    baseSha: hexSha(obj(pr.lastMergeTargetCommit).commitId),
+    viewed: {},
+    threads,
+    reviews: reviews.sort((x, y) => (x.submittedAt < y.submittedAt ? -1 : 1)),
+    comments: comments.sort((x, y) => (x.createdAt < y.createdAt ? -1 : 1)),
+    timeline: timeline.sort(byTime),
+    reviewers,
+    pendingOnService: null
+  }
+}
+
+/** The signed-in user's part in a pull request and what others did (its threads, iterations and commits newest first). */
+export function azureActivity(threadsJson: unknown, iterationsJson: unknown, commitsJson: unknown, viewer: AzureUser | null, baseRef: string, maxCommits: number): PullActivity {
+  const isViewer = (u: unknown) => !!viewer && str(obj(u).id).toLowerCase() === viewer.id.toLowerCase()
+  const who = (u: unknown) => str(obj(u).displayName) || str(obj(u).uniqueName)
+  const iterations = azureIterations(iterationsJson)
+  const headOf = new Map(iterations.map((i) => [i.id, i.head]))
+  const headAt = (at: string) => iterations.filter((i) => i.at <= at).at(-1)?.head || null
+  let viewerReview: PullActivity['viewerReview'] = null
+  let viewerCommentAt: string | null = null
+  const others: PullActivity['others'] = []
+  const review = (r: NonNullable<PullActivity['viewerReview']>) => {
+    if (!viewerReview || r.at > viewerReview.at) viewerReview = r
+  }
+  for (const t of values(threadsJson)) {
+    if (t.isDeleted === true) continue
+    const said = values(t.comments).filter((c) => c.isDeleted !== true)
+    if (!said.length) continue
+    if (str(said[0].commentType) === 'system') {
+      const verdict = prop(t, 'CodeReviewThreadType') === 'VoteUpdate' ? voteVerdict(Number(prop(t, 'CodeReviewVoteResult'))) : null
+      const at = str(said[0].publishedDate)
+      if (!verdict || !at) continue
+      if (isViewer(said[0].author)) review({ commit: headAt(at), at, verdict })
+      else others.push({ who: who(said[0].author), at, kind: 'review', verdict })
+      continue
+    }
+    const onLine = !!str(obj(t.threadContext).filePath)
+    const iteration = num(obj(obj(t.pullRequestThreadContext).iterationContext).secondComparingIteration)
+    for (const c of said) {
+      const at = str(c.publishedDate)
+      if (!at) continue
+      if (!isViewer(c.author)) others.push({ who: who(c.author), at, kind: 'comment' })
+      else if (onLine) review({ commit: headOf.get(iteration) || headAt(at), at, verdict: 'commented' })
+      else if (!viewerCommentAt || at > viewerCommentAt) viewerCommentAt = at
+    }
+  }
+  const listed = values(commitsJson).filter((c) => hexSha(c.commitId))
+  const commits = listed
+    .slice(0, maxCommits)
+    .reverse()
+    .map((c) => ({
+      sha: hexSha(c.commitId),
+      at: str(obj(c.committer).date) || str(obj(c.author).date),
+      baseMerge: (Array.isArray(c.parents) ? c.parents.length > 1 : /^Merge/.test(str(c.comment))) && isBaseMerge(str(c.comment).split('\n')[0], baseRef)
+    }))
+  return { viewerReview, viewerCommentAt, commits, moreCommits: listed.length > maxCommits, others: others.sort(byTime) }
 }

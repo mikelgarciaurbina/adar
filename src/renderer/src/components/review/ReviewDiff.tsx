@@ -9,7 +9,7 @@ import { buildDiffModel } from '@renderer/components/diff/diffModel'
 import { useSyntax } from '@renderer/components/diff/useSyntax'
 import { wordDiff, type Range, type WordDiff } from '@renderer/components/diff/wordDiff'
 import { pluralize } from '@renderer/lib/format'
-import type { DraftComment, DiffSide } from '@shared/review'
+import type { DraftComment, DiffSide, ReviewFeatures } from '@shared/review'
 import type { DiffLine, FileDiff } from '@shared/types'
 import { lineSlot, type FileThreads } from './model'
 import { Composer, DraftCard, Thread } from './parts'
@@ -30,9 +30,10 @@ interface Props {
   /** The diff starts at the pull request's base: comments may go on the old side too. */
   againstBase: boolean
   canComment: boolean
+  features: ReviewFeatures
 }
 
-export function ReviewDiff({ repo, number, pull, diff, path, threads, drafts, againstBase, canComment }: Props) {
+export function ReviewDiff({ repo, number, pull, diff, path, threads, drafts, againstBase, canComment, features }: Props) {
   const model = useMemo(() => buildDiffModel(diff, { hunkHeaders: true }), [diff])
   const blocks = useMemo(() => model.hunks.flatMap((h) => [h.oldText, h.newText]), [model])
   const lookup = useSyntax(path, blocks)
@@ -78,7 +79,7 @@ export function ReviewDiff({ repo, number, pull, diff, path, threads, drafts, ag
 
   const start = (side: DiffSide, line: number, extend: boolean) => {
     const c = useReview.getState().composer
-    if (extend && c && c.path === path && c.side === side && c.key === pull) {
+    if (extend && features.multiLine && c && c.path === path && c.side === side && c.key === pull) {
       const lo = Math.min(c.startLine ?? c.line, c.line, line)
       const hi = Math.max(c.startLine ?? c.line, c.line, line)
       useReview.getState().setComposer({ ...c, line: hi, startLine: lo < hi ? lo : undefined })
@@ -124,7 +125,7 @@ export function ReviewDiff({ repo, number, pull, diff, path, threads, drafts, ag
                       <button
                         type="button"
                         className="rv-add"
-                        title="Comment on this line (Shift-click: down to here)"
+                        title={features.multiLine ? 'Comment on this line (Shift-click: down to here)' : 'Comment on this line'}
                         aria-label={`Comment on line ${n}`}
                         onClick={(e) => start(side, n!, e.shiftKey)}
                       >
@@ -142,7 +143,7 @@ export function ReviewDiff({ repo, number, pull, diff, path, threads, drafts, ag
                   <DraftCard key={`d${d.index}`} pull={pull} draft={d.draft} index={d.index} />
                 ))}
                 {open && slot === lineSlot(open.side, open.line) && (
-                  <Composer repo={repo} number={number} pull={pull} lines={textOf(open.side, open.startLine ?? open.line, open.line)} againstHead={canComment} />
+                  <Composer repo={repo} number={number} pull={pull} lines={textOf(open.side, open.startLine ?? open.line, open.line)} againstHead={canComment} features={features} />
                 )}
               </Fragment>
             )

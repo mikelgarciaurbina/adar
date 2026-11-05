@@ -1,12 +1,13 @@
 // A pull request's review, instead of the graph: its files (all of them, or what changed since the user's last
-// review) with GitHub's Viewed marks, one file's diff with its comment threads, the conversation in order and the
-// commits. The review itself (verdict, summary, kept comments) is in the right panel (ReviewPanel).
+// review) with Viewed marks (the service's, or Adar's own), one file's diff with its comment threads, the
+// conversation in order and the commits. The review itself (verdict, summary, kept comments) is in the right panel
+// (ReviewPanel).
 
 import { useEffect, useMemo, useState } from 'react'
 import { ArrowLeft, Check, ChevronDown, ChevronRight, Circle, ExternalLink, FileCode2, GitCommitHorizontal, GitPullRequest, MessageSquare, RefreshCw, Search, Sparkles } from 'lucide-react'
 import * as git from '@renderer/actions/git'
 import { openWebPage } from '@renderer/actions/pulls'
-import { commentOnConversation, keyOf, loadReview, setViewed } from '@renderer/actions/review'
+import { commentOnConversation, keyOf, loadReview, REVIEW_PAGE, setViewed } from '@renderer/actions/review'
 import { api } from '@renderer/api/client'
 import { Button, EmptyState, IconButton, Spinner } from '@renderer/components/common/Button'
 import { Avatar } from '@renderer/components/common/Avatar'
@@ -16,7 +17,7 @@ import { PullStateIcon } from '@renderer/components/pulls/PullChip'
 import { usePulls } from '@renderer/components/pulls/pullStore'
 import { absoluteTime, pluralize, relativeTime, shortSha } from '@renderer/lib/format'
 import { isEditableTarget } from '@renderer/lib/keys'
-import { pullRef } from '@renderer/lib/pulls'
+import { providerName, pullRef } from '@renderer/lib/pulls'
 import { useApp, type RepoTab, type ReviewMode, type ReviewTab } from '@renderer/store/appStore'
 import { describeError } from '@shared/errors'
 import type { PullRequest } from '@shared/hosting'
@@ -114,7 +115,7 @@ export function ReviewView({ tab, view }: { tab: RepoTab; view: View }) {
           <RefreshCw size={15} className={entry.loading ? 'rv-spin' : undefined} />
         </IconButton>
         {pr && (
-          <IconButton label="Open on GitHub" onClick={() => openWebPage(`${pr.url}/files`)}>
+          <IconButton label={`Open on ${providerName(pr)}`} onClick={() => openWebPage(`${pr.url}${REVIEW_PAGE[pr.provider]}`)}>
             <ExternalLink size={15} />
           </IconButton>
         )}
@@ -125,7 +126,7 @@ export function ReviewView({ tab, view }: { tab: RepoTab; view: View }) {
           <EmptyState title="The review could not be loaded">{entry.error}</EmptyState>
           <div className="rv-row rv-row-center">
             <Button onClick={() => void loadReview(repo, number, { force: true })}>Try again</Button>
-            {pr && <Button icon={<ExternalLink size={13} />} onClick={() => openWebPage(`${pr.url}/files`)}>Open on GitHub</Button>}
+            {pr && <Button icon={<ExternalLink size={13} />} onClick={() => openWebPage(`${pr.url}${REVIEW_PAGE[pr.provider]}`)}>Open on {providerName(pr)}</Button>}
           </div>
         </div>
       ) : !entry.data || !entry.range || !groups ? (
@@ -209,7 +210,7 @@ function Files({
     <div className="rv-body">
       <div className="rv-tree">
         <div className="rv-th">
-          <div className="rv-progress" title="Files marked Viewed (V)">
+          <div className="rv-progress" title={data.features.viewed === 'adar' ? 'Files marked Viewed (V), kept by Adar on this computer' : 'Files marked Viewed (V)'}>
             <i style={{ ['--p' as string]: `${total ? Math.round((viewedCount / total) * 100) : 0}%` }} />
             {viewedCount} of {total} viewed
           </div>
@@ -244,7 +245,7 @@ function Files({
         {banner?.text && <div className={`rv-since rv-since-${banner.tone}`}>{banner.text}</div>}
         {data.pendingOnService && (
           <div className="rv-since rv-since-calm">
-            You started a review on GitHub with {pluralize(data.pendingOnService.comments, 'comment')}: submitting from Adar adds yours to it and sends them all.
+            You started a review on {pr ? providerName(pr) : 'the website'} with {pluralize(data.pendingOnService.comments, 'comment')}: submitting from Adar adds yours to it and sends them all.
           </div>
         )}
         {file ? (
@@ -428,6 +429,7 @@ function FileBody(props: {
             drafts={drafts}
             againstBase={props.againstBase}
             canComment={props.canComment}
+            features={props.data.features}
           />
         )}
       </div>

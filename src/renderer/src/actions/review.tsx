@@ -1,17 +1,19 @@
-// Reviewing pull requests in Adar and keeping up with them: opening a review (GitHub; other services open their own
-// page) and the inbox of every open repository, loading what the review shows, line comments, replies, resolving
-// threads, Viewed marks and submitting the review; following a pull request and marking it seen.
+// Reviewing pull requests in Adar and keeping up with them: opening a review (GitHub, GitLab, Bitbucket and Azure
+// DevOps) and the inbox of every open repository, loading what the review shows, line comments, replies,
+// resolving threads, Viewed marks (the service's, or Adar's own where the service keeps none it can read) and
+// submitting the review; following a pull request and marking it seen.
 
 import { api } from '@renderer/api/client'
 import { toast } from '@renderer/components/common/toast'
 import { usePulls } from '@renderer/components/pulls/pullStore'
+import { settleReview } from '@renderer/components/review/model'
 import { entryKey, EMPTY_ENTRY, useReview, type ReviewEntry } from '@renderer/components/review/reviewStore'
 import { marksOf, pullKey, pullNews } from '@renderer/lib/following'
 import { providerName, pullNoun } from '@renderer/lib/pulls'
 import { useApp, type ReviewMode, type ReviewTab } from '@renderer/store/appStore'
 import { describeError } from '@shared/errors'
 import type { HostingProvider, PullRequest, RepoPullRequests } from '@shared/hosting'
-import type { DraftComment, ReviewEvent } from '@shared/review'
+import type { DraftComment, FileViewed, PullReviewData, ReviewEvent } from '@shared/review'
 import { MAX_PULLS_SEEN } from '@shared/types'
 import { openWebPage } from './pulls'
 
@@ -21,8 +23,10 @@ const review = () => useReview.getState()
 /** Where each service shows a pull request's changes, after its own address. */
 export const REVIEW_PAGE: Record<HostingProvider, string> = { github: '/files', gitlab: '/diffs', 'bitbucket-cloud': '/diff', 'bitbucket-server': '/diff', azure: '?_a=files' }
 
-/** Adar reviews GitHub's pull requests (github.com and GitHub Enterprise); the others open on their service. */
-export const reviewsInAdar = (pr: Pick<PullRequest, 'provider'>) => pr.provider === 'github'
+/** Services whose pull requests Adar reviews itself (all of them now: a new one opens its own page until it does). */
+const IN_ADAR: ReadonlySet<HostingProvider> = new Set(['github', 'gitlab', 'bitbucket-cloud', 'bitbucket-server', 'azure'])
+
+export const reviewsInAdar = (pr: Pick<PullRequest, 'provider'>) => IN_ADAR.has(pr.provider)
 
 export function pullData(repo: string): RepoPullRequests | null {
   return usePulls.getState().repos[repo]?.data ?? null
@@ -130,13 +134,14 @@ export function loadReview(repo: string, number: number, opts: { force?: boolean
       }
       if (!pr) throw new Error(`Pull request #${number} is not among this repository’s recent pull requests`)
       const since = review().entries[key]?.since ?? null
-      const data = await api.getPullReview(repo, number)
-      const range = await api.preparePullReview(repo, number, { head: data.headSha || pr.headSha, baseRef: pr.baseRef, baseSha: data.baseSha || null, since: since?.sha ?? null })
+      const fetched = await api.getPullReview(repo, number)
+      const range = await api.preparePullReview(repo, number, { head: fetched.headSha || pr.headSha, baseRef: pr.baseRef, baseSha: fetched.baseSha || null, since: since?.sha ?? null })
       const sinceFiles = range.since && range.sinceState !== 'missing' && range.since !== range.head ? api.getCompareFiles(repo, range.since, range.head) : Promise.resolve(null)
-      const [files, changed, log] = await Promise.all([
+      const [files, changed, log, data] = await Promise.all([
         api.getCompareFiles(repo, range.base, range.head),
         sinceFiles,
-        api.getLog(repo, { revisions: [range.head, `^${range.base}`], maxCount: 250 })
+        api.getLog(repo, { revisions: [range.head, `^${range.base}`], maxCount: 250 }),
+        settle(repo, number, fetched, range.head)
       ])
       review().patch(key, { data, range, files, sinceFiles: changed, commits: log.commits, loading: false, error: null, at: Date.now() })
     } catch (err) {
@@ -147,11 +152,25 @@ export function loadReview(repo: string, number: number, opts: { force?: boolean
   return run
 }
 
+/** The review as the repository says it is at `head` (Adar's Viewed marks, threads left on lines that changed): see settleReview. */
+function settle(repo: string, number: number, data: PullReviewData, head: string): Promise<PullReviewData> {
+  const pull = keyOf(repo, number)
+  const marks = pull ? (review().viewed[pull]?.files ?? {}) : {}
+  return settleReview(data, head, marks, (sha) =>
+    api
+      .getCompareFiles(repo, sha, head)
+      .then((files) => new Set(files.flatMap((f) => (f.oldPath ? [f.path, f.oldPath] : [f.path]))))
+      .catch(() => null)
+  )
+}
+
 /** Ask the service again for the threads, reviews and Viewed marks (after a change made from Adar). */
 async function reloadData(repo: string, number: number): Promise<void> {
   const key = entryKey(repo, number)
   try {
-    review().patch(key, { data: await api.getPullReview(repo, number) })
+    const head = review().entries[key]?.range?.head
+    const data = await api.getPullReview(repo, number)
+    review().patch(key, { data: head ? await settle(repo, number, data, head) : data })
   } catch (err) {
     toast.error(err)
   }
@@ -191,9 +210,9 @@ export async function commentNow(repo: string, number: number, draft: DraftComme
   }
 }
 
-export async function replyTo(repo: string, number: number, commentId: number, body: string): Promise<boolean> {
+export async function replyTo(repo: string, number: number, threadId: string, commentId: number, body: string): Promise<boolean> {
   try {
-    await api.pullReviewAction(repo, number, { kind: 'reply', commentId, body })
+    await api.pullReviewAction(repo, number, { kind: 'reply', threadId, commentId, body })
     await reloadData(repo, number)
     return true
   } catch (err) {
@@ -211,15 +230,22 @@ export async function resolveThread(repo: string, number: number, threadId: stri
   }
 }
 
-/** Mark a file viewed (or not) on the service; shown at once, put back if the service refuses. */
+/** Mark a file viewed (or not) on the service, or in Adar for services without marks; shown at once, put back if the service refuses. */
 export async function setViewed(repo: string, number: number, path: string, viewed: boolean): Promise<void> {
   const key = entryKey(repo, number)
-  const put = (v: 'viewed' | 'unviewed' | 'changed') => {
+  const put = (v: FileViewed) => {
     const data = review().entries[key]?.data
     if (data) review().patch(key, { data: { ...data, viewed: { ...data.viewed, [path]: v } } })
   }
-  const before = review().entries[key]?.data?.viewed[path] ?? 'unviewed'
+  const entry = review().entries[key]
+  const before = entry?.data?.viewed[path] ?? 'unviewed'
   put(viewed ? 'viewed' : 'unviewed')
+  if (entry?.data?.features.viewed === 'adar') {
+    const pull = keyOf(repo, number)
+    const head = entry.range?.head
+    if (pull && head) review().setViewedMark(pull, path, viewed ? head : null)
+    return
+  }
   try {
     await api.pullReviewAction(repo, number, { kind: 'viewed', path, viewed })
   } catch (err) {

@@ -16,6 +16,21 @@ import {
   type PullState,
   type ReviewState
 } from './hosting'
+import {
+  MAX_TEXT,
+  commitsTimeline,
+  isBaseMerge,
+  isSafePath,
+  type ConversationComment,
+  type PullActivity,
+  type PullReviewData,
+  type ReviewComment,
+  type ReviewFeatures,
+  type ReviewSummary,
+  type ReviewThread,
+  type ReviewVerdict,
+  type TimelineEvent
+} from './review'
 
 type Obj = Record<string, unknown>
 
@@ -320,4 +335,397 @@ export function serverProtected(json: unknown): string[] {
       .filter((m) => m.active !== false && ['BRANCH', 'PATTERN'].includes(str(obj(m.type).id)))
       .map((m) => str(m.id).replace(/^refs\/heads\//, ''))
   )
+}
+
+// ── Reviewing a pull request in Adar ─────────────────────────────────────────
+
+/** Bitbucket keeps no Viewed marks Adar can read; Cloud places comments on several lines and has no suggested changes. */
+export const CLOUD_FEATURES: ReviewFeatures = { viewed: 'adar', multiLine: true, suggestions: null, events: ['comment', 'approve', 'request-changes'] }
+/** Data Center: one line per comment, suggested changes as ```suggestion. */
+export const SERVER_FEATURES: ReviewFeatures = { viewed: 'adar', multiLine: false, suggestions: 'github', events: ['comment', 'approve', 'request-changes'] }
+
+const lineNo = (v: unknown): number | null => (typeof v === 'number' && Number.isSafeInteger(v) && v > 0 ? v : null)
+const byTime = <T extends { at: string }>(a: T, b: T) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0)
+const text = (v: unknown) => str(v).slice(0, MAX_TEXT)
+
+/** The full id of a commit Bitbucket names by a prefix (Cloud's 12 characters), among those known. */
+function fullSha(prefix: string, known: readonly string[]): string | null {
+  const p = prefix.toLowerCase()
+  return p.length >= 7 ? (known.find((k) => k.startsWith(p)) ?? null) : null
+}
+
+/** What Adar reads to show a Cloud pull request's review. */
+export interface CloudReviewAnswers {
+  /** GET …/pullrequests/{id} */
+  pr: unknown
+  /** GET …/comments, every page's values. */
+  comments: Obj[]
+  /** GET …/activity values (approvals, changes requested). */
+  activity: Obj[]
+  /** GET …/commits values, newest first. */
+  commits: Obj[]
+  viewer: CloudViewer | null
+}
+
+/** The commit an inline comment was written on: Cloud's `links.code` names the diff it was on (…/diff/<repo>:<hash>%0D…). */
+function cloudWrittenOn(c: Obj): string {
+  const m = /:([0-9a-f]{7,40})(?:%0D|\r)/i.exec(str(obj(obj(c.links).code).href))
+  return m ? m[1].toLowerCase() : ''
+}
+
+/** A Cloud pull request's review as Adar shows it, or null when the answer is not a pull request. */
+export function cloudReview(a: CloudReviewAnswers): PullReviewData | null {
+  if (!isObj(a.pr)) return null
+  const pr = a.pr
+  const number = num(pr.id)
+  if (!number) return null
+  const known = a.commits.map((c) => hexSha(c.hash)).filter((h) => h.length === 40)
+  const headSha = fullSha(str(obj(obj(pr.source).commit).hash), known) ?? ''
+  const mine = (u: unknown) => isCloudViewer(u, a.viewer)
+  const comment = (c: Obj): ReviewComment => ({ id: num(c.id), author: cloudName(c.user), body: text(obj(c.content).raw), createdAt: str(c.created_on), viewerDidAuthor: mine(c.user) })
+
+  // Threads: a comment without a parent, with its replies (at any depth) in order. Drafts of a review started on the website stay private.
+  const live = a.comments.filter((c) => num(c.id) > 0 && c.deleted !== true && c.pending !== true)
+  const byId = new Map(live.map((c) => [num(c.id), c]))
+  const rootOf = (c: Obj): Obj => {
+    let at = c
+    for (let i = 0; i < 50 && num(obj(at.parent).id) && byId.has(num(obj(at.parent).id)); i++) at = byId.get(num(obj(at.parent).id))!
+    return at
+  }
+  const replies = new Map<number, Obj[]>()
+  for (const c of live) {
+    const root = rootOf(c)
+    if (root !== c) replies.set(num(root.id), [...(replies.get(num(root.id)) ?? []), c])
+  }
+  const threads: ReviewThread[] = []
+  const comments: ConversationComment[] = []
+  for (const root of live.filter((c) => rootOf(c) === c)) {
+    const all = [root, ...(replies.get(num(root.id)) ?? []).sort((x, y) => (str(x.created_on) < str(y.created_on) ? -1 : 1))]
+    const inline = isObj(root.inline) ? root.inline : null
+    if (!inline) {
+      for (const c of all) comments.push(comment(c))
+      continue
+    }
+    if (!isSafePath(inline.path)) continue
+    const to = lineNo(inline.to)
+    const from = lineNo(inline.from)
+    const side = to ? 'RIGHT' : 'LEFT'
+    const line = to ?? from
+    const start = side === 'RIGHT' ? lineNo(inline.start_to) : lineNo(inline.start_from)
+    const outdated = inline.outdated === true || !line
+    const writtenOn = cloudWrittenOn(root)
+    threads.push({
+      id: String(num(root.id)),
+      path: inline.path,
+      side,
+      line: outdated ? null : line,
+      startLine: !outdated && start && line && start < line ? start : null,
+      originalLine: line,
+      resolved: isObj(root.resolution),
+      outdated,
+      canResolve: true,
+      canReply: true,
+      comments: all.map(comment),
+      writtenOn: writtenOn ? (fullSha(writtenOn, known) ?? writtenOn) : null
+    })
+  }
+
+  const reviews: ReviewSummary[] = []
+  for (const e of a.activity) {
+    const approval = obj(e.approval)
+    const changes = obj(e.changes_requested)
+    const said = isObj(e.approval) ? { v: approval, verdict: 'approved' as const } : isObj(e.changes_requested) ? { v: changes, verdict: 'changes-requested' as const } : null
+    if (!said || !str(said.v.date)) continue
+    reviews.push({ id: `${said.verdict}-${str(said.v.date)}`, author: cloudName(said.v.user), verdict: said.verdict, body: '', submittedAt: str(said.v.date), commit: null, comments: 0 })
+  }
+
+  const author = cloudName(pr.author)
+  const reviewers: PullReviewData['reviewers'] = []
+  const put = (login: string, verdict: ReviewVerdict | 'requested') => {
+    if (!login || login === author) return
+    const had = reviewers.find((r) => r.login === login)
+    if (had) had.verdict = verdict
+    else reviewers.push({ login, verdict })
+  }
+  for (const r of arr(pr.reviewers)) put(cloudName(r), 'requested')
+  for (const p of arr(pr.participants)) {
+    if (p.state === 'approved' || p.approved === true) put(cloudName(p.user), 'approved')
+    else if (p.state === 'changes_requested') put(cloudName(p.user), 'changes-requested')
+  }
+
+  const commits = a.commits
+    .filter((c) => hexSha(c.hash).length === 40)
+    .map((c) => ({ sha: hexSha(c.hash), subject: str(c.message).split('\n')[0], author: cloudName(obj(c.author).user) || str(obj(c.author).raw).replace(/\s*<[^>]*>$/, ''), at: str(c.date) }))
+    .reverse()
+  return {
+    number,
+    nodeId: String(number),
+    features: CLOUD_FEATURES,
+    viewer: a.viewer?.name ?? '',
+    title: str(pr.title),
+    body: text(pr.description),
+    author,
+    headSha,
+    // Cloud names the base by a short id: the base branch as fetched stands in for it.
+    baseSha: '',
+    viewed: {},
+    threads,
+    reviews: reviews.sort((x, y) => (x.submittedAt < y.submittedAt ? -1 : 1)),
+    comments: comments.sort((x, y) => (x.createdAt < y.createdAt ? -1 : 1)),
+    timeline: commitsTimeline(commits),
+    reviewers,
+    pendingOnService: null
+  }
+}
+
+/** The signed-in user's part in a Cloud pull request and what others did (GET …/activity, …/commits newest first). */
+export function cloudActivity(activity: readonly Obj[], commitsNewestFirst: readonly Obj[], viewer: CloudViewer | null, baseRef: string, maxCommits: number): PullActivity {
+  const known = commitsNewestFirst.map((c) => hexSha(c.hash)).filter((h) => h.length === 40)
+  // The head at a given time: the last update (push) before it.
+  const updates = activity
+    .map((e) => obj(e.update))
+    .map((u) => ({ at: str(u.date), head: fullSha(str(obj(obj(u.source).commit).hash), known) }))
+    .filter((u) => u.at && u.head)
+    .sort(byTime)
+  const headAt = (at: string) => updates.filter((u) => u.at <= at).at(-1)?.head ?? null
+  let viewerReview: PullActivity['viewerReview'] = null
+  let viewerCommentAt: string | null = null
+  const others: PullActivity['others'] = []
+  const review = (r: NonNullable<PullActivity['viewerReview']>) => {
+    if (!viewerReview || r.at > viewerReview.at) viewerReview = r
+  }
+  for (const e of activity) {
+    const verdict: ReviewVerdict | null = isObj(e.approval) ? 'approved' : isObj(e.changes_requested) ? 'changes-requested' : null
+    if (verdict) {
+      const v = obj(e.approval ?? e.changes_requested)
+      const at = str(v.date)
+      if (!at) continue
+      if (isCloudViewer(v.user, viewer)) review({ commit: headAt(at), at, verdict })
+      else others.push({ who: cloudName(v.user), at, kind: 'review', verdict })
+      continue
+    }
+    const c = obj(e.comment)
+    const at = str(c.created_on)
+    if (!num(c.id) || !at || c.deleted === true || c.pending === true) continue
+    if (!isCloudViewer(c.user, viewer)) others.push({ who: cloudName(c.user), at, kind: 'comment' })
+    else if (isObj(c.inline)) review({ commit: fullSha(cloudWrittenOn(c), known) ?? headAt(at), at, verdict: 'commented' })
+    else if (!viewerCommentAt || at > viewerCommentAt) viewerCommentAt = at
+  }
+  const listed = commitsNewestFirst.filter((c) => hexSha(c.hash).length === 40)
+  const commits = listed
+    .slice(0, maxCommits)
+    .reverse()
+    .map((c) => ({ sha: hexSha(c.hash), at: str(c.date), baseMerge: arr(c.parents).length > 1 && isBaseMerge(str(c.message).split('\n')[0], baseRef) }))
+  return { viewerReview, viewerCommentAt, commits, moreCommits: listed.length > maxCommits, others: others.sort(byTime) }
+}
+
+/** What Adar reads to show a Data Center pull request's review. */
+export interface ServerReviewAnswers {
+  /** GET …/pull-requests/{id} */
+  pr: unknown
+  /** GET …/activities values, newest first, every page read. */
+  activities: Obj[]
+  /** GET …/commits values, newest first. */
+  commits: Obj[]
+  /** GET …/review values: the signed-in user's comments of a review not finished yet, or null when the server has no reviews. */
+  pending: Obj[] | null
+  viewer: string
+}
+
+const serverWho = (u: unknown) => {
+  const user = obj(u)
+  return str(user.displayName) || str(user.name)
+}
+
+/** Every comment of the answers by id, the newest version first seen, with each reply's thread root. */
+function serverComments(activities: readonly Obj[]): { roots: Array<{ comment: Obj; anchor: Obj | null }>; replies: Map<number, Obj[]> } {
+  const seen = new Map<number, Obj>()
+  const parentOf = new Map<number, number>()
+  const anchors = new Map<number, Obj>()
+  const walk = (c: Obj, parent: number | null) => {
+    const id = num(c.id)
+    if (!id) return
+    if (!seen.has(id)) seen.set(id, c)
+    if (parent) parentOf.set(id, parent)
+    for (const r of arr(c.comments)) walk(r, id)
+  }
+  for (const e of activities) {
+    if (e.action !== 'COMMENTED' || !isObj(e.comment)) continue
+    walk(e.comment, num(obj(e.comment.parent).id) || null)
+    const id = num(e.comment.id)
+    const anchor = isObj(e.commentAnchor) ? e.commentAnchor : isObj(e.comment.anchor) ? e.comment.anchor : null
+    if (anchor && !anchors.has(id)) anchors.set(id, anchor)
+  }
+  const rootOf = (id: number) => {
+    let at = id
+    for (let i = 0; i < 50 && parentOf.has(at); i++) at = parentOf.get(at)!
+    return at
+  }
+  const replies = new Map<number, Obj[]>()
+  const roots: Array<{ comment: Obj; anchor: Obj | null }> = []
+  for (const [id, c] of seen) {
+    const root = rootOf(id)
+    if (root === id) roots.push({ comment: c, anchor: anchors.get(id) ?? (isObj(c.anchor) ? c.anchor : null) })
+    else replies.set(root, [...(replies.get(root) ?? []), c])
+  }
+  return { roots, replies }
+}
+
+const anchorPath = (v: unknown): string => (typeof v === 'string' ? v : str(obj(v).toString))
+
+/** A Data Center pull request's review as Adar shows it, or null when the answer is not a pull request. */
+export function serverReview(a: ServerReviewAnswers): PullReviewData | null {
+  if (!isObj(a.pr)) return null
+  const pr = a.pr
+  const number = num(pr.id)
+  if (!number) return null
+  const viewer = a.viewer
+  const comment = (c: Obj): ReviewComment => ({
+    id: num(c.id),
+    author: serverWho(c.author),
+    body: text(c.text),
+    createdAt: isoFromMs(c.createdDate),
+    viewerDidAuthor: isServerViewer(obj(c.author), viewer)
+  })
+  const { roots, replies } = serverComments(a.activities)
+  const threads: ReviewThread[] = []
+  const comments: ConversationComment[] = []
+  for (const { comment: root, anchor } of roots) {
+    if (root.state === 'PENDING') continue
+    const all = [root, ...(replies.get(num(root.id)) ?? []).filter((c) => c.state !== 'PENDING').sort((x, y) => num(x.createdDate) - num(y.createdDate))]
+    const path = anchor ? anchorPath(anchor.path) : ''
+    const line = anchor ? lineNo(anchor.line) : null
+    if (anchor && !isSafePath(path)) continue
+    // On the pull request, or on a whole file: the conversation.
+    if (!anchor || !line) {
+      for (const c of all) comments.push(comment(c))
+      continue
+    }
+    const side = anchor.fileType === 'FROM' || anchor.lineType === 'REMOVED' ? 'LEFT' : 'RIGHT'
+    // Bitbucket keeps comments on the pull request's diff where their line went; a comment on one commit's diff, or one whose line is gone, is outdated.
+    const outdated = anchor.orphaned === true || root.anchored === false || (!!anchor.diffType && anchor.diffType !== 'EFFECTIVE')
+    threads.push({
+      id: String(num(root.id)),
+      path,
+      side,
+      line: outdated ? null : line,
+      startLine: null,
+      originalLine: line,
+      resolved: root.threadResolved === true,
+      outdated,
+      canResolve: true,
+      canReply: true,
+      comments: all.map(comment)
+    })
+  }
+
+  const reviews: ReviewSummary[] = []
+  const timeline: TimelineEvent[] = []
+  const pushed = new Set<string>()
+  for (const e of a.activities) {
+    const at = isoFromMs(e.createdDate)
+    const who = serverWho(e.user)
+    if (!at) continue
+    switch (e.action) {
+      case 'APPROVED':
+        reviews.push({ id: `a${num(e.id)}`, author: who, verdict: 'approved', body: '', submittedAt: at, commit: null, comments: 0 })
+        break
+      case 'REVIEWED':
+        reviews.push({ id: `a${num(e.id)}`, author: who, verdict: 'changes-requested', body: '', submittedAt: at, commit: null, comments: 0 })
+        break
+      case 'RESCOPED': {
+        const added = arr(obj(e.added).commits)
+          .filter((c) => hexSha(c.id).length === 40)
+          .map((c) => ({ sha: hexSha(c.id), subject: str(c.message).split('\n')[0].slice(0, 300) }))
+          .reverse()
+        for (const c of added) pushed.add(c.sha)
+        if (added.length) timeline.push({ kind: 'commits', at, author: who, commits: added })
+        else if (arr(obj(e.removed).commits).length) timeline.push({ kind: 'force-push', at, actor: who, before: hexSha(e.previousFromHash) || null, after: hexSha(e.fromHash) || null })
+        break
+      }
+      case 'UPDATED':
+        for (const r of arr(e.addedReviewers)) timeline.push({ kind: 'review-requested', at, actor: who, reviewer: serverWho(r) })
+        break
+      case 'MERGED':
+        timeline.push({ kind: 'merged', at, actor: who })
+        break
+      case 'DECLINED':
+        timeline.push({ kind: 'closed', at, actor: who })
+        break
+      case 'REOPENED':
+        timeline.push({ kind: 'reopened', at, actor: who })
+        break
+    }
+  }
+  const author = serverWho(serverUser(pr.author))
+  // The commits it was opened with: no rescope lists them.
+  const opening = a.commits
+    .filter((c) => hexSha(c.id).length === 40 && !pushed.has(hexSha(c.id)))
+    .map((c) => ({ sha: hexSha(c.id), subject: str(c.message).split('\n')[0].slice(0, 300) }))
+    .reverse()
+  if (opening.length) timeline.push({ kind: 'commits', at: isoFromMs(pr.createdDate), author, commits: opening })
+
+  const reviewers: PullReviewData['reviewers'] = arr(pr.reviewers)
+    .map((r) => ({
+      login: serverWho(serverUser(r)),
+      verdict: (r.status === 'APPROVED' ? 'approved' : r.status === 'NEEDS_WORK' ? 'changes-requested' : 'requested') as ReviewVerdict | 'requested'
+    }))
+    .filter((r) => r.login && r.login !== author)
+  const pending = (a.pending ?? []).flatMap((t) => [obj(t.comment ?? t), ...arr(obj(t.comment ?? t).comments)]).filter((c) => c.state === 'PENDING').length
+  return {
+    number,
+    nodeId: String(number),
+    features: SERVER_FEATURES,
+    viewer: serverWho(arr(pr.reviewers).map(serverUser).find((u) => isServerViewer(u, viewer))) || viewer,
+    title: str(pr.title),
+    body: text(pr.description),
+    author,
+    headSha: hexSha(obj(pr.fromRef).latestCommit).length === 40 ? hexSha(obj(pr.fromRef).latestCommit) : '',
+    baseSha: hexSha(obj(pr.toRef).latestCommit).length === 40 ? hexSha(obj(pr.toRef).latestCommit) : '',
+    viewed: {},
+    threads,
+    reviews: reviews.sort((x, y) => (x.submittedAt < y.submittedAt ? -1 : 1)),
+    comments: comments.sort((x, y) => (x.createdAt < y.createdAt ? -1 : 1)),
+    timeline: timeline.sort(byTime),
+    reviewers,
+    pendingOnService: pending ? { id: 'review', comments: pending } : null
+  }
+}
+
+/** The signed-in user's part in a Data Center pull request and what others did (GET …/activities newest first, …/commits newest first). */
+export function serverActivity(activities: readonly Obj[], commitsNewestFirst: readonly Obj[], viewer: string, baseRef: string, maxCommits: number): PullActivity {
+  // The head at a given time: the last rescope before it (or the oldest commit's first head).
+  const heads = activities
+    .filter((e) => e.action === 'RESCOPED' || e.action === 'OPENED')
+    .map((e) => ({ at: isoFromMs(e.createdDate), head: hexSha(e.fromHash).length === 40 ? hexSha(e.fromHash) : null }))
+    .filter((h) => h.at && h.head)
+    .sort(byTime)
+  const headAt = (at: string) => heads.filter((h) => h.at <= at).at(-1)?.head ?? null
+  let viewerReview: PullActivity['viewerReview'] = null
+  let viewerCommentAt: string | null = null
+  const others: PullActivity['others'] = []
+  const review = (r: NonNullable<PullActivity['viewerReview']>) => {
+    if (!viewerReview || r.at > viewerReview.at) viewerReview = r
+  }
+  for (const e of activities) {
+    const at = isoFromMs(e.createdDate)
+    const user = obj(e.user)
+    if (!at) continue
+    const verdict: ReviewVerdict | null = e.action === 'APPROVED' ? 'approved' : e.action === 'REVIEWED' ? 'changes-requested' : e.action === 'REVIEW_FINISHED' ? 'commented' : null
+    if (verdict) {
+      if (isServerViewer(user, viewer)) review({ commit: headAt(at), at, verdict })
+      else if (verdict !== 'commented') others.push({ who: serverWho(user), at, kind: 'review', verdict })
+      continue
+    }
+    if (e.action !== 'COMMENTED' || str(e.commentAction || 'ADDED') !== 'ADDED' || obj(e.comment).state === 'PENDING') continue
+    if (!isServerViewer(user, viewer)) others.push({ who: serverWho(user), at, kind: 'comment' })
+    else if (isObj(e.commentAnchor) && lineNo(e.commentAnchor.line)) review({ commit: hexSha(e.commentAnchor.toHash).length === 40 ? hexSha(e.commentAnchor.toHash) : headAt(at), at, verdict: 'commented' })
+    else if (!viewerCommentAt || at > viewerCommentAt) viewerCommentAt = at
+  }
+  const listed = commitsNewestFirst.filter((c) => hexSha(c.id).length === 40)
+  const commits = listed
+    .slice(0, maxCommits)
+    .reverse()
+    .map((c) => ({ sha: hexSha(c.id), at: isoFromMs(c.committerTimestamp ?? c.authorTimestamp), baseMerge: arr(c.parents).length > 1 && isBaseMerge(str(c.message).split('\n')[0], baseRef) }))
+  return { viewerReview, viewerCommentAt, commits, moreCommits: listed.length > maxCommits, others: others.sort(byTime) }
 }

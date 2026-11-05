@@ -1,13 +1,29 @@
 // GitLab merge requests of one project (REST API v4 on gitlab.com or a self-managed instance, personal
-// access token). The list leaves out pipelines, so each open merge request is read with its approvals;
-// a finished pipeline's jobs, and the paths of forks, are cached.
+// access token). The list leaves out pipelines, so each open merge request is read with its approvals and,
+// for the dots, its notes, commits and versions; a finished pipeline's jobs, the paths of forks and each merge
+// request's activity (until it changes) are cached. Reviews: threads are GitLab's discussions, a review is the
+// user's draft notes published together, with an approval or a reviewer state.
 
+import { createHash } from 'node:crypto'
 import { AdarError } from '@shared/errors'
-import { gitlabApprovers, gitlabCommits, gitlabJobs, gitlabMergeChecks, gitlabMergeMethods, gitlabProtected, gitlabPull, type GitlabExtra, type GitlabUser } from '@shared/gitlab'
+import {
+  gitlabActivity,
+  gitlabApprovers,
+  gitlabCommits,
+  gitlabJobs,
+  gitlabMergeChecks,
+  gitlabMergeMethods,
+  gitlabProtected,
+  gitlabPull,
+  gitlabReview,
+  type GitlabExtra,
+  type GitlabUser
+} from '@shared/gitlab'
 import { sameCommit, type PullCheck, type PullRequest, type RepoPullRequests } from '@shared/hosting'
+import { MAX_ACTIVITY_COMMITS, type DraftComment, type PullActivity } from '@shared/review'
 import { gitlabAvatar } from './avatars'
 import { BoundedCache, mapLimit, type ApiClient } from './http'
-import { changedSinceLooked, invalid, unlessRefused, type HostingRemote, type PullProvider } from './provider'
+import { changedSinceLooked, invalid, unlessRefused, type HostingRemote, type PlacedLine, type PullProvider, type ReviewRepo } from './provider'
 
 /** Open merge requests read in full (pipeline, approvals) per update; the rest show without them. */
 const MAX_DETAILED = 30
@@ -21,9 +37,41 @@ export interface GitlabCaches {
   jobs: BoundedCache<PullCheck[]>
   /** group/project of forks, by project id. */
   forks: BoundedCache<string>
+  /** What changed in each open merge request, and the user's state as its reviewer, by "<project>!<iid>", until it changes again. */
+  activity: BoundedCache<{ key: string; value: Followed }>
 }
 
-export const newGitlabCaches = (): GitlabCaches => ({ jobs: new BoundedCache(), forks: new BoundedCache() })
+export const newGitlabCaches = (): GitlabCaches => ({ jobs: new BoundedCache(), forks: new BoundedCache(), activity: new BoundedCache() })
+
+/** Pages of a list GitLab answers 100 at a time. */
+const MAX_PAGES = 5
+
+/** GitLab's code for a line of a diff: the file's SHA-1, its old and its new number. */
+const lineCode = (l: PlacedLine) => `${createHash('sha1').update(l.newPath).digest('hex')}_${l.oldPos}_${l.newPos}`
+
+const lineRef = (l: PlacedLine) => ({
+  line_code: lineCode(l),
+  // "new" for an added line, "old" otherwise.
+  type: l.oldLine === null ? 'new' : 'old',
+  ...(l.oldLine !== null ? { old_line: l.oldLine } : {}),
+  ...(l.newLine !== null ? { new_line: l.newLine } : {})
+})
+
+/** What the dots read of an open merge request. */
+interface Followed {
+  activity: PullActivity
+  /** The signed-in user's state as a reviewer (GET …/reviewers), or null when they are not one. */
+  reviewState: string | null
+}
+
+/** Reviewer states of someone who has answered: GitLab asks them again by setting them back to unreviewed. */
+const ANSWERED = new Set(['reviewed', 'requested_changes', 'approved'])
+
+interface DiffRefs {
+  base: string
+  start: string
+  head: string
+}
 
 type Obj = Record<string, unknown>
 const obj = (v: unknown): Obj => (typeof v === 'object' && v !== null && !Array.isArray(v) ? (v as Obj) : {})
@@ -60,6 +108,38 @@ export function gitlabProvider(api: ApiClient, at: HostingRemote, server: string
     return path || null
   }
 
+  /** A list GitLab pages (100 a page), up to MAX_PAGES pages. */
+  const pages = async (path: string): Promise<Obj[]> => {
+    const out: Obj[] = []
+    for (let page = 1; page <= MAX_PAGES; page++) {
+      const got = arr(await api.json('GET', `${path}${path.includes('?') ? '&' : '?'}per_page=100&page=${page}`))
+      out.push(...got)
+      if (got.length < 100) break
+    }
+    return out
+  }
+
+  /** What changed in an open merge request: its notes, commits, versions and reviewers, read again only once it changed. */
+  const followed = async (mr: Obj, approvers: GitlabUser[] | null, who: GitlabUser | null): Promise<Followed> => {
+    const number = num(mr.iid)
+    const key = [str(mr.updated_at), str(mr.sha), num(mr.user_notes_count), str(mr.detailed_merge_status), (approvers ?? []).map((u) => u.username).sort().join(',')].join('|')
+    const id = `${at.owner}/${at.name}!${number}`
+    const cached = caches.activity.get(id)
+    if (cached?.key === key) return cached.value
+    const p = `${base}/merge_requests/${number}`
+    const [notes, commits, versions, reviewers] = await Promise.all([
+      api.json('GET', `${p}/notes?sort=desc&order_by=created_at&per_page=100`),
+      api.json('GET', `${p}/commits?per_page=${MAX_ACTIVITY_COMMITS + 1}`),
+      api.json('GET', `${p}/versions`),
+      unlessRefused(() => api.json('GET', `${p}/reviewers`))
+    ])
+    const me = who?.username.toLowerCase()
+    const mine = arr(reviewers).find((r) => !!me && str(obj(r.user).username).toLowerCase() === me)
+    const value: Followed = { activity: gitlabActivity({ notes, commits, versions }, who, str(mr.target_branch)), reviewState: mine ? str(mine.state) : null }
+    caches.activity.set(id, { key, value })
+    return value
+  }
+
   const detailed = async (listed: Obj, who: GitlabUser | null): Promise<PullRequest | null> => {
     const number = num(listed.iid)
     const [full, approvals] = await Promise.all([read(number).catch(() => listed), api.json('GET', `${base}/merge_requests/${number}/approvals`).catch(() => null)])
@@ -69,7 +149,45 @@ export function gitlabProvider(api: ApiClient, at: HostingRemote, server: string
       pipeline: num(head.id) ? { status: str(head.status), jobs: await jobs(head) } : null,
       fork: await forkOf(full)
     }
-    return gitlabPull(full, who, extra, repoUrl)
+    const pr = gitlabPull(full, who, extra, repoUrl)
+    if (!pr || (pr.state !== 'open' && pr.state !== 'draft')) return pr
+    const f = await followed(full, extra.approvers, who).catch(() => null)
+    // Once the user reviewed it, it waits for the author until GitLab asks them again.
+    return { ...pr, activity: f?.activity ?? null, reviewRequested: pr.reviewRequested && !ANSWERED.has(f?.reviewState ?? '') }
+  }
+
+  /** The versions GitLab compares now: where the changes start, the target branch's tip and the head. */
+  const diffRefs = async (number: number): Promise<DiffRefs> => {
+    const mr = await read(number)
+    const r = obj(mr.diff_refs)
+    const hex = (v: unknown) => (/^[0-9a-f]{40}$/i.test(str(v)) ? str(v).toLowerCase() : '')
+    const refs = { base: hex(r.base_sha), start: hex(r.start_sha), head: hex(r.head_sha) || hex(mr.sha) }
+    if (!refs.base || !refs.start || !refs.head) throw new AdarError({ message: `GitLab has no diff for merge request !${number} yet. Try again in a moment.`, code: 'NOT_FOUND' })
+    return refs
+  }
+
+  /** Where a comment goes in GitLab's diff (its last line, and the first for several lines). */
+  const positionOf = async (refs: DiffRefs, c: DraftComment, repo: ReviewRepo): Promise<Obj> => {
+    const file = await repo.lines(refs.base, refs.head, c.path)
+    const end = file.at(c.side, c.line)
+    return {
+      base_sha: refs.base,
+      start_sha: refs.start,
+      head_sha: refs.head,
+      position_type: 'text',
+      old_path: end.oldPath,
+      new_path: end.newPath,
+      ...(end.oldLine !== null ? { old_line: end.oldLine } : {}),
+      ...(end.newLine !== null ? { new_line: end.newLine } : {}),
+      ...(c.startLine && c.startLine < c.line ? { line_range: { start: lineRef(file.at(c.side, c.startLine)), end: lineRef(end) } } : {})
+    }
+  }
+
+  /** The diff GitLab has is the one the comments were written on. */
+  const current = async (number: number, commit: string): Promise<DiffRefs> => {
+    const refs = await diffRefs(number)
+    if (!sameCommit(refs.head, commit)) throw changedSinceLooked('GitLab', 'merge request')
+    return refs
   }
 
   return {
@@ -154,6 +272,71 @@ export function gitlabProvider(api: ApiClient, at: HostingRemote, server: string
       return out
     },
 
-    image: (url) => api.image(url)
+    image: (url) => api.image(url),
+
+    async review(number) {
+      const p = `${base}/merge_requests/${number}`
+      const [mr, discussions, reviewers, approvals, drafts, commits, who] = await Promise.all([
+        read(number),
+        pages(`${p}/discussions`),
+        unlessRefused(() => api.json('GET', `${p}/reviewers`)),
+        unlessRefused(() => api.json('GET', `${p}/approvals`)),
+        unlessRefused(() => api.json('GET', `${p}/draft_notes?per_page=100`)),
+        unlessRefused(() => api.json('GET', `${p}/commits?per_page=100`)),
+        viewer()
+      ])
+      const data = gitlabReview({ mr, discussions, reviewers, approvals, drafts, commits, viewer: who })
+      if (!data) throw new AdarError({ message: `Merge request !${number} was not found on GitLab`, code: 'NOT_FOUND' })
+      return data
+    },
+
+    async reviewAction(number, action, repo) {
+      const p = `${base}/merge_requests/${number}`
+      const thread = (id: string) => `${p}/discussions/${encodeURIComponent(id)}`
+      switch (action.kind) {
+        case 'comment': {
+          const refs = await current(number, action.commit)
+          await api.json('POST', `${p}/discussions`, { body: action.comment.body, position: await positionOf(refs, action.comment, repo) })
+          return
+        }
+        case 'reply':
+          await api.json('POST', `${thread(action.threadId)}/notes`, { body: action.body })
+          return
+        case 'resolve':
+          await api.json('PUT', thread(action.threadId), { resolved: action.resolved })
+          return
+        case 'conversation':
+          await api.json('POST', `${p}/notes`, { body: action.body })
+          return
+        case 'viewed':
+          throw invalid('GitLab keeps no Viewed marks Adar can change: Adar keeps them on this computer')
+        case 'submit': {
+          const refs = await current(number, action.commit)
+          const started = arr(await unlessRefused(() => api.json('GET', `${p}/draft_notes?per_page=100`))).length
+          // The review is the user's draft notes published together: the summary first, then the line comments.
+          const made: number[] = []
+          try {
+            if (action.body.trim()) made.push(num(obj(await api.json('POST', `${p}/draft_notes`, { note: action.body })).id))
+            for (const c of action.comments) made.push(num(obj(await api.json('POST', `${p}/draft_notes`, { note: c.body, position: await positionOf(refs, c, repo) })).id))
+          } catch (err) {
+            // Nothing half sent stays behind as a review started on GitLab.
+            await Promise.all(made.filter(Boolean).map((id) => api.json('DELETE', `${p}/draft_notes/${id}`).catch(() => undefined)))
+            throw err
+          }
+          if (action.event !== 'approve') {
+            await api.json('POST', `${p}/draft_notes/bulk_publish`, { reviewer_state: action.event === 'request-changes' ? 'requested_changes' : 'reviewed' })
+            return
+          }
+          if (made.length || started) await api.json('POST', `${p}/draft_notes/bulk_publish`, {})
+          try {
+            await api.json('POST', `${p}/approve`, { sha: refs.head })
+          } catch (err) {
+            if (err instanceof AdarError && /sha|409|conflict/i.test(err.message)) throw changedSinceLooked('GitLab', 'merge request')
+            throw err
+          }
+          return
+        }
+      }
+    }
   }
 }

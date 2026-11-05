@@ -15,11 +15,14 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
   `agents.ts` (Agents at work: what a watched worktree is doing — `AgentWorktree`, `AgentEvent` — and the rules both
   sides share: `agentState` working / quiet / idle, `agentOf` from Co-Authored-By trailers, the branch prefix or the
   folder, the 30-minute strip, `newSince`, the settings sanitizers and `parseAgentNotice`),
-  `review.ts` (reviewing a pull request in Adar: threads, reviews, Viewed marks, the timeline, GitHub's review query and
-  changes, `parseReviewAction`/`parsePullNotice` for what the renderer sends, and `PullActivity`: the signed-in user's
-  part in each open pull request, read by the list query, for the blue dots and notifications),
+  `review.ts` (reviewing a pull request in Adar, whatever the service: threads, reviews, Viewed marks, the timeline,
+  `ReviewFeatures` — what each service lets a review do: Viewed marks of its own or kept by Adar, comments on several
+  lines, its suggested-change syntax, the verdicts —, GitHub's review query and changes, `parseReviewAction`/
+  `parsePullNotice` for what the renderer sends, and `PullActivity`: the signed-in user's part in each open pull request,
+  read by the list query (and by each provider for the others), for the blue dots and notifications),
   `bitbucket.ts` / `gitlab.ts` / `azure.ts` (pure mapping of Bitbucket Cloud and Data Center answers / of GitLab's merge
-  requests / of Azure DevOps' pull requests, votes and branch policies), `remoteUrl.ts` (remote URL → web page, provider;
+  requests / of Azure DevOps' pull requests, votes and branch policies; each also maps its review — `cloudReview`,
+  `serverReview`, `gitlabReview`, `azureReview` — and its activity for the dots), `remoteUrl.ts` (remote URL → web page, provider;
   `hostingOf`/`pickHostingRemote` find GitHub — github.com, signed-in GitHub Enterprise servers and github.* hosts —,
   GitLab — gitlab.com, gitlab.* hosts and signed-in instances —, bitbucket.org, Data Center and Azure DevOps remotes —
   dev.azure.com, ssh.dev.azure.com and <org>.visualstudio.com, all as https://dev.azure.com/<org>), `groupColor.ts` (custom tab group
@@ -63,7 +66,11 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
     is empty); the device code stays in the main process and the renderer polls `checkGithubSignIn`. `avatars.ts` maps
     what each provider knows about an author's picture (`getAuthorAvatars`: GitHub by commit, GitLab by public email,
     Bitbucket by commit; Azure DevOps none), returned as data: URLs and cached. `index.ts` picks the repository's remote and provider;
-    the providers' `review`/`reviewAction` (GitHub only) read and change a review, `preparePullReview` fetches a pull
+    the providers' `review`/`reviewAction` read and change a review (GitHub through GraphQL; GitLab's draft notes
+    published together; Bitbucket Data Center's pending comments finished with `PUT …/review`; Bitbucket Cloud and Azure
+    DevOps, which publish no drafts, comment by comment and then the verdict, taking back what a failure left), placing
+    comments with the repository's own diff (`place.ts`: a line's number on both sides, whether it was added, removed
+    or kept, a renamed file's old path — `ReviewRepo`), `preparePullReview` fetches a pull
     request's commits without making branches and says where its changes start and how it moved on since a commit (an
     ancestor, the same changes rebased — `git range-diff` —, rewritten, or only merges), and `notifyPullRequest` shows a
     notification through `PlatformAdapter.notify` (a click sends an `open-pull` event). `index.ts` also
@@ -117,9 +124,11 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
     `graph.ts` (the graph's dashed rows for other worktrees' work in progress, `AgentRow` in `graph/model.ts`, and the
     commits new since the user looked). Worktree rows in the left panel have two lines; the tab bar, the toolbar
     (Agents, ⇧⌘E) and the menu bar panel ("At work", `menuBarOpenAgent`) show the state too.
-  - `actions/review.tsx` — reviewing in Adar and keeping up: `openReview` (GitHub; other services open their page),
+  - `actions/review.tsx` — reviewing in Adar and keeping up: `openReview` (GitHub, GitLab, Bitbucket and Azure DevOps),
     `openInbox`, loading what the review shows, line comments kept for the review (`components/review/reviewStore.ts`,
-    in localStorage until submitted), replies, resolve, Viewed marks, `submitReview`; `markSeen` and `setFollowing`
+    in localStorage until submitted), replies, resolve, Viewed marks (the service's on GitHub; elsewhere Adar's own,
+    the head each file was viewed at, in localStorage — `settleReview` in `model.ts` says which changed since, and which
+    threads a service kept on an earlier version's lines are now outdated), `submitReview`; `markSeen` and `setFollowing`
     (`settings.pullsSeen`, `pullsFollowed`, `pullsUnfollowed`). `components/review/` — the review view (a centre view:
     files with Viewed marks, all changes or since the last review, one file's diff with its threads in `ReviewDiff.tsx`,
     the conversation and the commits; Esc goes back) and `ReviewPanel.tsx` (the right panel while reviewing: the kept
