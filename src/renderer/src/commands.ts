@@ -7,6 +7,7 @@ import { installCliCommand, uninstallCliCommand } from '@renderer/actions/cli'
 import { openBranchCleanup, openKeptBranches } from '@renderer/actions/cleanup'
 import { openAgents } from '@renderer/actions/agents'
 import { openReflog } from '@renderer/actions/reflog'
+import { openWorkReview } from '@renderer/actions/workReview'
 import { newWorktree } from '@renderer/actions/worktrees'
 import { openConnect, selectPull, startPullRequest, turnOffPullRequests } from '@renderer/actions/pulls'
 import { openInbox, openReview } from '@renderer/actions/review'
@@ -124,6 +125,7 @@ export const COMMANDS: Command[] = [
   },
   { id: 'pull-requests', label: 'Pull Requests', group: 'Remote', shortcut: 'Mod+Shift+R', when: () => hasRepo() && anyPullsOn(), run: () => openInbox() },
   { id: 'agents', label: 'Agents at Work', group: 'Repository', shortcut: 'Mod+Shift+E', when: () => hasRepo() && useApp.getState().settings.agentsOn, run: () => openAgents() },
+  { id: 'review-work', label: 'Review the Work in This Worktree', group: 'Repository', when: () => hasRepo(), run: withRepo((r) => void openWorkReview(r)) },
   {
     id: 'review-pull-request',
     label: 'Review Pull Request',

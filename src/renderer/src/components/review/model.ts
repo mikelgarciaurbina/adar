@@ -1,9 +1,10 @@
 // Pure helpers for the review view: which files are generated (folded away), which agents co-wrote the commits,
 // how the file list groups (changed since the review, already reviewed, generated), where each comment thread
-// sits in a diff, what the "since your review" banner says, the conversation's timeline in order, and the review as
-// the repository says it is at its head (Adar's own Viewed marks, threads left on lines that changed).
+// sits in a diff, what the "since your review" banner says, the conversation's timeline in order, the review as
+// the repository says it is at its head (Adar's own Viewed marks, threads left on lines that changed), and for an
+// agent's work: the files changed since the last review, its banner, and the notes as a message for the agent.
 
-import type { ConversationComment, FileViewed, PullReviewData, ReviewRange, ReviewSummary, ReviewThread, TimelineEvent } from '@shared/review'
+import type { ConversationComment, DraftComment, FileViewed, PullReviewData, ReviewRange, ReviewSummary, ReviewThread, TimelineEvent, WorkReviewRange } from '@shared/review'
 import type { FileChange } from '@shared/types'
 import { pluralize } from '@renderer/lib/format'
 
@@ -177,4 +178,86 @@ export async function settleReview(
     out = { ...out, threads }
   }
   return out
+}
+
+// ── An agent's work ───────────────────────────────────────────────────────────
+
+/** The files changed since the version reviewed that belong to the work (what the base branch brought in is left out). */
+export function workSinceFiles(since: readonly FileChange[], work: readonly FileChange[]): FileChange[] {
+  const mine = new Set(work.flatMap((f) => (f.oldPath ? [f.path, f.oldPath] : [f.path])))
+  return since.filter((f) => mine.has(f.path) || (!!f.oldPath && mine.has(f.oldPath)))
+}
+
+/** What the banner above an agent's work says in "since" mode (`changed`: files changed since, in the work). */
+export function workSinceBanner(range: WorkReviewRange, changed: number, when: string, base: string): { text: string; tone: 'new' | 'calm' } {
+  const since = `your review${when ? ` ${when}` : ''}`
+  switch (range.sinceState) {
+    case 'missing':
+      return { text: `What you reviewed ${when || 'last'} is no longer in the repository: showing all the changes.`, tone: 'calm' }
+    case 'rewritten':
+      return { text: `The branch was rewritten since ${since} (rebased or amended): this compares the files as you saw them with the files now.`, tone: 'new' }
+    case 'ancestor': {
+      if (!changed) return { text: `Nothing changed since ${since}.`, tone: 'calm' }
+      if (range.onlyMerges) return { text: `Only ${base} was merged in since ${since}.`, tone: 'calm' }
+      const how = range.sinceCommits ? ` in ${pluralize(range.sinceCommits, 'commit')}${range.uncommitted ? ' and changes not committed' : ''}` : range.uncommitted ? ', not committed yet' : ''
+      return { text: `${pluralize(changed, 'file')} changed since ${since}${how}.`, tone: 'new' }
+    }
+    default:
+      return { text: '', tone: 'calm' }
+  }
+}
+
+/** Lines of code a note for an agent quotes (the lines it is on); longer selections are cut. */
+export const MAX_QUOTE_LINES = 8
+
+export function noteQuote(lines: readonly string[]): string[] {
+  return lines.length > MAX_QUOTE_LINES ? [...lines.slice(0, MAX_QUOTE_LINES), '…'] : [...lines]
+}
+
+/** A Markdown fence longer than any run of backticks in `text`. */
+function fenceFor(text: string): string {
+  const longest = Math.max(0, ...[...text.matchAll(/`+/g)].map((m) => m[0].length))
+  return '`'.repeat(Math.max(3, longest + 1))
+}
+
+/** "line 12", "lines 10–12"; a removed line is numbered as before the changes. */
+function noteWhere(n: DraftComment): string {
+  const lines = n.startLine && n.startLine < n.line ? `lines ${n.startLine}–${n.line}` : `line ${n.line}`
+  return n.side === 'LEFT' ? `removed ${lines} (numbered as before your changes)` : lines
+}
+
+/** A note's text with its suggested changes written out for an agent. */
+function noteText(body: string): string {
+  return body
+    .trim()
+    .replace(/^```suggestion[^\n]*\n([\s\S]*?)^```[ \t]*$/gm, (_m, code: string) => {
+      const fence = fenceFor(code)
+      return `Replace those lines with:\n${fence}\n${code}${fence}`
+    })
+}
+
+/**
+ * The notes of a review of an agent's work as one message to paste into the agent's chat: what was reviewed, the
+ * summary, then each note in file and line order with the lines it is on.
+ */
+export function agentPrompt(o: { branch: string | null; baseRef: string | null; notes: readonly DraftComment[]; summary: string }): string {
+  const what = `${o.branch ? `your work on ${o.branch}` : 'your changes'}${o.baseRef ? ` (compared with ${o.baseRef.replace(/^origin\//, '')})` : ''}`
+  const notes = [...o.notes].sort((a, b) => a.path.localeCompare(b.path) || a.line - b.line)
+  const out: string[] = [`I reviewed ${what}.`]
+  const summary = o.summary.trim()
+  if (summary) out.push('', summary)
+  if (notes.length) out.push('', notes.length === 1 ? 'Please address this note:' : 'Please address these notes:')
+  notes.forEach((n, i) => {
+    const head = `${i + 1}. `
+    const pad = ' '.repeat(head.length)
+    const lines = [`${head}${n.path}, ${noteWhere(n)}:`]
+    if (n.quote?.length) {
+      const code = n.quote.join('\n')
+      const fence = fenceFor(code)
+      lines.push(`${pad}${fence}`, ...n.quote.map((l) => `${pad}${l}`), `${pad}${fence}`)
+    }
+    lines.push(...noteText(n.body).split('\n').map((l) => (l ? `${pad}${l}` : '')))
+    out.push('', ...lines)
+  })
+  return `${out.join('\n')}\n`
 }

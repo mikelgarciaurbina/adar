@@ -50,6 +50,8 @@ export type CenterView =
   | { kind: 'reflog'; mode: 'lost' | 'moves' }
   /** A pull request's review: its changes (all, or since the user last reviewed), its conversation or its commits. */
   | { kind: 'review'; number: number; mode: ReviewMode; tab: ReviewTab; path?: string }
+  /** The work of the tab's worktree (an agent's, before its pull request): its changes (all, or since the last review) or its commits. */
+  | { kind: 'work-review'; mode: ReviewMode; tab: ReviewTab; path?: string }
   /** The pull requests of every open repository, what waits for the user first. */
   | { kind: 'inbox' }
   /** Agents at work: what the worktrees of the open repositories (or the tab group in front) are doing. */

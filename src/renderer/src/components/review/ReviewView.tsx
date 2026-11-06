@@ -1,15 +1,18 @@
 // A pull request's review, instead of the graph: its files (all of them, or what changed since the user's last
 // review) with Viewed marks (the service's, or Adar's own), one file's diff with its comment threads, the
 // conversation in order and the commits. The review itself (verdict, summary, kept comments) is in the right panel
-// (ReviewPanel).
+// (ReviewPanel). The same view reviews the tab's own work, an agent's before its pull request: its commits and its
+// changes not committed against the base branch, with notes for the agent (WorkReviewPanel on the right).
 
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowLeft, Check, ChevronDown, ChevronRight, Circle, ExternalLink, FileCode2, GitCommitHorizontal, GitPullRequest, MessageSquare, RefreshCw, Search, Sparkles } from 'lucide-react'
+import { ArrowLeft, Bot, Check, ChevronDown, ChevronRight, Circle, ExternalLink, FileCode2, GitCommitHorizontal, GitPullRequest, MessageSquare, PencilLine, RefreshCw, Search, Sparkles } from 'lucide-react'
 import * as git from '@renderer/actions/git'
 import { openWebPage } from '@renderer/actions/pulls'
 import { commentOnConversation, keyOf, loadReview, REVIEW_PAGE, setViewed } from '@renderer/actions/review'
+import { loadWorkReview } from '@renderer/actions/workReview'
 import { api } from '@renderer/api/client'
 import { Button, EmptyState, IconButton, Spinner } from '@renderer/components/common/Button'
+import { useAgents } from '@renderer/components/agents/agentStore'
 import { Avatar } from '@renderer/components/common/Avatar'
 import { goToCommit } from '@renderer/components/details/CommitPanel'
 import { StatusBadge } from '@renderer/components/diff/parts'
@@ -23,25 +26,33 @@ import { describeError } from '@shared/errors'
 import type { PullRequest } from '@shared/hosting'
 import type { PullReviewData, TimelineEvent } from '@shared/review'
 import type { FileChange, FileDiff } from '@shared/types'
-import { baseName, coAuthorAgents, conversation, dirOf, fileGroups, fileOrder, sinceBanner, threadCounts, threadsOf } from './model'
+import { baseName, coAuthorAgents, conversation, dirOf, fileGroups, fileOrder, sinceBanner, threadCounts, threadsOf, workSinceBanner } from './model'
 import { ago, CommentBody, Thread } from './parts'
 import { ReviewDiff } from './ReviewDiff'
-import { useDrafts, useReviewEntry, type ReviewEntry } from './reviewStore'
+import { useDrafts, useReviewEntry, type ReviewEntry, type ReviewId } from './reviewStore'
 import '@renderer/components/diff/diff.css'
 import './review.css'
 
-type View = { kind: 'review'; number: number; mode: ReviewMode; tab: ReviewTab; path?: string }
+type View = { kind: 'review'; number: number; mode: ReviewMode; tab: ReviewTab; path?: string } | { kind: 'work-review'; mode: ReviewMode; tab: ReviewTab; path?: string }
+
+/** Load (or reload) what a review shows: a pull request's, or the tab's own work. */
+const load = (repo: string, id: ReviewId, force?: boolean) => (id === 'work' ? loadWorkReview(repo, { force }) : loadReview(repo, id, { force }))
+
+/** "origin/main" → "main". */
+const shortBase = (ref: string) => ref.replace(/^origin\//, '')
 
 export function ReviewView({ tab, view }: { tab: RepoTab; view: View }) {
   const repo = tab.path
-  const { number } = view
-  const pr = usePulls((s) => s.repos[repo]?.data?.pulls.find((p) => p.number === number))
-  const entry = useReviewEntry(repo, number)
-  const set = (patch: Partial<View>) => useApp.getState().setCenter(repo, { ...view, ...patch })
+  const id: ReviewId = view.kind === 'review' ? view.number : 'work'
+  const number = typeof id === 'number' ? id : 0
+  const pr = usePulls((s) => (typeof id === 'number' ? s.repos[repo]?.data?.pulls.find((p) => p.number === id) : undefined))
+  const entry = useReviewEntry(repo, id)
+  const work = id === 'work'
+  const set = (patch: Partial<View>) => useApp.getState().setCenter(repo, { ...view, ...patch } as View)
 
   useEffect(() => {
-    void loadReview(repo, number)
-  }, [repo, number])
+    void load(repo, id)
+  }, [repo, id])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -59,6 +70,10 @@ export function ReviewView({ tab, view }: { tab: RepoTab; view: View }) {
   const canSince = !!entry.since && !!entry.range?.since && entry.range.sinceState !== 'missing'
   const mode: ReviewMode = view.mode === 'since' && canSince ? 'since' : 'all'
   const groups = useMemo(() => (entry.files ? fileGroups(entry.files, mode === 'since' ? (entry.sinceFiles ?? []) : null) : null), [entry.files, entry.sinceFiles, mode])
+  const tabName = view.tab === 'conversation' && work ? 'files' : view.tab
+  // An agent's work goes on while it is reviewed: say when the worktree changed after this view looked at it.
+  const lastChange = useAgents((s) => (work ? (s.worktrees[repo]?.lastChange ?? null) : null))
+  const stale = work && !entry.loading && !!entry.at && !!lastChange && lastChange > entry.at
 
   return (
     <div className="rv-view">
@@ -66,6 +81,9 @@ export function ReviewView({ tab, view }: { tab: RepoTab; view: View }) {
         <IconButton label="Back to the graph (Esc)" onClick={() => git.showGraph(repo)}>
           <ArrowLeft size={16} />
         </IconButton>
+        {work ? (
+          <WorkTitle tab={tab} entry={entry} agents={agents} />
+        ) : (
         <div className="rv-title">
           <b>
             {pr ? <PullStateIcon state={pr.state} size={14} /> : <GitPullRequest size={14} />}
@@ -83,8 +101,14 @@ export function ReviewView({ tab, view }: { tab: RepoTab; view: View }) {
             </small>
           )}
         </div>
+        )}
         <span className="rv-spacer" />
-        {view.tab === 'files' && (
+        {stale && (
+          <Button size="sm" variant="ghost" icon={<RefreshCw size={13} />} title="The worktree changed after this review looked at it" onClick={() => void load(repo, id, true)}>
+            New changes
+          </Button>
+        )}
+        {tabName === 'files' && (
           <div className="rv-seg" role="group" aria-label="Which changes">
             <button type="button" aria-pressed={mode === 'all'} onClick={() => set({ mode: 'all' })}>
               All changes <span>{entry.files?.length ?? ''}</span>
@@ -101,17 +125,19 @@ export function ReviewView({ tab, view }: { tab: RepoTab; view: View }) {
           </div>
         )}
         <div className="rv-seg" role="group" aria-label="What to show">
-          <button type="button" aria-pressed={view.tab === 'files'} onClick={() => set({ tab: 'files' })}>
+          <button type="button" aria-pressed={tabName === 'files'} onClick={() => set({ tab: 'files' })}>
             Files
           </button>
-          <button type="button" aria-pressed={view.tab === 'conversation'} onClick={() => set({ tab: 'conversation' })}>
-            Conversation <span>{entry.data ? entry.data.comments.length + entry.data.reviews.length : ''}</span>
-          </button>
-          <button type="button" aria-pressed={view.tab === 'commits'} onClick={() => set({ tab: 'commits' })}>
+          {!work && (
+            <button type="button" aria-pressed={tabName === 'conversation'} onClick={() => set({ tab: 'conversation' })}>
+              Conversation <span>{entry.data ? entry.data.comments.length + entry.data.reviews.length : ''}</span>
+            </button>
+          )}
+          <button type="button" aria-pressed={tabName === 'commits'} onClick={() => set({ tab: 'commits' })}>
             Commits <span>{entry.commits?.length ?? ''}</span>
           </button>
         </div>
-        <IconButton label="Refresh" onClick={() => void loadReview(repo, number, { force: true })} disabled={entry.loading}>
+        <IconButton label="Refresh" onClick={() => void load(repo, id, true)} disabled={entry.loading}>
           <RefreshCw size={15} className={entry.loading ? 'rv-spin' : undefined} />
         </IconButton>
         {pr && (
@@ -125,22 +151,58 @@ export function ReviewView({ tab, view }: { tab: RepoTab; view: View }) {
         <div className="rv-empty">
           <EmptyState title="The review could not be loaded">{entry.error}</EmptyState>
           <div className="rv-row rv-row-center">
-            <Button onClick={() => void loadReview(repo, number, { force: true })}>Try again</Button>
+            <Button onClick={() => void load(repo, id, true)}>Try again</Button>
             {pr && <Button icon={<ExternalLink size={13} />} onClick={() => openWebPage(`${pr.url}${REVIEW_PAGE[pr.provider]}`)}>Open on {providerName(pr)}</Button>}
           </div>
         </div>
       ) : !entry.data || !entry.range || !groups ? (
         <div className="rv-empty">
           <Spinner size="lg" />
-          <span className="rv-muted">Getting the pull request’s commits…</span>
+          <span className="rv-muted">{work ? 'Looking at the worktree…' : 'Getting the pull request’s commits…'}</span>
         </div>
-      ) : view.tab === 'conversation' ? (
+      ) : tabName === 'conversation' ? (
         <Conversation repo={repo} number={number} data={entry.data} pr={pr} />
-      ) : view.tab === 'commits' ? (
+      ) : tabName === 'commits' ? (
         <Commits repo={repo} entry={entry} />
       ) : (
-        <Files tab={tab} view={view} mode={mode} entry={entry} data={entry.data} groups={groups} pr={pr} />
+        <Files tab={tab} id={id} view={view} mode={mode} entry={entry} data={entry.data} groups={groups} pr={pr} />
       )}
+    </div>
+  )
+}
+
+/** The title of an agent's work: its branch, what it is compared with, its commits and changes not committed, who made them. */
+function WorkTitle({ tab, entry, agents }: { tab: RepoTab; entry: ReviewEntry; agents: string[] }) {
+  const w = entry.work
+  const branch = w ? (w.branch ?? 'Detached HEAD') : (tab.info?.head.branch ?? tab.name)
+  const commits = entry.commits?.length ?? 0
+  return (
+    <div className="rv-title">
+      <b>
+        <Bot size={14} />
+        <span className="rv-title-text">{branch}</span>
+        <span className="rv-num">{tab.name}</span>
+      </b>
+      <small>
+        {w ? (
+          <>
+            {w.baseRef ? (
+              <>
+                against <code>{shortBase(w.baseRef)}</code> ·{' '}
+              </>
+            ) : null}
+            {pluralize(commits, 'commit')}
+            {w.uncommitted ? ` · ${pluralize(w.uncommitted, 'file')} not committed` : ''}
+          </>
+        ) : (
+          'Its commits and its changes not committed'
+        )}
+        {agents.map((a) => (
+          <span key={a} className="rv-ai" title={`${a} co-wrote commits of it (Co-Authored-By)`}>
+            <Sparkles size={10} /> {a}
+          </span>
+        ))}
+      </small>
     </div>
   )
 }
@@ -149,6 +211,7 @@ export function ReviewView({ tab, view }: { tab: RepoTab; view: View }) {
 
 function Files({
   tab,
+  id,
   view,
   mode,
   entry,
@@ -157,6 +220,7 @@ function Files({
   pr
 }: {
   tab: RepoTab
+  id: ReviewId
   view: View
   mode: ReviewMode
   entry: ReviewEntry
@@ -165,9 +229,8 @@ function Files({
   pr: PullRequest | undefined
 }) {
   const repo = tab.path
-  const number = view.number
   const range = entry.range!
-  const pull = keyOf(repo, number) ?? ''
+  const pull = keyOf(repo, id) ?? ''
   const drafts = useDrafts(pull)
   const [filter, setFilter] = useState('')
   const [showGenerated, setShowGenerated] = useState(false)
@@ -187,7 +250,7 @@ function Files({
       const i = order.findIndex((f) => f.path === path)
       if ((e.key === 'v' || e.key === 'V') && path) {
         e.preventDefault()
-        void setViewed(repo, number, path, !viewed(path))
+        void setViewed(repo, id, path, !viewed(path))
       } else if (e.key === 'n' || e.key === 'j') {
         e.preventDefault()
         // The next file not viewed yet, else simply the next one.
@@ -204,7 +267,13 @@ function Files({
 
   const q = filter.trim().toLowerCase()
   const match = (f: FileChange) => !q || f.path.toLowerCase().includes(q)
-  const banner = mode === 'since' && entry.since ? sinceBanner(range, entry.since.how, ago(entry.since.at), pr?.baseRef ?? 'the base branch') : null
+  const work = entry.work
+  const banner =
+    mode !== 'since' || !entry.since
+      ? null
+      : work
+        ? workSinceBanner(work, entry.sinceFiles?.length ?? 0, ago(entry.since.at), work.baseRef ? shortBase(work.baseRef) : 'the base branch')
+        : sinceBanner(range, entry.since.how, ago(entry.since.at), pr?.baseRef ?? 'the base branch')
 
   return (
     <div className="rv-body">
@@ -243,6 +312,9 @@ function Files({
 
       <div className="rv-center">
         {banner?.text && <div className={`rv-since rv-since-${banner.tone}`}>{banner.text}</div>}
+        {work?.uncommittedLeftOut ? (
+          <div className="rv-since rv-since-calm">{pluralize(work.uncommittedLeftOut, 'file')} not committed are too many to review here: these are its commits only.</div>
+        ) : null}
         {data.pendingOnService && (
           <div className="rv-since rv-since-calm">
             You started a review on {pr ? providerName(pr) : 'the website'} with {pluralize(data.pendingOnService.comments, 'comment')}: submitting from Adar adds yours to it and sends them all.
@@ -252,7 +324,7 @@ function Files({
           <FileBody
             key={`${file.path}@${from}`}
             repo={repo}
-            number={number}
+            id={id}
             pull={pull}
             file={file}
             from={from}
@@ -260,7 +332,7 @@ function Files({
             data={data}
             drafts={drafts}
             againstBase={mode === 'all'}
-            canComment={pr?.state === 'open' || pr?.state === 'draft'}
+            canComment={!!work || pr?.state === 'open' || pr?.state === 'draft'}
             viewed={viewed(file.path)}
             changedSinceViewed={data.viewed[file.path] === 'changed'}
             next={order[order.findIndex((f) => f.path === file.path) + 1]?.path ?? null}
@@ -335,7 +407,7 @@ function FileList(props: {
 
 function FileBody(props: {
   repo: string
-  number: number
+  id: ReviewId
   pull: string
   file: FileChange
   from: string
@@ -349,7 +421,7 @@ function FileBody(props: {
   next: string | null
   onNext(path: string): void
 }) {
-  const { repo, number, file } = props
+  const { repo, id, file } = props
   const [diff, setDiff] = useState<FileDiff | null>(null)
   const [error, setError] = useState<string | null>(null)
   useEffect(() => {
@@ -385,7 +457,7 @@ function FileBody(props: {
         <span className="rv-spacer" />
         {props.changedSinceViewed && <span className="rv-muted">Changed since you viewed it</span>}
         <label className="rv-check" title="Viewed (V)">
-          <input type="checkbox" checked={props.viewed} onChange={(e) => void setViewed(repo, number, file.path, e.target.checked)} />
+          <input type="checkbox" checked={props.viewed} onChange={(e) => void setViewed(repo, id, file.path, e.target.checked)} />
           Viewed
         </label>
         {props.next && (
@@ -407,7 +479,7 @@ function FileBody(props: {
                   <div className="rv-muted">
                     {t.outdated ? 'Outdated' : 'Old side'} · line {t.originalLine ?? t.line ?? '?'}
                   </div>
-                  <Thread repo={repo} number={number} thread={t} canAct={props.canComment} />
+                  <Thread repo={repo} number={id} thread={t} canAct={props.canComment} />
                 </div>
               ))}
           </div>
@@ -421,7 +493,7 @@ function FileBody(props: {
         ) : (
           <ReviewDiff
             repo={repo}
-            number={number}
+            number={id}
             pull={props.pull}
             diff={diff}
             path={file.path}
@@ -576,9 +648,17 @@ function Commits({ repo, entry }: { repo: string; entry: ReviewEntry }) {
   const since = entry.range?.since ?? null
   const commits = entry.commits ?? []
   const sinceIndex = since ? commits.findIndex((c) => c.sha === since) : -1
+  const uncommitted = entry.work?.uncommitted ?? 0
   return (
     <div className="rv-conv-scroll">
       <div className="rv-commits">
+        {uncommitted > 0 && (
+          <div className="rv-commit rv-commit-new rv-commit-wip">
+            <PencilLine size={16} />
+            <span className="rv-commit-subject">Not committed yet</span>
+            <span className="rv-muted">{pluralize(uncommitted, 'file')}</span>
+          </div>
+        )}
         {commits.map((c, i) => (
           <button key={c.sha} type="button" className={`rv-commit${sinceIndex > 0 && i < sinceIndex ? ' rv-commit-new' : ''}`} title="Select it in the graph" onClick={() => goToCommit(repo, c.sha)}>
             <Avatar name={c.authorName} email={c.authorEmail} sha={c.sha} size={20} />
@@ -593,7 +673,7 @@ function Commits({ repo, entry }: { repo: string; entry: ReviewEntry }) {
             <code>{c.shortSha}</code>
           </button>
         ))}
-        {!commits.length && <div className="rv-note-block">No commits.</div>}
+        {!commits.length && <div className="rv-note-block">{uncommitted ? 'No commits yet: only changes not committed.' : 'No commits.'}</div>}
       </div>
     </div>
   )

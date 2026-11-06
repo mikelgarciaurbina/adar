@@ -1,5 +1,6 @@
 // Pieces of the review view: a comment's text (Markdown with code blocks and suggested changes), a comment thread
-// with its replies and Resolve, the box for a new line comment, and a comment kept for the next review.
+// with its replies and Resolve, the box for a new line comment (a note, for an agent's work), and a comment kept for
+// the next review.
 
 import { Fragment, useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { ChevronDown, ChevronRight, CircleCheck, FileDiff as FileDiffIcon, Pencil, Trash2, Undo2 } from 'lucide-react'
@@ -9,7 +10,8 @@ import { Button, IconButton } from '@renderer/components/common/Button'
 import { ReleaseNotes } from '@renderer/components/update/ReleaseNotes'
 import { relativeTime } from '@renderer/lib/format'
 import { suggestionBlock, type DraftComment, type ReviewComment, type ReviewFeatures, type ReviewThread } from '@shared/review'
-import { useReview } from './reviewStore'
+import { noteQuote } from './model'
+import { isWorkKey, useReview, type ReviewId } from './reviewStore'
 
 export const ago = (iso: string) => (iso ? relativeTime(Math.floor(Date.parse(iso) / 1000)) : '')
 
@@ -77,7 +79,7 @@ function textKeys(primary: () => void, cancel: () => void) {
   }
 }
 
-export function Thread({ repo, number, thread, canAct }: { repo: string; number: number; thread: ReviewThread; canAct: boolean }) {
+export function Thread({ repo, number, thread, canAct }: { repo: string; number: ReviewId; thread: ReviewThread; canAct: boolean }) {
   const [open, setOpen] = useState(!thread.resolved)
   const [replying, setReplying] = useState(false)
   const [body, setBody] = useState('')
@@ -96,7 +98,7 @@ export function Thread({ repo, number, thread, canAct }: { repo: string; number:
     )
   }
   const send = async () => {
-    if (!body.trim() || busy) return
+    if (!body.trim() || busy || typeof number !== 'number') return
     setBusy(true)
     const ok = await replyTo(repo, number, thread.id, thread.comments.at(-1)!.id, body)
     setBusy(false)
@@ -145,7 +147,7 @@ export function Thread({ repo, number, thread, canAct }: { repo: string; number:
                 </button>
               )}
               {thread.canResolve && (
-                <Button size="sm" icon={thread.resolved ? <Undo2 size={13} /> : <CircleCheck size={13} />} onClick={() => void resolveThread(repo, number, thread.id, !thread.resolved)}>
+                <Button size="sm" icon={thread.resolved ? <Undo2 size={13} /> : <CircleCheck size={13} />} onClick={() => typeof number === 'number' && void resolveThread(repo, number, thread.id, !thread.resolved)}>
                   {thread.resolved ? 'Unresolve' : 'Resolve conversation'}
                 </Button>
               )}
@@ -170,9 +172,9 @@ export function Composer({
   features
 }: {
   repo: string
-  number: number
+  number: ReviewId
   pull: string
-  /** The text of the lines commented on (for a suggested change). */
+  /** The text of the lines commented on (for a suggested change, and quoted by a note for an agent). */
   lines: string[]
   /** Comments can be posted at once (the diff ends at the pull request's head). */
   againstHead: boolean
@@ -181,6 +183,7 @@ export function Composer({
   const c = useReview((s) => s.composer)
   const ref = useRef<HTMLTextAreaElement>(null)
   const [busy, setBusy] = useState(false)
+  const note = number === 'work'
   useEffect(() => {
     ref.current?.focus()
   }, [c?.line, c?.startLine])
@@ -190,11 +193,11 @@ export function Composer({
   const draft = (): DraftComment => ({ path: c.path, side: c.side, line: c.line, ...(c.startLine && c.startLine < c.line ? { startLine: c.startLine } : {}), body: c.body })
   const add = () => {
     if (!c.body.trim()) return
-    addDraft(pull, draft())
+    addDraft(pull, note ? { ...draft(), quote: noteQuote(lines) } : draft())
     close()
   }
   const now = async () => {
-    if (!c.body.trim() || busy) return
+    if (!c.body.trim() || busy || typeof number !== 'number') return
     setBusy(true)
     const ok = await commentNow(repo, number, draft())
     setBusy(false)
@@ -208,13 +211,13 @@ export function Composer({
   return (
     <div className="rv-compose">
       <div className="rv-compose-label">
-        Comment on <code>{linesLabel(c.side, c.line, c.startLine)}</code>
+        {note ? 'Note for the agent on' : 'Comment on'} <code>{linesLabel(c.side, c.line, c.startLine)}</code>
         {features.multiLine && <span className="rv-muted">· Shift-click another line’s + for several</span>}
       </div>
       <textarea
         ref={ref}
         className="rv-textarea"
-        placeholder="Leave a comment"
+        placeholder={note ? 'What should the agent change?' : 'Leave a comment'}
         value={c.body}
         onChange={(e) => set(e.target.value)}
         onKeyDown={textKeys(add, close)}
@@ -229,13 +232,13 @@ export function Composer({
         <Button size="sm" variant="ghost" onClick={close}>
           Cancel
         </Button>
-        {againstHead && (
+        {againstHead && !note && (
           <Button size="sm" loading={busy} disabled={!c.body.trim()} onClick={() => void now()}>
             Comment now
           </Button>
         )}
-        <Button size="sm" variant="primary" disabled={!c.body.trim()} title="Kept with your review until you submit it (⌘↩)" onClick={add}>
-          Add to review
+        <Button size="sm" variant="primary" disabled={!c.body.trim()} title={note ? 'Kept until you copy the notes for the agent (⌘↩)' : 'Kept with your review until you submit it (⌘↩)'} onClick={add}>
+          {note ? 'Add note' : 'Add to review'}
         </Button>
       </div>
     </div>
@@ -253,7 +256,7 @@ export function DraftCard({ pull, draft, index }: { pull: string; draft: DraftCo
         <div className="rv-ct">
           <div className="rv-who">
             <b>You</b>
-            <span className="rv-pending">Pending</span>
+            <span className="rv-pending">{isWorkKey(pull) ? 'Note' : 'Pending'}</span>
             <span className="rv-spacer" />
             {!editing && (
               <>

@@ -31,6 +31,7 @@ import {
   Pin,
   Plus,
   RefreshCw,
+  ScanEye,
   Settings,
   SquareTerminal,
   Tag,
@@ -50,6 +51,7 @@ import {
 import { keepMenuItem, openBranchCleanup, openKeptBranches, useSafeToDelete } from '@renderer/actions/cleanup'
 import { openReflog } from '@renderer/actions/reflog'
 import { markWorktreeSeen, setQuietMuted } from '@renderer/actions/agents'
+import { openWorkReview } from '@renderer/actions/workReview'
 import { useAgents } from '@renderer/components/agents/agentStore'
 import { newCommits } from '@renderer/components/agents/model'
 import { checkoutPull, copyPullLink, openWebPage, startPullRequest } from '@renderer/actions/pulls'
@@ -416,6 +418,7 @@ export function worktreeMenu(ctx: SidebarMenuCtx, wt: Worktree, merged: PullRequ
     { label: here ? 'This tab' : 'Open in a new tab', icon: icon(ExternalLink), disabled: here || wt.missing, onClick: () => void openWorktree(repo, wt.path) },
     { label: 'Reveal in Finder', icon: icon(FolderOpen), disabled: wt.missing, onClick: () => git.showInFolder(wt.path) },
     { label: 'Open in terminal', icon: icon(SquareTerminal), disabled: wt.missing, onClick: () => git.openInTerminal(wt.path) },
+    { label: 'Review its work', icon: icon(ScanEye), disabled: wt.missing, onClick: () => void openWorkReview(wt.path, repo) },
     SEP,
     { label: 'Copy path', icon: icon(Copy), onClick: () => git.copyText(wt.path, 'Copied the worktree path') }
   ]

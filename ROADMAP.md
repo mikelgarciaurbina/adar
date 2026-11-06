@@ -60,7 +60,9 @@ and the menu bar panel, and notifications when an agent commits, pushes or goes 
 its label or from its menu · pull requests reviewed in Adar on GitLab, Bitbucket (Cloud and Data Center) and Azure
 DevOps too, with their own reviews (GitLab's draft notes, Bitbucket Data Center's pending comments), approvals or votes,
 threads to resolve, suggested changes where the service has them and Viewed marks Adar keeps where it has none; and
-their activity (reviews, comments, pushes) for the inbox's blue dots and the notifications.
+their activity (reviews, comments, pushes) for the inbox's blue dots and the notifications · an agent's work reviewed
+before its pull request: its commits and its changes not committed against the base branch, with Viewed marks and
+notes on lines copied as one message for the agent's chat, and on the next round only what changed since.
 
 ---
 
@@ -69,8 +71,6 @@ their activity (reviews, comments, pushes) for the inbox's blue dots and the not
 ### Supervise AI agents and the team
 Code and commits are more and more written by AI agents. Adar is where people see what the agents did, review it,
 and keep up with their colleagues' branches and pull requests.
-- [ ] **Since I last looked**: mark a point of a branch as reviewed and see only what came after it, with files you can
-      tick as viewed.
 - [ ] **Diffs for large changes**: a file tree with the lines added and removed, lockfiles and generated files folded
       away, whitespace changes hidden on demand, and keyboard navigation through files and changes.
 - [ ] **AI-authored commits**: recognise `Co-Authored-By` trailers (Claude, Copilot, Codex, Cursor…) and show a badge in

@@ -127,6 +127,8 @@ export interface DraftComment {
   line: number
   startLine?: number
   body: string
+  /** The lines it is on, as the diff showed them (a note for an agent quotes them). */
+  quote?: string[]
 }
 
 /** Something done to a pull request from the review view. */
@@ -156,6 +158,36 @@ export interface ReviewRange {
   /** Every one of them is a merge (the base branch brought in), so the pull request's own changes did not change. */
   onlyMerges: boolean
 }
+
+/**
+ * An agent's work in a worktree before its pull request (prepareWorkReview): the commits its branch has that the
+ * base branch lacks and the changes not committed yet, as one comparison base..head. With changes not committed,
+ * `head` is a snapshot tree of the working tree (the same files give the same tree). "since" is the version last
+ * reviewed in Adar; it is compared as it was (a tree), so `sinceState` is only 'ancestor' (the branch went on from
+ * it), 'rewritten' (rebased, amended) or 'missing'.
+ */
+export interface WorkReviewRange extends ReviewRange {
+  /** The checked-out branch; null on a detached HEAD. */
+  branch: string | null
+  /** What the work is compared with ("origin/main"); null when the repository has no base branch (only the changes not committed then). */
+  baseRef: string | null
+  /** The last commit (HEAD). */
+  tip: string
+  /** Files with changes not committed (in `head`). */
+  uncommitted: number
+  /** Files not committed left out because there are too many of them (their number), else 0. */
+  uncommittedLeftOut: number
+}
+
+/** The version of an agent's work last reviewed in Adar: what it looked like (`head`) and its last commit then. */
+export interface WorkReviewMark {
+  head: string
+  tip: string
+  at: string
+}
+
+/** What a review of an agent's work can do: notes kept in Adar for the agent, Adar's own Viewed marks. */
+export const WORK_FEATURES: ReviewFeatures = { viewed: 'adar', multiLine: true, suggestions: 'github', events: [] }
 
 export const MAX_COMMENT = 65_000
 /** Longest text kept from the service (descriptions, comments). */

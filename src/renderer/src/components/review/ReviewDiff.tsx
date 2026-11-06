@@ -1,6 +1,6 @@
-// One file of a pull request in the review view: the unified diff with syntax and word highlighting, the comment
-// threads under the lines they are on, the comments kept for the review, and the box for a new comment (the + in
-// the gutter; Shift-click a second + for several lines).
+// One file of a pull request (or of an agent's work) in the review view: the unified diff with syntax and word
+// highlighting, the comment threads under the lines they are on, the comments kept for the review (notes for the
+// agent), and the box for a new comment (the + in the gutter; Shift-click a second + for several lines).
 
 import { Fragment, useCallback, useMemo, useState } from 'react'
 import { Plus } from 'lucide-react'
@@ -13,14 +13,14 @@ import type { DraftComment, DiffSide, ReviewFeatures } from '@shared/review'
 import type { DiffLine, FileDiff } from '@shared/types'
 import { lineSlot, type FileThreads } from './model'
 import { Composer, DraftCard, Thread } from './parts'
-import { useReview } from './reviewStore'
+import { useReview, type ReviewId } from './reviewStore'
 
 /** Lines shown before "Show N more lines". */
 const FIRST_LINES = 2500
 
 interface Props {
   repo: string
-  number: number
+  number: ReviewId
   /** The pull request's key (drafts). */
   pull: string
   diff: FileDiff
@@ -125,8 +125,8 @@ export function ReviewDiff({ repo, number, pull, diff, path, threads, drafts, ag
                       <button
                         type="button"
                         className="rv-add"
-                        title={features.multiLine ? 'Comment on this line (Shift-click: down to here)' : 'Comment on this line'}
-                        aria-label={`Comment on line ${n}`}
+                        title={`${number === 'work' ? 'Leave a note on this line' : 'Comment on this line'}${features.multiLine ? ' (Shift-click: down to here)' : ''}`}
+                        aria-label={`${number === 'work' ? 'Leave a note on' : 'Comment on'} line ${n}`}
                         onClick={(e) => start(side, n!, e.shiftKey)}
                       >
                         <Plus size={12} strokeWidth={2.5} />

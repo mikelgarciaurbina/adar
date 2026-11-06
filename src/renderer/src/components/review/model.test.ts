@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { GITHUB_FEATURES, type PullReviewData, type ReviewRange, type ReviewThread } from '@shared/review'
-import { coAuthorAgents, conversation, fileGroups, isGenerated, settleReview, sinceBanner, threadCounts, threadsOf } from './model'
+import { GITHUB_FEATURES, type PullReviewData, type ReviewRange, type ReviewThread, type WorkReviewRange } from '@shared/review'
+import type { FileChange } from '@shared/types'
+import { agentPrompt, coAuthorAgents, conversation, fileGroups, isGenerated, noteQuote, settleReview, sinceBanner, threadCounts, threadsOf, workSinceBanner, workSinceFiles } from './model'
 
 const sha = (c: string) => c.repeat(40)
 
@@ -141,5 +142,81 @@ describe('The review at its head', () => {
     ])
     const same = data('service', [thread('4', 'c.ts', null)])
     expect(await settleReview(same, sha('h'), {}, async () => null)).toBe(same)
+  })
+})
+
+describe('Reviewing an agent’s work', () => {
+  const work = (p: Partial<WorkReviewRange>): WorkReviewRange => ({
+    base: sha('a'),
+    head: sha('b'),
+    since: sha('c'),
+    sinceState: 'ancestor',
+    sinceCommits: 0,
+    onlyMerges: false,
+    branch: 'claude/login',
+    baseRef: 'origin/main',
+    tip: sha('b'),
+    uncommitted: 0,
+    uncommittedLeftOut: 0,
+    ...p
+  })
+
+  it('says what changed since the last review', () => {
+    expect(workSinceBanner(work({}), 0, '2 hours ago', 'main').text).toBe('Nothing changed since your review 2 hours ago.')
+    expect(workSinceBanner(work({ sinceCommits: 2, uncommitted: 3 }), 4, '', 'main')).toEqual({ text: '4 files changed since your review in 2 commits and changes not committed.', tone: 'new' })
+    expect(workSinceBanner(work({ uncommitted: 1 }), 1, '', 'main').text).toBe('1 file changed since your review, not committed yet.')
+    expect(workSinceBanner(work({ sinceState: 'rewritten' }), 3, '', 'main').tone).toBe('new')
+    expect(workSinceBanner(work({ sinceState: 'missing' }), 0, 'yesterday', 'main').text).toMatch(/^What you reviewed yesterday is no longer/)
+  })
+
+  it('leaves out what the base branch brought in', () => {
+    const f = (path: string, oldPath?: string): FileChange => ({ path, status: oldPath ? 'renamed' : 'modified', ...(oldPath ? { oldPath } : {}) }) as unknown as FileChange
+    expect(workSinceFiles([f('a.ts'), f('main-only.ts'), f('b2.ts', 'b.ts')], [f('a.ts'), f('b.ts')]).map((x) => x.path)).toEqual(['a.ts', 'b2.ts'])
+  })
+
+  it('writes the notes as one message for the agent', () => {
+    expect(noteQuote(Array.from({ length: 10 }, (_, i) => `l${i}`))).toHaveLength(9)
+    const text = agentPrompt({
+      branch: 'claude/login',
+      baseRef: 'origin/main',
+      summary: '  Looks close. ',
+      notes: [
+        { path: 'src/z.ts', side: 'RIGHT', line: 3, body: 'Rename this.', quote: ['const x = 1'] },
+        { path: 'src/a.ts', side: 'RIGHT', line: 12, startLine: 10, body: 'Simpler:\n```suggestion\nreturn ok\n```', quote: ['if (a) {', '  return ok', '}'] },
+        { path: 'src/a.ts', side: 'LEFT', line: 4, body: 'Keep this check.' }
+      ]
+    })
+    expect(text).toBe(
+      [
+        'I reviewed your work on claude/login (compared with main).',
+        '',
+        'Looks close.',
+        '',
+        'Please address these notes:',
+        '',
+        '1. src/a.ts, removed line 4 (numbered as before your changes):',
+        '   Keep this check.',
+        '',
+        '2. src/a.ts, lines 10–12:',
+        '   ```',
+        '   if (a) {',
+        '     return ok',
+        '   }',
+        '   ```',
+        '   Simpler:',
+        '   Replace those lines with:',
+        '   ```',
+        '   return ok',
+        '   ```',
+        '',
+        '3. src/z.ts, line 3:',
+        '   ```',
+        '   const x = 1',
+        '   ```',
+        '   Rename this.',
+        ''
+      ].join('\n')
+    )
+    expect(agentPrompt({ branch: null, baseRef: null, notes: [], summary: 'All good, commit it.' })).toBe('I reviewed your changes.\n\nAll good, commit it.\n')
   })
 })

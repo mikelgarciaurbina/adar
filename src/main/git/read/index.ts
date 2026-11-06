@@ -13,6 +13,7 @@ import { createWorktreeReadOps } from './worktrees'
 import { createAgentOps } from '../../system/activity'
 import { createRepoOps } from './repo'
 import { createStatusOps } from './status'
+import { createWorkReviewOps } from './workReview'
 
 /**
  * Read commands run with GIT_OPTIONAL_LOCKS=0: `git status` / `git diff` would otherwise
@@ -37,6 +38,7 @@ export function createReadOps(ctx: GitContext, services: SystemServices): ReadOp
     ...createReflogOps(rctx),
     ...createWorktreeReadOps(rctx),
     ...createAgentOps(services),
+    ...createWorkReviewOps(rctx),
     ...createStatusOps(rctx),
     ...createDiffOps(rctx),
     ...createContentOps(rctx)

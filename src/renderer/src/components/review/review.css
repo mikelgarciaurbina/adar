@@ -817,6 +817,20 @@
 .rv-commit-new {
   box-shadow: inset 3px 0 0 var(--lane-3);
 }
+/* An agent's changes not committed yet, above its commits. */
+.rv-commit-wip {
+  cursor: default;
+}
+.rv-commit-wip:hover {
+  background: transparent;
+}
+.rv-commit-wip svg {
+  color: var(--text-3);
+}
+.rv-commit-wip .rv-muted {
+  grid-column: 3 / -1;
+  justify-self: end;
+}
 .rv-commit-subject {
   min-width: 0;
   overflow: hidden;

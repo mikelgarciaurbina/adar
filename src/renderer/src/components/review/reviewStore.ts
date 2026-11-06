@@ -1,10 +1,12 @@
-// State of the review view, per repository and pull request: what the service says (threads, reviews, Viewed marks),
-// where the local repository has the changes (ReviewRange), the files changed in all of them and since the review,
-// the line comments written in Adar for the next review (kept in this browser's storage until submitted) and, for
-// services that keep no Viewed marks Adar can read (GitLab), Adar's own: the head each file was viewed at.
+// State of the review view, per repository and pull request (or the tab's own work, an agent's before its pull
+// request): what the service says (threads, reviews, Viewed marks), where the local repository has the changes
+// (ReviewRange), the files changed in all of them and since the review, the line comments written in Adar for the next
+// review or for the agent (kept in this browser's storage until submitted or copied), Adar's own Viewed marks for
+// services that keep none Adar can read and for an agent's work (the head each file was viewed at), and the version of
+// each agent's work last reviewed.
 
 import { create } from 'zustand'
-import type { DraftComment, PullReviewData, ReviewRange } from '@shared/review'
+import type { DraftComment, PullReviewData, ReviewRange, WorkReviewMark, WorkReviewRange } from '@shared/review'
 import type { Commit, FileChange } from '@shared/types'
 
 export interface ReviewEntry {
@@ -15,14 +17,16 @@ export interface ReviewEntry {
   sinceFiles: FileChange[] | null
   /** The pull request's commits as the repository has them (base..head), newest first. */
   commits: Commit[] | null
-  /** What "since" means here: the user's last review, comment or look, fixed when the view opened. */
-  since: { sha: string; how: 'review' | 'comment' | 'seen'; at: string } | null
+  /** What "since" means here: the user's last review, comment or look, fixed when the view opened (`tip`: an agent's work). */
+  since: { sha: string; how: 'review' | 'comment' | 'seen'; at: string; tip?: string } | null
+  /** An agent's work: its branch, base and changes not committed (the same object as `range`). */
+  work: WorkReviewRange | null
   loading: boolean
   error: string | null
   at: number
 }
 
-export const EMPTY_ENTRY: ReviewEntry = { data: null, range: null, files: null, sinceFiles: null, commits: null, since: null, loading: false, error: null, at: 0 }
+export const EMPTY_ENTRY: ReviewEntry = { data: null, range: null, files: null, sinceFiles: null, commits: null, since: null, work: null, loading: false, error: null, at: 0 }
 
 interface ReviewState {
   entries: Record<string, ReviewEntry>
@@ -30,12 +34,15 @@ interface ReviewState {
   drafts: Record<string, DraftComment[]>
   /** Adar's Viewed marks, by pull request: the commit each file was viewed at, and when the marks last changed. */
   viewed: Record<string, ViewedMarks>
+  /** The version of each agent's work last reviewed, by its key (workKey). */
+  reviewed: Record<string, WorkReviewMark>
   /** The comment box open in the diff (one at a time). */
   composer: { key: string; path: string; side: 'LEFT' | 'RIGHT'; line: number; startLine?: number; body: string } | null
   patch(key: string, p: Partial<ReviewEntry>): void
   setDrafts(pull: string, drafts: DraftComment[]): void
   /** Mark a file viewed at `head`, or not (null). */
   setViewedMark(pull: string, path: string, head: string | null): void
+  setWorkReviewed(key: string, mark: WorkReviewMark | null): void
   setComposer(c: ReviewState['composer']): void
 }
 
@@ -44,7 +51,16 @@ export interface ViewedMarks {
   files: Record<string, string>
 }
 
-export const entryKey = (repo: string, number: number) => `${repo}\0${number}`
+/** A pull request's number, or 'work': the tab's own work (an agent's, before its pull request). */
+export type ReviewId = number | 'work'
+
+export const entryKey = (repo: string, id: ReviewId) => `${repo}\0${id}`
+
+/** Where an agent's notes, Viewed marks and last review are kept: its worktree and branch. */
+export const workKey = (path: string, branch: string | null) => `work:${path}#${branch ?? ''}`
+export const isWorkKey = (key: string) => key.startsWith('work:')
+
+const OBJECT_ID = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/
 
 const DRAFTS_KEY = 'adar.reviewDrafts.v1'
 
@@ -89,7 +105,7 @@ function loadViewed(): Record<string, ViewedMarks> {
       const m = v as Partial<ViewedMarks> | null
       if (!m || typeof m.at !== 'number' || !m.files || typeof m.files !== 'object') continue
       const files: Record<string, string> = {}
-      for (const [path, sha] of Object.entries(m.files)) if (typeof sha === 'string' && /^[0-9a-f]{40}$/.test(sha)) files[path] = sha
+      for (const [path, sha] of Object.entries(m.files)) if (typeof sha === 'string' && OBJECT_ID.test(sha)) files[path] = sha
       if (Object.keys(files).length) out[k] = { at: m.at, files }
     }
     return out
@@ -106,10 +122,30 @@ function saveViewed(viewed: Record<string, ViewedMarks>): void {
   }
 }
 
+const REVIEWED_KEY = 'adar.workReviewed.v1'
+/** Agents' work whose last review is kept (the oldest go first). */
+const MAX_REVIEWED = 200
+
+function loadReviewed(): Record<string, WorkReviewMark> {
+  try {
+    const raw = JSON.parse(localStorage.getItem(REVIEWED_KEY) ?? '{}') as unknown
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {}
+    const out: Record<string, WorkReviewMark> = {}
+    for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+      const m = v as Partial<WorkReviewMark> | null
+      if (isWorkKey(k) && m && typeof m.head === 'string' && OBJECT_ID.test(m.head) && typeof m.tip === 'string' && OBJECT_ID.test(m.tip) && typeof m.at === 'string') out[k] = { head: m.head, tip: m.tip, at: m.at }
+    }
+    return out
+  } catch {
+    return {}
+  }
+}
+
 export const useReview = create<ReviewState>()((set) => ({
   entries: {},
   drafts: loadDrafts(),
   viewed: loadViewed(),
+  reviewed: loadReviewed(),
   composer: null,
 
   patch(key, p) {
@@ -143,6 +179,22 @@ export const useReview = create<ReviewState>()((set) => ({
     })
   },
 
+  setWorkReviewed(key, mark) {
+    set((s) => {
+      const reviewed = { ...s.reviewed }
+      if (mark) reviewed[key] = mark
+      else delete reviewed[key]
+      const keys = Object.keys(reviewed)
+      if (keys.length > MAX_REVIEWED) for (const k of keys.sort((a, b) => (reviewed[a].at < reviewed[b].at ? -1 : 1)).slice(0, keys.length - MAX_REVIEWED)) delete reviewed[k]
+      try {
+        localStorage.setItem(REVIEWED_KEY, JSON.stringify(reviewed))
+      } catch {
+        /* storage unavailable: kept for this run only */
+      }
+      return { reviewed }
+    })
+  },
+
   setComposer(composer) {
     set({ composer })
   }
@@ -154,4 +206,4 @@ const NO_DRAFTS: DraftComment[] = []
 export const useDrafts = (pull: string | null) => useReview((s) => (pull ? (s.drafts[pull] ?? NO_DRAFTS) : NO_DRAFTS))
 
 /** A review view's entry (EMPTY_ENTRY until loaded). */
-export const useReviewEntry = (repo: string, number: number) => useReview((s) => s.entries[entryKey(repo, number)] ?? EMPTY_ENTRY)
+export const useReviewEntry = (repo: string, id: ReviewId) => useReview((s) => s.entries[entryKey(repo, id)] ?? EMPTY_ENTRY)

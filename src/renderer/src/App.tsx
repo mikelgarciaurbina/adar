@@ -50,6 +50,8 @@ function CenterPanel({ tab }: { tab: RepoTab }) {
       return <ReflogView tab={tab} mode={view.mode} />
     case 'review':
       return <ReviewView key={view.number} tab={tab} view={view} />
+    case 'work-review':
+      return <ReviewView key="work" tab={tab} view={view} />
     case 'inbox':
       return <InboxView tab={tab} />
     case 'agents':
@@ -67,7 +69,7 @@ function RepoWorkspace({ tab }: { tab: RepoTab }) {
   const updateSettings = useApp((s) => s.updateSettings)
   // A review has its own file list on the left; the inbox and the Agents view span the window.
   const wide = tab.center.kind === 'inbox' || tab.center.kind === 'agents'
-  const left = !leftCollapsed && tab.center.kind !== 'review' && !wide
+  const left = !leftCollapsed && tab.center.kind !== 'review' && tab.center.kind !== 'work-review' && !wide
   const right = !rightCollapsed && !wide
 
   return (

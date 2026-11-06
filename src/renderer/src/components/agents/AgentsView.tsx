@@ -4,10 +4,11 @@
 // the user looked.
 
 import { useEffect, useMemo, useState, type MouseEvent } from 'react'
-import { ArrowLeft, ArrowUp, ArrowUpRight, Bell, BellOff, Bot, CheckCheck, ChevronDown, ChevronRight, FileDiff, FolderGit2, GitCommitHorizontal, MessageCircleQuestion, Moon, Settings, Sparkle } from 'lucide-react'
+import { ArrowLeft, ArrowUp, ArrowUpRight, Bell, BellOff, Bot, CheckCheck, ChevronDown, ChevronRight, FileDiff, FolderGit2, GitCommitHorizontal, MessageCircleQuestion, Moon, ScanEye, Settings, Sparkle } from 'lucide-react'
 import { pendingWork, type AgentsScope, type AgentState, type AgentWorktree } from '@shared/agents'
 import * as git from '@renderer/actions/git'
 import { markWorktreeSeen, setQuietMuted, showWorktree } from '@renderer/actions/agents'
+import { openWorkReview } from '@renderer/actions/workReview'
 import { Button, EmptyState, IconButton } from '@renderer/components/common/Button'
 import { showContextMenu, type MenuItem } from '@renderer/components/common/ContextMenu'
 import { pluralize } from '@renderer/lib/format'
@@ -179,9 +180,13 @@ function repoName(repo: string): string {
   return useApp.getState().tabs.find((t) => t.path === repo)?.name ?? repo.split(/[\\/]/).pop() ?? repo
 }
 
+/** Something to review: commits the base branch lacks, or changes not committed. */
+const hasWork = (w: AgentWorktree) => w.ahead > 0 || w.fileCount > 0
+
 function cardMenu(w: AgentWorktree, fresh: boolean, muted: boolean): MenuItem[] {
   return [
     { label: 'Open', icon: <ArrowUpRight size={14} />, onClick: () => void showWorktree(w.path, w.repo) },
+    { label: 'Review its work', icon: <ScanEye size={14} />, disabled: !hasWork(w), onClick: () => void openWorkReview(w.path, w.repo) },
     { label: 'See changes', icon: <FileDiff size={14} />, onClick: () => void showWorktree(w.path, w.repo, 'changes') },
     { label: 'Mark as seen', icon: <CheckCheck size={14} />, disabled: !fresh, onClick: () => markWorktreeSeen([w]) },
     { type: 'separator' },
@@ -310,6 +315,9 @@ function Card({ w, state }: { w: AgentWorktree; state: AgentState }) {
         </div>
       )}
       <div className="ag-actions">
+        <Button size="sm" icon={<ScanEye size={14} />} disabled={!hasWork(w)} title="Its commits and changes not committed, against the base branch, with notes for the agent" onClick={() => void openWorkReview(w.path, w.repo)}>
+          Review
+        </Button>
         <Button size="sm" icon={<ArrowUpRight size={14} />} onClick={() => void showWorktree(w.path, w.repo)}>
           Open
         </Button>

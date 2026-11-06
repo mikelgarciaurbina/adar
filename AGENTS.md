@@ -16,6 +16,7 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
   sides share: `agentState` working / quiet / idle, `agentOf` from Co-Authored-By trailers, the branch prefix or the
   folder, the 30-minute strip, `newSince`, the settings sanitizers and `parseAgentNotice`),
   `review.ts` (reviewing a pull request in Adar, whatever the service: threads, reviews, Viewed marks, the timeline,
+  an agent's work before its pull request — `WorkReviewRange`, `WorkReviewMark`, `WORK_FEATURES` —,
   `ReviewFeatures` — what each service lets a review do: Viewed marks of its own or kept by Adar, comments on several
   lines, its suggested-change syntax, the verdicts —, GitHub's review query and changes, `parseReviewAction`/
   `parsePullNotice` for what the renderer sends, and `PullActivity`: the signed-in user's part in each open pull request,
@@ -115,6 +116,15 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
     branch in); `components/pulls/` — the store and its sync (`pullStore.ts`: the active repository after each fetch, on
     focus, at most once a minute; every open one every three minutes), the chip on branch labels, the details panel and
     the dialogs; pure helpers in `lib/pulls.ts`.
+  - `actions/workReview.tsx` — reviewing an agent's work before its pull request, in its worktree's tab (`Review` on an
+    Agents card, the worktree's menu, the palette): `prepareWorkReview` (`git/read/workReview.ts`) compares the base
+    branch's merge base with HEAD or, when there are changes not committed, a snapshot tree of the working tree made
+    through a throwaway copy of the index (`git add --all` with `GIT_INDEX_FILE`: the worktree's index, HEAD and refs are
+    never touched; the same files give the same tree). The review view's `work-review` mode (`ReviewId` 'work'), Adar's
+    Viewed marks and notes on lines kept by `workKey` (worktree + branch), and `finishWorkReview`: the notes copied as one
+    message for the agent's chat (`agentPrompt` in `components/review/model.ts`) and the version reviewed kept
+    (`reviewed` in the review store), so the next round shows only what changed since. Right panel:
+    `components/review/WorkReviewPanel.tsx`.
   - `actions/agents.tsx` — Agents at work: opening a worktree on its changes or a commit (`showWorktree`), the Agents
     view, marking a worktree as seen (`settings.worktreesSeen`), silencing its quiet notifications. `components/agents/`
     — `agentStore.ts` (the watched worktrees from the main process, the clock, which tabs are watched, seen marks,

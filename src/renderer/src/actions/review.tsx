@@ -1,13 +1,13 @@
 // Reviewing pull requests in Adar and keeping up with them: opening a review (GitHub, GitLab, Bitbucket and Azure
 // DevOps) and the inbox of every open repository, loading what the review shows, line comments, replies,
-// resolving threads, Viewed marks (the service's, or Adar's own where the service keeps none it can read) and
-// submitting the review; following a pull request and marking it seen.
+// resolving threads, Viewed marks (the service's, or Adar's own where the service keeps none it can read — and for an
+// agent's work, see workReview.tsx) and submitting the review; following a pull request and marking it seen.
 
 import { api } from '@renderer/api/client'
 import { toast } from '@renderer/components/common/toast'
 import { usePulls } from '@renderer/components/pulls/pullStore'
 import { settleReview } from '@renderer/components/review/model'
-import { entryKey, EMPTY_ENTRY, useReview, type ReviewEntry } from '@renderer/components/review/reviewStore'
+import { entryKey, EMPTY_ENTRY, useReview, workKey, type ReviewEntry, type ReviewId } from '@renderer/components/review/reviewStore'
 import { marksOf, pullKey, pullNews } from '@renderer/lib/following'
 import { providerName, pullNoun } from '@renderer/lib/pulls'
 import { useApp, type ReviewMode, type ReviewTab } from '@renderer/store/appStore'
@@ -36,10 +36,17 @@ export function pullOf(repo: string, number: number): PullRequest | undefined {
   return pullData(repo)?.pulls.find((p) => p.number === number)
 }
 
-/** "github.com/acme/widgets#42" for a pull request of a repository tab, or null before its pull requests load. */
-export function keyOf(repo: string, number: number): string | null {
+/** "github.com/acme/widgets#42" for a pull request of a repository tab, or null before its pull requests load; for the tab's own work, workKeyOf. */
+export function keyOf(repo: string, id: ReviewId): string | null {
+  if (id === 'work') return workKeyOf(repo)
   const data = pullData(repo)
-  return data ? pullKey(data, number) : null
+  return data ? pullKey(data, id) : null
+}
+
+/** Where the tab's own work keeps its notes, Viewed marks and last review: the branch last loaded, else the one checked out. */
+export function workKeyOf(repo: string): string {
+  const loaded = review().entries[entryKey(repo, 'work')]?.work
+  return workKey(repo, loaded ? loaded.branch : (store().tabs.find((t) => t.path === repo)?.info?.head.branch ?? null))
 }
 
 // ── Seen and following ──────────────────────────────────────────────────────
@@ -141,7 +148,7 @@ export function loadReview(repo: string, number: number, opts: { force?: boolean
         api.getCompareFiles(repo, range.base, range.head),
         sinceFiles,
         api.getLog(repo, { revisions: [range.head, `^${range.base}`], maxCount: 250 }),
-        settle(repo, number, fetched, range.head)
+        settle(repo, keyOf(repo, number), fetched, range.head)
       ])
       review().patch(key, { data, range, files, sinceFiles: changed, commits: log.commits, loading: false, error: null, at: Date.now() })
     } catch (err) {
@@ -153,8 +160,7 @@ export function loadReview(repo: string, number: number, opts: { force?: boolean
 }
 
 /** The review as the repository says it is at `head` (Adar's Viewed marks, threads left on lines that changed): see settleReview. */
-function settle(repo: string, number: number, data: PullReviewData, head: string): Promise<PullReviewData> {
-  const pull = keyOf(repo, number)
+export function settle(repo: string, pull: string | null, data: PullReviewData, head: string): Promise<PullReviewData> {
   const marks = pull ? (review().viewed[pull]?.files ?? {}) : {}
   return settleReview(data, head, marks, (sha) =>
     api
@@ -170,7 +176,7 @@ async function reloadData(repo: string, number: number): Promise<void> {
   try {
     const head = review().entries[key]?.range?.head
     const data = await api.getPullReview(repo, number)
-    review().patch(key, { data: head ? await settle(repo, number, data, head) : data })
+    review().patch(key, { data: head ? await settle(repo, keyOf(repo, number), data, head) : data })
   } catch (err) {
     toast.error(err)
   }
@@ -230,9 +236,9 @@ export async function resolveThread(repo: string, number: number, threadId: stri
   }
 }
 
-/** Mark a file viewed (or not) on the service, or in Adar for services without marks; shown at once, put back if the service refuses. */
-export async function setViewed(repo: string, number: number, path: string, viewed: boolean): Promise<void> {
-  const key = entryKey(repo, number)
+/** Mark a file viewed (or not) on the service, or in Adar for services without marks and an agent's work; shown at once, put back if the service refuses. */
+export async function setViewed(repo: string, id: ReviewId, path: string, viewed: boolean): Promise<void> {
+  const key = entryKey(repo, id)
   const put = (v: FileViewed) => {
     const data = review().entries[key]?.data
     if (data) review().patch(key, { data: { ...data, viewed: { ...data.viewed, [path]: v } } })
@@ -240,14 +246,14 @@ export async function setViewed(repo: string, number: number, path: string, view
   const entry = review().entries[key]
   const before = entry?.data?.viewed[path] ?? 'unviewed'
   put(viewed ? 'viewed' : 'unviewed')
-  if (entry?.data?.features.viewed === 'adar') {
-    const pull = keyOf(repo, number)
-    const head = entry.range?.head
+  if (entry?.data?.features.viewed === 'adar' || id === 'work') {
+    const pull = keyOf(repo, id)
+    const head = entry?.range?.head
     if (pull && head) review().setViewedMark(pull, path, viewed ? head : null)
     return
   }
   try {
-    await api.pullReviewAction(repo, number, { kind: 'viewed', path, viewed })
+    await api.pullReviewAction(repo, id, { kind: 'viewed', path, viewed })
   } catch (err) {
     put(before)
     toast.error(err)

@@ -61,7 +61,7 @@ import type {
   PullRequest,
   RepoPullRequests
 } from './hosting'
-import type { PullNotice, PullReviewData, ReviewAction, ReviewRange } from './review'
+import type { PullNotice, PullReviewData, ReviewAction, ReviewRange, WorkReviewRange } from './review'
 
 export interface AdarApi {
   // ── App / system ────────────────────────────────────────────────────────
@@ -127,6 +127,12 @@ export interface AdarApi {
   getAgentWorktrees(): Promise<AgentWorktree[]>
   /** A system notification about an agent; clicking it sends an 'open-agent' event. */
   notifyAgent(notice: AgentNotice): Promise<void>
+  /**
+   * A worktree's work as one comparison with its base branch: its branch's own commits and its changes not committed
+   * (a snapshot tree; the worktree's index, HEAD and branches are left as they are), and how it moved on since the
+   * version last reviewed.
+   */
+  prepareWorkReview(repo: string, opts?: { since?: { head: string; tip: string } | null }): Promise<WorkReviewRange>
   getCommitDetails(repo: string, sha: string): Promise<CommitDetails>
   /** Files changed between two revisions (from..to). */
   getCompareFiles(repo: string, from: string, to: string): Promise<CommitDetails['files']>
@@ -406,6 +412,7 @@ export const API_METHODS = [
   'watchAgents',
   'getAgentWorktrees',
   'notifyAgent',
+  'prepareWorkReview',
   'getCommitDetails',
   'getCompareFiles',
   'getFileHistory',
