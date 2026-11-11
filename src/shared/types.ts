@@ -882,6 +882,7 @@ export const MENU_COMMANDS = [
   'uninstall-cli',
   'focus-branch-filter',
   'open-repo-path',
+  'open-repo-wsl',
   'stage-all',
   'commit',
   'about',

@@ -7,7 +7,7 @@ import path from 'node:path'
 import { AdarError } from '@shared/errors'
 import type { AdarEvent, RepoOperationState } from '@shared/types'
 import type { PlatformAdapter } from '../platform'
-import { commandDisplay, parseProgressPercent, runGit, type GitResult, type GitRunOptions } from './runner'
+import { commandDisplay, nativePath, parseProgressPercent, runGit, type GitResult, type GitRunOptions } from './runner'
 
 export interface GitContext {
   platform: PlatformAdapter
@@ -166,8 +166,8 @@ export function createGitContext(platform: PlatformAdapter, emit: (e: AdarEvent)
       if (cached) return cached
       const res = await runGit(['rev-parse', '--absolute-git-dir'], { cwd: repo, allowFailure: true })
       if (res.code !== 0) throw new AdarError({ message: `${repo} is not a Git repository`, code: 'NOT_A_REPO', stderr: res.stderr })
-      // Native form (Git for Windows prints C:/x/y), as locateRepo() returns it.
-      const dir = path.resolve(res.stdout.trim())
+      // Native form (Git for Windows prints C:/x/y, git inside WSL /home/…), as locateRepo() returns it.
+      const dir = nativePath(repo, res.stdout.trim())
       gitDirs.set(repo, dir)
       return dir
     },

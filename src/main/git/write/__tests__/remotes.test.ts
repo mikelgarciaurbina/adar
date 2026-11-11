@@ -341,6 +341,15 @@ describe('remotes & config', () => {
     expect(fs.readFileSync(file, 'utf8')).toContain('Global Name')
   })
 
+  it('sets the global identity of the git that runs a repository', async () => {
+    const { ops } = makeOps()
+    const dir = initRepo()
+    await ops.setIdentity(dir, 'Repo Global', 'repo-global@example.com', 'global')
+    expect(fs.readFileSync(process.env.GIT_CONFIG_GLOBAL as string, 'utf8')).toContain('repo-global@example.com')
+    expect(git(dir, ['config', '--local', '--list'])).not.toContain('repo-global@example.com')
+    await expectCode(ops.setIdentity(dir, 'Name', 'a@b', 'system' as never), 'INVALID_ARGUMENT')
+  })
+
   it('updates submodules', async () => {
     const { ops } = makeOps()
     const sub = initRepo()

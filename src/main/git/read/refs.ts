@@ -168,7 +168,7 @@ export function createRefsOps(ctx: GitContext): Pick<ReadOps, 'getRefs' | 'getBr
 
     async getRefs(repo): Promise<RefsResult> {
       await assertRepo(ctx, repo)
-      const batched = await gitAtLeast(ctx, 2, 41)
+      const batched = await gitAtLeast(ctx, 2, 41, repo)
       const format = batched ? FOR_EACH_REF_FORMAT_NO_TRACK : FOR_EACH_REF_FORMAT
       const refArgs = ['for-each-ref', `--format=${format}`, 'refs/heads', 'refs/remotes', 'refs/tags']
       const [refsRes, remotesRes, stashRes, head, submodules, elsewhere] = await Promise.all([

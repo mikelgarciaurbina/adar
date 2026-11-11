@@ -45,9 +45,9 @@ export function IdentityModal({ repo }: { repo: string | null }) {
     if (error || saving) return
     setSaving(true)
     try {
-      const scopeRepo = target === 'local' ? repo : null
-      await api.setIdentity(scopeRepo, name.trim(), email.trim())
-      toast.success(scopeRepo ? `Identity set for ${repoName}` : 'Global Git identity saved')
+      // With a repository, global means the global config of the git that runs it (WSL has its own).
+      await api.setIdentity(repo, name.trim(), email.trim(), target)
+      toast.success(repo && target === 'local' ? `Identity set for ${repoName}` : 'Global Git identity saved')
       if (useApp.getState().modal?.kind === 'identity') useApp.getState().closeModal()
     } catch (err) {
       toast.error(err)

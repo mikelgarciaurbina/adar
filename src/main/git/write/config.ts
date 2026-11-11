@@ -22,14 +22,21 @@ const exactly = (value: string) => `^${value.replace(/[.*+?^${}()|[\]\\]/g, '\\$
 
 export function createConfigOps(ctx: GitContext): ConfigOps {
   return {
-    async setIdentity(repo, name, email) {
+    async setIdentity(repo, name, email, scope = 'local') {
       const n = lineArg(name, 'name')
       const e = lineArg(email, 'email')
       if (/[<>]/.test(n)) throw invalid('The name must not contain "<" or ">"')
       if (/[<>\s]/.test(e)) throw invalid('The email must not contain spaces, "<" or ">"')
+      if (scope !== 'local' && scope !== 'global') throw invalid('Invalid scope')
       if (repo === null) {
         await ctx.gitGlobal(['config', '--global', '--', 'user.name', n])
         await ctx.gitGlobal(['config', '--global', '--', 'user.email', e])
+        return
+      }
+      if (scope === 'global') {
+        // Run in the repository: a repository inside WSL has the distribution's global config.
+        await ctx.git(repo, ['config', '--global', '--', 'user.name', n])
+        await ctx.git(repo, ['config', '--global', '--', 'user.email', e])
         return
       }
       await ctx.exclusive(repo, async () => {

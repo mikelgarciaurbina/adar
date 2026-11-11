@@ -7,6 +7,7 @@ import path from 'node:path'
 import type { GitContext } from '../context'
 import type { WriteOps } from '../ops'
 import { listWorktrees } from '../read/worktrees'
+import { gitPath } from '../runner'
 import { arg, invalid, nameArg, optionalArg, withCode } from './util'
 import { AdarError } from '@shared/errors'
 
@@ -47,9 +48,10 @@ export function createWorktreeWriteOps(ctx: GitContext): WorktreeOps {
       const branch = nameArg(opts?.branch, 'branch')
       const from = optionalArg(opts?.from, 'start point')
       const folder = await newFolder(opts?.path)
+      const where = gitPath(repo, folder)
       const args = from
-        ? ['worktree', 'add', ...(opts.track ? ['--track'] : ['--no-track']), '-b', branch, folder, from]
-        : ['worktree', 'add', folder, branch]
+        ? ['worktree', 'add', ...(opts.track ? ['--track'] : ['--no-track']), '-b', branch, where, from]
+        : ['worktree', 'add', where, branch]
       await ctx.exclusive(repo, async () => {
         try {
           await ctx.git(repo, args)
@@ -68,7 +70,7 @@ export function createWorktreeWriteOps(ctx: GitContext): WorktreeOps {
       if (w.locked) throw invalid(`${path.basename(w.path)} is locked. Unlock it first.`)
       await ctx.exclusive(repo, async () => {
         try {
-          await ctx.git(repo, ['worktree', 'remove', ...(opts?.force ? ['--force'] : []), w.path])
+          await ctx.git(repo, ['worktree', 'remove', ...(opts?.force ? ['--force'] : []), gitPath(repo, w.path)])
         } catch (err) {
           if (err instanceof AdarError && /modified or untracked files/i.test(`${err.stderr ?? ''} ${err.message}`)) {
             throw withCode(err, 'DIRTY_WORKTREE', `${path.basename(w.path)} has changes that are not committed`)
@@ -80,7 +82,7 @@ export function createWorktreeWriteOps(ctx: GitContext): WorktreeOps {
 
     async setWorktreeLocked(repo, worktree, locked) {
       const w = await linked(repo, worktree)
-      await ctx.exclusive(repo, () => ctx.git(repo, ['worktree', locked ? 'lock' : 'unlock', w.path]))
+      await ctx.exclusive(repo, () => ctx.git(repo, ['worktree', locked ? 'lock' : 'unlock', gitPath(repo, w.path)]))
     },
 
     async pruneWorktrees(repo) {

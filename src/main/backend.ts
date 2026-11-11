@@ -71,6 +71,7 @@ function bindMethods<T extends object, K extends keyof T & string>(obj: T, keys:
 const NON_REPO_METHODS: ReadonlySet<string> = new Set([
   'getAppInfo',
   'pickDirectory',
+  'wslHomeFolder',
   'openExternal',
   'showInFolder',
   'openInTerminal',

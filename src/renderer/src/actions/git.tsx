@@ -143,6 +143,21 @@ export async function openRepoDialog(): Promise<void> {
   await openRepoAt(dir)
 }
 
+/**
+ * Windows: open a repository inside WSL. The picker starts in the default distribution's home folder
+ * (others are under Linux in the same picker); git then runs inside the distribution.
+ */
+export async function openWslRepoDialog(): Promise<void> {
+  const home = await api.wslHomeFolder().catch(() => null)
+  if (!home) {
+    toast.error('WSL is not installed, or it has no Linux distribution. Install one with: wsl --install')
+    return
+  }
+  const dir = await api.pickDirectory({ title: 'Open a Git repository in WSL', defaultPath: home })
+  if (!dir) return
+  await openRepoAt(dir)
+}
+
 export async function openRepoAt(dir: string): Promise<boolean> {
   try {
     void suggestGroup(await store().openRepo(dir))

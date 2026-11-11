@@ -13,7 +13,7 @@ import { openConnect, selectPull, startPullRequest, turnOffPullRequests } from '
 import { openInbox, openReview } from '@renderer/actions/review'
 import { anyPullsOn, hostingOn, pullIndexOf, repoHosting, usePulls } from '@renderer/components/pulls/pullStore'
 import { currentBranch } from '@renderer/lib/refs'
-import { isElectron } from '@renderer/api/client'
+import { isElectron, platform } from '@renderer/api/client'
 import { FOCUS_FILTER_EVENT } from '@renderer/components/sidebar/LeftPanel'
 import { checkForUpdatesNow } from '@renderer/components/update/UpdateNotice'
 import { getActiveTab, useApp } from '@renderer/store/appStore'
@@ -82,6 +82,7 @@ function cycleTab(dir: 1 | -1) {
 export const COMMANDS: Command[] = [
   { id: 'open-repo', label: 'Open Repository…', group: 'App', shortcut: 'Mod+O', run: () => git.openRepoDialog() },
   { id: 'open-repo-path', label: 'Open Repository by Path…', group: 'App', run: () => useApp.getState().openModal({ kind: 'open' }) },
+  { id: 'open-repo-wsl', label: 'Open Repository in WSL…', group: 'App', when: () => isElectron && platform === 'win32', run: () => git.openWslRepoDialog() },
   { id: 'clone-repo', label: 'Clone Repository…', group: 'App', shortcut: 'Mod+Shift+N', run: () => useApp.getState().openModal({ kind: 'clone' }) },
   { id: 'init-repo', label: 'Init Repository…', group: 'App', shortcut: 'Mod+Alt+N', run: () => useApp.getState().openModal({ kind: 'init' }) },
   { id: 'close-tab', label: 'Close Tab', group: 'App', shortcut: 'Mod+W', when: hasRepo, run: withRepo((r) => useApp.getState().closeTab(r)) },

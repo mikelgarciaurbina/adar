@@ -10,6 +10,7 @@ import type { FoundRepo, GitCommandResult, Identity } from '@shared/types'
 import type { GitContext } from '../context'
 import type { ReadOps } from '../ops'
 import { summarizeGitOutput } from '../runner'
+import { wslExecutable, wslHomeFolder, wslTarget } from '../wsl'
 import type { PlatformAdapter } from '../../platform'
 import type { SystemServices } from '../../system'
 import { assertRepo, expandHome, invalidArgument, notFound } from './common'
@@ -18,6 +19,7 @@ type AppOps = Pick<
   ReadOps,
   | 'getAppInfo'
   | 'pickDirectory'
+  | 'wslHomeFolder'
   | 'openExternal'
   | 'showInFolder'
   | 'openInTerminal'
@@ -271,6 +273,10 @@ export function createAppOps(ctx: GitContext, services: SystemServices): AppOps 
       return platform.pickDirectory(opts)
     },
 
+    wslHomeFolder() {
+      return wslHomeFolder()
+    },
+
     async openExternal(url) {
       if (typeof url !== 'string' || !url) throw invalidArgument('URL is required')
       return platform.openExternal(url)
@@ -295,8 +301,11 @@ export function createAppOps(ctx: GitContext, services: SystemServices): AppOps 
         return
       }
       if (process.platform === 'win32') {
+        const wsl = wslTarget(dir)
         try {
-          await spawnDetached('cmd.exe', ['/c', 'start', '', 'cmd.exe'], { cwd: dir })
+          // A folder inside WSL: a shell of its distribution there (cmd.exe cannot start in a \\wsl.localhost\ folder).
+          if (wsl) await spawnDetached(wslExecutable(), ['-d', wsl.distro, '--cd', wsl.linux], { cwd: os.homedir() })
+          else await spawnDetached('cmd.exe', ['/c', 'start', '', 'cmd.exe'], { cwd: dir })
         } catch (err) {
           throw launchError('Could not open a terminal', err)
         }

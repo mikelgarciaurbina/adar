@@ -26,6 +26,7 @@ import type { AdarEvent, AppSettings } from '@shared/types'
 import type { GitContext } from '../git/context'
 import { baseBranch, baseName, countBetween, filesBetween, isAncestor, lookAtWorktree, parseAgentLog, type WorktreeLook } from '../git/read/activity'
 import { listWorktrees } from '../git/read/worktrees'
+import { nativePath } from '../git/runner'
 import { WatcherManager, type WatcherOptions, type WatchTarget } from './watcher'
 
 /** How often the worktree lists are read again (new worktrees an agent made, removed ones). */
@@ -244,9 +245,10 @@ export class ActivityTracker {
   private async targetOf(dir: string): Promise<WatchTarget | null> {
     const res = await this.deps.ctx.git(dir, ['rev-parse', '--absolute-git-dir', '--git-common-dir'], { allowFailure: true })
     if (res.code !== 0) return null
-    const [gitDir, common] = res.stdout.trim().split('\n')
-    if (!gitDir) return null
-    const commonDir = common ? path.resolve(dir, common) : gitDir
+    const [printed, common] = res.stdout.trim().split('\n')
+    if (!printed) return null
+    const gitDir = nativePath(dir, printed)
+    const commonDir = common ? nativePath(dir, common) : gitDir
     return { repoPath: dir, gitDir, commonDir, isBare: false }
   }
 

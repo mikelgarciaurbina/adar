@@ -35,6 +35,14 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
     `hosting/` (pull requests).
   - `git/runner.ts` spawns git (argument arrays only, deterministic env); `git/context.ts` (`GitContext`: `git`,
     `gitNetwork`, `exclusive`, `gitDir`, `operationState`); `git/ops.ts` (read/write split).
+  - `git/wsl.ts` — Windows: repositories inside WSL (`\\wsl.localhost\<distro>\…` or `\\wsl$\…`) run the distribution's own
+    git, `wsl.exe -d <distro> --cd <linux dir> --exec [env PATH=…] git …` (no shell; System32's wsl.exe). Only the
+    variables Adar sets cross over (WSLENV), plus PATH and SSH_AUTH_SOCK from the user's login shell there (read once per
+    distribution). `nativePath`/`gitPath` in `runner.ts` turn paths git prints into Windows ones and Windows paths into
+    Linux ones (temp files are /mnt/c/…); credential prompts reach Adar through interop (`askpass-wsl.sh`); the git
+    version is per distribution (`gitVersion(ctx, repo)`); the watcher only polls there (Windows hears no Linux file
+    events); Open in Terminal opens a shell of the distribution. "Open Repository in WSL…" (Windows only) starts the
+    picker in the default distribution's home (`wslHomeFolder`). Not testable on macOS beyond the pure helpers.
   - `system/` — settings/recents/trusted repos store, askpass bridge (credential prompts → UI), file watcher with
     polling fallback, login-shell `PATH` fix. `activity.ts` is Agents at work's `ActivityTracker`: a WatcherManager of
     its own on the linked worktrees of the open tabs (and each repository's folder with `agentsWatchMain`), a look at a
@@ -194,6 +202,8 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
 ## Safety rules (keep them when changing code)
 - Spawn git only through `GitContext` with argument arrays — never a shell. Reject user-supplied names/refs that start
   with `-`. Use `--pathspec-from-file` + `GIT_LITERAL_PATHSPECS` for path lists.
+- Absolute paths handed to git (arguments, `GIT_INDEX_FILE`, sh lines) go through `gitPath(repo, p)` / `shellPath(p, repo)`,
+  and absolute paths git prints through `nativePath(repo, p)`: inside WSL git only knows Linux paths.
 - Mutating operations per repo run inside `ctx.exclusive(repo, …)`.
 - Untrusted repositories: `openRepo` refuses (`UNTRUSTED_REPO`) repos whose local config runs commands until the user
   trusts them; never execute files from a repository (see `openInEditor`), never write through symlinks, validate that

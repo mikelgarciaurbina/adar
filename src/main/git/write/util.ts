@@ -6,7 +6,8 @@ import path from 'node:path'
 import { AdarError } from '@shared/errors'
 import type { OperationResult, AdarErrorCode, RepoOperationState } from '@shared/types'
 import type { GitContext } from '../context'
-import { commandDisplay, friendlyMessage, gitError, type GitResult, type GitRunOptions } from '../runner'
+import { commandDisplay, friendlyMessage, gitError, gitPath, type GitResult, type GitRunOptions } from '../runner'
+import { isWslPath, wslTarget } from '../wsl'
 
 // ── Errors ─────────────────────────────────────────────────────────────────
 
@@ -336,24 +337,30 @@ export async function hasStagedChanges(ctx: GitContext, repo: string): Promise<b
   return res.code === 1
 }
 
-let gitVersionCache: Promise<number[]> | null = null
+/** Installed git versions: '' for Adar's own git, `wsl:<distro>` for the one inside a WSL distribution. */
+const gitVersions = new Map<string, Promise<number[]>>()
 
-/** Installed git version as [major, minor, patch]. */
-export function gitVersion(ctx: GitContext): Promise<number[]> {
-  if (!gitVersionCache) {
-    gitVersionCache = ctx
-      .gitGlobal(['version'])
+/** Version, as [major, minor, patch], of the git that runs in `cwd` (Adar's own when omitted). */
+export function gitVersion(ctx: GitContext, cwd?: string): Promise<number[]> {
+  const wsl = wslTarget(cwd)
+  const key = wsl ? `wsl:${wsl.distro.toLowerCase()}` : ''
+  let version = gitVersions.get(key)
+  if (!version) {
+    version = ctx
+      .gitGlobal(['version'], wsl ? { cwd } : undefined)
       .then((r) => {
         const m = /(\d+)\.(\d+)(?:\.(\d+))?/.exec(r.stdout)
         return m ? [Number(m[1]), Number(m[2]), Number(m[3] ?? 0)] : [0, 0, 0]
       })
       .catch(() => [0, 0, 0])
+    gitVersions.set(key, version)
   }
-  return gitVersionCache
+  return version
 }
 
-export async function gitAtLeast(ctx: GitContext, major: number, minor: number): Promise<boolean> {
-  const [a, b] = await gitVersion(ctx)
+/** Whether the git that runs in `cwd` (a repository inside WSL has its own) is at least major.minor. */
+export async function gitAtLeast(ctx: GitContext, major: number, minor: number, cwd?: string): Promise<boolean> {
+  const [a, b] = await gitVersion(ctx, cwd)
   return a > major || (a === major && b >= minor)
 }
 
@@ -443,7 +450,11 @@ export function shellQuote(s: string): string {
   return `'${s.replace(/'/g, `'\\''`)}'`
 }
 
-/** Path as written into sh command lines (forward slashes on Windows for MSYS sh). */
-export function shellPath(p: string): string {
+/**
+ * Path as written into sh command lines run by git in `cwd`: forward slashes on Windows for MSYS sh,
+ * a Linux path when git runs inside WSL.
+ */
+export function shellPath(p: string, cwd?: string): string {
+  if (isWslPath(cwd)) return gitPath(cwd, p)
   return process.platform === 'win32' ? p.replace(/\\/g, '/') : p
 }

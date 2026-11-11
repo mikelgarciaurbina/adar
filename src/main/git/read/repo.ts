@@ -7,6 +7,7 @@ import type { RepoInfo } from '@shared/types'
 import type { ReadOps } from '../ops'
 import type { GitContext } from '../context'
 import { parseRemotesVerbose } from '../parsers/refs'
+import { gitPath } from '../runner'
 import { keptBranches } from '../write/config'
 import type { SystemServices } from '../../system'
 import { assertRepo, clampInt, expandHome, failed, invalidArgument, locateRepo, notFound, readHead, type RepoLocation } from './common'
@@ -277,14 +278,16 @@ export function createRepoOps(ctx: GitContext, services: SystemServices): RepoOp
       // Re-running init in an existing repository keeps its config: only a new repository is trusted.
       const existed = await exists(path.join(dir, '.git'))
       await fs.mkdir(dir, { recursive: true })
-      const res = await ctx.gitGlobal(['init', '-b', branch, dir], { cwd: dir, allowFailure: true })
+      // (A folder inside WSL is a Linux path for the git that runs there.)
+      const where = gitPath(dir, dir)
+      const res = await ctx.gitGlobal(['init', '-b', branch, where], { cwd: dir, allowFailure: true })
       if (res.code !== 0) {
         // git < 2.28 has no -b: init, then point HEAD at the branch.
         if (/unknown switch|unknown option|usage:/i.test(res.stderr)) {
-          await ctx.gitGlobal(['init', dir], { cwd: dir })
+          await ctx.gitGlobal(['init', where], { cwd: dir })
           await ctx.gitGlobal(['symbolic-ref', 'HEAD', `refs/heads/${branch}`], { cwd: dir })
         } else {
-          failed(['init', '-b', branch, dir], res)
+          failed(['init', '-b', branch, where], res)
         }
       }
       return openRepoAt(dir, existed ? undefined : await realpathIfExists(dir))
@@ -307,7 +310,7 @@ export function createRepoOps(ctx: GitContext, services: SystemServices): RepoOp
         const depth = clampInt(opts.depth, 0, 0, 1_000_000_000)
         if (depth > 0) args.push('--depth', String(depth))
       }
-      args.push('--', u, target)
+      args.push('--', u, gitPath(parent, target))
       await ctx.gitNetwork(null, args, { opId: opts.opId, cwd: parent })
       return openRepoAt(target, await realpathIfExists(target))
     }

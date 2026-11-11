@@ -11,12 +11,15 @@
 //    and is emitted by the poller;
 //  - while fs.watch has not proven itself (no event yet) or is degraded, worktree edits are
 //    detected by comparing a `git status` signature at an adaptive interval.
+// Repositories inside WSL (\\wsl.localhost\…) are never fs.watched: Windows hears nothing of what
+// Linux does to its files, so the poller and the status signature are all there is.
 // Worktree batches that only touch git-ignored paths (build output...) are dropped.
 
 import { existsSync, promises as fsp } from 'node:fs'
 import fs from 'node:fs'
 import path from 'node:path'
 import type { AdarEvent } from '@shared/types'
+import { isWslPath } from '../git/wsl'
 
 export type ChangeScope = 'worktree' | 'index' | 'refs'
 
@@ -244,7 +247,7 @@ export class WatcherManager {
     }
     this.repos.set(target.repoPath, entry)
 
-    if (this.opts.fsWatch) {
+    if (this.opts.fsWatch && !isWslPath(target.repoPath)) {
       this.watchDir(entry, target.gitDir, classifyGitDirPath, 'git')
       if (target.commonDir && target.commonDir !== target.gitDir) {
         // Linked worktree: refs and packed-refs live in the common dir; ignore its index/HEAD.

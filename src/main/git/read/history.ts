@@ -144,7 +144,7 @@ export function createHistoryOps(ctx: GitContext): HistoryOps {
     async getCommitDetails(repo, sha): Promise<CommitDetails> {
       await assertRepo(ctx, repo)
       const rev = validateRev(sha, 'commit')
-      if (await gitAtLeast(ctx, 2, 31)) {
+      if (await gitAtLeast(ctx, 2, 31, repo)) {
         // Header and changed files (merges: vs the first parent) from a single process.
         const res = await ctx.git(
           repo,

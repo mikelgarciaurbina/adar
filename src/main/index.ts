@@ -387,6 +387,7 @@ function buildMenu(): void {
       submenu: [
         item('Open Repository…', 'open-repo', 'CmdOrCtrl+O'),
         item('Open Repository by Path…', 'open-repo-path', 'CmdOrCtrl+Shift+O'),
+        ...(process.platform === 'win32' ? [item('Open Repository in WSL…', 'open-repo-wsl')] : []),
         item('Clone Repository…', 'clone-repo', 'CmdOrCtrl+Shift+N'),
         item('Init Repository…', 'init-repo', 'CmdOrCtrl+Alt+N'),
         { type: 'separator' },

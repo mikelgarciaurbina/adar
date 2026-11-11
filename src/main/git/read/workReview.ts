@@ -10,6 +10,7 @@ import path from 'node:path'
 import { AdarError } from '@shared/errors'
 import type { WorkReviewRange } from '@shared/review'
 import type { GitContext } from '../context'
+import { nativePath } from '../runner'
 import type { ReadOps } from '../ops'
 import { baseBranch } from './activity'
 import { assertRepo } from './common'
@@ -38,7 +39,7 @@ export function countStatus(out: string): number {
 /** The working tree of `dir` as a tree object: tracked changes, staged or not, and files not ignored nor tracked yet. */
 export async function snapshotTree(ctx: GitContext, dir: string, tip: string): Promise<string> {
   const where = await ctx.git(dir, ['rev-parse', '--git-path', 'index'], READ)
-  const index = path.resolve(dir, where.stdout.trim() || '.git/index')
+  const index = nativePath(dir, where.stdout.trim() || '.git/index')
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'adar-review-'))
   const copy = path.join(tmp, 'index')
   try {

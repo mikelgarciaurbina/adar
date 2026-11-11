@@ -6,7 +6,7 @@ import path from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import { DEFAULT_SETTINGS, type AdarEvent } from '@shared/types'
 import { UNRECORDED_VERSION } from '@shared/update'
-import { ASKPASS_TOKEN_HEADER, AskpassService, askpassShellScript, classifyPrompt, shDoubleQuote } from './askpass'
+import { ASKPASS_TOKEN_HEADER, AskpassService, askpassShellScript, askpassWslScript, classifyPrompt, shDoubleQuote } from './askpass'
 import { ignoredPaths, parseGitVersion, worktreeSignature } from './index'
 import { createGitContext, ensurePrivateDir } from '../git/context'
 import type { AdarError } from '@shared/errors'
@@ -87,6 +87,19 @@ describe('askpass', () => {
     expect(script).toBe('#!/bin/sh\nexec env ELECTRON_RUN_AS_NODE=1 "/path with space/Adar" "/data/askpass.js" "$@"\n')
   })
 
+  it('asks Adar on Windows from inside WSL, through interop', () => {
+    const script = askpassWslScript('/mnt/c/Program Files/Adar/Adar.exe', 'C:\\Users\\me\\AppData\\Roaming\\Adar\\askpass\\askpass.js')
+    expect(script.split('\n')).toEqual([
+      '#!/bin/sh',
+      '# Adar askpass helper for git inside WSL (generated).',
+      'ELECTRON_RUN_AS_NODE=1',
+      'WSLENV=ELECTRON_RUN_AS_NODE:ADAR_ASKPASS_PORT:ADAR_ASKPASS_TOKEN:ADAR_ASKPASS_OP',
+      'export ELECTRON_RUN_AS_NODE WSLENV',
+      'exec "/mnt/c/Program Files/Adar/Adar.exe" "C:\\\\Users\\\\me\\\\AppData\\\\Roaming\\\\Adar\\\\askpass\\\\askpass.js" "$@"',
+      ''
+    ])
+  })
+
   it('round-trips a prompt through the helper script, the server and answer()', async () => {
     const dir = tmp()
     const events: AdarEvent[] = []
@@ -101,9 +114,11 @@ describe('askpass', () => {
       expect(env.SSH_ASKPASS_REQUIRE).toBe('force')
       expect(env.GIT_ASKPASS).toBe(env.SSH_ASKPASS)
       expect(env.ADAR_ASKPASS_PORT).toMatch(/^\d+$/)
-      expect(readdirSync(path.join(dir, 'askpass')).sort()).toEqual(['askpass.js', 'askpass.sh'])
       // Windows has no executable bit: Git for Windows runs the helper through its sh (the shebang), and so does this test.
       const windows = process.platform === 'win32'
+      // Windows also gets the helper git inside WSL runs (through interop), named for the runner.
+      expect(readdirSync(path.join(dir, 'askpass')).sort()).toEqual(windows ? ['askpass-wsl.sh', 'askpass.js', 'askpass.sh'] : ['askpass.js', 'askpass.sh'])
+      expect(env.ADAR_ASKPASS_WSL).toBe(windows ? path.join(dir, 'askpass', 'askpass-wsl.sh') : undefined)
       if (!windows) expect((await fs.stat(env.GIT_ASKPASS)).mode & 0o111).not.toBe(0)
 
       const run = (prompt: string) =>

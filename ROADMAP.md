@@ -111,6 +111,9 @@ and keep up with their colleagues' branches and pull requests.
 Windows and Linux builds shipped in 0.6.0 as a beta. Still to do:
 - [ ] **Windows**: sign the installer (for example through SignPath's free signing for open source) so SmartScreen
   stops warning; check `.cmd` editors and the Git for Windows askpass on real machines; an arm64 build.
+- [ ] **Windows**: check repositories inside WSL on real machines (opened from `\\wsl.localhost\…` or **Open Repository
+  in WSL…**, git runs inside the distribution with its keys, credential helpers and hooks): speed with one `wsl.exe` per
+  git command, credential prompts through interop, changes found by polling, and an `adar` command inside WSL.
 - [ ] **Linux**: an `.rpm` package and arm64 builds; check file watching, askpass and terminal integration on real
   desktops (GNOME, KDE).
 - [ ] **Windows and Linux**: install updates from inside the app (today **Download** opens the release page), and the

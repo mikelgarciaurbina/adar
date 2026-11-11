@@ -5,6 +5,7 @@ import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import type { Worktree } from '@shared/types'
 import type { GitContext } from '../context'
+import { nativePath } from '../runner'
 import type { ReadOps } from '../ops'
 import { assertRepo } from './common'
 
@@ -45,7 +46,7 @@ const real = (p: string) => fs.realpath(p).catch(() => path.resolve(p))
 
 export async function listWorktrees(ctx: GitContext, repo: string): Promise<ListedWorktree[]> {
   const res = await ctx.git(repo, ['worktree', 'list', '--porcelain'], { allowFailure: true })
-  return res.code === 0 ? parseWorktreeList(res.stdout).map((w) => ({ ...w, path: path.resolve(w.path) })) : []
+  return res.code === 0 ? parseWorktreeList(res.stdout).map((w) => ({ ...w, path: nativePath(repo, w.path) })) : []
 }
 
 /** Branches checked out in a worktree other than `repo`'s, by name → that worktree's path. */

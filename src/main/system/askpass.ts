@@ -10,6 +10,7 @@ import type { AddressInfo } from 'node:net'
 import path from 'node:path'
 import type { AdarEvent } from '@shared/types'
 import { ASKPASS_OP_ENV } from '../git/context'
+import { ASKPASS_WSL_ENV, windowsToWsl } from '../git/wsl'
 
 export type CredentialKind = 'username' | 'password' | 'passphrase' | 'yesno' | 'other'
 
@@ -84,6 +85,24 @@ export function askpassShellScript(execPath: string, jsPath: string): string {
   return `#!/bin/sh\nexec env ELECTRON_RUN_AS_NODE=1 ${shDoubleQuote(execPath)} ${shDoubleQuote(jsPath)} "$@"\n`
 }
 
+/**
+ * The helper git runs inside WSL (Windows): Adar's own executable through WSL interop (`exe` as
+ * Linux reaches it, /mnt/c/…), with the askpass variables handed back to Windows through WSLENV,
+ * so the prompt reaches this server on Windows' 127.0.0.1. `jsPath` stays a Windows path: Adar reads it.
+ */
+export function askpassWslScript(exe: string, jsPath: string): string {
+  const vars = ['ELECTRON_RUN_AS_NODE', 'ADAR_ASKPASS_PORT', 'ADAR_ASKPASS_TOKEN', ASKPASS_OP_ENV].join(':')
+  return [
+    '#!/bin/sh',
+    '# Adar askpass helper for git inside WSL (generated).',
+    'ELECTRON_RUN_AS_NODE=1',
+    `WSLENV=${vars}`,
+    'export ELECTRON_RUN_AS_NODE WSLENV',
+    `exec ${shDoubleQuote(exe)} ${shDoubleQuote(jsPath)} "$@"`,
+    ''
+  ].join('\n')
+}
+
 interface Pending {
   resolve: (value: string | null) => void
   timer: ReturnType<typeof setTimeout>
@@ -139,7 +158,16 @@ export class AskpassService {
     const helper = path.join(this.dir, 'askpass.sh')
     await fs.writeFile(helper, askpassShellScript(process.execPath, jsPath), { mode: 0o755 })
     await fs.chmod(helper, 0o755)
+    // Windows: git inside WSL (repositories on \\wsl.localhost\…) runs this one instead (see wsl.ts).
+    const wslExe = process.platform === 'win32' ? windowsToWsl('', process.execPath) : null
+    const wsl: Record<string, string> = {}
+    if (wslExe) {
+      const wslHelper = path.join(this.dir, 'askpass-wsl.sh')
+      await fs.writeFile(wslHelper, askpassWslScript(wslExe, jsPath), { mode: 0o755 })
+      wsl[ASKPASS_WSL_ENV] = wslHelper
+    }
     return {
+      ...wsl,
       GIT_ASKPASS: helper,
       SSH_ASKPASS: helper,
       SSH_ASKPASS_REQUIRE: 'force',

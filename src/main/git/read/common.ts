@@ -6,7 +6,7 @@ import path from 'node:path'
 import { AdarError } from '@shared/errors'
 import type { HeadInfo } from '@shared/types'
 import type { GitContext } from '../context'
-import { commandDisplay, gitError, type GitResult } from '../runner'
+import { commandDisplay, gitError, nativePath, type GitResult } from '../runner'
 
 /** Env making pathspecs literal (no glob magic) for paths that come from file lists. */
 export const LITERAL_PATHSPECS: Record<string, string> = { GIT_LITERAL_PATHSPECS: '1' }
@@ -141,8 +141,9 @@ export async function locateRepo(ctx: GitContext, dir: string): Promise<RepoLoca
   }
   const [printedGitDir = '', bare = ''] = r.stdout.split('\n').map((l) => l.trim())
   if (!printedGitDir) throw notARepo(dir, undefined, r.stderr)
-  // Git for Windows prints C:/x/y: keep the native form (as dialogs and the CLI give paths) so paths compare equal.
-  const gitDir = path.resolve(printedGitDir)
+  // Git for Windows prints C:/x/y, git inside WSL /home/…: keep the native form (as dialogs and the CLI
+  // give paths) so paths compare equal.
+  const gitDir = nativePath(dir, printedGitDir)
   let commonDir = gitDir
   try {
     const rel = (await fs.readFile(path.join(gitDir, 'commondir'), 'utf8')).trim()
@@ -153,7 +154,7 @@ export async function locateRepo(ctx: GitContext, dir: string): Promise<RepoLoca
   if (bare === 'true') return { root: gitDir, gitDir, commonDir, isBare: true }
 
   const top = await ctx.gitGlobal(['rev-parse', '--show-toplevel'], { cwd: dir, allowFailure: true, timeoutMs: 30_000 })
-  const root = top.code === 0 && top.stdout.trim() ? path.resolve(top.stdout.trim()) : ''
+  const root = top.code === 0 && top.stdout.trim() ? nativePath(dir, top.stdout.trim()) : ''
   if (root) return { root, gitDir, commonDir, isBare: false }
   // Opened from inside the .git directory of a regular repository.
   if (path.basename(gitDir) === '.git') return { root: path.dirname(gitDir), gitDir, commonDir, isBare: false }

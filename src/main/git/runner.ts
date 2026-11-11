@@ -3,8 +3,11 @@
 
 import { spawn } from 'node:child_process'
 import { statSync } from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import { AdarError } from '@shared/errors'
 import type { AdarErrorCode } from '@shared/types'
+import { windowsToWsl, wslFailure, wslGitCommand, wslLoginEnv, wslTarget, wslToWindows, type WslLocation } from './wsl'
 
 export interface GitRunOptions {
   /** Working directory. Required unless running a repo-less command (clone, version). */
@@ -37,21 +40,26 @@ export interface GitResult {
   truncated?: boolean
 }
 
+/** Variables Adar sets for every git invocation (also the ones git inside WSL gets). */
+const GIT_ENV: Readonly<Record<string, string>> = {
+  // Stable, English, non-interactive output.
+  LC_ALL: 'C',
+  LANG: 'C',
+  LANGUAGE: 'C',
+  GIT_PAGER: 'cat',
+  PAGER: 'cat',
+  // Never open an editor: messages are always supplied via -m/-F or defaults kept.
+  GIT_EDITOR: 'true',
+  GIT_MERGE_AUTOEDIT: 'no',
+  // Do not hang waiting for a terminal prompt; credentials go through askpass when configured.
+  GIT_TERMINAL_PROMPT: '0'
+}
+
 /** Environment applied to every git invocation. */
 export function baseGitEnv(extra?: Record<string, string | undefined>): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = {
     ...process.env,
-    // Stable, English, non-interactive output.
-    LC_ALL: 'C',
-    LANG: 'C',
-    LANGUAGE: 'C',
-    GIT_PAGER: 'cat',
-    PAGER: 'cat',
-    // Never open an editor: messages are always supplied via -m/-F or defaults kept.
-    GIT_EDITOR: 'true',
-    GIT_MERGE_AUTOEDIT: 'no',
-    // Do not hang waiting for a terminal prompt; credentials go through askpass when configured.
-    GIT_TERMINAL_PROMPT: '0',
+    ...GIT_ENV,
     // Electron sets this for child processes in some cases; git hooks must run with normal node.
     ELECTRON_RUN_AS_NODE: undefined
   }
@@ -77,24 +85,72 @@ export function getGitExecutable(): string {
   return gitExecutable
 }
 
+/**
+ * A path git printed when run in `cwd`, in the form Node and the UI use: Git for Windows' C:/x/y
+ * as C:\x\y, a Linux path printed inside WSL as \\wsl.localhost\<distro>\… (or C:\… for /mnt/c/…).
+ * Relative paths are relative to `cwd`.
+ */
+export function nativePath(cwd: string | undefined, printed: string): string {
+  const wsl = wslTarget(cwd)
+  if (wsl) return wslToWindows(wsl, printed)
+  return cwd ? path.resolve(cwd, printed) : path.resolve(printed)
+}
+
+/**
+ * A path as an argument (or in a command line) for git run in `cwd`: unchanged, except when git
+ * runs inside WSL, which reaches it as a Linux path. Throws when the distribution cannot reach it.
+ */
+export function gitPath(cwd: string | undefined, p: string): string {
+  const wsl = wslTarget(cwd)
+  if (!wsl) return p
+  const linux = windowsToWsl(wsl.distro, p)
+  if (linux === null) throw new AdarError({ message: `${p} cannot be reached from WSL (${wsl.distro})`, code: 'INVALID_ARGUMENT' })
+  return linux
+}
+
+/** The process that runs one git command. */
+interface GitProcess {
+  file: string
+  args: string[]
+  cwd?: string
+  env: NodeJS.ProcessEnv
+  /** Set when git runs inside WSL (through wsl.exe). */
+  wsl?: WslLocation
+}
+
 export function runGit(args: string[], opts: GitRunOptions = {}): Promise<GitResult> {
+  const fullArgs = [...GLOBAL_FLAGS, ...args]
+  const display = commandDisplay(args)
+  const wsl = wslTarget(opts.cwd)
+  if (!wsl) return runProcess({ file: gitExecutable, args: fullArgs, cwd: opts.cwd, env: baseGitEnv(opts.env) }, display, opts)
+  // A repository inside WSL: git runs there (see wsl.ts), with the login shell's PATH and SSH agent.
+  return wslLoginEnv(wsl.distro).then((login) => {
+    let cmd: ReturnType<typeof wslGitCommand>
+    try {
+      cmd = wslGitCommand(wsl, fullArgs, { ...GIT_ENV, ...opts.env }, login)
+    } catch (err) {
+      throw new AdarError({ message: (err as Error).message, code: 'INVALID_ARGUMENT', command: display })
+    }
+    return runProcess({ ...cmd, cwd: os.homedir(), wsl }, display, opts)
+  })
+}
+
+function runProcess(proc: GitProcess, display: string, opts: GitRunOptions): Promise<GitResult> {
   const okCodes = opts.okCodes ?? [0]
   const timeoutMs = opts.timeoutMs ?? 120_000
   const maxBuffer = opts.maxBuffer ?? 256 * 1024 * 1024
-  const fullArgs = [...GLOBAL_FLAGS, ...args]
-  const display = commandDisplay(args)
 
   return new Promise<GitResult>((resolve, reject) => {
     let child: ReturnType<typeof spawn>
     try {
-      child = spawn(gitExecutable, fullArgs, {
-        cwd: opts.cwd,
-        env: baseGitEnv(opts.env),
+      child = spawn(proc.file, proc.args, {
+        cwd: proc.cwd,
+        env: proc.env,
         stdio: ['pipe', 'pipe', 'pipe'],
         windowsHide: true
       })
     } catch (err) {
-      reject(spawnError(err, display, opts.cwd))
+      reject(spawnError(err, display, opts.cwd, proc.wsl))
       return
     }
 
@@ -158,7 +214,7 @@ export function runGit(args: string[], opts: GitRunOptions = {}): Promise<GitRes
       }
     })
 
-    child.on('error', (err) => finish(() => reject(spawnError(err, display, opts.cwd))))
+    child.on('error', (err) => finish(() => reject(spawnError(err, display, opts.cwd, proc.wsl))))
 
     child.on('close', (code, signal) => {
       finish(() => {
@@ -168,6 +224,18 @@ export function runGit(args: string[], opts: GitRunOptions = {}): Promise<GitRes
           stderr,
           code: code ?? (signal ? 128 : 0),
           truncated: truncated || undefined
+        }
+        if (proc.wsl && result.code !== 0) {
+          // wsl.exe's own failures (the folder, the distribution, git itself missing) are never git's answer.
+          if (opts.cwd && !isDirectory(opts.cwd)) {
+            reject(new AdarError({ message: `Repository folder not found: ${opts.cwd}`, code: 'NOT_FOUND', command: display }))
+            return
+          }
+          const failure = wslFailure(proc.wsl.distro, result.code, stderr, result.stdout.slice(0, 4000))
+          if (failure) {
+            reject(new AdarError({ message: failure.message, code: failure.code, command: display, stderr: stderr.trim() || undefined }))
+            return
+          }
         }
         if (opts.binary) result.stdoutBuffer = stdoutBuffer
         if (truncated && !opts.allowFailure) {
@@ -193,8 +261,15 @@ function isDirectory(p: string): boolean {
   }
 }
 
-function spawnError(err: unknown, command: string, cwd?: string): AdarError {
+function spawnError(err: unknown, command: string, cwd?: string, wsl?: WslLocation): AdarError {
   const e = err as NodeJS.ErrnoException
+  if (wsl && e?.code === 'ENOENT') {
+    return new AdarError({
+      message: `WSL is not installed, so Adar cannot run git in ${wsl.distro}. Install WSL (wsl --install) and restart Adar.`,
+      code: 'GIT_NOT_INSTALLED',
+      command
+    })
+  }
   // spawn also reports ENOENT (ENOTDIR when a parent is a file) for a missing working directory
   // (repo moved/deleted).
   if ((e?.code === 'ENOENT' || e?.code === 'ENOTDIR') && cwd && !isDirectory(cwd)) {

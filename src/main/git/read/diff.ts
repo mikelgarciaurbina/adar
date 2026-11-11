@@ -163,7 +163,7 @@ export function createDiffOps(ctx: GitContext): Pick<ReadOps, 'getDiff'> {
         case 'commit': {
           const sha = validateRev(target.sha, 'commit')
           const oldPath = target.oldPath ? validateRelPath(target.oldPath, 'oldPath') : undefined
-          if (await gitAtLeast(ctx, 2, 31)) {
+          if (await gitAtLeast(ctx, 2, 31, repo)) {
             // One process: root commits diff against the empty tree, merges against their first parent.
             const args = ['show', '--format=', '--no-show-signature', '--diff-merges=first-parent', ...flags, `${sha}^{commit}`, '--', ...pathspec(p, oldPath)]
             const res = await ctx.git(repo, args, { allowFailure: true, maxBuffer: MAX_DIFF_BUFFER, env: LITERAL_PATHSPECS, binary: true })

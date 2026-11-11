@@ -8,6 +8,7 @@ import type { Commit, OperationResult } from '@shared/types'
 import { INTERACTIVE_REBASE_MARKER, type GitContext } from '../context'
 import type { WriteOps } from '../ops'
 import { getGitExecutable } from '../runner'
+import { isWslPath } from '../wsl'
 import { LOG_FORMAT, parseLog } from './log'
 import { buildTodo, messagesNeeded, resolveTodo } from './rebaseTodo'
 import { arg, describeCommit, FAMILY, finishOperation, gitAtLeast, invalid, isUnborn, resolveCommit, shellPath, shellQuote } from './util'
@@ -126,7 +127,8 @@ export function createInteractiveOps(ctx: GitContext): InteractiveOps {
         const tmp = await ctx.ensureTmpDir()
         const dir = await fs.mkdtemp(path.join(tmp, `rebase-${repoKey(repo)}-`))
         const todoFile = path.join(dir, 'git-rebase-todo')
-        const git = shellQuote(shellPath(getGitExecutable()))
+        // Inside WSL the exec lines run in the distribution, where git is the one on its PATH.
+        const git = shellQuote(isWslPath(repo) ? 'git' : shellPath(getGitExecutable()))
         const lines: string[] = []
         let n = 0
         for (const step of steps) {
@@ -137,15 +139,15 @@ export function createInteractiveOps(ctx: GitContext): InteractiveOps {
           const file = path.join(dir, `message-${++n}.txt`)
           await fs.writeFile(file, step.message, 'utf8')
           lines.push(
-            `exec ${git} -c i18n.commitEncoding=UTF-8 commit --amend --only --allow-empty --no-verify --cleanup=whitespace -F ${shellQuote(shellPath(file))}`
+            `exec ${git} -c i18n.commitEncoding=UTF-8 commit --amend --only --allow-empty --no-verify --cleanup=whitespace -F ${shellQuote(shellPath(file, repo))}`
           )
         }
         await fs.writeFile(todoFile, `${lines.join('\n')}\n`, 'utf8')
 
         const args = ['rebase', '-i', '--autostash', '--no-autosquash', '--no-rebase-merges']
-        if (await gitAtLeast(ctx, 2, 38)) args.push('--no-update-refs')
+        if (await gitAtLeast(ctx, 2, 38, repo)) args.push('--no-update-refs')
         // A failed message amend (signing, identity) must run again on Continue instead of being dropped.
-        if (await gitAtLeast(ctx, 2, 22)) args.push('--reschedule-failed-exec')
+        if (await gitAtLeast(ctx, 2, 22, repo)) args.push('--reschedule-failed-exec')
         args.push(isRoot ? '--root' : base)
 
         let result: OperationResult
@@ -155,7 +157,7 @@ export function createInteractiveOps(ctx: GitContext): InteractiveOps {
           await fs.writeFile(await markerPath(ctx, repo), `${new Date().toISOString()}\n`, 'utf8').catch(() => undefined)
           const res = await ctx.git(repo, args, {
             allowFailure: true,
-            env: { GIT_SEQUENCE_EDITOR: `cp ${shellQuote(shellPath(todoFile))}`, GIT_EDITOR: 'true' }
+            env: { GIT_SEQUENCE_EDITOR: `cp ${shellQuote(shellPath(todoFile, repo))}`, GIT_EDITOR: 'true' }
           })
           result = await finishOperation(ctx, repo, args, res, FAMILY.rebase)
         } finally {

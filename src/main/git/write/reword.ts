@@ -10,6 +10,7 @@ import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import type { RewordInfo, RewordResult } from '@shared/types'
 import type { GitContext } from '../context'
+import { gitPath, nativePath } from '../runner'
 import type { WriteOps } from '../ops'
 import { arg, combinedOutput, failure, gitAtLeast, invalid, isUnborn, resolveCommit } from './util'
 
@@ -51,7 +52,7 @@ async function shallowBoundaries(ctx: GitContext, repo: string): Promise<Set<str
   const shallow = await ctx.git(repo, ['rev-parse', '--is-shallow-repository'], { allowFailure: true })
   if (shallow.stdout.trim() !== 'true') return new Set()
   const rel = (await ctx.git(repo, ['rev-parse', '--git-path', 'shallow'])).stdout.trim()
-  const text = await fs.readFile(path.resolve(repo, rel), 'utf8').catch(() => '')
+  const text = await fs.readFile(nativePath(repo, rel), 'utf8').catch(() => '')
   return new Set(text.split('\n').map((l) => l.trim()).filter(Boolean))
 }
 
@@ -120,12 +121,12 @@ async function cleanMessage(ctx: GitContext, repo: string, message: string): Pro
 
 /** Run the repository's commit-msg hook on the message (it may reject or amend it, e.g. add a Change-Id). */
 async function applyCommitMsgHook(ctx: GitContext, repo: string, message: string): Promise<string> {
-  if (!(await gitAtLeast(ctx, 2, 36))) return message // `git hook run` is newer than that
+  if (!(await gitAtLeast(ctx, 2, 36, repo))) return message // `git hook run` is newer than that
   const dir = await fs.mkdtemp(path.join(await ctx.ensureTmpDir(), 'reword-'))
   const file = path.join(dir, 'COMMIT_EDITMSG')
   try {
     await fs.writeFile(file, message, 'utf8')
-    const res = await ctx.git(repo, ['hook', 'run', '--ignore-missing', 'commit-msg', '--', file], {
+    const res = await ctx.git(repo, ['hook', 'run', '--ignore-missing', 'commit-msg', '--', gitPath(repo, file)], {
       allowFailure: true,
       timeoutMs: 300_000
     })

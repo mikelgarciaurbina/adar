@@ -3,8 +3,8 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
-import { ArrowLeft, ArrowRight, ChevronDown, CircleArrowUp, Copy, Download, FolderGit2, FolderInput, FolderOpen, FolderPlus, GitBranch, Layers, Plus, RefreshCw, SquareTerminal, X } from 'lucide-react'
-import { isElectron, isMac } from '@renderer/api/client'
+import { ArrowLeft, ArrowRight, ChevronDown, CircleArrowUp, Copy, Download, FolderGit2, FolderInput, FolderOpen, FolderPlus, GitBranch, Layers, Plus, RefreshCw, SquareTerminal, Terminal, X } from 'lucide-react'
+import { isElectron, isMac, platform } from '@renderer/api/client'
 import * as git from '@renderer/actions/git'
 import { closeGroup, fetchGroup, newGroup, openGroup, renameGroup, setGroupColor } from '@renderer/actions/groups'
 import { showContextMenu, showMenuBelow, type MenuItem } from '@renderer/components/common/ContextMenu'
@@ -71,6 +71,7 @@ export function repoLifecycleItems(): MenuItem[] {
   return [
     { label: 'Open Repository…', icon: <FolderOpen size={14} />, shortcut: shortcutOf('open-repo'), onClick: () => git.openRepoDialog() },
     { label: 'Open by Path…', icon: <FolderInput size={14} />, shortcut: shortcutOf('open-repo-path'), onClick: () => s.openModal({ kind: 'open' }) },
+    ...(isElectron && platform === 'win32' ? [{ label: 'Open in WSL…', icon: <Terminal size={14} />, onClick: () => git.openWslRepoDialog() }] : []),
     { label: 'Clone Repository…', icon: <Download size={14} />, shortcut: shortcutOf('clone-repo'), onClick: () => s.openModal({ kind: 'clone' }) },
     { label: 'Init Repository…', icon: <FolderPlus size={14} />, shortcut: shortcutOf('init-repo'), onClick: () => s.openModal({ kind: 'init' }) },
     ...openGroupItems()

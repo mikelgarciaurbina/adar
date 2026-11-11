@@ -68,6 +68,12 @@ export interface AdarApi {
   getAppInfo(): Promise<AppInfo>
   /** Native folder picker. Resolves null when cancelled. */
   pickDirectory(opts?: { title?: string; defaultPath?: string }): Promise<string | null>
+  /**
+   * Windows: the home folder of WSL's default distribution as Windows reaches it
+   * (\\wsl.localhost\Ubuntu\home\me), where "Open Repository in WSL…" starts. Null elsewhere, or
+   * when WSL is not installed or has no distribution.
+   */
+  wslHomeFolder(): Promise<string | null>
   openExternal(url: string): Promise<void>
   /** Reveal a path in Finder / Explorer. */
   showInFolder(path: string): Promise<void>
@@ -278,8 +284,11 @@ export interface AdarApi {
   // ── Config / identity ───────────────────────────────────────────────────
   /** Effective user.name/email for repo (or global when repo is null). */
   getIdentity(repo: string | null): Promise<Identity>
-  /** Set user.name/email locally for repo, or globally when repo is null. */
-  setIdentity(repo: string | null, name: string, email: string): Promise<void>
+  /**
+   * Set user.name/email locally for repo, or globally when repo is null or scope is 'global' (the global
+   * config of the git that runs repo: a repository inside WSL has the distribution's own).
+   */
+  setIdentity(repo: string | null, name: string, email: string, scope?: 'local' | 'global'): Promise<void>
   /**
    * Keep a branch name or pattern ("env/*") out of Clean up branches, here and on the remote, or stop keeping it.
    * Saved in the repository's own git config (adar.keepBranch, shared by its worktrees); RepoInfo.keptBranches lists them.
@@ -386,6 +395,7 @@ export type AdarApiMethod = keyof AdarApi
 export const API_METHODS = [
   'getAppInfo',
   'pickDirectory',
+  'wslHomeFolder',
   'openExternal',
   'showInFolder',
   'openInTerminal',
