@@ -62,7 +62,8 @@
   direction: ltr;
 }
 
-.diff-path-dir {
+.diff-path-dir,
+.diff-path-sep {
   color: var(--text-2);
 }
 
@@ -135,10 +136,12 @@
   container-name: diffhd;
 }
 
-/* The diff view's single bar: file, stats, navigation, view options and actions on one line
-   (what the diff is of shows in the right panel). The path shrinks first, then labels give way to
-   icons (least important first); only a very narrow window wraps it. */
+/* The diff view's single bar: file, stats, navigation, view options and actions, always on one line
+   (what the diff is of shows in the right panel). Only the path gives way: its folder first, then
+   the file's name. As the bar narrows, labels become icons (least important first) so the path
+   keeps some room; below FOLD_BELOW (DiffView.tsx) the view options move into the "⋯" menu. */
 .diff-bar {
+  flex-wrap: nowrap;
   min-height: 44px;
   gap: 4px;
   padding: 4px 6px 4px 12px;
@@ -146,44 +149,91 @@
   background: var(--bg-2);
   container: diffbar / inline-size;
 }
+.diff-bar > * {
+  flex-shrink: 0;
+}
 .diff-bar .diff-path {
+  display: flex;
   flex: 0 1 auto;
-  min-width: 60px;
+  min-width: 0;
   font-family: var(--font-mono);
   font-size: 12.5px;
+}
+.diff-bar .diff-path-dir {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.diff-bar .diff-path-sep {
+  flex: none;
+}
+/* The name never shrinks while its folder still can; alone, it is cut to the room there is. */
+.diff-bar .diff-path-name {
+  flex: none;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.diff-bar .diff-renamed {
+  flex: 0 100 auto;
 }
 .diff-bar .diff-stats {
   margin-left: 2px;
 }
+.diff-bar .diff-spacer {
+  flex: 1 0 0;
+  min-width: 0;
+}
 
-@container diffbar (max-width: 1000px) {
+@container diffbar (max-width: 1100px) {
   .diff-tb-btn > span {
     display: none;
   }
 }
 
-@container diffbar (max-width: 900px) {
+@container diffbar (max-width: 1000px) {
   .diff-toggle > span {
     display: none;
   }
 }
 
-@container diffbar (max-width: 840px) {
+@container diffbar (max-width: 950px) {
   .diff-seg-btn > span {
     display: none;
   }
 }
 
-@container diffbar (max-width: 700px) {
+@container diffbar (max-width: 880px) {
   .diff-btn-danger > span,
   .diff-tb-sep {
     display: none;
   }
 }
 
-@container diffbar (max-width: 660px) {
-  .diff-bar .diff-nav-count {
+@container diffbar (max-width: 780px) {
+  .diff-bar .diff-nav-count,
+  .diff-bar .diff-renamed {
     display: none;
+  }
+  .diff-bar .diff-nav {
+    margin-right: 0;
+  }
+}
+
+@container diffbar (max-width: 730px) {
+  .diff-act > span {
+    display: none;
+  }
+}
+
+@container diffbar (max-width: 600px) {
+  .diff-bar .diff-stats {
+    display: none;
+  }
+  .diff-bar {
+    gap: 2px;
+    padding-left: 8px;
   }
 }
 

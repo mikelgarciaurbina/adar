@@ -28,12 +28,17 @@ export function StatusBadge({ status }: { status: FileStatusCode }) {
   )
 }
 
-/** "src/components/" dimmed + "File.tsx" bold. */
+/** "src/components/" dimmed + "File.tsx" bold. The slash is its own piece, so a folder cut short still reads "src/comp…/File.tsx". */
 export function PathLabel({ path }: { path: string }) {
   const dir = dirname(path)
   return (
     <span className="diff-path selectable" title={path}>
-      {dir && <span className="diff-path-dir">{dir}/</span>}
+      {dir && (
+        <>
+          <span className="diff-path-dir">{dir}</span>
+          <span className="diff-path-sep">/</span>
+        </>
+      )}
       <span className="diff-path-name">{basename(path)}</span>
     </span>
   )
@@ -91,11 +96,22 @@ export interface DiffMoreMenuProps {
   repo: string
   /** False when the file does not exist in the working tree (deleted): no "Open in editor". */
   canOpen: boolean
+  /** Options the bar has no room for (a very narrow panel): they lead the menu. */
+  folded?: MenuItem[]
+}
+
+/** The layout and the whole-file toggle as menu items, for a bar too narrow to show their buttons. */
+export function viewMenuItems(mode: DiffViewMode, fullFile: boolean): MenuItem[] {
+  return [
+    ...LAYOUTS.map((m): MenuItem => ({ label: m.label, icon: m.icon, checked: mode === m.value, onClick: () => setDiffMode(m.value) })),
+    { label: 'Full file', icon: <UnfoldVertical size={14} />, checked: fullFile, shortcut: 'F', onClick: () => setFullFile(!fullFile) }
+  ]
 }
 
 /** The diff options that matter less often (whitespace, context, editor, copy path) behind a "⋯" button. */
-export function diffMoreItems({ ignoreWhitespace, contextLines, fullFile, path, repo, canOpen }: DiffMoreMenuProps): MenuItem[] {
+export function diffMoreItems({ ignoreWhitespace, contextLines, fullFile, path, repo, canOpen, folded }: DiffMoreMenuProps): MenuItem[] {
   return [
+    ...(folded?.length ? [...folded, { type: 'separator' } as MenuItem] : []),
     {
       label: 'Ignore whitespace',
       icon: <Space size={14} />,

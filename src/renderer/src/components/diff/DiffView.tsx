@@ -2,8 +2,10 @@
 // header with path / status / target, previous / next change, layout (unified / split),
 // full-file toggle, history / blame, an options menu (whitespace, context,
 // editor, copy path), whole-file, hunk, change-block and line staging.
+// The header is always one line: the path gives way first, then labels become icons (diff.css),
+// and in a very narrow panel the layout, full file, history and blame move into the options menu.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { AlertTriangle, ChevronDown, ChevronUp, History, Minus, Plus, ScanText, Trash2, X } from 'lucide-react'
 import { api, isMac } from '@renderer/api/client'
 import * as git from '@renderer/actions/git'
@@ -17,7 +19,8 @@ import { DiffBody } from './DiffBody'
 import { EncodingNote } from './EncodingNote'
 import type { ChangeNav, DiffRendererHandle, DiffStaging } from './DiffRenderer'
 import { remapKeys, selectionFromKeys, validKeys } from './diffModel'
-import { ChangeStats, DiffMoreButton, FullFileToggle, PathLabel, StatusBadge, ViewModeSwitch } from './parts'
+import type { MenuItem } from '@renderer/components/common/ContextMenu'
+import { ChangeStats, DiffMoreButton, FullFileToggle, PathLabel, StatusBadge, ViewModeSwitch, viewMenuItems } from './parts'
 import { applyPartial, type PartialUnit } from './staging'
 import { setFullFile, toggleFullFile, useDiffPrefs } from './prefs'
 import { blameRev, modeChangeText, nextChangedSibling, sameTarget, stillChanged, viewShowsTarget } from './targets'
@@ -34,6 +37,24 @@ function statusFileOf(status: WorkingStatus | null, target: DiffTarget): FileSta
 }
 
 const isEmptyDiff = (d: FileDiff) => !d.hunks.length && !d.binary && !d.isImage && !d.tooLarge && !modeChangeText(d)
+
+/** Below this width the bar keeps the file, its changes and its actions; the view options go into the "⋯" menu. */
+const FOLD_BELOW = 470
+
+/** Whether an element is narrower than `width` (false until it is measured). */
+function useNarrower(ref: RefObject<HTMLElement | null>, width: number): boolean {
+  const [narrow, setNarrow] = useState(false)
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el || typeof ResizeObserver === 'undefined') return
+    const check = () => setNarrow(el.clientWidth > 0 && el.clientWidth < width)
+    check()
+    const observer = new ResizeObserver(check)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [ref, width])
+  return narrow
+}
 
 export function DiffView({ tab, target, siblings }: { tab: RepoTab; target: DiffTarget; siblings?: DiffTarget[] }) {
   const repo = tab.path
@@ -57,6 +78,8 @@ export function DiffView({ tab, target, siblings }: { tab: RepoTab; target: Diff
   const navigateFromGen = useRef(0)
   const handle = useRef<DiffRendererHandle | null>(null)
   const rootRef = useRef<HTMLDivElement>(null)
+  const barRef = useRef<HTMLDivElement>(null)
+  const folded = useNarrower(barRef, FOLD_BELOW)
   const propsRef = useRef({ siblings, target })
   propsRef.current = { siblings, target }
 
@@ -291,12 +314,21 @@ export function DiffView({ tab, target, siblings }: { tab: RepoTab; target: Diff
   const textual = !diff || (!diff.isImage && !diff.binary)
   const modeText = diff ? modeChangeText(diff) : null
   const selCount = selected.size
+  const canBlame = exists && !uncommittedNew
+  /** What a very narrow bar leaves out, as the first items of its "⋯" menu. */
+  const foldedItems: MenuItem[] | undefined = folded
+    ? [
+        ...(textual ? [...viewMenuItems(mode, fullFile), { type: 'separator' } as MenuItem] : []),
+        { label: 'File history', icon: <History size={14} />, onClick: () => git.openFileHistory(repo, path) },
+        { label: uncommittedNew ? 'Blame (not committed yet)' : 'Blame', icon: <ScanText size={14} />, disabled: !canBlame, onClick: () => git.openBlame(repo, path, blameRev(target)) }
+      ]
+    : undefined
 
   return (
     <div className="diff-view" ref={rootRef}>
       <div className="diff-header">
         {/* One line: the file and its stats, then navigation, view options and the file's actions. */}
-        <div className="diff-toolbar diff-bar">
+        <div className="diff-toolbar diff-bar" ref={barRef}>
           <StatusBadge status={fileStatus} />
           <PathLabel path={path} />
           {oldPath && oldPath !== path && (
@@ -325,34 +357,38 @@ export function DiffView({ tab, target, siblings }: { tab: RepoTab; target: Diff
               </IconButton>
             </div>
           )}
-          {textual && (
+          {textual && !folded && (
             <>
               <ViewModeSwitch value={mode} />
               <FullFileToggle value={fullFile} />
               <span className="diff-tb-sep" />
             </>
           )}
-          <Button
-            size="sm"
-            variant="ghost"
-            className="diff-tb-btn"
-            icon={<History size={14} />}
-            onClick={() => git.openFileHistory(repo, path)}
-            title="File history"
-          >
-            History
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="diff-tb-btn"
-            icon={<ScanText size={14} />}
-            disabled={!exists || uncommittedNew}
-            onClick={() => git.openBlame(repo, path, blameRev(target))}
-            title={uncommittedNew ? 'Not committed yet: nothing to blame' : 'Blame: who changed each line'}
-          >
-            Blame
-          </Button>
+          {!folded && (
+            <>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="diff-tb-btn"
+                icon={<History size={14} />}
+                onClick={() => git.openFileHistory(repo, path)}
+                title="File history"
+              >
+                History
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="diff-tb-btn"
+                icon={<ScanText size={14} />}
+                disabled={!canBlame}
+                onClick={() => git.openBlame(repo, path, blameRev(target))}
+                title={uncommittedNew ? 'Not committed yet: nothing to blame' : 'Blame: who changed each line'}
+              >
+                Blame
+              </Button>
+            </>
+          )}
           <DiffMoreButton
             repo={repo}
             path={path}
@@ -360,10 +396,11 @@ export function DiffView({ tab, target, siblings }: { tab: RepoTab; target: Diff
             ignoreWhitespace={ignoreWhitespace}
             contextLines={contextLines}
             fullFile={fullFile}
+            folded={foldedItems}
           />
           <span className="diff-spacer" />
           {conflicted && (
-            <Button size="sm" variant="primary" icon={<AlertTriangle size={14} />} onClick={() => git.openConflict(repo, path)}>
+            <Button size="sm" variant="primary" className="diff-act" icon={<AlertTriangle size={14} />} title="Resolve Conflict" onClick={() => git.openConflict(repo, path)}>
               Resolve Conflict
             </Button>
           )}
@@ -374,18 +411,19 @@ export function DiffView({ tab, target, siblings }: { tab: RepoTab; target: Diff
                 variant="ghost"
                 className="diff-btn-danger"
                 icon={<Trash2 size={14} />}
+                title="Discard File"
                 disabled={busy}
                 onClick={() => void fileAction('discard')}
               >
                 Discard File
               </Button>
-              <Button size="sm" variant="primary" icon={<Plus size={14} />} disabled={busy} onClick={() => void fileAction('stage')}>
+              <Button size="sm" variant="primary" className="diff-act" icon={<Plus size={14} />} title="Stage File" disabled={busy} onClick={() => void fileAction('stage')}>
                 Stage File
               </Button>
             </>
           )}
           {!conflicted && stagingKind === 'staged' && (
-            <Button size="sm" icon={<Minus size={14} />} disabled={busy} onClick={() => void fileAction('unstage')}>
+            <Button size="sm" className="diff-act" icon={<Minus size={14} />} title="Unstage File" disabled={busy} onClick={() => void fileAction('unstage')}>
               Unstage File
             </Button>
           )}
