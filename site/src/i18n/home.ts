@@ -113,7 +113,7 @@ const en = {
     download: (file: string) => `Download ${file}`,
     req: {
       mac: 'Needs a recent macOS on Apple Silicon and Git 2.26 or newer (<code>xcode-select --install</code> or <code>brew install git</code>).',
-      win: 'Needs 64-bit Windows 10 or 11 and Git for Windows 2.26 or newer (<a class="link" href="https://git-scm.com/downloads/win">git-scm.com</a> or <code>winget install Git.Git</code>).',
+      win: 'Needs 64-bit Windows 10 or 11 and Git for Windows 2.26 or newer (<a class="link" href="https://git-scm.com/downloads/win">git-scm.com</a> or <code>winget install Git.Git</code>). Repositories inside WSL use the git of their distribution.',
       linux: 'Needs a 64-bit (x86-64) distribution and Git 2.26 or newer (<code>sudo apt install git</code> or your package manager’s equivalent). The AppImage also needs FUSE 2 (<code>libfuse2</code>).',
     },
     // For visitors on another system: while the release is macOS only, and once it has other builds.
@@ -130,6 +130,7 @@ const en = {
         ['Install', 'Run the installer. It installs Adar for your user — no administrator rights needed — and adds it to the Start menu.'],
         ['First launch', 'The Windows installer isn’t signed yet, so SmartScreen may stop it the first time (“Windows protected your PC”). Click <b>More info</b>, then <b>Run anyway</b>.'],
         ['Stay current', 'Adar tells you when a new version is out, and its <i>Download</i> button opens the release page: run the new installer over the old version.'],
+        ['Repositories in WSL', 'Open them with <i>File → Open Repository in WSL…</i>, or any folder under <code>\\\\wsl.localhost\\</code>: Adar runs the git of that Linux distribution, with its SSH keys, credential helpers and hooks, as VS Code does. It’s new: if something doesn’t work, <a class="link" href="https://github.com/mikelgarciaurbina/adar/issues">open an issue</a>.'],
       ],
       linux: [
         ['AppImage', 'Works on most distributions. In the folder you saved it to, make it executable and open it:'],
@@ -263,7 +264,7 @@ const es: HomeContent = {
     download: (file: string) => `Descargar ${file}`,
     req: {
       mac: 'Necesita un macOS reciente en Apple Silicon y Git 2.26 o posterior (<code>xcode-select --install</code> o <code>brew install git</code>).',
-      win: 'Necesita Windows 10 u 11 de 64 bits y Git for Windows 2.26 o posterior (<a class="link" href="https://git-scm.com/downloads/win">git-scm.com</a> o <code>winget install Git.Git</code>).',
+      win: 'Necesita Windows 10 u 11 de 64 bits y Git for Windows 2.26 o posterior (<a class="link" href="https://git-scm.com/downloads/win">git-scm.com</a> o <code>winget install Git.Git</code>). Los repositorios dentro de WSL usan el git de su distribución.',
       linux: 'Necesita una distribución de 64 bits (x86-64) y Git 2.26 o posterior (<code>sudo apt install git</code> o el equivalente de tu gestor de paquetes). El AppImage también necesita FUSE 2 (<code>libfuse2</code>).',
     },
     platform: (href: string) => `Parece que usas otro sistema. Por ahora Adar funciona en macOS; Linux y Windows están <a href="${href}">en la hoja de ruta</a>: el código es casi todo portable y cualquier ayuda es bienvenida.`,
@@ -279,6 +280,7 @@ const es: HomeContent = {
         ['Instala', 'Ejecuta el instalador. Instala Adar para tu usuario, sin permisos de administrador, y lo añade al menú Inicio.'],
         ['Primera vez', 'El instalador de Windows aún no está firmado, así que SmartScreen puede frenarlo la primera vez («Windows protegió su PC»). Pulsa <b>Más información</b> y luego <b>Ejecutar de todas formas</b>.'],
         ['Mantente al día', 'Adar te avisa cuando sale una versión nueva, y su botón <i>Download</i> abre la página de la versión: ejecuta el nuevo instalador encima del anterior.'],
+        ['Repositorios en WSL', 'Ábrelos con <i>File → Open Repository in WSL…</i>, o cualquier carpeta bajo <code>\\\\wsl.localhost\\</code>: Adar usa el git de esa distribución de Linux, con sus claves SSH, sus helpers de credenciales y sus hooks, como hace VS Code. Es nuevo: si algo no funciona, <a class="link" href="https://github.com/mikelgarciaurbina/adar/issues">abre una issue</a>.'],
       ],
       linux: [
         ['AppImage', 'Funciona en casi cualquier distribución. En la carpeta donde lo hayas guardado, dale permiso de ejecución y ábrelo:'],
@@ -410,7 +412,7 @@ const eu: HomeContent = {
     download: (file: string) => `Deskargatu ${file}`,
     req: {
       mac: 'Apple Silicon duen macOS berri bat eta Git 2.26 edo berriagoa behar ditu (<code>xcode-select --install</code> edo <code>brew install git</code>).',
-      win: '64 biteko Windows 10 edo 11 eta Git for Windows 2.26 edo berriagoa behar ditu (<a class="link" href="https://git-scm.com/downloads/win">git-scm.com</a> edo <code>winget install Git.Git</code>).',
+      win: '64 biteko Windows 10 edo 11 eta Git for Windows 2.26 edo berriagoa behar ditu (<a class="link" href="https://git-scm.com/downloads/win">git-scm.com</a> edo <code>winget install Git.Git</code>). WSL barruko biltegiek beren banaketako git-a erabiltzen dute.',
       linux: '64 biteko (x86-64) banaketa bat eta Git 2.26 edo berriagoa behar ditu (<code>sudo apt install git</code> edo zure pakete-kudeatzailearen baliokidea). AppImage-ak FUSE 2 ere behar du (<code>libfuse2</code>).',
     },
     platform: (href: string) => `Badirudi beste sistema bat erabiltzen duzula. Oraingoz Adarrek macOSen bakarrik funtzionatzen du; Linux eta Windows <a href="${href}">bide-orrian</a> daude: kodea ia osorik da eramangarria, eta laguntza ongi etorria da.`,
@@ -426,6 +428,7 @@ const eu: HomeContent = {
         ['Instalatu', 'Exekutatu instalatzailea. Adar zure erabiltzailearentzat instalatzen du, administratzaile-baimenik gabe, eta Hasiera menuan jartzen du.'],
         ['Lehen aldia', 'Windowserako instalatzailea oraindik sinatu gabe dagoenez, SmartScreen-ek gelditu dezake lehen aldian. Sakatu informazio gehiagoko esteka, eta exekutatu hala ere.'],
         ['Egon egunean', 'Bertsio berri bat ateratzen denean, Adarrek abisatzen dizu, eta <i>Download</i> botoiak bertsioaren orria irekitzen du: exekutatu instalatzaile berria zaharraren gainean.'],
+        ['WSLko biltegiak', 'Ireki itzazu <i>File → Open Repository in WSL…</i> aukerarekin, edo <code>\\\\wsl.localhost\\</code> azpiko edozein karpeta: Adarrek Linux banaketa horretako <code>git</code>-a erabiltzen du, bere SSH gakoekin, kredentzial-laguntzaileekin eta hook-ekin, VS Code-k egiten duen bezala. Berria da: zerbaitek huts egiten badu, <a class="link" href="https://github.com/mikelgarciaurbina/adar/issues">ireki issue bat</a>.'],
       ],
       linux: [
         ['AppImage', 'Banaketa gehienetan dabil. Gorde duzun karpetan, eman exekutatzeko baimena eta ireki:'],

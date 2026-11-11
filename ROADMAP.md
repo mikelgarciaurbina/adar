@@ -62,7 +62,9 @@ DevOps too, with their own reviews (GitLab's draft notes, Bitbucket Data Center'
 threads to resolve, suggested changes where the service has them and Viewed marks Adar keeps where it has none; and
 their activity (reviews, comments, pushes) for the inbox's blue dots and the notifications · an agent's work reviewed
 before its pull request: its commits and its changes not committed against the base branch, with Viewed marks and
-notes on lines copied as one message for the agent's chat, and on the next round only what changed since.
+notes on lines copied as one message for the agent's chat, and on the next round only what changed since · on Windows,
+repositories inside WSL run the distribution's own git (its SSH keys, credential helpers and hooks), opened from
+**Open Repository in WSL…** or any `\\wsl.localhost\…` folder.
 
 ---
 
