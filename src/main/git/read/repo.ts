@@ -8,6 +8,7 @@ import type { ReadOps } from '../ops'
 import type { GitContext } from '../context'
 import { parseRemotesVerbose } from '../parsers/refs'
 import { gitPath } from '../runner'
+import { wslTarget } from '../wsl'
 import { keptBranches } from '../write/config'
 import type { SystemServices } from '../../system'
 import { assertRepo, clampInt, expandHome, failed, invalidArgument, locateRepo, notFound, readHead, type RepoLocation } from './common'
@@ -181,14 +182,32 @@ function mainRootOf(loc: RepoLocation): string {
 type RepoOps = Pick<ReadOps, 'openRepo' | 'trustRepo' | 'closeRepo' | 'initRepo' | 'cloneRepo' | 'getRepoInfo'>
 
 export function createRepoOps(ctx: GitContext, services: SystemServices): RepoOps {
+  /** `git version` inside each WSL distribution (asked once; again after a failure). */
+  const wslVersions = new Map<string, Promise<string>>()
+  const wslGitVersion = (distro: string, repo: string): Promise<string> => {
+    const key = distro.toLowerCase()
+    let version = wslVersions.get(key)
+    if (!version) {
+      version = ctx.git(repo, ['version'], { allowFailure: true }).then(
+        (r) => (r.code === 0 ? r.stdout.trim() : ''),
+        () => ''
+      )
+      wslVersions.set(key, version)
+      void version.then((v) => v || wslVersions.delete(key))
+    }
+    return version
+  }
+
   const getRepoInfo = async (repo: string): Promise<RepoInfo> => {
     const gitDir = await assertRepo(ctx, repo)
-    const [bare, head, state, remotes, kept] = await Promise.all([
+    const wsl = wslTarget(repo)
+    const [bare, head, state, remotes, kept, wslGit] = await Promise.all([
       ctx.git(repo, ['rev-parse', '--is-bare-repository'], { allowFailure: true }),
       readHead(ctx, repo),
       ctx.operationState(repo),
       ctx.git(repo, ['remote', '-v'], { allowFailure: true }),
-      keptBranches(ctx, repo)
+      keptBranches(ctx, repo),
+      wsl ? wslGitVersion(wsl.distro, repo) : null
     ])
     const root = repo.length > 1 ? repo.replace(/[\\/]+$/, '') : repo
     // A linked worktree's git dir names the main repository's in its commondir file.
@@ -206,7 +225,8 @@ export function createRepoOps(ctx: GitContext, services: SystemServices): RepoOp
       state,
       remotes: remotes.code === 0 ? parseRemotesVerbose(remotes.stdout) : [],
       mainWorktree,
-      keptBranches: kept
+      keptBranches: kept,
+      ...(wsl ? { wsl: { distro: wsl.distro, gitVersion: wslGit ?? '' } } : {})
     }
   }
 

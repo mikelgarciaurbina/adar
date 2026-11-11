@@ -36,7 +36,9 @@ export function StatusBar() {
   const cur = currentBranch(tab?.refs ?? null)
   const head = tab?.refs?.head ?? tab?.info?.head
   const state = tab?.info?.state ?? 'none'
-  const gitVersion = formatGitVersion(appInfo?.gitVersion)
+  // A repository inside WSL runs its distribution's git, not Adar's own.
+  const wsl = tab?.info?.wsl
+  const gitVersion = formatGitVersion(wsl ? wsl.gitVersion : appInfo?.gitVersion)
   const percent = prog?.state.percent
   const zoomPct = Math.round(zoom * 100)
 
@@ -120,10 +122,13 @@ export function StatusBar() {
           {zoomPct}%
         </button>
         {appInfo && (
-          <span className="tb-status-item tb-status-version" title={`Adar ${appInfo.version}${gitVersion ? ` · git ${gitVersion}` : ''} · ${appInfo.platform}`}>
+          <span
+            className="tb-status-item tb-status-version"
+            title={`Adar ${appInfo.version}${gitVersion ? ` · git ${gitVersion}${wsl ? ` in WSL (${wsl.distro})` : ''}` : ''} · ${appInfo.platform}`}
+          >
             <AdarLogo bare size={13} className="tb-status-logo" />
             Adar {appInfo.version}
-            {gitVersion && <> · git {gitVersion}</>}
+            {gitVersion && <> · git {gitVersion}{wsl && ' (WSL)'}</>}
           </span>
         )}
       </div>

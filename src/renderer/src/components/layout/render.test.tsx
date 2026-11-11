@@ -190,6 +190,19 @@ describe('chrome render smoke tests', () => {
     expect(html).toContain('tb-status-logo')
   })
 
+  it('shows the git of a repository inside WSL, not Adar’s own', () => {
+    const tab = useApp.getState().tabs[0]
+    const wslTab = { ...tab, info: { ...tab.info!, wsl: { distro: 'Ubuntu', gitVersion: 'git version 2.43.0' } } }
+    seed({
+      tabs: [wslTab, ...useApp.getState().tabs.slice(1)],
+      appInfo: { version: '0.1.0', platform: 'win32', gitVersion: 'git version 2.45.2.windows.1', homeDir: 'C:\\Users\\me', isElectron: true }
+    })
+    const html = renderToStaticMarkup(<StatusBar />)
+    expect(html).toContain('git 2.43.0 (WSL)')
+    expect(html).toContain('git 2.43.0 in WSL (Ubuntu)')
+    expect(html).not.toContain('2.45.2.windows.1')
+  })
+
   it('renders the welcome screen with recent repositories', () => {
     seed({ tabs: [], activePath: null })
     const html = renderToStaticMarkup(<Welcome />)

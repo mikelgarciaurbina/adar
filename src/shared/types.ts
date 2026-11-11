@@ -48,6 +48,8 @@ export interface RepoInfo {
   mainWorktree?: string | null
   /** Branch names and patterns ("env/*") Clean up branches never offers (git config adar.keepBranch). */
   keptBranches?: string[]
+  /** Windows: a repository inside WSL, run by its distribution's git (`gitVersion`: `git version` there, '' if unknown). */
+  wsl?: { distro: string; gitVersion: string }
 }
 
 /** A worktree of the repository (getWorktrees). */
