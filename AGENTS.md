@@ -183,7 +183,9 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
   repository's `ROADMAP.md` and the GitHub Releases at build time — `src/lib/roadmap.ts`, `src/lib/releases.ts`) and
   `Design.astro` (the Basoa design system); `src/pages/404.astro` is the trilingual not-found page. Shared layout/nav/footer/icon in `src/layouts` and
   `src/components`; tokens in `src/styles/tokens.css` (also published as `/tokens.css`); fonts self-hosted; build
-  telemetry off; the browser only calls the GitHub API for the star count. Separate from the app's own `theme.css`.
+  telemetry off; the browser only calls the GitHub API for the star count. On Cloudflare Pages (`CF_PAGES=1`) a build that
+  cannot read the releases fails, so the live site keeps its downloads (`src/lib/releases.ts`; a `GITHUB_TOKEN` variable in
+  the Pages project avoids the anonymous rate limit of its shared build machines). Separate from the app's own `theme.css`.
   Always link with `url()` from `src/lib/url.ts` (respects the base).
   The site is in English (root), Spanish (`/es`) and Basque (`/eu`) with localized slugs and anchors (`src/i18n/config.ts`:
   routes, anchors, `pageUrl()`). Pages in `src/pages/` are thin wrappers around the templates in `src/views/`; all copy lives
