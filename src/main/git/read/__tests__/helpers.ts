@@ -1,17 +1,17 @@
-// Test helpers: isolated git config, temp repos and a backend wired to a fake platform.
+// Test helpers for isolated git configuration and temporary repositories.
 
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { appendFileSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import type { AdarEvent } from '@shared/types'
-import { createBackend, type Backend } from '../../../backend'
 import type { PlatformAdapter } from '../../../platform'
+import { getGitExecutable, setGitExecutable } from '../../runner'
 
 const created: string[] = []
 
 /** Point git at an empty global config and disable the system config (call at file top). */
 export function isolateGitConfig(): string {
+  setGitExecutable(process.env.ADAR_TEST_GIT ?? 'git')
   const dir = realpathSync.native(mkdtempSync(path.join(os.tmpdir(), 'adar-gitcfg-')))
   created.push(dir)
   const cfg = path.join(dir, 'gitconfig')
@@ -40,7 +40,7 @@ let clock = 1_700_000_000
 export function git(cwd: string, args: string[], opts: { input?: string; env?: Record<string, string> } = {}): string {
   clock += 60
   const date = `${clock} +0000`
-  return execFileSync('git', args, {
+  return execFileSync(getGitExecutable(), args, {
     cwd,
     input: opts.input,
     encoding: 'utf8',
@@ -59,17 +59,14 @@ export function gitMayFail(cwd: string, args: string[]): string {
   }
 }
 
-export function configureRepo(dir: string, name = 'Test User', email = 'test@example.com'): void {
-  git(dir, ['config', 'user.name', name])
-  git(dir, ['config', 'user.email', email])
-  git(dir, ['config', 'commit.gpgsign', 'false'])
-  git(dir, ['config', 'tag.gpgsign', 'false'])
-  git(dir, ['config', 'core.autocrlf', 'false'])
+/** Local identity so tests can distinguish it from a user's global identity. */
+export function configureRepo(dir: string): void {
+  appendFileSync(path.join(dir, '.git', 'config'), '[user]\n\tname = Test User\n\temail = test@example.com\n[core]\n\tautocrlf = false\n')
 }
 
 export function initTestRepo(dir = tempDir(), branch = 'main'): string {
   mkdirSync(dir, { recursive: true })
-  git(dir, ['init', '-q', '-b', branch])
+  git(dir, ['init', '-q', '--template=', '-b', branch])
   configureRepo(dir)
   return dir
 }
@@ -99,16 +96,6 @@ export function fakePlatform(userDataDir: string): PlatformAdapter {
     async openExternal() {},
     async showInFolder() {}
   }
-}
-
-export function makeBackend(userDataDir = tempDir('adar-userdata-')): { backend: Backend; events: AdarEvent[]; userDataDir: string } {
-  const events: AdarEvent[] = []
-  const backend = createBackend({
-    platform: fakePlatform(userDataDir),
-    emit: (e) => events.push(e),
-    system: { fixShellPath: false }
-  })
-  return { backend, events, userDataDir }
 }
 
 /** Poll until `pred` is true or the timeout elapses. */

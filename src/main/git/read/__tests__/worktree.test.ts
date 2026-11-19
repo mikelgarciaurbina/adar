@@ -1,5 +1,6 @@
 // Integration tests for status, diffs (every target kind), file content and stash details.
-import { PNG_1X1, cleanupTempDirs, commitAll, git, gitMayFail, initTestRepo, isolateGitConfig, makeBackend, write } from './helpers'
+import { PNG_1X1, cleanupTempDirs, commitAll, git, gitMayFail, initTestRepo, isolateGitConfig, write } from './helpers'
+import { makeBackend } from './backend'
 
 isolateGitConfig()
 

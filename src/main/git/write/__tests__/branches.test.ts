@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { createBranchOps } from '../branches'
 import {
   cleanupTmp,
   cloneSetup,
@@ -9,7 +10,7 @@ import {
   head,
   initRepo,
   isolateGitConfig,
-  makeOps,
+  testContext,
   read,
   status,
   write
@@ -22,7 +23,7 @@ const current = (dir: string) => git(dir, ['symbolic-ref', '--quiet', '--short',
 
 describe('checkout', () => {
   it('checks out a local branch', async () => {
-    const { ops } = makeOps()
+    const ops = createBranchOps(testContext())
     const dir = initRepo()
     commitFile(dir, 'a.txt', 'a\n', 'a')
     git(dir, ['branch', 'feature'])
@@ -33,7 +34,7 @@ describe('checkout', () => {
   })
 
   it('creates a tracking branch for a remote branch, or checks out the existing local one', async () => {
-    const { ops } = makeOps()
+    const ops = createBranchOps(testContext())
     const { repo, clone } = cloneSetup()
     const other = clone()
     git(other, ['checkout', '-q', '-b', 'feature/x'])
@@ -55,7 +56,7 @@ describe('checkout', () => {
   })
 
   it('detaches HEAD for tags and shas', async () => {
-    const { ops } = makeOps()
+    const ops = createBranchOps(testContext())
     const dir = initRepo()
     const first = commitFile(dir, 'a.txt', 'a\n', 'a')
     git(dir, ['tag', 'v1'])
@@ -70,7 +71,7 @@ describe('checkout', () => {
   })
 
   it('reports local changes that would be overwritten as DIRTY_WORKTREE, and force discards them', async () => {
-    const { ops } = makeOps()
+    const ops = createBranchOps(testContext())
     const dir = initRepo()
     // A file name containing "conflict" must not confuse the classification.
     commitFile(dir, 'conflict.txt', 'main\n', 'main')
@@ -87,7 +88,7 @@ describe('checkout', () => {
   })
 
   it('rejects option-looking refs', async () => {
-    const { ops } = makeOps()
+    const ops = createBranchOps(testContext())
     const dir = initRepo()
     commitFile(dir, 'a.txt', 'a\n', 'a')
     await expectCode(ops.checkout(dir, '--orphan=x'), 'INVALID_ARGUMENT')
@@ -96,7 +97,7 @@ describe('checkout', () => {
 
 describe('branches', () => {
   it('creates (with and without checkout), renames and deletes branches', async () => {
-    const { ops } = makeOps()
+    const ops = createBranchOps(testContext())
     const dir = initRepo()
     const first = commitFile(dir, 'a.txt', 'a\n', 'a')
     commitFile(dir, 'a.txt', 'b\n', 'b')
@@ -120,7 +121,7 @@ describe('branches', () => {
   })
 
   it('needs force to delete an unmerged branch', async () => {
-    const { ops } = makeOps()
+    const ops = createBranchOps(testContext())
     const dir = initRepo()
     commitFile(dir, 'a.txt', 'a\n', 'a')
     git(dir, ['checkout', '-q', '-b', 'unmerged'])
@@ -133,7 +134,7 @@ describe('branches', () => {
   })
 
   it('sets and unsets upstreams (including a remote branch that does not exist yet)', async () => {
-    const { ops } = makeOps()
+    const ops = createBranchOps(testContext())
     const { repo } = cloneSetup()
     git(repo, ['branch', 'local-only'])
     await ops.setUpstream(repo, 'local-only', 'origin/main')
@@ -151,7 +152,7 @@ describe('branches', () => {
 
 describe('fastForwardBranch', () => {
   it('fast-forwards a branch that is not checked out, and the current one', async () => {
-    const { ops } = makeOps()
+    const ops = createBranchOps(testContext())
     const dir = initRepo()
     const first = commitFile(dir, 'a.txt', 'a\n', 'a')
     git(dir, ['branch', 'behind'])
@@ -167,7 +168,7 @@ describe('fastForwardBranch', () => {
   })
 
   it('refuses when it is not a fast-forward', async () => {
-    const { ops } = makeOps()
+    const ops = createBranchOps(testContext())
     const dir = initRepo()
     commitFile(dir, 'a.txt', 'a\n', 'a')
     git(dir, ['checkout', '-q', '-b', 'diverged'])
@@ -182,7 +183,7 @@ describe('fastForwardBranch', () => {
 
 describe('reset', () => {
   it('supports soft, mixed and hard', async () => {
-    const { ops } = makeOps()
+    const ops = createBranchOps(testContext())
     const dir = initRepo()
     const first = commitFile(dir, 'a.txt', 'a\n', 'a')
     commitFile(dir, 'a.txt', 'b\n', 'b')
@@ -207,7 +208,7 @@ describe('reset', () => {
   })
 
   it('keep: moves the files with HEAD but keeps local changes, and refuses when one is in the way', async () => {
-    const { ops } = makeOps()
+    const ops = createBranchOps(testContext())
     const dir = initRepo()
     const first = commitFile(dir, 'a.txt', 'a\n', 'a')
     commitFile(dir, 'b.txt', 'b\n', 'b')
@@ -227,7 +228,7 @@ describe('reset', () => {
 
 describe('moveBranch', () => {
   it('moves a branch that is not checked out, only from where Adar saw it', async () => {
-    const { ops } = makeOps()
+    const ops = createBranchOps(testContext())
     const dir = initRepo()
     const first = commitFile(dir, 'a.txt', 'a\n', 'a')
     const second = commitFile(dir, 'a.txt', 'b\n', 'b')

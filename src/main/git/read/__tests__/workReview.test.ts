@@ -5,7 +5,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { cleanupTmp, commitFile, git, head, initRepo, isolateGitConfig, makeOps, status, tmpDir, write } from '../../write/__tests__/helpers'
+import { cleanupTmp, commitFile, git, head, initRepo, isolateGitConfig, testContext, status, tmpDir, write } from '../../write/__tests__/helpers'
 import { createHistoryOps } from '../history'
 import { countStatus, createWorkReviewOps } from '../workReview'
 
@@ -18,7 +18,7 @@ function setup() {
   commitFile(repo, 'gone.txt', 'bye\n', 'second')
   const wt = path.join(fs.realpathSync(tmpDir('adar-wr-')), 'agent')
   git(repo, ['worktree', 'add', '-q', '-b', 'claude/feature', wt])
-  const { ctx } = makeOps()
+  const ctx = testContext()
   return { repo, wt, work: createWorkReviewOps(ctx), history: createHistoryOps(ctx) }
 }
 

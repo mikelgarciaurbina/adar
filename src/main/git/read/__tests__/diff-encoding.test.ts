@@ -9,14 +9,14 @@ import { readFileSync } from 'node:fs'
 import { afterAll, describe, expect, it } from 'vitest'
 import { buildPartialPatch, patchApplyOptions, supportsPartialPatch } from '@shared/patch'
 import { createGitContext } from '../../context'
-import { createWriteOps } from '../../write'
+import { createWorktreeOps } from '../../write/worktree'
 import { createDiffOps } from '../diff'
 
 afterAll(cleanupTempDirs)
 
 const ctx = createGitContext(fakePlatform(tempDir('adar-userdata-')), () => undefined)
 const { getDiff } = createDiffOps(ctx)
-const { applyPatch } = createWriteOps(ctx)
+const { applyPatch } = createWorktreeOps(ctx)
 
 /** Bytes of `git show <rev>` (index ":f", "HEAD:f"...). */
 const blob = (repo: string, rev: string) => execFileSync('git', ['show', rev], { cwd: repo })

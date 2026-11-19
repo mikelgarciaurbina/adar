@@ -1,7 +1,10 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { cleanupTmp, commitFile, configure, exists, expectCode, git, head, initRepo, isolateGitConfig, makeOps, read, status, tmpDir, write } from './helpers'
+import { createOperationOps } from '../operations'
+import { createConflictOps } from '../conflicts'
+import { createWorktreeOps } from '../worktree'
+import { cleanupTmp, commitFile, exists, expectCode, git, head, initRepo, isolateGitConfig, testContext, read, status, tmpDir, write } from './helpers'
 
 beforeAll(isolateGitConfig)
 afterAll(cleanupTmp)
@@ -19,7 +22,7 @@ const staged = (dir: string) =>
 
 describe('staging', () => {
   it('stages and unstages specific files, including weird names, without globbing', async () => {
-    const { ops } = makeOps()
+    const ops = createWorktreeOps(testContext())
     const dir = initRepo()
     commitFile(dir, 'base.txt', 'base\n', 'base')
     for (const f of WEIRD) write(dir, f, `${f}\n`)
@@ -42,7 +45,7 @@ describe('staging', () => {
   })
 
   it('stages deletions and modifications', async () => {
-    const { ops } = makeOps()
+    const ops = createWorktreeOps(testContext())
     const dir = initRepo()
     commitFile(dir, 'a.txt', 'a\n', 'a')
     commitFile(dir, 'b.txt', 'b\n', 'b')
@@ -53,7 +56,7 @@ describe('staging', () => {
   })
 
   it('works on an unborn branch', async () => {
-    const { ops } = makeOps()
+    const ops = createWorktreeOps(testContext())
     const dir = initRepo()
     write(dir, 'one.txt', '1\n')
     write(dir, 'two words.txt', '2\n')
@@ -67,7 +70,7 @@ describe('staging', () => {
   })
 
   it('keeps an in-progress merge when unstaging everything', async () => {
-    const { ops } = makeOps()
+    const ops = createWorktreeOps(testContext())
     const dir = initRepo()
     commitFile(dir, 'f.txt', 'base\n', 'base')
     git(dir, ['checkout', '-q', '-b', 'other'])
@@ -80,7 +83,8 @@ describe('staging', () => {
   })
 
   it('does not resolve conflicted files when unstaging everything', async () => {
-    const { ops, ctx } = makeOps()
+    const ctx = testContext()
+    const ops = createWorktreeOps(ctx)
     const dir = initRepo()
     commitFile(dir, 'f.txt', 'base\n', 'base')
     git(dir, ['checkout', '-q', '-b', 'other'])
@@ -88,7 +92,7 @@ describe('staging', () => {
     commitFile(dir, 'clean.txt', 'clean\n', 'clean')
     git(dir, ['checkout', '-q', 'main'])
     commitFile(dir, 'f.txt', 'ours\n', 'ours')
-    await ops.merge(dir, 'other')
+    await createOperationOps(ctx).merge(dir, 'other')
     expect(staged(dir)).toContain('clean.txt')
     await ops.unstageAll(dir)
     expect(await ctx.conflictedPaths(dir)).toEqual(['f.txt'])
@@ -96,7 +100,8 @@ describe('staging', () => {
   })
 
   it('stageAll never stages unresolved conflicts (their markers would be committed as resolved)', async () => {
-    const { ops, ctx } = makeOps()
+    const ctx = testContext()
+    const ops = createWorktreeOps(ctx)
     const dir = initRepo()
     // ('*' is not allowed in Windows file names: there the untracked name is one the bracket glob matches.)
     const [weird, globMatch] = windows ? ['-dash [x].txt', '-dash x.txt'] : ['-dash [x]*.txt', '-dash [x]-glob.txt']
@@ -129,15 +134,16 @@ describe('staging', () => {
     expect(exists(dir, '.git/MERGE_HEAD')).toBe(true)
 
     // Without conflicts it stages everything, as before.
-    await ops.resolveConflict(dir, 'f.txt', { kind: 'ours' })
-    await ops.resolveConflict(dir, weird, { kind: 'theirs' })
+    const conflicts = createConflictOps(ctx)
+    await conflicts.resolveConflict(dir, 'f.txt', { kind: 'ours' })
+    await conflicts.resolveConflict(dir, weird, { kind: 'theirs' })
     write(dir, 'late.txt', 'late\n')
     await ops.stageAll(dir)
     expect(status(dir)).toContain('A  late.txt')
   })
 
   it('ignores empty path lists', async () => {
-    const { ops } = makeOps()
+    const ops = createWorktreeOps(testContext())
     const dir = initRepo()
     write(dir, 'x.txt', 'x\n')
     await ops.stageFiles(dir, [])
@@ -147,7 +153,7 @@ describe('staging', () => {
 
 describe('discard', () => {
   it('reverts tracked files and deletes untracked ones (files and directories)', async () => {
-    const { ops } = makeOps()
+    const ops = createWorktreeOps(testContext())
     const dir = initRepo()
     const odd = windows ? 'new file[1].txt' : 'new file*.txt' // ('*' is not allowed in Windows file names)
     commitFile(dir, 'tracked.txt', 'original\n', 'base')
@@ -171,7 +177,7 @@ describe('discard', () => {
   })
 
   it('keeps staged changes when discarding unstaged ones', async () => {
-    const { ops } = makeOps()
+    const ops = createWorktreeOps(testContext())
     const dir = initRepo()
     commitFile(dir, 'f.txt', 'v1\n', 'base')
     write(dir, 'f.txt', 'v2\n')
@@ -183,7 +189,7 @@ describe('discard', () => {
   })
 
   it('rejects paths that escape the repository', async () => {
-    const { ops } = makeOps()
+    const ops = createWorktreeOps(testContext())
     const parent = tmpDir()
     const dir = path.join(parent, 'repo')
     fs.mkdirSync(dir)
@@ -195,7 +201,7 @@ describe('discard', () => {
   })
 
   it('discardAll reverts everything unstaged and removes untracked files but keeps ignored ones', async () => {
-    const { ops } = makeOps()
+    const ops = createWorktreeOps(testContext())
     const dir = initRepo()
     commitFile(dir, '.gitignore', '*.log\n', 'ignore')
     commitFile(dir, 'a.txt', 'a\n', 'a')
@@ -212,7 +218,7 @@ describe('discard', () => {
   })
 
   it('discardAll works in a fresh repository', async () => {
-    const { ops } = makeOps()
+    const ops = createWorktreeOps(testContext())
     const dir = initRepo()
     write(dir, 'x.txt', 'x\n')
     await ops.discardAll(dir)
@@ -224,7 +230,7 @@ describe('applyPatch', () => {
   const base = 'line1\nline2\nline3\nline4\nline5\nline6\nline7\nline8\nline9\nline10\n'
 
   it('stages a single hunk and unstages it again with --reverse', async () => {
-    const { ops } = makeOps()
+    const ops = createWorktreeOps(testContext())
     const dir = initRepo()
     commitFile(dir, 'f.txt', base, 'base')
     write(dir, 'f.txt', base.replace('line1\n', 'LINE1\n').replace('line10\n', 'LINE10\n'))
@@ -241,7 +247,7 @@ describe('applyPatch', () => {
   })
 
   it('discards a hunk from the working tree with --reverse (no trailing newline in patch)', async () => {
-    const { ops } = makeOps()
+    const ops = createWorktreeOps(testContext())
     const dir = initRepo()
     commitFile(dir, 'f.txt', base, 'base')
     write(dir, 'f.txt', base.replace('line1\n', 'LINE1\n').replace('line10\n', 'LINE10\n'))
@@ -251,7 +257,7 @@ describe('applyPatch', () => {
   })
 
   it('rejects empty and non-applying patches', async () => {
-    const { ops } = makeOps()
+    const ops = createWorktreeOps(testContext())
     const dir = initRepo()
     commitFile(dir, 'f.txt', base, 'base')
     await expectCode(ops.applyPatch(dir, '   '), 'INVALID_ARGUMENT')
@@ -262,7 +268,7 @@ describe('applyPatch', () => {
 
 describe('commit', () => {
   it('commits staged changes and returns the new sha', async () => {
-    const { ops } = makeOps()
+    const ops = createWorktreeOps(testContext())
     const dir = initRepo()
     write(dir, 'a.txt', 'a\n')
     git(dir, ['add', 'a.txt'])
@@ -272,7 +278,7 @@ describe('commit', () => {
   })
 
   it('reports nothing to commit as INVALID_ARGUMENT', async () => {
-    const { ops } = makeOps()
+    const ops = createWorktreeOps(testContext())
     const dir = initRepo()
     await expectCode(ops.commit(dir, { message: 'empty' }), 'INVALID_ARGUMENT')
     commitFile(dir, 'a.txt', 'a\n', 'a')
@@ -283,7 +289,7 @@ describe('commit', () => {
   })
 
   it('amends (message only, and with staged changes), allow-empty, signoff', async () => {
-    const { ops } = makeOps()
+    const ops = createWorktreeOps(testContext())
     const dir = initRepo()
     commitFile(dir, 'a.txt', 'a\n', 'original')
     const before = head(dir)
@@ -302,9 +308,10 @@ describe('commit', () => {
   })
 
   it('honours noVerify', async () => {
-    const { ops } = makeOps()
+    const ops = createWorktreeOps(testContext())
     const dir = initRepo()
     const hook = path.join(dir, '.git/hooks/pre-commit')
+    fs.mkdirSync(path.dirname(hook), { recursive: true })
     fs.writeFileSync(hook, '#!/bin/sh\necho "hook says no" >&2\nexit 1\n', { mode: 0o755 })
     write(dir, 'a.txt', 'a\n')
     git(dir, ['add', 'a.txt'])
@@ -317,7 +324,7 @@ describe('commit', () => {
 
 describe('addToGitignore', () => {
   it('creates, appends on a new line and skips duplicates', async () => {
-    const { ops } = makeOps()
+    const ops = createWorktreeOps(testContext())
     const dir = initRepo()
     await ops.addToGitignore(dir, '*.log')
     expect(read(dir, '.gitignore')).toBe('*.log\n')
@@ -330,7 +337,7 @@ describe('addToGitignore', () => {
   })
 
   it('appends without re-encoding existing bytes that are not UTF-8', async () => {
-    const { ops } = makeOps()
+    const ops = createWorktreeOps(testContext())
     const dir = initRepo()
     fs.writeFileSync(path.join(dir, '.gitignore'), Buffer.from('# caf\xe9\r\n*.log', 'latin1'))
     await ops.addToGitignore(dir, 'dist/')
@@ -338,7 +345,7 @@ describe('addToGitignore', () => {
   })
 
   it.skipIf(process.platform === 'win32')('refuses to write through a symlinked .gitignore (into .git/config or outside the repo)', async () => {
-    const { ops } = makeOps()
+    const ops = createWorktreeOps(testContext())
     const dir = initRepo()
     const config = fs.readFileSync(path.join(dir, '.git/config'))
     fs.symlinkSync('.git/config', path.join(dir, '.gitignore'))
@@ -352,7 +359,6 @@ describe('addToGitignore', () => {
     const repo = path.join(parent, 'repo')
     fs.mkdirSync(repo)
     git(repo, ['init', '-q', '-b', 'main'])
-    configure(repo)
     fs.symlinkSync('../victim.txt', path.join(repo, '.gitignore'))
     await expectCode(ops.addToGitignore(repo, '/build/'), 'INVALID_ARGUMENT')
     expect(fs.existsSync(path.join(parent, 'victim.txt'))).toBe(false)

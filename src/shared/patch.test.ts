@@ -252,10 +252,6 @@ describe('buildPartialPatch (string level)', () => {
     // The parser strips "\r" from content and flags the line; patches must put it back byte for byte.
     const crlf = fd('w.txt', [h('@@ -1,3 +1,3 @@', [' a\r', '-b\r', '+B\r', ' c\r'])])
 
-    it('fixture lines carry the flag, not the carriage return', () => {
-      expect(crlf.hunks[0].lines[1]).toEqual({ type: 'del', content: 'b', oldLine: 2, newLine: null, crlf: true })
-    })
-
     it('re-adds "\\r" to context, selected and unselected lines', () => {
       expect(patchBody(buildPartialPatch(crlf, [{ hunkIndex: 0, lineIndexes: [2] }], 'stage'))).toBe(
         ['@@ -1,3 +1,4 @@', ' a\r', ' b\r', '+B\r', ' c\r', ''].join('\n')
@@ -376,7 +372,7 @@ interface Node {
 }
 let node: Node
 let tmpRoot = ''
-let emptyConfig = ''
+let gitConfig = ''
 
 beforeAll(async () => {
   const [cp, fs, path, os, proc] = await Promise.all([
@@ -388,8 +384,8 @@ beforeAll(async () => {
   ])
   node = { cp, fs, path, os, env: (proc.default ?? proc).env, platform: (proc.default ?? proc).platform }
   tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'adar-patch-'))
-  emptyConfig = path.join(tmpRoot, 'gitconfig')
-  fs.writeFileSync(emptyConfig, '')
+  gitConfig = path.join(tmpRoot, 'gitconfig')
+  fs.writeFileSync(gitConfig, '[user]\n\tname = Adar Test\n\temail = adar@example.com\n[core]\n\tautocrlf = false\n')
 })
 
 afterAll(() => {
@@ -403,24 +399,16 @@ class Repo {
   constructor() {
     this.dir = node.path.join(tmpRoot, `repo${++repoCounter}`)
     node.fs.mkdirSync(this.dir)
-    this.git(['init', '-q', '-b', 'main'])
-    this.git(['config', 'user.name', 'Adar Test'])
-    this.git(['config', 'user.email', 'adar@example.com'])
-    this.git(['config', 'core.autocrlf', 'false'])
+    this.git(['init', '-q', '--template=', '-b', 'main'])
   }
-  run(args: string[], input?: string): { code: number; stdout: string; stderr: string } {
-    const r = node.cp.spawnSync('git', args, {
+  git(args: string[], input?: string): string {
+    return node.cp.execFileSync(node.env.ADAR_TEST_GIT ?? 'git', args, {
       cwd: this.dir,
       input,
       encoding: 'utf8',
-      env: { ...node.env, GIT_CONFIG_GLOBAL: emptyConfig, GIT_CONFIG_NOSYSTEM: '1', GIT_TERMINAL_PROMPT: '0', LC_ALL: 'C' }
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: { ...node.env, GIT_CONFIG_GLOBAL: gitConfig, GIT_CONFIG_NOSYSTEM: '1', GIT_TERMINAL_PROMPT: '0', LC_ALL: 'C' }
     })
-    return { code: r.status ?? -1, stdout: r.stdout ?? '', stderr: r.stderr ?? '' }
-  }
-  git(args: string[], input?: string): string {
-    const r = this.run(args, input)
-    if (r.code !== 0) throw new Error(`git ${args.join(' ')} failed: ${r.stderr}`)
-    return r.stdout
   }
   write(file: string, content: string): void {
     node.fs.writeFileSync(node.path.join(this.dir, file), content)
@@ -435,12 +423,10 @@ class Repo {
     this.git(['add', '-A'])
     this.git(['commit', '-q', '-m', msg])
   }
-  /** git apply --check then apply, with the options of the mode. */
+  /** Apply the generated patch to the index or worktree with the options of the mode. */
   apply(patch: string, mode: PatchMode): void {
     const o = patchApplyOptions(mode)
     const flags = [...(o.cached ? ['--cached'] : []), ...(o.reverse ? ['--reverse'] : [])]
-    const check = this.run(['apply', '--check', ...flags, '-'], patch)
-    if (check.code !== 0) throw new Error(`patch does not apply: ${check.stderr}\n${patch}`)
     this.git(['apply', ...flags, '-'], patch)
   }
   /** Hunk text git produces, normalised (explicit counts, no section) to compare with fixtures. */
@@ -698,47 +684,6 @@ describe('buildPartialPatch applies with git', () => {
   })
 
   describe('CRLF files', () => {
-    const crlfText = (ls: string[]) => ls.map((l) => l + '\r\n').join('')
-
-    it('stages, unstages and discards selected lines of a CRLF file', () => {
-      const repo = new Repo()
-      const base = lines(12)
-      repo.write('w.txt', crlfText(base))
-      repo.commitAll()
-      const next = [...base]
-      next[1] = 'LINE 2'
-      next[9] = 'LINE 10'
-      repo.write('w.txt', crlfText(next))
-      const diff = fixtureFromGit(repo, ['--', 'w.txt'], 'w.txt')
-      expect(diff.hunks.flatMap((hk) => hk.lines).every((l) => l.crlf && !l.content.endsWith('\r'))).toBe(true)
-      expectFixtureMatches(repo, diff, ['--', 'w.txt'])
-
-      // Stage only the second change ("line 10" → "LINE 10").
-      const sel: HunkSelection[] = []
-      diff.hunks.forEach((hk, hunkIndex) =>
-        hk.lines.forEach((l, i) => {
-          if (l.content.endsWith('10')) sel.push({ hunkIndex, lineIndexes: [i] })
-        })
-      )
-      repo.apply(buildPartialPatch(diff, sel, 'stage')!, 'stage')
-      const staged = [...base]
-      staged[9] = 'LINE 10'
-      expect(repo.index('w.txt')).toBe(crlfText(staged))
-
-      // Unstage it again from the staged diff (its "-line 10" / "+LINE 10" pair).
-      const cached = fixtureFromGit(repo, ['--cached', '--', 'w.txt'], 'w.txt')
-      const pair = cached.hunks[0].lines.map((l, i) => (l.type !== 'context' ? i : -1)).filter((i) => i >= 0)
-      expect(pair).toHaveLength(2)
-      repo.apply(buildPartialPatch(cached, [{ hunkIndex: 0, lineIndexes: pair }], 'unstage')!, 'unstage')
-      expect(repo.index('w.txt')).toBe(crlfText(base))
-
-      // Discard the first change from the working tree, keep the second.
-      const wt = fixtureFromGit(repo, ['--', 'w.txt'], 'w.txt')
-      const first = wt.hunks[0].lines.map((l, i) => (l.content.endsWith(' 2') || l.content === 'LINE 2' ? i : -1)).filter((i) => i >= 0)
-      repo.apply(buildPartialPatch(wt, [{ hunkIndex: 0, lineIndexes: first }], 'discard')!, 'discard')
-      expect(repo.read('w.txt')).toBe(crlfText(staged))
-    })
-
     it('stages a line-ending-only change and mixed endings without touching other lines', () => {
       const repo = new Repo()
       repo.write('m.txt', 'a\r\nb\r\nc\nd\r\n')

@@ -1,7 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { createConflictOps } from '../conflicts'
 import type { GitContext } from '../../context'
 import { createStashOps } from '../stash'
-import { cleanupTmp, commitFile, exists, expectCode, git, initRepo, isolateGitConfig, makeOps, read, status, write } from './helpers'
+import { cleanupTmp, commitFile, exists, expectCode, git, initRepo, isolateGitConfig, testContext, read, status, write } from './helpers'
 
 beforeAll(isolateGitConfig)
 afterAll(cleanupTmp)
@@ -10,7 +11,7 @@ const stashList = (dir: string) => git(dir, ['stash', 'list', '--format=%gs']).s
 
 describe('stash', () => {
   it('saves with a message and untracked files, then pops restoring the index', async () => {
-    const { ops } = makeOps()
+    const ops = createStashOps(testContext())
     const dir = initRepo()
     commitFile(dir, 'a.txt', 'a\n', 'a')
     write(dir, 'a.txt', 'staged\n')
@@ -28,7 +29,7 @@ describe('stash', () => {
   })
 
   it('reports nothing to stash as INVALID_ARGUMENT', async () => {
-    const { ops } = makeOps()
+    const ops = createStashOps(testContext())
     const dir = initRepo()
     commitFile(dir, 'a.txt', 'a\n', 'a')
     const err = await expectCode(ops.stashSave(dir), 'INVALID_ARGUMENT')
@@ -38,7 +39,7 @@ describe('stash', () => {
   })
 
   it('stashes only the given paths and supports keepIndex', async () => {
-    const { ops } = makeOps()
+    const ops = createStashOps(testContext())
     // A glob as a literal file name ('*' is not allowed in Windows file names: a bracket glob there).
     const glob = process.platform === 'win32' ? 'b[X].txt' : 'b*.txt'
     const dir = initRepo()
@@ -58,7 +59,7 @@ describe('stash', () => {
   })
 
   it('applies keeping the stash, drops, and validates indexes', async () => {
-    const { ops } = makeOps()
+    const ops = createStashOps(testContext())
     const dir = initRepo()
     commitFile(dir, 'a.txt', 'a\n', 'a')
     write(dir, 'a.txt', 'one\n')
@@ -81,7 +82,8 @@ describe('stash', () => {
   })
 
   it('returns conflicts when popping onto a changed file and keeps the stash', async () => {
-    const { ops } = makeOps()
+    const ctx = testContext()
+    const ops = createStashOps(ctx)
     const dir = initRepo()
     commitFile(dir, 'f.txt', 'base\n', 'base')
     write(dir, 'f.txt', 'stashed\n')
@@ -90,12 +92,12 @@ describe('stash', () => {
     const res = await ops.stashApply(dir, 0, { pop: true, restoreIndex: true })
     expect(res).toMatchObject({ ok: false, conflicts: ['f.txt'], state: 'none' })
     expect(stashList(dir)).toHaveLength(1)
-    const v = await ops.getConflictVersions(dir, 'f.txt')
+    const v = await createConflictOps(ctx).getConflictVersions(dir, 'f.txt')
     expect(v).toMatchObject({ ours: 'committed\n', theirs: 'stashed\n', kind: 'both-modified' })
   })
 
   it('refuses to apply over local changes that would be overwritten', async () => {
-    const { ops } = makeOps()
+    const ops = createStashOps(testContext())
     const dir = initRepo()
     commitFile(dir, 'f.txt', 'base\n', 'base')
     write(dir, 'f.txt', 'stashed\n')
@@ -109,7 +111,7 @@ describe('stash', () => {
   it('keeps staged changes (incl. a rename) when applying with restoreIndex, and applies the stash', async () => {
     // Original data-loss scenario: `git stash apply --index` with a dirty index reset the index to
     // HEAD, then failed with "would be overwritten by merge ... Index was not unstashed".
-    const { ops } = makeOps()
+    const ops = createStashOps(testContext())
     const dir = initRepo()
     write(dir, 'README.md', 'hello\n')
     write(dir, 'a.txt', 'a\n')
@@ -145,7 +147,7 @@ describe('stash', () => {
   })
 
   it('falls back to applying without the index when the staged part no longer applies', async () => {
-    const { ops } = makeOps()
+    const ops = createStashOps(testContext())
     const dir = initRepo()
     const lines = Array.from({ length: 10 }, (_, i) => `line ${i + 1}`)
     commitFile(dir, 'f.txt', `${lines.join('\n')}\n`, 'base')
@@ -167,7 +169,7 @@ describe('stash', () => {
   })
 
   it('restores the index saved before a failed --index attempt, then applies without --index', async () => {
-    const base = makeOps().ctx
+    const base = testContext()
     const dir = initRepo()
     commitFile(dir, 'a.txt', 'a\n', 'a')
     commitFile(dir, 'b.txt', 'b\n', 'b')

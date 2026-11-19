@@ -3,7 +3,8 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { cleanupTmp, commitFile, configure, expectCode, git, initRepo, isolateGitConfig, makeOps, nextDate, read, tmpDir } from './helpers'
+import { createConflictOps } from '../conflicts'
+import { cleanupTmp, commitFile, expectCode, git, initRepo, isolateGitConfig, testContext, nextDate, read, tmpDir } from './helpers'
 
 beforeAll(isolateGitConfig)
 afterAll(cleanupTmp)
@@ -41,7 +42,7 @@ describe('non-UTF-8 text conflicts', () => {
   }
 
   it('reports them like binary files (whole-side resolutions only) and flags nonUtf8', async () => {
-    const { ops } = makeOps()
+    const ops = createConflictOps(testContext())
     const dir = latin1Conflict()
     const v = await ops.getConflictVersions(dir, 'f.txt')
     expect(v).toMatchObject({ kind: 'both-modified', binary: true, nonUtf8: true, base: '', ours: '', theirs: '', merged: '' })
@@ -54,7 +55,7 @@ describe('non-UTF-8 text conflicts', () => {
   })
 
   it('refuses a content resolution built from the lossy UTF-8 decode, leaving the bytes alone', async () => {
-    const { ops } = makeOps()
+    const ops = createConflictOps(testContext())
     const dir = latin1Conflict()
     const file = path.join(dir, 'f.txt')
     const before = fs.readFileSync(file)
@@ -67,7 +68,7 @@ describe('non-UTF-8 text conflicts', () => {
   })
 
   it('still accepts content with a genuine U+FFFD in UTF-8 files', async () => {
-    const { ops } = makeOps()
+    const ops = createConflictOps(testContext())
     const dir = initRepo()
     commitFile(dir, 'u.txt', 'x �\nbase\n', 'base')
     git(dir, ['checkout', '-q', '-b', 'other'])
@@ -97,7 +98,7 @@ describe('files changed on disk while the editor was open', () => {
   }
 
   it('refuses (CONFLICT) to overwrite external edits made after the versions were loaded', async () => {
-    const { ops } = makeOps()
+    const ops = createConflictOps(testContext())
     const dir = conflictRepo()
     const file = path.join(dir, 'f.txt')
     const v = await ops.getConflictVersions(dir, 'f.txt')
@@ -124,7 +125,7 @@ describe('files changed on disk while the editor was open', () => {
   })
 
   it('keeps accepting resolutions without `expected` (whole-content writes)', async () => {
-    const { ops } = makeOps()
+    const ops = createConflictOps(testContext())
     const dir = conflictRepo()
     await ops.resolveConflict(dir, 'f.txt', { kind: 'content', content: 'resolved\n' })
     expect(read(dir, 'f.txt')).toBe('resolved\n')
@@ -144,7 +145,6 @@ describe.skipIf(process.platform === 'win32')('symbolic link conflicts', () => {
     const dir = path.join(parent, 'repo')
     fs.mkdirSync(dir)
     git(dir, ['init', '-q', '-b', 'main'])
-    configure(dir)
     const link = path.join(dir, 'link')
     fs.writeFileSync(path.join(dir, 'a.txt'), 'a\n')
     fs.writeFileSync(path.join(dir, 'b.txt'), 'b\n')
@@ -164,7 +164,7 @@ describe.skipIf(process.platform === 'win32')('symbolic link conflicts', () => {
   }
 
   it('never reads through the worktree link and offers whole-side resolutions only', async () => {
-    const { ops } = makeOps()
+    const ops = createConflictOps(testContext())
     const { dir } = symlinkConflict()
     expect(fs.readlinkSync(path.join(dir, 'link'))).toBe('../secret')
     const v = await ops.getConflictVersions(dir, 'link')
@@ -173,7 +173,7 @@ describe.skipIf(process.platform === 'win32')('symbolic link conflicts', () => {
   })
 
   it('refuses a content resolution (it would replace the link with a regular file) and resolves by side', async () => {
-    const { ops } = makeOps()
+    const ops = createConflictOps(testContext())
     const { dir } = symlinkConflict()
     const link = path.join(dir, 'link')
     await expectCode(ops.resolveConflict(dir, 'link', { kind: 'content', content: 'TOP SECRET KEY\n' }), 'INVALID_ARGUMENT')

@@ -4,7 +4,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { cleanupTmp, commitFile, git, head, initRepo, isolateGitConfig, makeOps, nextDate } from '../../write/__tests__/helpers'
+import { cleanupTmp, commitFile, git, head, initRepo, isolateGitConfig, testContext, nextDate } from '../../write/__tests__/helpers'
 import { describeMove, expireDays, groupLostCommits, type RawMove } from '../../parsers/reflog'
 import { createReflogOps } from '../reflog'
 
@@ -17,7 +17,7 @@ const at = (repo: string, args: string[]) => git(repo, args, { env: { GIT_COMMIT
 describe('lost commits', () => {
   it('groups what a reset, a deleted branch, a detached HEAD and an amend left behind', async () => {
     const repo = initRepo()
-    const ops = createReflogOps(makeOps().ctx)
+    const ops = createReflogOps(testContext())
     commitFile(repo, 'a.txt', '1\n', 'One')
     const two = commitFile(repo, 'a.txt', '2\n', 'Two')
     const three = commitFile(repo, 'a.txt', '3\n', 'Three')
@@ -68,7 +68,7 @@ describe('lost commits', () => {
 
   it('lists the moves of HEAD or a branch in words, marking what is lost', async () => {
     const repo = initRepo()
-    const ops = createReflogOps(makeOps().ctx)
+    const ops = createReflogOps(testContext())
     commitFile(repo, 'a.txt', '1\n', 'One')
     const two = commitFile(repo, 'a.txt', '2\n', 'Two')
     commitFile(repo, 'a.txt', '3\n', 'Three')
@@ -94,7 +94,7 @@ describe('lost commits', () => {
 
   it('looks deeper for commits no reflog remembers: dropped stashes', async () => {
     const repo = initRepo()
-    const ops = createReflogOps(makeOps().ctx)
+    const ops = createReflogOps(testContext())
     commitFile(repo, 'a.txt', '1\n', 'One')
     expect(await ops.findDanglingCommits(repo)).toEqual([])
     fs.writeFileSync(path.join(repo, 'a.txt'), 'changed\n')

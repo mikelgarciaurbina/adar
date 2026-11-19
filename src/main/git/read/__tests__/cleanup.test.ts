@@ -2,7 +2,7 @@
 // was deleted (with and without commits of their own), and remote branches merged into main.
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { cleanupTmp, cloneSetup, commitFile, git, head, isolateGitConfig, makeOps } from '../../write/__tests__/helpers'
+import { cleanupTmp, cloneSetup, commitFile, git, head, isolateGitConfig, testContext } from '../../write/__tests__/helpers'
 import { createRefsOps } from '../refs'
 
 beforeAll(() => isolateGitConfig())
@@ -11,7 +11,7 @@ afterAll(() => cleanupTmp())
 describe('getBranchCleanup', () => {
   it('tells merged branches from gone ones, and counts the commits only a gone branch has', async () => {
     const { repo } = cloneSetup()
-    const { ctx } = makeOps()
+    const ctx = testContext()
     const ops = createRefsOps(ctx)
 
     // merged: in main and pushed; squashed: its work went in as another commit; gone-empty: deleted on origin, nothing of its own.

@@ -1,4 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { createConflictOps } from '../conflicts'
+import { createOperationOps } from '../operations'
 import {
   cleanupTmp,
   commitFile,
@@ -8,30 +10,35 @@ import {
   head,
   initRepo,
   isolateGitConfig,
-  makeOps,
+  testContext,
   read,
+  repoFixture,
   status,
   subjects,
   write
 } from './helpers'
 
+function operationAndConflictOps() {
+  const ctx = testContext()
+  return { ...createOperationOps(ctx), ...createConflictOps(ctx) }
+}
+
 beforeAll(isolateGitConfig)
 afterAll(cleanupTmp)
 
 /** main: base → "ours" change on f.txt; other: base → "theirs" change on f.txt. */
-function conflictRepo(): string {
-  const dir = initRepo()
+const conflictRepo = repoFixture((dir) => {
   commitFile(dir, 'f.txt', 'base\n', 'base')
   git(dir, ['checkout', '-q', '-b', 'other'])
   commitFile(dir, 'f.txt', 'theirs\n', 'theirs change', { GIT_AUTHOR_NAME: 'Original Author', GIT_AUTHOR_EMAIL: 'orig@example.com' })
   git(dir, ['checkout', '-q', 'main'])
   commitFile(dir, 'f.txt', 'ours\n', 'ours change')
-  return dir
-}
+  return {}
+})
 
 describe('merge', () => {
   it('fast-forwards by default and creates a merge commit with noFf', async () => {
-    const { ops } = makeOps()
+    const ops = operationAndConflictOps()
     const dir = initRepo()
     commitFile(dir, 'a.txt', 'a\n', 'a')
     git(dir, ['checkout', '-q', '-b', 'feature'])
@@ -55,7 +62,7 @@ describe('merge', () => {
   })
 
   it('squash merges without committing', async () => {
-    const { ops } = makeOps()
+    const ops = operationAndConflictOps()
     const dir = initRepo()
     commitFile(dir, 'a.txt', 'a\n', 'a')
     git(dir, ['checkout', '-q', '-b', 'feature'])
@@ -69,8 +76,8 @@ describe('merge', () => {
   })
 
   it('stops on conflicts, resolves with content and continues', async () => {
-    const { ops } = makeOps()
-    const dir = conflictRepo()
+    const ops = operationAndConflictOps()
+    const { dir } = conflictRepo()
     const res = await ops.merge(dir, 'other')
     expect(res).toMatchObject({ ok: false, conflicts: ['f.txt'], state: 'merge' })
 
@@ -99,8 +106,8 @@ describe('merge', () => {
   })
 
   it('continues a merge with a custom message and aborts another', async () => {
-    const { ops } = makeOps()
-    const dir = conflictRepo()
+    const ops = operationAndConflictOps()
+    const { dir } = conflictRepo()
     await ops.merge(dir, 'other')
     await ops.resolveConflict(dir, 'f.txt', { kind: 'theirs' })
     expect(read(dir, 'f.txt')).toBe('theirs\n')
@@ -118,7 +125,7 @@ describe('merge', () => {
   })
 
   it('resolves modify/delete conflicts by keeping or deleting the file', async () => {
-    const { ops } = makeOps()
+    const ops = operationAndConflictOps()
     const dir = initRepo()
     commitFile(dir, 'f.txt', 'base\n', 'base')
     commitFile(dir, 'g.txt', 'g\n', 'g')
@@ -143,8 +150,8 @@ describe('merge', () => {
   })
 
   it('markResolved stages files as they are', async () => {
-    const { ops } = makeOps()
-    const dir = conflictRepo()
+    const ops = operationAndConflictOps()
+    const { dir } = conflictRepo()
     await ops.merge(dir, 'other')
     write(dir, 'f.txt', 'hand edited\n')
     await ops.markResolved(dir, ['f.txt'])
@@ -154,7 +161,7 @@ describe('merge', () => {
   })
 
   it('surfaces untracked files that would be overwritten as DIRTY_WORKTREE', async () => {
-    const { ops } = makeOps()
+    const ops = operationAndConflictOps()
     const dir = initRepo()
     commitFile(dir, 'a.txt', 'a\n', 'a')
     git(dir, ['checkout', '-q', '-b', 'feature'])
@@ -168,7 +175,7 @@ describe('merge', () => {
 
 describe('rebase', () => {
   it('rebases cleanly and reports up to date', async () => {
-    const { ops } = makeOps()
+    const ops = operationAndConflictOps()
     const dir = initRepo()
     commitFile(dir, 'a.txt', 'a\n', 'a')
     git(dir, ['checkout', '-q', '-b', 'feature'])
@@ -186,8 +193,8 @@ describe('rebase', () => {
   })
 
   it('stops on conflicts with labels, then skip finishes it', async () => {
-    const { ops } = makeOps()
-    const dir = conflictRepo()
+    const ops = operationAndConflictOps()
+    const { dir } = conflictRepo()
     git(dir, ['checkout', '-q', 'other'])
     commitFile(dir, 'other2.txt', 'x\n', 'other second')
     const res = await ops.rebase(dir, 'main')
@@ -206,8 +213,8 @@ describe('rebase', () => {
   })
 
   it('aborts a conflicted rebase', async () => {
-    const { ops } = makeOps()
-    const dir = conflictRepo()
+    const ops = operationAndConflictOps()
+    const { dir } = conflictRepo()
     git(dir, ['checkout', '-q', 'other'])
     const before = head(dir)
     await ops.rebase(dir, 'main')
@@ -217,8 +224,8 @@ describe('rebase', () => {
   })
 
   it('continues with a new message, keeping the original author', async () => {
-    const { ops } = makeOps()
-    const dir = conflictRepo()
+    const ops = operationAndConflictOps()
+    const { dir } = conflictRepo()
     git(dir, ['checkout', '-q', 'other'])
     await ops.rebase(dir, 'main')
     await ops.resolveConflict(dir, 'f.txt', { kind: 'content', content: 'merged\n' })
@@ -228,8 +235,8 @@ describe('rebase', () => {
   })
 
   it('drops a commit that becomes empty when continuing', async () => {
-    const { ops } = makeOps()
-    const dir = conflictRepo()
+    const ops = operationAndConflictOps()
+    const { dir } = conflictRepo()
     git(dir, ['checkout', '-q', 'other'])
     await ops.rebase(dir, 'main')
     await ops.resolveConflict(dir, 'f.txt', { kind: 'ours' })
@@ -241,7 +248,7 @@ describe('rebase', () => {
 
 describe('cherry-pick', () => {
   it('picks several commits oldest first regardless of the given order', async () => {
-    const { ops } = makeOps()
+    const ops = operationAndConflictOps()
     const dir = initRepo()
     commitFile(dir, 'a.txt', 'a\n', 'base')
     git(dir, ['checkout', '-q', '-b', 'source'])
@@ -255,7 +262,7 @@ describe('cherry-pick', () => {
   })
 
   it('orders commits made in the same second topologically', async () => {
-    const { ops } = makeOps()
+    const ops = operationAndConflictOps()
     const dir = initRepo()
     const same = { GIT_AUTHOR_DATE: '1700000000 +0000', GIT_COMMITTER_DATE: '1700000000 +0000' }
     commitFile(dir, 'a.txt', 'a\n', 'base', same)
@@ -269,7 +276,7 @@ describe('cherry-pick', () => {
   })
 
   it('skips commits that are already applied', async () => {
-    const { ops } = makeOps()
+    const ops = operationAndConflictOps()
     const dir = initRepo()
     commitFile(dir, 'a.txt', 'a\n', 'base')
     git(dir, ['checkout', '-q', '-b', 'source'])
@@ -284,8 +291,8 @@ describe('cherry-pick', () => {
   })
 
   it('stops on conflicts and continues', async () => {
-    const { ops } = makeOps()
-    const dir = conflictRepo()
+    const ops = operationAndConflictOps()
+    const { dir } = conflictRepo()
     const theirs = head(dir, 'other')
     const res = await ops.cherryPick(dir, [theirs])
     expect(res).toMatchObject({ ok: false, conflicts: ['f.txt'], state: 'cherry-pick' })
@@ -299,7 +306,7 @@ describe('cherry-pick', () => {
   })
 
   it('continues a multi-commit cherry-pick after a conflict, with and without a message', async () => {
-    const { ops } = makeOps()
+    const ops = operationAndConflictOps()
     const dir = initRepo()
     commitFile(dir, 'f.txt', 'base\n', 'base')
     git(dir, ['checkout', '-q', '-b', 'source'])
@@ -323,7 +330,7 @@ describe('cherry-pick', () => {
   })
 
   it('cherry-picks with noCommit and merge commits with -m 1', async () => {
-    const { ops } = makeOps()
+    const ops = operationAndConflictOps()
     const dir = initRepo()
     commitFile(dir, 'a.txt', 'a\n', 'base')
     git(dir, ['checkout', '-q', '-b', 'feature'])
@@ -341,7 +348,7 @@ describe('cherry-pick', () => {
 
 describe('revert', () => {
   it('reverts a commit and a merge commit with a mainline', async () => {
-    const { ops } = makeOps()
+    const ops = operationAndConflictOps()
     const dir = initRepo()
     commitFile(dir, 'a.txt', 'a\n', 'base')
     const change = commitFile(dir, 'a.txt', 'b\n', 'change a')
@@ -365,7 +372,7 @@ describe('revert', () => {
   })
 
   it('stops on conflicts with a revert label', async () => {
-    const { ops } = makeOps()
+    const ops = operationAndConflictOps()
     const dir = initRepo()
     commitFile(dir, 'f.txt', 'v1\n', 'v1')
     const v2 = commitFile(dir, 'f.txt', 'v2\n', 'v2')
@@ -381,7 +388,7 @@ describe('revert', () => {
 
 describe('continue / skip guards', () => {
   it('rejects continue and skip without an operation', async () => {
-    const { ops } = makeOps()
+    const ops = operationAndConflictOps()
     const dir = initRepo()
     commitFile(dir, 'a.txt', 'a\n', 'a')
     await expectCode(ops.continueOperation(dir), 'INVALID_ARGUMENT')

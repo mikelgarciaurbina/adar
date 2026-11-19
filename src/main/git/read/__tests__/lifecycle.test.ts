@@ -1,14 +1,16 @@
 // Integration tests for repository lifecycle, settings, watchers, identity and the git console.
-import { cleanupTempDirs, commitAll, git, initTestRepo, isolateGitConfig, makeBackend, tempDir, waitFor, write } from './helpers'
+import { cleanupTempDirs, commitAll, git, initTestRepo, isolateGitConfig, tempDir, waitFor, write } from './helpers'
+import { makeBackend } from './backend'
 
 const globalConfig = isolateGitConfig()
 
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { API_METHODS } from '@shared/api'
 import type { AdarEvent } from '@shared/types'
 import type { Backend } from '../../../backend'
+import { WatcherManager } from '../../../system/watcher'
 import { deriveCloneDirName } from '../repo'
 
 let backend: Backend
@@ -278,19 +280,28 @@ describe('runGit', () => {
 })
 
 describe('watcher', () => {
-  it('emits repo-changed for worktree edits and new branches', { timeout: 60_000 }, async () => {
+  it('emits repo-changed for worktree edits and new branches', { timeout: 60_000 }, async ({ onTestFinished }) => {
     const repo = initTestRepo()
     write(repo, 'a.txt', 'a\n')
     commitAll(repo, 'init')
-    mkdirSync(path.join(repo, 'node_modules'), { recursive: true })
+    const start = vi.spyOn(WatcherManager.prototype, 'start')
+    onTestFinished(() => start.mockRestore())
     const info = await backend.openRepo(repo)
-    // Let the watcher take its baselines (fs.watch, or the polling fallback when FSEvents is silent).
-    await new Promise((r) => setTimeout(r, 1500))
+    const watcher = start.mock.contexts[0] as WatcherManager
+    expect(watcher.isWatching(info.path)).toBe(true)
     const changed = () => events.filter((e): e is Extract<AdarEvent, { type: 'repo-changed' }> => e.type === 'repo-changed' && e.repoPath === info.path)
-    const start = changed().length
+    const beforeEdit = changed().length
 
-    write(repo, 'a.txt', 'edited\n')
-    expect(await waitFor(() => changed().slice(start).some((e) => e.scopes.includes('worktree')), 15_000)).toBe(true)
+    // A polling-only host may include the first edit in its baseline. Keep editing until observed.
+    let revision = 0
+    const edit = () => write(repo, 'a.txt', `revision ${++revision}\n`)
+    edit()
+    const retry = setInterval(edit, 500)
+    try {
+      expect(await waitFor(() => changed().slice(beforeEdit).some((e) => e.scopes.includes('worktree')), 15_000)).toBe(true)
+    } finally {
+      clearInterval(retry)
+    }
 
     const mark = changed().length
     git(repo, ['branch', 'feature/new'])
@@ -301,10 +312,6 @@ describe('watcher', () => {
     expect(await waitFor(() => changed().slice(mark2).some((e) => e.scopes.includes('index')))).toBe(true)
 
     await backend.closeRepo(info.path)
-    await new Promise((r) => setTimeout(r, 400))
-    const afterClose = changed().length
-    write(repo, 'a.txt', 'after close\n')
-    await new Promise((r) => setTimeout(r, 800))
-    expect(changed().length).toBe(afterClose)
+    expect(watcher.isWatching(info.path)).toBe(false)
   })
 })

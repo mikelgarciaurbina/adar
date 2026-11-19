@@ -1,25 +1,30 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { createOperationOps } from '../operations'
 import type { RebaseTodoItem } from '@shared/types'
-import { cleanupTmp, commitFile, exists, expectCode, git, head, initRepo, isolateGitConfig, makeOps, nextDate, read, status, subjects, write } from './helpers'
+import { cleanupTmp, commitFile, exists, expectCode, git, head, initRepo, isolateGitConfig, testContext, nextDate, read, repoFixture, status, subjects, write } from './helpers'
 import { INTERACTIVE_REBASE_MARKER } from '../../context'
-import { repoKey } from '../interactive'
+import { createInteractiveOps, repoKey } from '../interactive'
+
+function makeOps() {
+  const ctx = testContext()
+  return { ctx, ops: { ...createInteractiveOps(ctx), ...createOperationOps(ctx) } }
+}
 
 beforeAll(isolateGitConfig)
 afterAll(cleanupTmp)
 
 /** base ← A ← B ← C ← D on main, each commit adding its own file. Returns repo + base sha. */
-function linearRepo(): { dir: string; base: string } {
-  const dir = initRepo()
+const linearRepo = repoFixture((dir) => {
   const base = commitFile(dir, 'base.txt', 'base\n', 'base')
   for (const name of ['A', 'B', 'C', 'D']) {
     write(dir, `${name}.txt`, `${name}\n`)
     git(dir, ['add', `${name}.txt`])
     git(dir, ['commit', '-q', '-F', '-'], { input: `${name} subject\n\n${name} body\n` })
   }
-  return { dir, base }
-}
+  return { base }
+})
 
 const files = (dir: string) => git(dir, ['ls-files']).split('\n').filter(Boolean).sort()
 
@@ -114,16 +119,6 @@ describe('interactiveRebase', () => {
     expect(subjects(dir)).toEqual(['D subject', 'C reworded', 'B amended', 'A subject', 'base'])
     expect(read(dir, 'B.txt')).toBe('B edited\n')
     expect(status(dir)).toBe('')
-  })
-
-  it('stops at an edit and continues without a message', async () => {
-    const { ops } = makeOps()
-    const { dir, base } = linearRepo()
-    const todo = await todoFrom(dir, base, ([a, b, c, d]) => [{ ...a, action: 'edit' }, b, c, d])
-    expect((await ops.interactiveRebase(dir, base, todo)).state).toBe('rebase-interactive')
-    const done = await ops.continueOperation(dir)
-    expect(done.ok).toBe(true)
-    expect(subjects(dir)).toEqual(['D subject', 'C subject', 'B subject', 'A subject', 'base'])
   })
 
   it('rebases from the root commit', async () => {
@@ -259,6 +254,7 @@ describe('rebase state', () => {
     expect(fs.existsSync(marker(dir))).toBe(true)
     expect(await ctx.operationState(dir)).toBe('rebase-interactive')
     expect((await ops.continueOperation(dir)).state).toBe('none')
+    expect(subjects(dir)).toEqual(['D subject', 'C subject', 'B subject', 'A subject', 'base'])
     expect(fs.existsSync(marker(dir))).toBe(false)
 
     // Aborted from Adar.

@@ -1,19 +1,19 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { cleanupTmp, cloneSetup, commitFile, expectCode, git, head, initRepo, isolateGitConfig, makeOps, read, status, subjects, tmpDir, write } from './helpers'
+import { createRewordOps } from '../reword'
+import { cleanupTmp, cloneSetup, commitFile, expectCode, git, head, initRepo, isolateGitConfig, testContext, read, repoFixture, status, subjects, tmpDir, write } from './helpers'
 
 beforeAll(isolateGitConfig)
 afterAll(cleanupTmp)
 
 /** base ← A ← B ← C, each adding its own file. */
-function linearRepo(): { dir: string; shas: Record<string, string> } {
-  const dir = initRepo()
+const linearRepo = repoFixture((dir) => {
   const shas: Record<string, string> = {}
   shas.base = commitFile(dir, 'base.txt', 'base\n', 'base')
   for (const n of ['A', 'B', 'C']) shas[n] = commitFile(dir, `${n}.txt`, `${n}\n`, `${n} subject`)
-  return { dir, shas }
-}
+  return { shas }
+})
 
 const message = (dir: string, rev: string) => git(dir, ['log', '-1', '--format=%B', rev]).replace(/\n+$/, '')
 const tree = (dir: string, rev: string) => git(dir, ['rev-parse', `${rev}^{tree}`]).trim()
@@ -28,7 +28,7 @@ const hook = (dir: string, name: string, body: string) => {
 
 describe('rewordCommit', () => {
   it('edits the HEAD message without committing staged changes', async () => {
-    const { ops } = makeOps()
+    const ops = createRewordOps(testContext())
     const { dir, shas } = linearRepo()
     write(dir, 'staged.txt', 'staged\n')
     git(dir, ['add', 'staged.txt'])
@@ -47,7 +47,7 @@ describe('rewordCommit', () => {
   })
 
   it('edits an older commit, keeping later commits, trees, authors and uncommitted work', async () => {
-    const { ops } = makeOps()
+    const ops = createRewordOps(testContext())
     const { dir, shas } = linearRepo()
     write(dir, 'C.txt', 'dirty\n')
     write(dir, 'new.txt', 'untracked\n')
@@ -72,7 +72,7 @@ describe('rewordCommit', () => {
   })
 
   it('never touches ignored files, stashes or checkout hooks', async () => {
-    const { ops } = makeOps()
+    const ops = createRewordOps(testContext())
     const dir = initRepo()
     // A secret committed by mistake, then untracked and ignored; the real one lives on locally.
     commitFile(dir, '.env', 'API_KEY=placeholder\n', 'add env')
@@ -95,7 +95,7 @@ describe('rewordCommit', () => {
   })
 
   it('edits the root commit and keeps merges intact when rewriting across them', async () => {
-    const { ops } = makeOps()
+    const ops = createRewordOps(testContext())
     const { dir, shas } = linearRepo()
     git(dir, ['checkout', '-q', '-b', 'side', shas.A])
     const side = commitFile(dir, 'side.txt', 'side\n', 'side work')
@@ -125,7 +125,7 @@ describe('rewordCommit', () => {
   })
 
   it('works on a detached HEAD', async () => {
-    const { ops } = makeOps()
+    const ops = createRewordOps(testContext())
     const { dir, shas } = linearRepo()
     git(dir, ['checkout', '-q', '--detach'])
     const res = await ops.rewordCommit(dir, shas.B, 'B detached')
@@ -136,7 +136,7 @@ describe('rewordCommit', () => {
   })
 
   it('is a no-op when the message is unchanged (whitespace cleanup included)', async () => {
-    const { ops } = makeOps()
+    const ops = createRewordOps(testContext())
     const { dir, shas } = linearRepo()
     const res = await ops.rewordCommit(dir, shas.B, 'B subject   \n\n\n')
     expect(res).toMatchObject({ ok: true, newSha: shas.B })
@@ -144,7 +144,7 @@ describe('rewordCommit', () => {
   })
 
   it('refuses commits outside the branch, operations in progress, shallow edges and empty messages', async () => {
-    const { ops } = makeOps()
+    const ops = createRewordOps(testContext())
     const { dir, shas } = linearRepo()
     await expectCode(ops.rewordCommit(dir, shas.B, '   '), 'INVALID_ARGUMENT')
 
@@ -182,7 +182,7 @@ describe('rewordCommit', () => {
   }, 60_000)
 
   it('runs the commit-msg hook, which can reject or amend the message', async () => {
-    const { ops } = makeOps()
+    const ops = createRewordOps(testContext())
     const { dir, shas } = linearRepo()
     hook(dir, 'commit-msg', 'grep -q "^feat" "$1" || { echo "subject must start with feat" >&2; exit 1; }\necho "Change-Id: I42" >> "$1"')
     const err = await expectCode(ops.rewordCommit(dir, shas.A, 'A reworded'), 'INVALID_ARGUMENT')
@@ -196,7 +196,7 @@ describe('rewordCommit', () => {
   })
 
   it('signs the recreated commits when commit.gpgSign is set, and changes nothing if signing fails', async () => {
-    const { ops } = makeOps()
+    const ops = createRewordOps(testContext())
     const { dir, shas } = linearRepo()
     const bin = tmpDir('adar-wtest-gpg-')
     const fake = path.join(bin, 'fake-gpg')
@@ -228,7 +228,7 @@ describe('rewordCommit', () => {
   })
 
   it('keeps non-UTF-8 messages readable (commits are rewritten as UTF-8)', async () => {
-    const { ops } = makeOps()
+    const ops = createRewordOps(testContext())
     const dir = initRepo()
     git(dir, ['config', 'i18n.commitEncoding', 'ISO-8859-1'])
     const latin1 = (text: string) => {
@@ -254,7 +254,7 @@ describe('rewordCommit', () => {
   })
 
   it('copies later commits byte for byte, odd author lines and extra headers included', async () => {
-    const { ops } = makeOps()
+    const ops = createRewordOps(testContext())
     const { dir, shas } = linearRepo()
     // Commits as importers or other tools write them: git itself would tidy these author lines.
     const craft = (author: string, subject: string) => {
@@ -276,7 +276,7 @@ describe('rewordCommit', () => {
   })
 
   it('reports where the commit already is: upstream, other branches and tags', async () => {
-    const { ops } = makeOps()
+    const ops = createRewordOps(testContext())
     const { repo } = cloneSetup()
     const pushed = head(repo)
     git(repo, ['branch', 'feature'])

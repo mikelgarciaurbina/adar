@@ -3,7 +3,7 @@ import { mkdtempSync, promises as fs, readdirSync, realpathSync, rmSync, writeFi
 import http from 'node:http'
 import os from 'node:os'
 import path from 'node:path'
-import { afterAll, describe, expect, it } from 'vitest'
+import { afterAll, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_SETTINGS, type AdarEvent } from '@shared/types'
 import { UNRECORDED_VERSION } from '@shared/update'
 import { ASKPASS_TOKEN_HEADER, AskpassService, askpassShellScript, askpassWslScript, classifyPrompt, shDoubleQuote } from './askpass'
@@ -492,83 +492,72 @@ describe('watcher classification', () => {
 
   it('detects worktree edits through the status signature until fs.watch proves itself', async () => {
     const dir = tmp()
-    const gitDir = path.join(dir, '.git')
-    await fs.mkdir(gitDir, { recursive: true })
     let sig = 'a'
-    let calls = 0
+    const signature = vi.fn(async () => sig)
     const events: AdarEvent[] = []
     const w = new WatcherManager((e) => events.push(e), {
-      fsWatch: false,
-      pollMs: 0,
-      debounceMs: 10,
-      worktreeSignature: async () => {
-        calls++
-        return sig
-      }
+      fsWatch: false, pollMs: 0, debounceMs: 10, worktreeSignature: signature
     })
-    w.start({ repoPath: dir, gitDir, isBare: false })
+    vi.useFakeTimers()
     try {
-      await until(() => calls >= 1)
+      w.start({ repoPath: dir, gitDir: path.join(dir, '.git'), isBare: false })
+      await vi.advanceTimersByTimeAsync(0)
+      expect(signature).toHaveBeenCalledTimes(1)
       sig = 'b'
-      // Unknown health: checked every 3 s at most.
-      expect(await until(() => scopesOf(events).has('worktree'), 6000)).toBe(true)
-      // A real fs.watch event proves FSEvents works: the signature poller stops.
+      await vi.advanceTimersByTimeAsync(3010)
+      expect(scopesOf(events)).toEqual(new Set(['worktree']))
+      expect(signature).toHaveBeenCalledTimes(2)
       w.notifyFsEvent(dir, null)
       expect(w.healthOf(dir)).toBe('healthy')
-      const before = calls
-      await sleep(3500)
-      expect(calls).toBe(before)
+      await vi.advanceTimersByTimeAsync(30_000)
+      expect(signature).toHaveBeenCalledTimes(2)
     } finally {
       w.stopAll()
+      vi.useRealTimers()
     }
-  }, 15_000)
+  })
 
   it('debounces fs events into one batch and drops batches of ignored paths only', async () => {
     const dir = tmp()
     const events: AdarEvent[] = []
-    const asked: string[][] = []
+    const ignoredPaths = vi.fn(async (_repo: string, paths: string[]) => new Set(paths.filter((p) => p.startsWith('out/'))))
     const w = new WatcherManager((e) => events.push(e), {
-      fsWatch: false,
-      pollMs: 0,
-      debounceMs: 60,
-      maxWaitMs: 400,
-      ignoredPaths: async (_repo, paths) => {
-        asked.push(paths)
-        return new Set(paths.filter((p) => p.startsWith('out/')))
-      }
+      fsWatch: false, pollMs: 0, debounceMs: 60, maxWaitMs: 400, ignoredPaths
     })
-    w.start({ repoPath: dir, gitDir: path.join(dir, '.git'), isBare: false })
+    vi.useFakeTimers()
     try {
+      w.start({ repoPath: dir, gitDir: path.join(dir, '.git'), isBare: false })
       w.notifyFsEvent(dir, 'worktree', 'out/main.js')
       w.notifyFsEvent(dir, 'worktree', 'out/chunk.js')
-      await sleep(200)
+      await vi.advanceTimersByTimeAsync(60)
       expect(events).toEqual([])
-      expect(asked).toEqual([['out/main.js', 'out/chunk.js']])
+      expect(ignoredPaths).toHaveBeenCalledExactlyOnceWith(dir, ['out/main.js', 'out/chunk.js'])
 
       w.notifyFsEvent(dir, 'worktree', 'out/main.js')
       w.notifyFsEvent(dir, 'worktree', 'src/app.ts')
       w.notifyFsEvent(dir, 'refs')
       w.notifyFsEvent(dir, 'index')
-      await sleep(200)
+      await vi.advanceTimersByTimeAsync(60)
       expect(events).toHaveLength(1)
-      expect(new Set((events[0] as Extract<AdarEvent, { type: 'repo-changed' }>).scopes)).toEqual(new Set(['worktree', 'refs', 'index']))
+      expect(scopesOf(events)).toEqual(new Set(['worktree', 'refs', 'index']))
 
-      // A continuous stream is flushed after maxWaitMs instead of being postponed forever.
+      // With no quiet period the first batch must be emitted at maxWaitMs.
       events.length = 0
-      const t0 = Date.now()
-      while (Date.now() - t0 < 700) {
+      for (let elapsed = 0; elapsed < 400; elapsed += 20) {
+        expect(events).toHaveLength(0)
         w.notifyFsEvent(dir, 'worktree', 'src/app.ts')
-        await sleep(20)
+        await vi.advanceTimersByTimeAsync(20)
       }
-      expect(events.length).toBeGreaterThanOrEqual(1)
-      expect(events.length).toBeLessThanOrEqual(3)
+      expect(events).toHaveLength(1)
+      w.notifyFsEvent(dir, 'refs')
+      w.stop(dir)
+      w.notifyFsEvent(dir, 'index')
+      await vi.advanceTimersByTimeAsync(400)
+      expect(events).toHaveLength(1)
     } finally {
       w.stopAll()
+      vi.useRealTimers()
     }
-    const n = events.length
-    w.notifyFsEvent(dir, 'worktree', 'src/app.ts')
-    await sleep(150)
-    expect(events).toHaveLength(n)
   })
 })
 

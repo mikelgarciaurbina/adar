@@ -4,7 +4,7 @@
 
 import fs from 'node:fs'
 import path from 'node:path'
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { AgentEvent } from '@shared/agents'
 import { DEFAULT_SETTINGS, type AdarEvent, type AppSettings } from '@shared/types'
 import { createGitContext } from '../git/context'
@@ -75,11 +75,6 @@ function worktreeSetup() {
   commitFile(repo, 'a.txt', 'one\ntwo\n', 'first')
   const wt = path.join(fs.realpathSync(tmpDir('adar-agents-')), 'claude-rooms')
   git(repo, ['worktree', 'add', '-q', '-b', 'claude/hold-rooms', wt])
-  for (const [k, v] of [
-    ['user.name', 'Test User'],
-    ['user.email', 'test@example.com'],
-    ['commit.gpgsign', 'false']
-  ]) git(wt, ['config', k, v])
   return { repo, wt }
 }
 
@@ -123,7 +118,7 @@ describe('ActivityTracker', () => {
     return { tracker, events, said }
   }
 
-  it('follows a linked worktree through edits, commits and a first push', async () => {
+  it('follows a linked worktree through edits, commits and a first push', async ({ onTestFinished }) => {
     const { repo, wt } = worktreeSetup()
     const { tracker, said } = track()
     await tracker.watch([repo])
@@ -148,12 +143,14 @@ describe('ActivityTracker', () => {
     expect(tracker.list()[0]).toMatchObject({ fileCount: 0, ahead: 1, unpushed: null, coAuthors: ['Claude'] })
 
     // What Adar commits itself is its own.
+    vi.useFakeTimers({ toFake: ['Date'] })
+    onTestFinished(() => { vi.useRealTimers() })
     tracker.ownStart(wt)
     commitFile(wt, 'b.txt', 'b\n', 'From Adar')
     tracker.ownEnd(wt)
     await tracker.lookNow()
     expect(said().at(-1)).toMatchObject({ kind: 'commit', own: true })
-    await new Promise((r) => setTimeout(r, 300))
+    vi.setSystemTime(Date.now() + 300)
 
     const origin = path.join(fs.realpathSync(tmpDir('adar-agents-origin-')), 'origin.git')
     git(repo, ['init', '-q', '--bare', origin])

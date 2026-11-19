@@ -1,5 +1,6 @@
 // Integration tests for log / refs / commit details / file history / blame on temp repos.
-import { cleanupTempDirs, commitAll, configureRepo, git, initTestRepo, isolateGitConfig, makeBackend, tempDir, write } from './helpers'
+import { cleanupTempDirs, commitAll, configureRepo, git, initTestRepo, isolateGitConfig, tempDir, write } from './helpers'
+import { makeBackend } from './backend'
 
 isolateGitConfig()
 
@@ -53,7 +54,7 @@ describe('getLog', () => {
 
   beforeAll(() => {
     repo = initTestRepo()
-    for (let i = 1; i <= 25; i++) {
+    for (let i = 1; i <= 9; i++) {
       write(repo, 'counter.txt', `${i}\n`)
       if (i === 7) write(repo, 'docs/guide.md', 'needle in a haystack\n')
       shas.push(commitAll(repo, i === 3 ? 'Fix: Important BUG\n\nLonger body\nwith two lines' : `commit ${i}`, i === 5 ? { author: 'Ann Other <ann@other.io>' } : {}))
@@ -69,19 +70,19 @@ describe('getLog', () => {
   }, 120_000)
 
   it('paginates with hasMore over all refs (stash excluded)', async () => {
-    const first = await backend.getLog(repo, { maxCount: 10 })
-    expect(first.commits).toHaveLength(10)
+    const first = await backend.getLog(repo, { maxCount: 5 })
+    expect(first.commits).toHaveLength(5)
     expect(first.hasMore).toBe(true)
     expect(first.commits[0].subject).toBe('feature 2') // newest first (date order)
     expect(first.commits.some((c) => c.subject.includes('wip stash'))).toBe(false)
 
-    const last = await backend.getLog(repo, { maxCount: 10, skip: 20 })
-    expect(last.commits).toHaveLength(7)
+    const last = await backend.getLog(repo, { maxCount: 5, skip: 10 })
+    expect(last.commits).toHaveLength(1)
     expect(last.hasMore).toBe(false)
     expect(last.commits[last.commits.length - 1].parents).toEqual([])
 
-    const exact = await backend.getLog(repo, { maxCount: 27 })
-    expect(exact.commits).toHaveLength(27)
+    const exact = await backend.getLog(repo, { maxCount: 11 })
+    expect(exact.commits).toHaveLength(11)
     expect(exact.hasMore).toBe(false)
   })
 
@@ -97,7 +98,7 @@ describe('getLog', () => {
 
   it('restricts to given revisions', async () => {
     const mainOnly = await backend.getLog(repo, { revisions: ['main'], maxCount: 100 })
-    expect(mainOnly.commits).toHaveLength(25)
+    expect(mainOnly.commits).toHaveLength(9)
     expect(mainOnly.commits.some((c) => c.subject.startsWith('feature'))).toBe(false)
     const range = await backend.getLog(repo, { revisions: ['main..feature'] })
     expect(range.commits.map((c) => c.subject)).toEqual(['feature 2', 'feature 1'])
@@ -111,8 +112,8 @@ describe('getLog', () => {
     const author = await backend.getLog(repo, { search: { mode: 'author', text: 'ANN OTHER' } })
     expect(author.commits.map((c) => c.subject)).toEqual(['commit 5'])
 
-    const sha = await backend.getLog(repo, { search: { mode: 'sha', text: shas[9].slice(0, 9) } })
-    expect(sha.commits.map((c) => c.sha)).toEqual([shas[9]])
+    const sha = await backend.getLog(repo, { search: { mode: 'sha', text: shas[6].slice(0, 9) } })
+    expect(sha.commits.map((c) => c.sha)).toEqual([shas[6]])
     expect(sha.hasMore).toBe(false)
     expect((await backend.getLog(repo, { search: { mode: 'sha', text: 'deadbeefdeadbeef' } })).commits).toEqual([])
 

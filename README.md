@@ -140,6 +140,9 @@ npm install
 npm run dev        # desktop app with hot reload
 npm run web        # same UI in a browser: open the http://127.0.0.1:5898/#t=… URL it prints
 npm run typecheck
+npm run test:changed # tests affected by working tree and staged changes since HEAD
+npm run test:related -- src/main/git/write/stash.ts  # tests affected by specific source files
+npm run test:watch   # run the suite once, then rerun affected tests on save
 npm test           # unit + integration tests against temporary git repositories
 npm run dist       # build release/Adar-<version>-arm64.dmg and .zip
 npm run dist:win   # Windows x64 installer (release/Adar-<version>-win-x64.exe)

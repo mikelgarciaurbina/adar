@@ -5,19 +5,19 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import type { PlatformAdapter } from '../../../platform'
+import { getGitExecutable, setGitExecutable } from '../../runner'
 import { createGitContext, type GitContext } from '../../context'
-import type { WriteOps } from '../../ops'
-import { createWriteOps } from '../index'
 
 let isolated = false
 
-/** Point git at an empty global config and ignore the system config. */
+/** Give every temporary repo and clone a test identity, isolated from the user’s config. */
 export function isolateGitConfig(): void {
+  setGitExecutable(process.env.ADAR_TEST_GIT ?? 'git')
   if (isolated) return
   isolated = true
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'adar-wtest-cfg-'))
+  const dir = tmpDir('adar-wtest-cfg-')
   const file = path.join(dir, 'gitconfig')
-  fs.writeFileSync(file, '')
+  fs.writeFileSync(file, '[user]\n\tname = Test User\n\temail = test@example.com\n')
   process.env.GIT_CONFIG_GLOBAL = file
   process.env.GIT_CONFIG_NOSYSTEM = '1'
   for (const k of ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_AUTHOR_DATE', 'GIT_COMMITTER_DATE', 'GIT_AUTHOR_NAME', 'GIT_AUTHOR_EMAIL']) {
@@ -36,6 +36,8 @@ export function tmpDir(prefix = 'adar-wtest-'): string {
 
 export function cleanupTmp(): void {
   for (const d of roots.splice(0)) fs.rmSync(d, { recursive: true, force: true })
+  isolated = false
+  initialRepo = undefined
 }
 
 let clock = 1_700_000_000
@@ -47,7 +49,7 @@ export function nextDate(): string {
 }
 
 export function git(cwd: string, args: string[], opts: { env?: Record<string, string>; input?: string } = {}): string {
-  return execFileSync('git', args, {
+  return execFileSync(getGitExecutable(), args, {
     cwd,
     env: { ...process.env, LC_ALL: 'C', GIT_EDITOR: 'true', GIT_MERGE_AUTOEDIT: 'no', ...opts.env },
     input: opts.input,
@@ -56,18 +58,24 @@ export function git(cwd: string, args: string[], opts: { env?: Record<string, st
   })
 }
 
-export function configure(dir: string): void {
-  git(dir, ['config', 'user.name', 'Test User'])
-  git(dir, ['config', 'user.email', 'test@example.com'])
-  git(dir, ['config', 'commit.gpgsign', 'false'])
-  git(dir, ['config', 'tag.gpgsign', 'false'])
-}
-
 export function initRepo(): string {
   const dir = tmpDir()
-  git(dir, ['init', '-q', '-b', 'main'])
-  configure(dir)
+  git(dir, ['init', '-q', '--template=', '-b', 'main'])
   return dir
+}
+
+/** Build a history once per suite. Each test gets its own worktree, index, refs and reflogs. */
+export function repoFixture<T extends object>(populate: (dir: string) => T) {
+  let template: { dir: string; data: T } | undefined
+  return () => {
+    if (!template) {
+      const dir = initRepo()
+      template = { dir, data: populate(dir) }
+    }
+    const dir = tmpDir()
+    fs.cpSync(template.dir, dir, { recursive: true })
+    return { ...template.data, dir }
+  }
 }
 
 export function write(dir: string, rel: string, content: string): void {
@@ -120,25 +128,24 @@ export const fakePlatform: PlatformAdapter = {
   showInFolder: async () => undefined
 }
 
-export function makeOps(): { ctx: GitContext; ops: WriteOps } {
-  const ctx = createGitContext(fakePlatform, () => undefined)
-  return { ctx, ops: createWriteOps(ctx) }
+export function testContext(): GitContext {
+  return createGitContext(fakePlatform, () => undefined)
 }
+
+let initialRepo: string | undefined
 
 /** A bare "origin" with one commit on main, and a configured clone of it. */
 export function cloneSetup(): { origin: string; repo: string; clone: () => string } {
   const origin = path.join(tmpDir('adar-wtest-origin-'), 'origin.git')
-  git(path.dirname(origin), ['init', '-q', '--bare', '-b', 'main', origin])
-  const seed = initRepo()
-  commitFile(seed, 'README.md', 'hello\n', 'Initial commit')
-  git(seed, ['remote', 'add', 'origin', origin])
-  git(seed, ['push', '-q', 'origin', 'main'])
+  if (!initialRepo) {
+    initialRepo = initRepo()
+    commitFile(initialRepo, 'README.md', 'hello\n', 'Initial commit')
+  }
+  git(path.dirname(origin), ['clone', '-q', '--bare', initialRepo, origin])
   const clone = () => {
     const parent = tmpDir('adar-wtest-clone-')
     git(parent, ['clone', '-q', origin, 'work'])
-    const dir = path.join(parent, 'work')
-    configure(dir)
-    return dir
+    return path.join(parent, 'work')
   }
   return { origin, repo: clone(), clone }
 }

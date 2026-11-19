@@ -46,28 +46,27 @@ describe.skipIf(process.platform !== 'darwin')('install / uninstall (temporary d
     copyFileSync(SCRIPT, source)
     chmodSync(source, 0o644) // install makes it executable
     bin = temp('adar-bin-')
-    process.env.PATH = `${bin}:/usr/bin:/bin`
   })
 
   it('links the bundled script, reports it, and removes only its own link', async () => {
-    expect((await cliStatus(source, [bin])).installedAt).toBeNull()
+    expect((await cliStatus(source, [bin], bin)).installedAt).toBeNull()
     const st = await installCli(source, false, [bin], bin)
     expect(st).toMatchObject({ available: true, installedAt: path.join(bin, 'adar'), onPath: true, conflict: null })
     expect(readlinkSync(path.join(bin, 'adar'))).toBe(source)
     expect(lstatSync(source).mode & 0o111).not.toBe(0)
     // Installing again is a no-op that keeps the link.
-    expect((await installCli(source, false, [bin])).installedAt).toBe(path.join(bin, 'adar'))
-    expect((await uninstallCli(source, [bin])).installedAt).toBeNull()
+    expect((await installCli(source, false, [bin], bin)).installedAt).toBe(path.join(bin, 'adar'))
+    expect((await uninstallCli(source, [bin], bin)).installedAt).toBeNull()
     expect(existsSync(path.join(bin, 'adar'))).toBe(false)
   })
 
   it('refuses to replace another adar unless forced, and never uninstalls it', async () => {
     writeFileSync(path.join(bin, 'adar'), '#!/bin/sh\necho someone else\n', { mode: 0o755 })
-    expect((await cliStatus(source, [bin])).conflict).toMatch(/another program/)
-    await expect(installCli(source, false, [bin])).rejects.toMatchObject({ code: 'INVALID_ARGUMENT' })
-    await uninstallCli(source, [bin])
+    expect((await cliStatus(source, [bin], bin)).conflict).toMatch(/another program/)
+    await expect(installCli(source, false, [bin], bin)).rejects.toMatchObject({ code: 'INVALID_ARGUMENT' })
+    await uninstallCli(source, [bin], bin)
     expect(existsSync(path.join(bin, 'adar'))).toBe(true)
-    expect((await installCli(source, true, [bin])).installedAt).toBe(path.join(bin, 'adar'))
+    expect((await installCli(source, true, [bin], bin)).installedAt).toBe(path.join(bin, 'adar'))
   })
 
   it('treats a dangling link into an old Adar.app as its own (app moved or DMG ejected)', async () => {
@@ -102,9 +101,9 @@ describe.skipIf(process.platform !== 'darwin')('install / uninstall (temporary d
     mkdirSync(oldRes, { recursive: true })
     copyFileSync(SCRIPT, path.join(oldRes, 'adar'))
     symlinkSync(path.join(oldRes, 'adar'), path.join(bin, 'adar'))
-    expect((await cliStatus(source, [bin])).installedAt).toBe(path.join(bin, 'adar'))
+    expect((await cliStatus(source, [bin], bin)).installedAt).toBe(path.join(bin, 'adar'))
     // Re-installing points the link at this build.
-    await installCli(source, false, [bin])
+    await installCli(source, false, [bin], bin)
     expect(readlinkSync(path.join(bin, 'adar'))).toBe(source)
   })
 })

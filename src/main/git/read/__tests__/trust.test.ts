@@ -1,22 +1,22 @@
 // Trust gate for repositories whose own config makes git run commands, and ".git"-equivalent
 // clone / init folder names. Integration tests with throwaway repositories.
-import { cleanupTempDirs, commitAll, git, initTestRepo, isolateGitConfig, makeBackend, tempDir, write } from './helpers'
+import { cleanupTempDirs, commitAll, git, initTestRepo, isolateGitConfig, tempDir, write } from './helpers'
+import { makeBackend } from './backend'
 
 isolateGitConfig()
 
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import type { AdarEvent } from '@shared/types'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import { WatcherManager } from '../../../system/watcher'
 import type { Backend } from '../../../backend'
 import { commandRunningConfig, deriveCloneDirName, isDotGitName, parseConfigList } from '../repo'
 
 let backend: Backend
-let events: AdarEvent[]
 let userDataDir: string
 
 beforeAll(() => {
-  ;({ backend, events, userDataDir } = makeBackend())
+  ;({ backend, userDataDir } = makeBackend())
 })
 
 afterAll(async () => {
@@ -92,7 +92,9 @@ describe('commandRunningConfig', () => {
 })
 
 describe('openRepo trust gate', () => {
-  it('refuses an unseen repository whose config runs a command, without running it or watching the repo', async () => {
+  it('refuses an unseen repository whose config runs a command, without running it or watching the repo', async ({ onTestFinished }) => {
+    const start = vi.spyOn(WatcherManager.prototype, 'start')
+    onTestFinished(() => start.mockRestore())
     const { repo, marker } = fsmonitorRepo()
     const err = await backend.openRepo(repo).then(
       () => null,
@@ -106,16 +108,13 @@ describe('openRepo trust gate', () => {
 
     expect(existsSync(marker)).toBe(false)
     expect((await backend.getRecentRepos()).some((r) => r.path === repo)).toBe(false)
-    // No watcher: edits in the refused repository produce no events (and no status polling).
-    write(repo, 'a.txt', 'edited\n')
-    await new Promise((r) => setTimeout(r, 1500))
-    expect(events.some((e) => e.type === 'repo-changed' && e.repoPath === repo)).toBe(false)
-    expect(existsSync(marker)).toBe(false)
+    expect(start).not.toHaveBeenCalled()
 
     // Once trusted it opens; the config is honoured from then on (the gate is what kept it from running).
     await backend.trustRepo(path.join(repo, 'a.txt'))
     const info = await backend.openRepo(repo)
     expect(info.path).toBe(repo)
+    expect(start).toHaveBeenCalledWith(expect.objectContaining({ repoPath: repo }))
     await backend.getStatus(repo)
     expect(existsSync(marker)).toBe(true)
     await backend.closeRepo(repo)

@@ -5,7 +5,8 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { cleanupTmp, commitFile, git, initRepo, isolateGitConfig, makeOps, tmpDir } from '../../write/__tests__/helpers'
+import { cleanupTmp, commitFile, git, initRepo, isolateGitConfig, testContext, tmpDir } from '../../write/__tests__/helpers'
+import { createWorktreeWriteOps } from '../../write/worktrees'
 import { createRefsOps } from '../refs'
 import { createRepoOps } from '../repo'
 import { createWorktreeReadOps, parseWorktreeList } from '../worktrees'
@@ -28,7 +29,8 @@ describe('worktrees', () => {
     const repo = fs.realpathSync(initRepo())
     commitFile(repo, 'a.txt', 'a\n', 'first')
     git(repo, ['branch', 'feat/x'])
-    const { ctx, ops } = makeOps()
+    const ctx = testContext()
+    const ops = createWorktreeWriteOps(ctx)
     const read = createWorktreeReadOps(ctx)
     const parent = fs.realpathSync(tmpDir('adar-wt-'))
 

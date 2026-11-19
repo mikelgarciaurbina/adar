@@ -215,8 +215,11 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
 - Never log or persist credentials; redact `user:token@` in URLs.
 
 ## Testing
-- Typecheck: `npm run typecheck`. Tests: `npx vitest run [path]` (backend tests create temporary repositories; UI logic
-  has unit and server-side render tests).
+- During an edit, use `npm run test:changed` for tests affected by changes since HEAD, or keep `npm run test:watch`
+  running for feedback on each save. To check just the source files touched in the current edit, use
+  `npm run test:related -- <source paths>`. For a specific suite, use `npx vitest run <path>`. Run the full suite with
+  `npm test` and typecheck with `npm run typecheck`. Backend tests create temporary repositories. UI logic has unit
+  and server-side render tests.
 - Real app, scripted: `scripts/e2e.sh <workdir> <steps.json> [--no-build]` builds into `<workdir>/out` (parallel-safe),
   launches Electron with `<workdir>/ud` as user data and saves screenshots to `<workdir>/shots`. Steps: `{"size":[w,h]}`,
   `{"wait":ms}`, `{"js":"expr"}`, `{"jsFile":"/abs/file.js"}`, `{"shot":"name"}`; the menu bar panel: `{"panel":true}` opens

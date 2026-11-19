@@ -5,8 +5,11 @@ import path from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { AdarEvent } from '@shared/types'
 import { createGitContext } from '../../context'
-import { keptBranches } from '../config'
-import { createWriteOps } from '../index'
+import { createConfigOps, keptBranches } from '../config'
+import { createConflictOps } from '../conflicts'
+import { createOperationOps } from '../operations'
+import { createRemoteOps } from '../remotes'
+import { createTagOps } from '../tags'
 import {
   cleanupTmp,
   cloneSetup,
@@ -17,7 +20,7 @@ import {
   head,
   initRepo,
   isolateGitConfig,
-  makeOps,
+  testContext,
   read,
   subjects,
   tmpDir
@@ -30,7 +33,7 @@ const remoteHead = (origin: string, ref: string) => git(origin, ['rev-parse', re
 
 describe('tags', () => {
   it('creates lightweight and annotated tags, pushes and deletes them remotely', async () => {
-    const { ops } = makeOps()
+    const ops = createTagOps(testContext())
     const { origin, repo } = cloneSetup()
     const sha = head(repo)
     await ops.createTag(repo, 'v1.0', sha)
@@ -53,7 +56,7 @@ describe('tags', () => {
 
 describe('fetch / pull / push', () => {
   it('treats fetching a repository without remotes as a no-op', async () => {
-    const { ops } = makeOps()
+    const ops = createRemoteOps(testContext())
     const local = initRepo()
     commitFile(local, 'a.txt', 'a\n', 'init')
     await ops.fetch(local, {})
@@ -64,11 +67,10 @@ describe('fetch / pull / push', () => {
   it('fetches with progress events and prunes', async () => {
     const events: AdarEvent[] = []
     const ctx = createGitContext(fakePlatform, (e) => events.push(e))
-    const ops = createWriteOps(ctx)
+    const ops = createRemoteOps(ctx)
     const { repo, clone } = cloneSetup()
     const other = clone()
     git(other, ['checkout', '-q', '-b', 'gone'])
-    git(other, ['push', '-q', 'origin', 'gone'])
     commitFile(other, 'x.txt', 'x\n', 'x')
     git(other, ['push', '-q', 'origin', 'gone'])
 
@@ -83,7 +85,7 @@ describe('fetch / pull / push', () => {
   })
 
   it('pulls fast-forward, reports divergence, and merges or rebases on request', async () => {
-    const { ops } = makeOps()
+    const ops = createRemoteOps(testContext())
     const { repo, clone } = cloneSetup()
     const other = clone()
     commitFile(other, 'remote1.txt', '1\n', 'remote one')
@@ -116,7 +118,8 @@ describe('fetch / pull / push', () => {
   })
 
   it('returns conflicts from a pull', async () => {
-    const { ops } = makeOps()
+    const ctx = testContext()
+    const ops = createRemoteOps(ctx)
     const { repo, clone } = cloneSetup()
     const other = clone()
     commitFile(other, 'README.md', 'remote\n', 'remote edit')
@@ -124,13 +127,13 @@ describe('fetch / pull / push', () => {
     commitFile(repo, 'README.md', 'local\n', 'local edit')
     const res = await ops.pull(repo, { mode: 'merge' })
     expect(res).toMatchObject({ ok: false, conflicts: ['README.md'], state: 'merge' })
-    const v = await ops.getConflictVersions(repo, 'README.md')
+    const v = await createConflictOps(ctx).getConflictVersions(repo, 'README.md')
     expect(v).toMatchObject({ oursLabel: 'main', theirsLabel: 'origin/main', ours: 'local\n', theirs: 'remote\n' })
-    await ops.abortOperation(repo)
+    await createOperationOps(ctx).abortOperation(repo)
   })
 
   it('requires an upstream and a branch to pull', async () => {
-    const { ops } = makeOps()
+    const ops = createRemoteOps(testContext())
     const { repo } = cloneSetup()
     git(repo, ['checkout', '-q', '-b', 'no-upstream'])
     const err = await expectCode(ops.pull(repo), 'INVALID_ARGUMENT')
@@ -140,7 +143,7 @@ describe('fetch / pull / push', () => {
   })
 
   it('pushes with upstream setup, rejects non-fast-forwards and force-pushes with lease', async () => {
-    const { ops } = makeOps()
+    const ops = createRemoteOps(testContext())
     const { origin, repo, clone } = cloneSetup()
 
     git(repo, ['checkout', '-q', '-b', 'feature'])
@@ -178,7 +181,7 @@ describe('fetch / pull / push', () => {
   })
 
   it('force-with-lease never overwrites commits that only a background fetch brought in', async () => {
-    const { ops } = makeOps()
+    const ops = createRemoteOps(testContext())
     const { origin, repo, clone } = cloneSetup()
     commitFile(repo, 'mine.txt', 'm\n', 'mine')
     await ops.push(repo)
@@ -203,7 +206,7 @@ describe('fetch / pull / push', () => {
   })
 
   it('force-with-lease works in a fresh clone, whose remote-tracking refs have no reflog yet', async () => {
-    const { ops } = makeOps()
+    const ops = createRemoteOps(testContext())
     const { origin, repo, clone } = cloneSetup()
     expect(fs.existsSync(path.join(repo, '.git', 'logs', 'refs', 'remotes', 'origin', 'main'))).toBe(false)
     git(repo, ['commit', '-q', '--amend', '--only', '-m', 'Initial commit (reworded)'])
@@ -224,7 +227,7 @@ describe('fetch / pull / push', () => {
   })
 
   it('force-with-lease also works once gc has emptied the remote-tracking reflog, with signatures shown in logs', async () => {
-    const { ops } = makeOps()
+    const ops = createRemoteOps(testContext())
     const { origin, repo } = cloneSetup()
     // Signed commits + log.showSignature: git log prints verification lines between the shas.
     const key = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'adar-wtest-key-')), 'id')
@@ -242,7 +245,7 @@ describe('fetch / pull / push', () => {
   })
 
   it('validates push arguments', async () => {
-    const { ops } = makeOps()
+    const ops = createRemoteOps(testContext())
     const dir = initRepo()
     commitFile(dir, 'a.txt', 'a\n', 'a')
     await expectCode(ops.push(dir), 'INVALID_ARGUMENT') // no remotes
@@ -252,7 +255,7 @@ describe('fetch / pull / push', () => {
   })
 
   it('pushes tags with followTags and deletes remote branches', async () => {
-    const { ops } = makeOps()
+    const ops = createRemoteOps(testContext())
     const { origin, repo } = cloneSetup()
     commitFile(repo, 'a.txt', 'a\n', 'tagged')
     git(repo, ['tag', '-a', '-m', 'v', 'v3'])
@@ -267,7 +270,7 @@ describe('fetch / pull / push', () => {
 
 describe('remotes & config', () => {
   it('adds, renames, re-points and removes remotes', async () => {
-    const { ops } = makeOps()
+    const ops = createRemoteOps(testContext())
     const dir = initRepo()
     const other = path.join(tmpDir(), 'other.git')
     await ops.addRemote(dir, 'upstream', 'https://example.com/a.git')
@@ -285,7 +288,7 @@ describe('remotes & config', () => {
   })
 
   it('sets the local identity', async () => {
-    const { ops } = makeOps()
+    const ops = createConfigOps(testContext())
     const dir = initRepo()
     await ops.setIdentity(dir, '  Ada Lovelace ', 'ada@example.com')
     expect(git(dir, ['config', '--local', 'user.name']).trim()).toBe('Ada Lovelace')
@@ -295,7 +298,8 @@ describe('remotes & config', () => {
   })
 
   it('keeps branches out of Clean up branches in the repository config, shared by its worktrees', async () => {
-    const { ctx, ops } = makeOps()
+    const ctx = testContext()
+    const ops = createConfigOps(ctx)
     const dir = initRepo()
     commitFile(dir, 'a.txt', 'a\n', 'a')
     git(dir, ['config', 'extensions.worktreeConfig', 'true'])
@@ -325,7 +329,7 @@ describe('remotes & config', () => {
   })
 
   it('reads only valid kept names', async () => {
-    const { ctx } = makeOps()
+    const ctx = testContext()
     const dir = initRepo()
     git(dir, ['config', '--add', 'adar.keepBranch', 'qa'])
     git(dir, ['config', '--add', 'adar.keepBranch', '--force'])
@@ -335,14 +339,14 @@ describe('remotes & config', () => {
   })
 
   it('sets the global identity in the (isolated) global config', async () => {
-    const { ops } = makeOps()
+    const ops = createConfigOps(testContext())
     await ops.setIdentity(null, 'Global Name', 'global@example.com')
     const file = process.env.GIT_CONFIG_GLOBAL as string
     expect(fs.readFileSync(file, 'utf8')).toContain('Global Name')
   })
 
   it('sets the global identity of the git that runs a repository', async () => {
-    const { ops } = makeOps()
+    const ops = createConfigOps(testContext())
     const dir = initRepo()
     await ops.setIdentity(dir, 'Repo Global', 'repo-global@example.com', 'global')
     expect(fs.readFileSync(process.env.GIT_CONFIG_GLOBAL as string, 'utf8')).toContain('repo-global@example.com')
@@ -351,7 +355,7 @@ describe('remotes & config', () => {
   })
 
   it('updates submodules', async () => {
-    const { ops } = makeOps()
+    const ops = createConfigOps(testContext())
     const sub = initRepo()
     commitFile(sub, 's.txt', 's\n', 'sub')
     const dir = initRepo()
