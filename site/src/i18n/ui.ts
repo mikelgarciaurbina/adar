@@ -5,7 +5,9 @@ import type { Locale } from './config';
 export const ui = {
   en: {
     skip: 'Skip to content',
+    lost: { title: 'Page not found', text: 'Check the address or return to the Adar homepage to find downloads and guides.' },
     home: 'Adar home',
+    socialImage: 'The Adar logo and an antler-shaped Git graph beside the words “See your Git grow”.',
     navAria: 'Main',
     menu: 'Menu',
     github: 'Adar on GitHub',
@@ -23,13 +25,15 @@ export const ui = {
       joke: '— no, we’re not pulling your leg: it’s free.',
     },
     client: {
-      copy: 'Copy', copied: 'Copied', copiedAnnounce: 'Copied to clipboard',
+      copy: 'Copy', copied: 'Copied', copiedAnnounce: 'Copied to clipboard', copyFailed: 'Couldn’t copy to the clipboard.',
       pause: 'Pause animations', play: 'Play animations',
     },
   },
   es: {
     skip: 'Saltar al contenido',
+    lost: { title: 'Página no encontrada', text: 'Comprueba la dirección o vuelve al inicio de Adar para encontrar las descargas y las guías.' },
     home: 'Inicio de Adar',
+    socialImage: 'Logotipo de Adar y grafo de Git en forma de cornamenta junto al lema «See your Git grow».',
     navAria: 'Principal',
     menu: 'Menú',
     github: 'Adar en GitHub',
@@ -47,13 +51,15 @@ export const ui = {
       joke: ': no, no te tomamos el pelo, es gratis.',
     },
     client: {
-      copy: 'Copiar', copied: 'Copiado', copiedAnnounce: 'Copiado al portapapeles',
+      copy: 'Copiar', copied: 'Copiado', copiedAnnounce: 'Copiado al portapapeles', copyFailed: 'No se ha podido copiar al portapapeles.',
       pause: 'Pausar animaciones', play: 'Reanudar animaciones',
     },
   },
   eu: {
     skip: 'Joan edukira',
+    lost: { title: 'Orria ez da aurkitu', text: 'Egiaztatu helbidea edo itzuli Adarren hasierako orrira deskargak eta gidak aurkitzeko.' },
     home: 'Adarren hasiera',
+    socialImage: 'Adarren logotipoa eta orein-adarren itxurako Git grafoa, «See your Git grow» leloaren ondoan.',
     navAria: 'Nagusia',
     menu: 'Menua',
     github: 'Adar GitHub-en',
@@ -71,7 +77,7 @@ export const ui = {
       joke: ': doakoa da, benetan.',
     },
     client: {
-      copy: 'Kopiatu', copied: 'Kopiatuta', copiedAnnounce: 'Arbelean kopiatuta',
+      copy: 'Kopiatu', copied: 'Kopiatuta', copiedAnnounce: 'Arbelean kopiatuta', copyFailed: 'Ezin izan da arbelean kopiatu.',
       pause: 'Gelditu animazioak', play: 'Abiarazi animazioak',
     },
   },

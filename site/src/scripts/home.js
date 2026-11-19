@@ -100,7 +100,7 @@ let queued = false;
 function update() {
   queued = false;
   const r = nameSection.getBoundingClientRect();
-  const p = clamp(-r.top / (r.height - innerHeight), 0, 1);
+  const p = clamp(-r.top / Math.max(1, r.height - innerHeight), 0, 1);
   const m = morphAt(p);
   scene?.setMorph(m);
   if (scene && inName !== r.top < innerHeight * 0.5) { inName = !inName; layout(false); }
@@ -123,13 +123,13 @@ function update() {
 
   if (shot) {
     const s = shot.getBoundingClientRect();
-    const tilt = reducedMotion ? 0 : clamp((s.top - innerHeight * 0.12) / (innerHeight * 0.68), 0, 1);
+    const tilt = motion.paused ? 0 : clamp((s.top - innerHeight * 0.12) / (innerHeight * 0.68), 0, 1);
     shot.style.setProperty('--tilt', tilt.toFixed(4));
     shot.classList.toggle('is-flat', tilt < 0.06);
   }
 }
 addEventListener('scroll', () => { if (!queued) { queued = true; requestAnimationFrame(update); } }, { passive: true });
-update();
+motion.subscribe(update);
 
 // ── Terminal demo ───────────────────────────────────────────
 const term = $('[data-term-body]');
@@ -147,12 +147,15 @@ if (term) {
   const render = (lines) => { term.innerHTML = lines.join('\n'); };
   const prompt = (text) => `<span class="p">❯</span> ${text}`;
   const play = async () => {
+    const complete = SCRIPT.map((step) => step.out || prompt(step.cmd.replace(/&/g, '&amp;')));
     const lines = [];
     const wait = (ms) => new Promise((r) => setTimeout(r, motion.paused ? 0 : ms));
     for (const step of SCRIPT) {
+      if (motion.paused) { render(complete); return; }
       if (step.out) { lines.push(step.out); render(lines); await wait(260); continue; }
       lines.push(prompt(''));
       for (let i = 1; i <= step.cmd.length; i++) {
+        if (motion.paused) { render(complete); return; }
         lines[lines.length - 1] = prompt(step.cmd.slice(0, i).replace(/&/g, '&amp;'));
         render(lines);
         await wait(38 + Math.random() * 50);
@@ -181,4 +184,5 @@ const os = /Android|CrOS/.test(ua) ? ''
   : '';
 const pick = os && $(`[data-dl="os"][value="${os}"]`);
 if (pick) pick.checked = true;
-else if (os !== 'mac') $('[data-dl="platform"]').hidden = false;
+const platformNote = $('[data-dl="platform"]');
+if (platformNote) platformNote.hidden = !!os && !!$(`[data-os="${os}"]`);

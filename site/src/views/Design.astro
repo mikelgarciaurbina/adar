@@ -1,11 +1,10 @@
 ---
-// Basoa, the design system, in any of the site's languages: the extruded 3D mark and the brand rules are
-// static; the colour, space and motion documentation is generated in the browser from the live CSS
-// variables (scripts/design.js), so it always shows what tokens.css really says.
+// Basoa documents the same tokens the site uses, in the initial HTML of each language.
 import Base from '../layouts/Base.astro';
 import Icon from '../components/Icon.astro';
 import '../styles/design.css';
 import { url } from '../lib/url';
+import { token, nature, ramps, semantic, curves } from '../lib/designTokens';
 import sprite from '../icons/icons.svg?raw';
 import { chaptersFor } from '../lib/story';
 import type { Locale } from '../i18n/config';
@@ -20,8 +19,8 @@ const copy = ui[lang].client.copy;
 const icons = [...sprite.matchAll(/<symbol[^>]*\bid="([\w-]+)"/g)].map((m) => m[1]);
 const head = (n: number, key: keyof typeof id, title = t.nav[key]) => ({ n: String(n).padStart(2, '0'), id: `h-${id[key]}`, title });
 ---
-<Base lang={lang} page="design" title={t.meta.title} description={t.meta.description} ogDescription={t.meta.ogDescription} client={t.client}>
-  <main id="main">
+<Base lang={lang} page="design" title={t.meta.title} description={t.meta.description} ogDescription={t.meta.ogDescription}>
+  <main id="main" tabindex="-1">
     <section class="ds-hero" aria-labelledby="ds-title">
       <div class="wrap ds-hero__grid">
         <div class="ds-hero__copy">
@@ -34,9 +33,9 @@ const head = (n: number, key: keyof typeof id, title = t.nav[key]) => ({ n: Stri
           </div>
         </div>
         <figure class="mark3d rise" data-mark3d aria-label={t.hero.markAria}>
-          <div class="mark3d__stage" data-stage></div>
+          <div class="mark3d__stage" data-stage aria-hidden="true"><img src={url('assets/adar-mark.svg')} width="256" height="256" alt=""></div>
           <div class="mark3d__floor" aria-hidden="true"></div>
-          <figcaption class="fig mono" set:html={t.hero.fig} />
+          <figcaption class="fig mono"><button class="btn btn--ghost" type="button" data-turn>{t.hero.turn}</button></figcaption>
         </figure>
       </div>
     </section>
@@ -115,13 +114,40 @@ const head = (n: number, key: keyof typeof id, title = t.nav[key]) => ({ n: Stri
         <section class="ds-sec" id={id.color} aria-labelledby={head(3, 'color').id}>
           <header class="ds-sec__head"><p class="eyebrow">03</p><h2 id={head(3, 'color').id}>{t.nav.color}</h2>
             <p>{t.color.text}</p></header>
-          <div class="swatches" data-swatches></div>
+          <div class="swatches">
+            {nature.map(([name, word], i) => (
+              <button class="swatch" type="button" disabled data-copy={token(name)} style={`--sw:var(${name})`}>
+                <span class="swatch__chip"></span>
+                <span class="swatch__name"><b lang="eu">{word}</b> <span>{t.tokens.swatches[i][0]}</span></span>
+                <span class="swatch__hex mono">{token(name)}<span class="swatch__var">{name}</span></span>
+                <span class="swatch__use">{t.tokens.swatches[i][1]}</span>
+                <span class="swatch__copied mono" data-label={copy}>{copy}</span>
+              </button>
+            ))}
+          </div>
           <h3 class="ds-h3">{t.color.neutrals}</h3>
-          <div class="ramps" data-ramps></div>
+          <div class="ramps">
+            {ramps.map((names, i) => <div class="ramp">
+              <p class="ramp__name">{t.tokens.ramps[i]}</p>
+              <div class="ramp__row">{names.map((name) => (
+                <button class="ramp__step" type="button" disabled data-copy={token(name)} aria-label={`${copy} ${name} · ${token(name)}`}
+                  style={`--sw:var(${name});color:var(${i === 0 ? '--laino-50' : '--gau-900'})`}>
+                  <span class="mono">{name.slice(2)}</span><span class="mono">{token(name)}</span>
+                </button>
+              ))}</div>
+            </div>)}
+          </div>
           <h3 class="ds-h3">{t.color.semantic}</h3>
-          <div class="tokens-table card"><table data-tokens>
+          <div class="tokens-table card" tabindex="0" role="region" aria-label={t.color.semantic}><table aria-label={t.color.semantic}>
             <thead><tr>{t.color.head.map((h) => <th scope="col">{h}</th>)}</tr></thead>
-            <tbody></tbody>
+            <tbody>{semantic.map(({ name, values }, i) => <tr>
+              <th scope="row"><code>{name}</code></th><td>{t.tokens.roles[i]}</td>
+              {values.map((value, j) => <td>
+                <button type="button" class="tok" disabled data-copy={value} aria-label={`${copy} ${name} · ${t.color.head[j + 2]} · ${value}`}>
+                  <i style={`background:${value}`}></i><span class="mono">{value}</span>
+                </button>
+              </td>)}
+            </tr>)}</tbody>
           </table></div>
         </section>
 
@@ -148,8 +174,16 @@ const head = (n: number, key: keyof typeof id, title = t.nav[key]) => ({ n: Stri
           <header class="ds-sec__head"><p class="eyebrow">05</p><h2 id={head(5, 'space').id} set:html={t.space.title} />
             <p>{t.space.text}</p></header>
           <div class="space-grid">
-            <div class="card space-card"><h3>{t.space.cards[0]}</h3><ul class="spacing" data-spacing></ul></div>
-            <div class="card space-card"><h3>{t.space.cards[1]}</h3><div class="radii" data-radii></div></div>
+            <div class="card space-card"><h3>{t.space.cards[0]}</h3><ul class="spacing">
+              {Array.from({ length: 10 }, (_, i) => `--space-${i + 1}`).map((name) => <li>
+                <span class="mono">{name.slice(2)}</span><i style={`width:var(${name})`}></i><span class="mono muted">{token(name)}</span>
+              </li>)}
+            </ul></div>
+            <div class="card space-card"><h3>{t.space.cards[1]}</h3><div class="radii">
+              {['xs', 'sm', 'md', 'lg', 'xl', 'full'].map((r) => <span style={`border-radius:var(--radius-${r})`}>
+                <b class="mono">{r}</b><i class="mono">{token('--radius-' + r)}</i>
+              </span>)}
+            </div></div>
             <div class="card space-card"><h3 set:html={t.space.cards[2]} /><div class="depths">
               <span style="box-shadow:var(--shadow-1)">shadow-1</span><span style="box-shadow:var(--shadow-2)">shadow-2</span><span style="box-shadow:var(--shadow-3)">shadow-3</span><span class="depth-glow" style="box-shadow:var(--glow-accent)">glow-accent</span>
             </div></div>
@@ -159,7 +193,19 @@ const head = (n: number, key: keyof typeof id, title = t.nav[key]) => ({ n: Stri
         <section class="ds-sec" id={id.motion} aria-labelledby={head(6, 'motion').id}>
           <header class="ds-sec__head"><p class="eyebrow">06</p><h2 id={head(6, 'motion').id}>{t.nav.motion}</h2>
             <p set:html={t.motion.text} /></header>
-          <div class="curves" data-curves></div>
+          <div class="curves">
+            {curves.map(({ name, value, word, a, b }, i) => <article class="curve card">
+              <svg viewBox="-8 -30 116 160" class="curve__svg" aria-hidden="true">
+                <path d="M0 100H100M0 0H100" class="curve__grid"/>
+                <path d={`M0 100L${a}M100 0L${b}`} class="curve__handle"/>
+                <path d={`M0 100C${a} ${b} 100 0`} class="curve__path"/>
+                {[a, b].map((point) => <circle cx={point.split(' ')[0]} cy={point.split(' ')[1]} r="3" class="curve__knob"/>)}
+              </svg>
+              <div class="curve__track"><i style={`animation-timing-function:var(${name})`}></i></div>
+              <h3><span class="serif" lang="eu">{word}</span>{t.tokens.curves[i][0] && <span class="muted"> · {t.tokens.curves[i][0]}</span>}</h3>
+              <p class="mono curve__val">{name}<br/>{value}</p><p>{t.tokens.curves[i][1]}</p>
+            </article>)}
+          </div>
           <dl class="durations card">
             {['--dur-1 · 120ms', '--dur-2 · 240ms', '--dur-3 · 520ms', '--dur-4 · 1100ms'].map((d, i) => <div><dt class="mono">{d}</dt><dd>{t.motion.durations[i]}</dd></div>)}
           </dl>
@@ -170,7 +216,7 @@ const head = (n: number, key: keyof typeof id, title = t.nav[key]) => ({ n: Stri
             <p set:html={t.icons.text} /></header>
           <div class="icons">
             {icons.map((icon) => (
-              <button type="button" class="icon" data-copy={`<svg><use href="assets/icons.svg#${icon}"/></svg>`} title={`${t.icons.copy} ${icon}`}>
+              <button type="button" class="icon" disabled data-copy={`<svg aria-hidden="true"><use href="${url(`assets/icons.svg#${icon}`)}"/></svg>`} aria-label={`${t.icons.copy} ${icon}`}>
                 <Icon name={icon} /><span class="mono" data-label={icon}>{icon}</span>
               </button>
             ))}
@@ -181,8 +227,9 @@ const head = (n: number, key: keyof typeof id, title = t.nav[key]) => ({ n: Stri
           <header class="ds-sec__head"><p class="eyebrow">08</p><h2 id={head(8, 'graph').id}>{t.nav.graph}</h2>
             <p>{t.graph.text}</p></header>
           <div class="graph-legend card">
-            <svg viewBox="0 0 640 210" class="graph-legend__svg" role="img" aria-labelledby="gl-title">
+            <svg viewBox="0 0 640 210" class="graph-legend__svg" role="img" aria-labelledby="gl-title" aria-describedby="gl-desc">
               <title id="gl-title">{t.graph.title}</title>
+              <desc id="gl-desc">{t.graph.labels.join('. ')}</desc>
               <g fill="none" stroke-width="3" stroke-linecap="round">
                 <path d="M60 196V20" stroke="var(--lane-1)"/>
                 <path d="M60 170C60 150 110 156 110 136V60C110 40 60 46 60 26" stroke="var(--lane-2)"/>
@@ -202,7 +249,9 @@ const head = (n: number, key: keyof typeof id, title = t.nav[key]) => ({ n: Stri
                 <path d="M72 196H230"/><text x="238" y="200">{t.graph.labels[5]}</text>
               </g>
             </svg>
-            <div class="lanes" data-lanes></div>
+            <div class="lanes">{t.tokens.lanes.map((name, i) => <span class="lane" style={`--c:var(--lane-${i + 1})`}>
+              <i></i><b class="mono">lane-{i + 1}</b><span>{name}</span>
+            </span>)}</div>
           </div>
         </section>
 
@@ -218,10 +267,10 @@ const head = (n: number, key: keyof typeof id, title = t.nav[key]) => ({ n: Stri
             </div>
             <div class="preview__body">
               <div class="cmp"><span class="cmp__label mono">{t.components.labels[0]}</span><div class="cmp__row">
-                <a class="btn btn--primary" href={`#${id.components}`}><Icon name="download" />{t.components.buttons[0]}</a>
-                <a class="btn" href={`#${id.components}`}>{t.components.buttons[1]}</a>
-                <a class="btn btn--ghost" href={`#${id.components}`}>{t.components.buttons[2]}<Icon name="arrow-right" /></a>
-                <a class="btn btn--primary btn--lg" href={`#${id.components}`}>{t.components.buttons[3]}<span class="btn__meta">{t.components.buttons[4]}</span></a>
+                <span class="btn btn--primary"><Icon name="download" />{t.components.buttons[0]}</span>
+                <span class="btn">{t.components.buttons[1]}</span>
+                <span class="btn btn--ghost">{t.components.buttons[2]}<Icon name="arrow-right" /></span>
+                <span class="btn btn--primary btn--lg">{t.components.buttons[3]}<span class="btn__meta">{t.components.buttons[4]}</span></span>
               </div></div>
               <div class="cmp"><span class="cmp__label mono">{t.components.labels[1]}</span><div class="cmp__row">
                 <span class="ref" style="--ref:var(--lane-1)"><Icon name="laptop" />main</span>
@@ -253,8 +302,8 @@ const head = (n: number, key: keyof typeof id, title = t.nav[key]) => ({ n: Stri
         <section class="ds-sec" id={id.story} aria-labelledby={head(11, 'story').id}>
           <header class="ds-sec__head"><p class="eyebrow">11</p><h2 id={head(11, 'story').id}>{t.nav.story}</h2>
             <p set:html={t.story.text} /></header>
-          <div class="story-table card">
-            <table>
+          <div class="story-table card" tabindex="0" role="region" aria-label={t.story.table}>
+            <table aria-label={t.story.table}>
               <thead><tr>{t.story.head.map((h) => <th scope="col">{h}</th>)}</tr></thead>
               <tbody>
                 {chaptersFor(lang).map((c) => (

@@ -20,16 +20,16 @@ const downloadHref = page === 'home' ? `#${anchor('download', lang)}` : pageUrl(
 <header class="nav">
   <div class="wrap nav__inner">
     <a class="brand" href={pageUrl('home', lang)} aria-label={t.home}><img src={url('assets/adar-lockup.svg')} width="94" height="32" alt="Adar"></a>
+    <button class="nav__toggle" type="button" aria-label={t.menu} aria-expanded="false" aria-controls="site-nav site-actions"><span></span><span></span></button>
     <nav class="nav__links" id="site-nav" aria-label={t.navAria}>
       {links.map(([label, href]) => <a href={href} aria-current={href === active ? 'page' : undefined}>{label}</a>)}
     </nav>
-    <div class="nav__cta">
+    <div class="nav__cta" id="site-actions">
       <LanguageSwitch lang={lang} page={page} />
       <a class="btn btn--ghost gh-stars" href={REPO_URL} aria-label={t.github}>
         <Icon name="star" /><span>GitHub</span><span class="btn__meta" data-gh="stars"></span>
       </a>
       <a class="btn btn--primary" href={downloadHref}><Icon name="download" />{t.download}</a>
     </div>
-    <button class="nav__toggle" type="button" aria-label={t.menu} aria-expanded="false" aria-controls="site-nav"><span></span><span></span></button>
   </div>
 </header>

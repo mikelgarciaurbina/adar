@@ -2,7 +2,8 @@
 import { repo, formatCount } from './github.js';
 
 document.documentElement.classList.remove('no-js');
-export const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const motionPreference = matchMedia('(prefers-reduced-motion: reduce)');
+export const reducedMotion = motionPreference.matches;
 
 // Strings for scripts, in the page's language (rendered by the layout into #i18n).
 let strings = {};
@@ -15,7 +16,7 @@ const motionListeners = new Set();
 let motionPaused = false;
 try { motionPaused = localStorage.getItem(MOTION_KEY) === 'paused'; } catch { /* storage unavailable */ }
 export const motion = {
-  get paused() { return motionPaused || reducedMotion; },
+  get paused() { return motionPaused || motionPreference.matches; },
   subscribe(fn) { motionListeners.add(fn); fn(this.paused); },
 };
 const motionToggle = document.querySelector('[data-motion-toggle]');
@@ -23,7 +24,6 @@ function setMotionPaused(paused, remember) {
   motionPaused = paused;
   document.documentElement.classList.toggle('motion-paused', paused);
   if (motionToggle) {
-    motionToggle.setAttribute('aria-pressed', String(paused));
     motionToggle.querySelector('[data-motion-label]').textContent = paused ? t('play', 'Play animations') : t('pause', 'Pause animations');
   }
   if (remember) {
@@ -32,6 +32,7 @@ function setMotionPaused(paused, remember) {
   motionListeners.forEach((fn) => fn(motion.paused));
 }
 setMotionPaused(motionPaused, false);
+motionPreference.addEventListener('change', () => setMotionPaused(motionPaused, false));
 motionToggle?.addEventListener('click', () => setMotionPaused(!motionPaused, true));
 
 const announcer = document.querySelector('[data-announce]');
@@ -52,11 +53,34 @@ if (nav) {
   const onScroll = () => nav.classList.toggle('is-scrolled', scrollY > 12);
   onScroll();
   addEventListener('scroll', onScroll, { passive: true });
-  toggle?.addEventListener('click', () => toggle.setAttribute('aria-expanded', String(nav.classList.toggle('is-open'))));
-  nav.querySelectorAll('.nav__links a').forEach((a) => a.addEventListener('click', () => {
-    nav.classList.remove('is-open');
-    toggle?.setAttribute('aria-expanded', 'false');
-  }));
+  function setMenu(open) {
+    nav.classList.toggle('is-open', open);
+    toggle.setAttribute('aria-expanded', String(open));
+  }
+  toggle.addEventListener('click', () => setMenu(!nav.classList.contains('is-open')));
+  nav.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && nav.classList.contains('is-open')) {
+      setMenu(false);
+      toggle.focus();
+    }
+  });
+  nav.addEventListener('click', (event) => {
+    const link = event.target.closest('a');
+    if (!link || !nav.classList.contains('is-open')) return;
+    setMenu(false);
+    const target = link.hash && document.getElementById(link.hash.slice(1));
+    if (target && link.pathname === location.pathname) {
+      target.tabIndex = -1;
+      target.focus({ preventScroll: true });
+    }
+  });
+  nav.addEventListener('focusout', (event) => {
+    if (!nav.contains(event.relatedTarget)) setMenu(false);
+  });
+  document.addEventListener('pointerdown', (event) => {
+    if (!nav.contains(event.target)) setMenu(false);
+  });
+  matchMedia('(max-width: 1120px)').addEventListener('change', () => setMenu(false));
 }
 
 // Scroll reveals
@@ -66,9 +90,11 @@ const revealer = new IntersectionObserver((entries) => {
     e.target.classList.add('is-in');
     revealer.unobserve(e.target);
   }
-}, { rootMargin: '0px 0px -8% 0px', threshold: 0.1 });
-export const reveal = (el) => revealer.observe(el);
+}, { rootMargin: '0px 0px -8% 0px', threshold: 0 });
+const reveal = (el) => revealer.observe(el);
 document.querySelectorAll('.reveal, [data-animate]').forEach(reveal);
+
+document.querySelectorAll('button[data-copy][disabled]').forEach((button) => { button.disabled = false; });
 
 // Copy buttons: data-copy="text", or the <code> inside the same .code block
 document.addEventListener('click', async (e) => {
@@ -81,8 +107,9 @@ document.addEventListener('click', async (e) => {
     const ta = Object.assign(document.createElement('textarea'), { value: text });
     document.body.append(ta);
     ta.select();
-    document.execCommand('copy');
-    ta.remove();
+    let copied = false;
+    try { copied = document.execCommand('copy'); } finally { ta.remove(); btn.focus({ preventScroll: true }); }
+    if (!copied) { announce(t('copyFailed', 'Couldn’t copy to the clipboard.')); return; }
   }
   const label = btn.querySelector('[data-label]');
   btn.classList.add('is-done');
@@ -96,9 +123,10 @@ document.addEventListener('click', async (e) => {
 });
 
 // Tilt + spotlight cards (fine pointers only)
-if (!reducedMotion && matchMedia('(hover: hover) and (pointer: fine)').matches) {
+if (matchMedia('(hover: hover) and (pointer: fine)').matches) {
   document.querySelectorAll('.tilt, .spotlight').forEach((el) => {
     el.addEventListener('pointermove', (e) => {
+      if (motion.paused) return;
       const r = el.getBoundingClientRect();
       const x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height;
       el.style.setProperty('--mx', `${x * 100}%`);

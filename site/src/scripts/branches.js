@@ -440,9 +440,9 @@ export function createScene(canvas, opts = {}) {
     last = now;
     const settled = Math.abs(state.morphTarget - state.morph) < 1e-4 && Math.abs(state.shiftTarget[0] - state.shift[0]) < 1e-4 &&
       Math.abs(state.shiftTarget[1] - state.shift[1]) < 1e-4 && Math.abs(state.scaleTarget - state.scale) < 1e-4;
-    if (paused && settled && drawn && canvas.width === Math.round(canvas.clientWidth * dpr)) return;
+    if (paused && settled && drawn && canvas.width === Math.round(canvas.clientWidth * dpr) && canvas.height === Math.round(canvas.clientHeight * dpr)) return;
     if (!paused) state.time += dt;
-    const k = (rate) => 1 - Math.exp(-dt * rate);
+    const k = (rate) => paused ? 1 : 1 - Math.exp(-dt * rate);
     state.morph += (state.morphTarget - state.morph) * k(reduced ? 20 : 3.2);
     state.shift[0] += (state.shiftTarget[0] - state.shift[0]) * k(4);
     state.shift[1] += (state.shiftTarget[1] - state.shift[1]) * k(4);

@@ -5,15 +5,15 @@ import type { Locale } from './config';
 
 const en = {
   meta: {
-    title: 'Adar with AI agents — review what they push',
-    description: 'How to work with AI coding agents and Adar: one worktree per agent, what each one is doing right now, a review of only what changed since you last looked, and a ping when they push or stop.',
+    title: 'Review AI coding agents in Git worktrees | Adar',
+    description: 'Give each coding agent a Git worktree. Review uncommitted changes, leave line comments and see what changed since your last review in Adar.',
     ogTitle: 'Your agents write the code. You stay in the loop.',
     ogDescription: 'Adar is where you see what your AI agents did, review it, and keep up while they keep going.',
   },
   hero: {
     eyebrow: 'Adar + AI agents',
-    title: 'Your agents write the code. <span class="serif">You stay in the loop.</span>',
-    lede: 'Claude, Copilot, Codex or Cursor can write most of a change now. Deciding whether it is right is still yours. Adar is where you see what they did, review it, and keep up while they keep going.',
+    title: 'Review the code <span class="serif">your agents write.</span>',
+    lede: 'Give Claude, Copilot, Codex or Cursor a worktree of its own. Adar shows which files changed, lets you leave feedback before a pull request and shows what the agent changed in the next round.',
     download: 'Download Adar',
     howItWorks: 'How it works',
   },
@@ -24,15 +24,15 @@ const en = {
   },
   steps: {
     eyebrow: 'The loop',
-    title: 'Six steps, <span class="serif">every day.</span>',
+    title: 'From worktree <span class="serif">to merge.</span>',
     text: 'The same loop whether one agent is fixing a bug or three are building a feature each.',
     items: [
       ['One agent, one worktree', 'Give each agent its own folder and branch, so none steps on another’s files. Make them in Adar or let your agent tool do it: each opens as a tab in the project’s group, side by side.', 'New Worktree…'],
-      ['Watch them work', 'Each worktree says what its agent is doing: <i>working</i>, <i>quiet</i> — it stopped with work left and may be waiting for you — or idle, with the files changing now, on its tab, in the left panel and in the <i>Agents</i> view. A notification tells you when one commits, pushes or goes quiet, and the commits an agent co-wrote carry its name from their <code>Co-Authored-By</code> line.', 'Agents ⇧⌘E'],
-      ['Review before the pull request', 'When an agent stops, <i>Review</i> on its card shows everything it did against main: its commits and what it hasn’t committed yet, with <i>Viewed</i> marks. Leave notes on lines and copy them into its chat in one go. Next round, you see only what changed since.', 'Review'],
-      ['Review the pull request', 'When an agent opens a pull request, review it in Adar: the files with <i>Viewed</i> marks, lockfiles folded away, comment threads on their lines. Comment, suggest a change, request changes, and the agent reads it on GitHub, GitLab, Bitbucket or Azure DevOps. Second round? <i>Since your review</i> shows just what was pushed after it.', 'Since your review'],
+      ['Watch them work', 'Open <i>Agents</i> to see which files are changing in each worktree. A quiet worktree still has unfinished changes. You can get a notification when an agent commits, pushes or goes quiet.', 'Agents ⇧⌘E'],
+      ['Review before the pull request', 'Choose <i>Review</i> on the agent’s card to compare its work with the base branch, including uncommitted changes. Leave notes on individual lines and copy them into the agent’s chat. Next time you can review just the changes made since.', 'Review'],
+      ['Review the pull request', 'Open the pull request in Adar to see each file’s diff and comment threads. Mark files as viewed and send your review to the hosting service. Use <i>Since your review</i> to see what changed after your feedback.', 'Since your review'],
       ['Know when to look', '<i>Reviews</i> lists the pull requests waiting for you, the ones you follow and yours, across every open repository. A blue dot marks what changed since you looked, and a notification tells you while you’re doing something else.', 'Reviews ⇧⌘R'],
-      ['Merge, tidy up, take back', 'Merge from Adar and the branch and its worktree go in one step. If an agent reset or force-pushed what it shouldn’t have, Adar finds the lost commits in the reflog, and Undo takes back the last git action.', 'Recover Lost Commits…'],
+      ['Merge, tidy up, take back', 'Once the pull request is merged, you can remove its branch and worktree together. If an agent reset or force-pushed what it shouldn’t have, Adar finds the lost commits in the reflog, and Undo takes back the last git action.', 'Recover Lost Commits…'],
     ],
   },
   inbox: {
@@ -61,7 +61,7 @@ const en = {
     title: 'Try it with <span class="serif">your agents.</span>',
     text: 'Free, open source, and on the git you already have.',
     download: 'Download Adar',
-    github: 'Star on GitHub',
+    github: 'View on GitHub',
   },
 };
 
@@ -69,38 +69,38 @@ type AgentsCopy = typeof en;
 
 const es: AgentsCopy = {
   meta: {
-    title: 'Adar con agentes de IA: revisa lo que suben',
-    description: 'Cómo trabajar con agentes de IA que programan y con Adar: un worktree por agente, qué está haciendo cada uno ahora mismo, una revisión de solo lo que ha cambiado desde que miraste y un aviso cuando suben cambios o se paran.',
+    title: 'Revisa el código de tus agentes de IA con Git | Adar',
+    description: 'Asigna un worktree de Git a cada agente. Revisa cambios antes del commit, comenta líneas y compara lo que ha cambiado desde tu última revisión en Adar.',
     ogTitle: 'Tus agentes escriben el código. Tú sigues al mando.',
     ogDescription: 'Adar es donde ves lo que han hecho tus agentes de IA, lo revisas y te mantienes al día mientras siguen trabajando.',
   },
   hero: {
     eyebrow: 'Adar + agentes de IA',
-    title: 'Tus agentes escriben el código. <span class="serif">Tú sigues al mando.</span>',
-    lede: 'Claude, Copilot, Codex o Cursor ya escriben casi todo un cambio. Decidir si está bien sigue siendo cosa tuya. Adar es donde ves lo que han hecho, lo revisas y te mantienes al día mientras siguen trabajando.',
+    title: 'Revisa el código <span class="serif">de tus agentes de IA.</span>',
+    lede: 'Dale a Claude, Copilot, Codex o Cursor su propia carpeta de trabajo en Git. En Adar puedes ver qué archivos ha tocado, dejar comentarios antes de abrir un pull request y revisar qué ha cambiado en la siguiente ronda.',
     download: 'Descargar Adar',
     howItWorks: 'Cómo funciona',
   },
   shot: {
     alt: 'Adar revisando un pull request escrito con Claude: solo los dos commits subidos desde la última revisión, un hilo de comentarios respondido por la autora y el panel de revisión a la derecha.',
     bar: 'booking-web — #42 desde tu revisión',
-    notes: ['<b>Since your review</b>: solo los commits nuevos', 'Escrito con <b>Claude</b>', '<b>Hilos</b> en sus líneas', '<b>Tu revisión</b>, enviada de una vez'],
+    notes: ['<b lang="en">Since your review</b>: solo los commits nuevos', 'Escrito con <b>Claude</b>', '<b>Hilos</b> en sus líneas', '<b>Tu revisión</b>, enviada de una vez'],
   },
   steps: {
     eyebrow: 'El ciclo',
-    title: 'Seis pasos, <span class="serif">cada día.</span>',
+    title: 'Del worktree <span class="serif">a la fusión de la rama.</span>',
     text: 'El mismo ciclo, tanto si un agente arregla un fallo como si tres construyen una función cada uno.',
     items: [
       ['Un agente, un worktree', 'Dale a cada agente su propia carpeta y su rama, para que ninguno pise los archivos de otro. Créalos en Adar o deja que lo haga tu herramienta de agentes: cada uno se abre como una pestaña en el grupo del proyecto, uno al lado del otro.', 'New Worktree…'],
-      ['Míralos trabajar', 'Cada worktree dice qué está haciendo su agente: <i>working</i>, <i>quiet</i> —se paró con trabajo pendiente y puede estar esperándote— o inactivo, con los archivos que cambia ahora, en su pestaña, en el panel izquierdo y en la vista <i>Agents</i>. Un aviso te dice cuándo uno hace commit, sube cambios o se queda parado, y los commits que escribió un agente llevan su nombre, sacado de su línea <code>Co-Authored-By</code>.', 'Agents ⇧⌘E'],
-      ['Revisa antes del pull request', 'Cuando un agente se para, <i>Review</i> en su tarjeta muestra todo lo que ha hecho frente a main: sus commits y lo que aún no ha commiteado, con marcas de <i>Viewed</i>. Deja notas en las líneas y cópialas en su chat de una vez. En la siguiente ronda ves solo lo que cambió desde entonces.', 'Review'],
-      ['Revisa el pull request', 'Cuando un agente abre un pull request, revísalo en Adar: los archivos con marcas de <i>Viewed</i>, los lockfiles plegados, los hilos de comentarios en sus líneas. Comenta, sugiere un cambio, pide cambios, y el agente lo lee en GitHub, GitLab, Bitbucket o Azure DevOps. ¿Segunda ronda? <i>Since your review</i> muestra solo lo que se subió después.', 'Since your review'],
-      ['Sabe cuándo mirar', '<i>Reviews</i> reúne los pull requests que esperan tu revisión, los que sigues y los tuyos, de todos tus repositorios abiertos. Un punto azul marca lo que ha cambiado desde que miraste, y un aviso te lo dice mientras haces otra cosa.', 'Reviews ⇧⌘R'],
-      ['Mergea, recoge, deshaz', 'Mergea desde Adar y la rama y su worktree se van en un paso. Si un agente hizo un reset o un force push que no debía, Adar encuentra los commits perdidos en el reflog, y Undo deshace la última acción de git.', 'Recover Lost Commits…'],
+      ['Consulta la actividad', 'Abre <i lang="en">Agents</i> para ver qué archivos están cambiando en cada worktree. El estado <i lang="en">quiet</i> indica que la actividad ha cesado y quedan cambios pendientes. Puedes recibir avisos cuando el agente crea un commit, sube cambios o se detiene.', 'Agents ⇧⌘E'],
+      ['Revisa antes de abrir un pull request', 'Selecciona <i lang="en">Review</i> en la tarjeta del agente para comparar su trabajo con la rama base, incluidos los cambios pendientes de commit. Deja notas por línea y cópialas juntas en su chat. En la siguiente revisión puedes centrarte en lo que ha cambiado desde entonces.', 'Review'],
+      ['Revisa el pull request', 'Abre el pull request en Adar para ver las diferencias y los hilos de comentarios de cada archivo. Marca los archivos revisados y envía tu revisión al servicio que aloja el repositorio. Con <i lang="en">Since your review</i> puedes ver qué cambió después.', 'Since your review'],
+      ['Qué revisiones tienes pendientes', '<i>Reviews</i> reúne los pull requests que esperan tu revisión, los que sigues y los tuyos, de todos tus repositorios abiertos. Un punto azul marca lo que ha cambiado desde que miraste, y un aviso te lo dice mientras haces otra cosa.', 'Reviews ⇧⌘R'],
+      ['Fusiona la rama y limpia el worktree', 'Después de fusionar el pull request, puedes eliminar la rama y su worktree en un solo paso. Si un agente hizo un reset o un force push que no debía, Adar encuentra los commits perdidos en el reflog, y Undo deshace la última acción de git.', 'Recover Lost Commits…'],
     ],
   },
   inbox: {
-    alt: 'La bandeja de pull requests de Adar: uno esperando revisión, uno seguido con una respuesta y un commit nuevo, y dos propios, uno aprobado y listo para mergear.',
+    alt: 'La bandeja de pull requests de Adar: uno esperando revisión, uno seguido con una respuesta y un commit nuevo, y dos propios, uno aprobado y listo para integrar.',
     bar: 'Pull requests — todos los repositorios abiertos',
     caption: 'Todo lo que te espera, en un solo sitio. El punto azul es lo que ha cambiado desde que miraste.',
   },
@@ -125,40 +125,40 @@ const es: AgentsCopy = {
     title: 'Pruébalo con <span class="serif">tus agentes.</span>',
     text: 'Gratis, de código abierto y con el git que ya tienes.',
     download: 'Descargar Adar',
-    github: 'Estrella en GitHub',
+    github: 'Ver en GitHub',
   },
 };
 
 const eu: AgentsCopy = {
   meta: {
-    title: 'Adar AA agenteekin: berrikusi igotzen dutena',
-    description: 'Nola lan egin programatzen duten AA agenteekin eta Adarrekin: worktree bat agente bakoitzeko, bakoitza une honetan zertan ari den, begiratu zenuenetik aldatu dena bakarrik berrikusteko aukera eta abisu bat aldaketak igotzen dituztenean edo gelditzen direnean.',
+    title: 'Berrikusi AAko agenteen kodea Git worktreeetan | Adar',
+    description: 'Eman Git worktree bana agenteei. Berrikusi aldaketak commita egin aurretik, utzi oharrak lerroetan eta ikusi azken berrikuspenetik zer aldatu den.',
     ogTitle: 'Zure agenteek kodea idazten dute. Zuk agintzen duzu.',
     ogDescription: 'Adar da zure AA agenteek egin dutena ikusteko, berrikusteko eta lanean jarraitzen duten bitartean egunean egoteko tokia.',
   },
   hero: {
     eyebrow: 'Adar + AA agenteak',
-    title: 'Zure agenteek kodea idazten dute. <span class="serif">Zuk agintzen duzu.</span>',
-    lede: 'Claudek, Copilotek, Codexek edo Cursorrek aldaketa baten ia guztia idazten dute dagoeneko. Ondo dagoen erabakitzea zure lana da oraindik. Adar da egin dutena ikusteko, berrikusteko eta lanean jarraitzen duten bitartean egunean egoteko tokia.',
+    title: 'Berrikusi <span class="serif">AAko agenteen kodea.</span>',
+    lede: 'Eman Git lan-karpeta bana Claude, Copilot, Codex edo Cursorri. Adarren ikus dezakezu zein fitxategi aldatu dituzten, oharrak utzi pull requesta ireki aurretik eta hurrengo txandako aldaketak berrikusi.',
     download: 'Deskargatu Adar',
     howItWorks: 'Nola dabilen',
   },
   shot: {
     alt: 'Adar Claudekin idatzitako pull request bat berrikusten: azken berrikuspenetik igotako bi commitak bakarrik, egileak erantzundako iruzkin-hari bat eta berrikuspen-panela eskuinean.',
     bar: 'booking-web — #42 zure berrikuspenetik',
-    notes: ['<b>Since your review</b>: commit berriak bakarrik', '<b>Claudekin</b> idatzia', '<b>Hariak</b> beren lerroetan', '<b>Zure berrikuspena</b>, behin bakarrik bidalia'],
+    notes: ['<b lang="en">Since your review</b>: commit berriak bakarrik', '<b>Claudekin</b> idatzia', '<b>Hariak</b> beren lerroetan', '<b>Zure berrikuspena</b>, behin bakarrik bidalia'],
   },
   steps: {
     eyebrow: 'Zikloa',
-    title: 'Sei urrats, <span class="serif">egunero.</span>',
+    title: 'Lan-karpeta sortzetik <span class="serif">adarra bateratu arte.</span>',
     text: 'Ziklo bera, agente batek akats bat konpontzen duenean zein hiruk funtzio bana eraikitzen dutenean.',
     items: [
       ['Agente bat, worktree bat', 'Eman agente bakoitzari bere karpeta eta bere adarra, bat ere ez dadin bestearen fitxategien gainean ibili. Sortu Adarren edo utzi zure agente-tresnari egiten: bakoitza fitxa gisa irekitzen da proiektuaren taldean, bata bestearen ondoan.', 'New Worktree…'],
-      ['Ikusi lanean', 'Worktree bakoitzak bere agentea zertan ari den esaten du: <i>working</i>, <i>quiet</i> —lana amaitu gabe gelditu da eta zure zain egon daiteke— edo geldirik, orain aldatzen ari diren fitxategiekin, bere fitxan, ezkerreko panelean eta <i>Agents</i> ikuspegian. Abisu batek esaten dizu batek commit egiten duenean, aldaketak igotzen dituenean edo geldirik geratzen denean, eta agente batek idatzitako commitek haren izena daramate, beren <code>Co-Authored-By</code> lerrotik.', 'Agents ⇧⌘E'],
-      ['Berrikusi pull requestaren aurretik', 'Agente bat gelditzen denean, bere txarteleko <i>Review</i> aukerak mainen aldean egin duen guztia erakusten du: bere commitak eta oraindik commit egin ez duena, <i>Viewed</i> markekin. Utzi oharrak lerroetan eta kopiatu bere txatera behin batean. Hurrengo txandan, ordutik aldatu dena bakarrik ikusten duzu.', 'Review'],
-      ['Berrikusi pull requesta', 'Agente batek pull request bat irekitzen duenean, berrikusi Adarren: fitxategiak <i>Viewed</i> markekin, lockfileak tolestuta, iruzkin-hariak beren lerroetan. Iruzkindu, iradoki aldaketa bat, eskatu aldaketak, eta agenteak GitHub, GitLab, Bitbucket edo Azure DevOpsen irakurtzen du. Bigarren txanda? <i>Since your review</i> aukerak ondoren igotakoa bakarrik erakusten du.', 'Since your review'],
+      ['Ikusi agenteen jarduera', 'Ireki <i lang="en">Agents</i> lan-karpeta bakoitzean zein fitxategi aldatzen ari diren ikusteko. <i lang="en">Quiet</i> egoerak jarduera eten dela eta aldaketak egiteke daudela adierazten du. Jaso abisuak agente batek commita egiten duenean, aldaketak igotzen dituenean edo lana eteten duenean.', 'Agents ⇧⌘E'],
+      ['Berrikusi pull requesta ireki aurretik', 'Aukeratu <i lang="en">Review</i> agentearen txartelean haren lana oinarri-adarrarekin alderatzeko. Oraindik commitean sartu gabeko aldaketak ere ikusiko dituzu. Idatzi oharrak lerroetan eta kopiatu denak agentearen txatera. Hurrengoan, ordutik egindako aldaketak soilik berrikus ditzakezu.', 'Review'],
+      ['Berrikusi pull requesta', 'Ireki pull requesta Adarren fitxategi bakoitzeko aldaketak eta iruzkin-hariak ikusteko. Markatu berrikusitako fitxategiak eta bidali berrikuspena biltegia ostatatzen duen zerbitzura. <i lang="en">Since your review</i> aukerarekin ordutik zer aldatu den ikusi dezakezu.', 'Since your review'],
       ['Jakin noiz begiratu', '<i>Reviews</i> aukerak zure berrikuspenaren zain dauden pull requestak, jarraitzen dituzunak eta zureak biltzen ditu, irekita dituzun biltegi guztietakoak. Puntu urdin batek begiratu zenuenetik aldatu dena markatzen du, eta jakinarazpen batek beste zerbaitetan zabiltzanean esaten dizu.', 'Reviews ⇧⌘R'],
-      ['Mergeatu, jaso, desegin', 'Mergeatu Adarretik eta adarra eta haren worktreea urrats bakarrean doaz. Agente batek behar ez zuen reset edo force push bat egin badu, Adarrek galdutako commitak reflogean aurkitzen ditu, eta Undo-k azken git ekintza desegiten du.', 'Recover Lost Commits…'],
+      ['Bateratu adarra eta garbitu lan-karpeta', 'Pull requesta bateratu ondoren, adarra eta haren lan-karpeta batera ezaba ditzakezu. Agente batek behar ez zuen reset edo force push bat egin badu, Adarrek galdutako commitak reflogean aurkitzen ditu, eta Undo-k azken git ekintza desegiten du.', 'Recover Lost Commits…'],
     ],
   },
   inbox: {
@@ -187,7 +187,7 @@ const eu: AgentsCopy = {
     title: 'Probatu <span class="serif">zure agenteekin.</span>',
     text: 'Doakoa, kode irekikoa eta dagoeneko duzun git-arekin.',
     download: 'Deskargatu Adar',
-    github: 'Eman izarra GitHub-en',
+    github: 'Ikusi GitHuben',
   },
 };
 

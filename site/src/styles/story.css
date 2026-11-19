@@ -79,10 +79,10 @@
 
 /* ── Chapter rail ────────────────────────────────────────── */
 .rail { position: fixed; left: 22px; top: 50%; z-index: 40; transform: translateY(-50%); opacity: 0; pointer-events: none; transition: opacity var(--dur-3) var(--ease-grow); }
-.rail.is-on { opacity: 1; pointer-events: auto; }
-.rail ol { position: relative; list-style: none; margin: 0; padding: 0; display: grid; gap: 20px; }
+.rail.is-on, .rail:focus-within { opacity: 1; pointer-events: auto; }
+.rail ol { position: relative; list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
 .rail ol::before { content: ""; position: absolute; left: 6px; top: 6px; bottom: 6px; width: 2px; background: repeating-linear-gradient(to bottom, rgb(197 245 106 / 0.35) 0 4px, transparent 4px 8px); }
-.rail a { position: relative; display: flex; align-items: center; gap: 12px; height: 14px; }
+.rail a { position: relative; display: flex; align-items: center; gap: 12px; height: 24px; }
 .rail__node { position: relative; width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--text-4); background: var(--bg); transition: border-color var(--dur-2), background var(--dur-2), box-shadow var(--dur-2), transform var(--dur-2) var(--ease-spring); }
 .rail a:hover .rail__node { border-color: var(--accent); transform: scale(1.15); }
 .rail a.is-done .rail__node { border-color: rgb(197 245 106 / 0.6); }

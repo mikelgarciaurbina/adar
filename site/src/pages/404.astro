@@ -3,26 +3,21 @@
 // three and every link is absolute to the site base.
 import Base from '../layouts/Base.astro';
 import { url } from '../lib/url';
-import { pageUrl, LOCALES, type Locale } from '../i18n/config';
-
-const copy: Record<Locale, { title: string; text: string; home: string; roadmap: string }> = {
-  en: { title: 'This branch <span class="serif">never grew.</span>', text: 'The page you were looking for isn’t here — maybe it was renamed, or it only exists in someone’s local checkout.', home: 'Back to the trunk', roadmap: 'See the roadmap' },
-  es: { title: 'Esta rama <span class="serif">nunca creció.</span>', text: 'La página que buscabas no está aquí: quizá cambió de nombre, o solo existe en la copia local de alguien.', home: 'Volver al tronco', roadmap: 'Ver la hoja de ruta' },
-  eu: { title: 'Adar hau <span class="serif">ez zen inoiz hazi.</span>', text: 'Bilatzen ari zinen orria ez dago hemen: agian izenez aldatu da, edo norbaiten kopia lokalean bakarrik dago.', home: 'Itzuli enborrera', roadmap: 'Ikusi bide-orria' },
-};
+import { pageUrl, LOCALES } from '../i18n/config';
+import { ui } from '../i18n/ui';
 ---
-<Base lang="en" title="Branch not found — Adar" description="This page doesn’t exist.">
-  <main class="lost" id="main">
+<Base lang="en" title={`${ui.en.lost.title} | Adar`} description={ui.en.lost.text}>
+  <main class="lost" id="main" tabindex="-1">
     <div class="lost__inner">
       <img src={url('assets/adar-mark.svg')} width="72" height="72" alt="">
-      <pre><code><b>fatal:</b> couldn't find remote ref for this page</code></pre>
+      <p class="mono muted">404</p>
       {LOCALES.map((l, i) => (
         <section class:list={['lost__lang', { 'lost__lang--main': i === 0 }]} lang={l}>
-          {i === 0 ? <h1 set:html={copy[l].title} /> : <h2 set:html={copy[l].title} />}
-          <p class="muted">{copy[l].text}</p>
+          {i === 0 ? <h1>{ui[l].lost.title}</h1> : <h2>{ui[l].lost.title}</h2>}
+          <p class="muted">{ui[l].lost.text}</p>
           <div class="lost__ctas">
-            <a class:list={['btn', i === 0 ? 'btn--primary' : 'btn--ghost']} href={pageUrl('home', l)}>{copy[l].home}</a>
-            <a class="btn btn--ghost" href={pageUrl('roadmap', l)}>{copy[l].roadmap}</a>
+            <a class:list={['btn', i === 0 ? 'btn--primary' : 'btn--ghost']} href={pageUrl('home', l)}>{ui[l].home}</a>
+            <a class="btn btn--ghost" href={pageUrl('roadmap', l)}>{ui[l].nav.roadmap}</a>
           </div>
         </section>
       ))}
@@ -34,13 +29,10 @@ const copy: Record<Locale, { title: string; text: string; home: string; roadmap:
   .lost { min-height: 100vh; display: grid; place-items: center; text-align: center; padding: 48px var(--gutter); background: radial-gradient(50% 40% at 50% 25%, rgb(197 245 106 / 0.1), transparent 70%), var(--bg); }
   .lost__inner { display: grid; justify-items: center; gap: var(--space-6); max-width: 620px; }
   .lost img { width: 72px; height: 72px; opacity: 0.9; filter: drop-shadow(0 0 24px rgb(197 245 106 / 0.4)); }
-  .lost pre { margin: 0; padding: 14px 18px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--bg-sunken); color: var(--text-3); font-size: var(--text-sm); white-space: pre-wrap; text-align: left; }
-  .lost pre b { color: var(--txingar); font-weight: 500; }
   .lost__lang { display: grid; justify-items: center; gap: var(--space-3); padding-top: var(--space-5); border-top: 1px solid var(--line); width: 100%; }
   .lost__lang--main { border-top: 0; padding-top: 0; }
   .lost h1 { font-size: var(--text-3xl); letter-spacing: var(--tracking-tight); line-height: 1; }
   .lost h2 { font-size: var(--text-xl); letter-spacing: var(--tracking-snug); }
-  .lost :is(h1, h2) :global(.serif) { color: var(--accent-text); }
   .lost__ctas { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-top: var(--space-2); }
 </style>
 

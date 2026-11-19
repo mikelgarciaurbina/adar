@@ -3,7 +3,7 @@ import source from '../../../ROADMAP.md?raw';
 import { inline } from './markdown.js';
 import { REPO_URL } from './url';
 
-export interface Item { html: string; text: string; gfi: boolean; done: boolean; discuss: string }
+export interface Item { title: string; html: string; text: string; gfi: boolean; done: boolean; discuss: string }
 export interface Area { id: string; title: string; note: string; items: Item[] }
 export interface Milestone { kind: 'next' | 'later'; title: string; range: string | null; count: number; areas: Area[] }
 interface RawSection { title: string; areas: { title: string; items: RawItem[]; text: string[] }[]; items: RawItem[]; text: string[] }
@@ -52,7 +52,7 @@ function toItem(raw: RawItem): Item {
   const text = raw.text.replace(/\s*\*\(good first issue\)\*/i, '');
   const title = (text.match(/\*\*([^*]+)\*\*/)?.[1] ?? text.split(/[—:.(]/)[0]).trim();
   return {
-    html: inline(text), text: text.toLowerCase(), gfi, done: raw.done,
+    title, html: inline(text), text: text.toLowerCase(), gfi, done: raw.done,
     discuss: `${REPO_URL}/issues?q=${encodeURIComponent(`is:issue ${title}`)}`,
   };
 }

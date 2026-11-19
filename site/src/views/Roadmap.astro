@@ -25,7 +25,7 @@ let lane = 1;
 ---
 <Base lang={lang} page="roadmap" title={t.meta.title} description={t.meta.description} ogTitle={t.meta.ogTitle} ogDescription={t.meta.ogDescription}
   client={t.client}>
-  <main id="main">
+  <main id="main" tabindex="-1">
     <section class="rm-hero" aria-labelledby="rm-title">
       <canvas class="rm-hero__scene" id="scene" aria-hidden="true"></canvas>
       <div class="wrap rm-hero__inner">
@@ -33,7 +33,7 @@ let lane = 1;
         <h1 id="rm-title" class="rise" style="--delay:80ms" set:html={t.hero.title} />
         <p class="rm-hero__lede rise" style="--delay:160ms" set:html={t.hero.lede} />
         <div class="rm-hero__ctas rise" style="--delay:240ms">
-          <button class="btn btn--primary btn--lg" type="button" data-show-gfi><Icon name="sparkle" />{t.hero.showGfi}</button>
+          <a class="btn btn--primary btn--lg" href={`#${anchor('next', lang)}`} data-show-gfi><Icon name="sparkle" />{t.hero.showGfi}</a>
           <a class="btn btn--ghost btn--lg" href="https://github.com/mikelgarciaurbina/adar/issues/new/choose"><Icon name="issue" />{t.hero.suggest}</a>
         </div>
         <dl class="rm-stats rise" style="--delay:320ms">
@@ -83,7 +83,7 @@ let lane = 1;
               </ul>
             </section>
           )}
-          <div class="rm-head reveal" aria-label={t.graph.hereAria} lang={lang}>
+          <div class="rm-head reveal" lang={lang}>
             <span class="rm-head__node" aria-hidden="true"></span>
             <span class="ref" style="--ref:var(--lane-1)"><Icon name="laptop" />HEAD → main</span>
             {latest && <span class="ref" style="--ref:var(--lane-6)"><Icon name="tag" />{latest.tag}</span>}
@@ -111,7 +111,7 @@ let lane = 1;
                             <Fragment set:html={it.html} />
                             {it.gfi && <span class="gfi">good first issue</span>}
                             {it.done && <span class="gfi gfi--done" lang={lang}>{t.graph.done}</span>}
-                            <a class="rm-item__link" href={it.discuss} lang={lang}>{t.graph.discuss}<Icon name="arrow-up-right" /></a>
+                            <a class="rm-item__link" href={it.discuss} lang={lang}>{t.graph.discuss}<span class="visually-hidden" lang="en"> — {it.title}</span><Icon name="arrow-up-right" /></a>
                           </p>
                         </div>
                       </li>
@@ -143,9 +143,9 @@ let lane = 1;
                 {r.prerelease && <span class="chip">{t.changelog.prerelease}</span>}
                 <time class="mono" datetime={r.date}>{formatDateIn(r.date, lang)}</time>
               </div>
-              <h3>{r.name}</h3>
+              <h3 lang="en">{r.name}</h3>
               <div class="release__body md" lang="en" set:html={render(withoutInstall(r.body))} />
-              <a class="release__link" href={r.url}><Fragment set:html={t.changelog.link} /><Icon name="arrow-up-right" /></a>
+              <a class="release__link" href={r.url}><Fragment set:html={t.changelog.link} /> <span class="mono">{r.tag}</span><Icon name="arrow-up-right" /></a>
             </li>
           ))}
           {releases.length === 0 && <li class="releases__loading" set:html={t.changelog.none} />}
@@ -163,7 +163,7 @@ let lane = 1;
         <ol class="steps">
           {t.contribute.steps.map(([title, text], i) => (
             <li class="step card reveal" style={`--delay:${i * 60}ms`}>
-              <span class="step__n mono">{i + 1}</span><h3>{title}</h3>
+              <span aria-hidden="true" class="step__n mono">{i + 1}</span><h3>{title}</h3>
               {i === 1
                 ? <div class="code"><code><span class="prompt">$</span>npm install &amp;&amp; npm run dev</code><button class="copy" type="button" data-copy="npm install && npm run dev" aria-label={t.contribute.copyCommand}><Icon name="copy" /><span data-label={copy}>{copy}</span></button></div>
                 : <p set:html={text} />}

@@ -25,7 +25,7 @@ const NOTES = [
 ];
 ---
 <Base lang={lang} page="agents" title={t.meta.title} description={t.meta.description} ogTitle={t.meta.ogTitle} ogDescription={t.meta.ogDescription}>
-  <main id="main">
+  <main id="main" tabindex="-1">
     <section class="ag-hero" aria-labelledby="ag-title">
       <div class="wrap ag-hero__inner">
         <p class="eyebrow rise">{t.hero.eyebrow}</p>
@@ -42,7 +42,7 @@ const NOTES = [
           <div class="shot__frame">
             <div class="shot__bar" aria-hidden="true"><i></i><i></i><i></i><span>{t.shot.bar}</span></div>
             <Picture src={review} formats={['avif', 'webp']} widths={[720, 1080, 1440]} sizes="(max-width: 1240px) calc(100vw - 32px), 1180px"
-              decoding="async" alt={t.shot.alt} />
+              loading="eager" fetchpriority="high" decoding="async" alt={t.shot.alt} />
           </div>
           <figcaption class="shot__notes">
             {NOTES.map((n, i) => (

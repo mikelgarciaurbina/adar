@@ -4,26 +4,18 @@ import type { Locale } from './config';
 
 const en = {
   meta: {
-    title: 'Adar — a visual Git client that grows with you',
-    description: 'Adar is a fast, free and open-source visual Git client for macOS. See and review what your AI agents and teammates push, on your own git and credentials: GitHub, GitLab, Bitbucket, Azure DevOps or your own server.',
-    ogTitle: 'Adar — See your Git grow',
-    ogDescription: 'A fast, visual Git client for every repository. Free and open source for macOS.',
-    jsonLd: 'A fast, visual Git client for every repository — GitHub, GitLab, Bitbucket, Azure DevOps or your own server.',
-    // Used instead once the latest release has macOS, Windows and Linux builds.
-    allSystems: {
-      description: 'Adar is a fast, free and open-source visual Git client for macOS, Windows and Linux. See and review what your AI agents and teammates push, on your own git and credentials: GitHub, GitLab, Bitbucket, Azure DevOps or your own server.',
-      ogDescription: 'A fast, visual Git client for every repository. Free and open source for macOS, Windows and Linux.',
-    },
+    title: 'Free visual Git client for macOS, Windows and Linux | Adar',
+    description: 'Explore your Git history, stage individual lines and review pull requests in Adar. Free and open source for macOS, Windows and Linux. Uses your existing Git credentials.',
   },
   hero: {
     newIn: 'New in', latest: 'Latest release', whatsNew: 'What’s new',
-    title: 'See your Git <span class="serif">grow.</span>',
-    lede: 'Adar is a fast, visual Git client for every repository. Your AI agents and teammates push; Adar shows you what changed, lets you review it, and tells you when there’s more — on the git and the keys you already use.',
+    title: 'Your Git branches, <span class="serif">at a glance.</span>',
+    lede: 'Adar is a visual Git client for public and private repositories. Follow a branch through the commit graph, stage the lines you want and review what your teammates or coding agents changed.',
     agents: 'Working with AI agents',
-    download: 'Download for macOS', downloadAll: 'Download', star: 'Star on GitHub',
+    download: 'Download Adar', star: 'View on GitHub',
     fine: 'Free &amp; open source · MIT · No account · No telemetry',
     fig: '<span>fig. 1</span> orein adarrak — <i>a deer’s antlers</i> · <span data-points>38,000</span> points',
-    scroll: 'Scroll — walk into the forest',
+    scroll: 'Why the name Adar?',
   },
   name: {
     mark: 'Why “Adar”',
@@ -45,8 +37,8 @@ const en = {
   },
   branches: {
     story: 'Branches split to reach the light, grow on their own, and sometimes grow back together.',
-    title: 'Everything you do in git. <span class="serif">Now you can see it.</span>',
-    text: 'Adar is the whole of your daily git — commits, branches, rebases, conflicts, remotes, and the pull requests others open — laid out where you can touch it, with an undo button for when you touch the wrong thing.',
+    title: 'Git tools for <span class="serif">everyday work.</span>',
+    text: 'Follow a branch through the graph, compare changes and choose the lines for your next commit. Open a pull request when the branch is ready for review.',
     graph: ['Commit graph', 'Coloured lanes, avatars, branch, tag and remote labels, stashes and a <code>// WIP</code> node. Search by message, author, SHA, content or path — smooth through tens of thousands of commits.'],
     drag: ['Drag &amp; drop', 'Drop a branch onto another to merge, rebase, fast-forward or push.'],
     stage: ['Stage by line', 'Stage or discard whole files, single hunks or just the lines you mean.'],
@@ -60,7 +52,7 @@ const en = {
     worktrees: ['Worktrees', 'A folder and a tab for each branch, so several features — or several agents — move at once, each saying what it is doing. Review an agent’s work before its pull request, and once that is merged, the worktree goes in one step.'],
     recover: ['Recover lost commits', 'A reset, a deleted branch or a force push that went too far: Adar finds what was left behind in the reflog and brings it back.'],
     moreAria: 'More features',
-    more: ['Unified &amp; split diffs', 'Intra-line highlights', 'Image diffs', 'Command palette &amp; git console', 'Amend', 'Stashes', 'Submodules', 'Tags', 'Background fetch', 'Pull: ff-only, merge or rebase', 'Force-push with lease', 'Clone with progress', 'Dark &amp; light themes', 'In-app updates', 'Keyboard first', 'Clean up merged branches', 'Menu bar panel', 'Authors’ pictures from GitHub'],
+    more: ['Unified &amp; split diffs', 'Intra-line highlights', 'Image diffs', 'Command palette &amp; git console', 'Amend', 'Stashes', 'Submodules', 'Tags', 'Background fetch', 'Pull: ff-only, merge or rebase', 'Force-push with lease', 'Clone with progress', 'Dark &amp; light themes', 'In-app updates', 'Keyboard first', 'Clean up merged branches', 'macOS menu bar panel', 'Authors’ pictures from GitHub'],
     agents: {
       title: 'Your agents write the code. <span class="serif">You stay in the loop.</span>',
       text: 'One worktree per agent, what each is doing right now, a review of only what changed, and a ping when they push or stop: how Adar fits the way you work with Claude, Copilot, Codex or Cursor.',
@@ -81,18 +73,18 @@ const en = {
     },
   },
   roots: {
-    story: 'Roots drink from what is already in the ground. Adar runs on the git, the keys and the terminal already on your Mac.',
+    story: 'Roots drink from what is already in the ground. Adar runs on the git, the keys and the terminal on your computer.',
     title: 'Your git. Your keys. <span class="serif">Your machine.</span>',
-    text: 'Adar drives the <code>git</code> already installed on your Mac, so it works with exactly the credentials you use in the terminal. When git needs a username, a token or an SSH passphrase, Adar asks in a dialog and git stores it with your usual credential helper.',
+    text: 'Adar runs the <code>git</code> installed on your computer. It uses the same SSH agent and credential helpers as your terminal and prompts you when Git needs a password or token.',
     ticks: ['SSH keys and the agent', 'macOS Keychain', '<code>gh auth</code> &amp; credential helpers', 'Git LFS and hooks'],
     ownServer: 'your own server',
     pillars: [
       ['No account', 'Nothing to sign up for, no proxy servers, no limits on which repositories you open.'],
-      ['No telemetry', 'Adar doesn’t phone home. Anything that would talk to a third-party service is opt-in.'],
-      ['Safe by default', 'Destructive actions ask first and can be undone. Repositories whose config would run commands open only once you trust them.'],
+      ['No telemetry', 'Adar doesn’t collect usage statistics. You choose whether to connect a pull request provider.'],
+      ['Safe by default', 'Adar asks before destructive actions. Undo is available for supported operations. Repositories whose config would run commands open only once you trust them.'],
     ],
     cli: {
-      eyebrow: 'Command line',
+      eyebrow: 'macOS command line',
       aria: 'Terminal example: opening repositories with the adar command',
       title: 'From terminal to graph <span class="serif">in four letters.</span>',
       text: 'Type <code>adar</code> in any repository — like <code>code .</code> — and it opens in a new tab. Point it at a folder that holds several repositories and they open together as a tab group. Install it once from <i>Adar → Install Command Line Tool…</i>',
@@ -101,8 +93,8 @@ const en = {
   },
   dawn: {
     story: 'After every winter a deer sheds its antlers and grows a new set — larger, with more tines, as it grows older. Adar grows the same way.',
-    title: 'A new set of antlers, <span class="serif">every release.</span>',
-    text: 'Each version branches a little further, and the app updates itself when the next one is out.',
+    title: 'Download <span class="serif">Adar.</span>',
+    text: 'Choose your operating system to find the installer and instructions for your machine.',
     antlersAria: 'Releases, oldest first',
     eyebrow: 'Download',
     // Per system: Windows and Linux are shown once the latest release has their builds.
@@ -116,14 +108,13 @@ const en = {
       win: 'Needs 64-bit Windows 10 or 11 and Git for Windows 2.26 or newer (<a class="link" href="https://git-scm.com/downloads/win">git-scm.com</a> or <code>winget install Git.Git</code>). Repositories inside WSL use the git of their distribution.',
       linux: 'Needs a 64-bit (x86-64) distribution and Git 2.26 or newer (<code>sudo apt install git</code> or your package manager’s equivalent). The AppImage also needs FUSE 2 (<code>libfuse2</code>).',
     },
-    // For visitors on another system: while the release is macOS only, and once it has other builds.
-    platform: (href: string) => `You seem to be on another system. Adar runs on macOS for now; Linux and Windows are <a href="${href}">on the roadmap</a> — the code is mostly portable and help is welcome.`,
+    releasesLink: 'Download the latest release on GitHub',
     noBuild: 'You seem to be on another system, and there’s no Adar build for it yet.',
     sums: 'SHA-256 checksums',
     steps: {
       mac: [
-        ['Install', 'Open the <code>.dmg</code> and drag <b>Adar</b> to <b>Applications</b>.'],
-        ['First launch', 'Adar is signed and notarized by Apple: the first time, macOS only asks whether to open an app downloaded from the Internet. Click <b>Open</b>.'],
+        ['Install', 'Open the <code>.dmg</code> or unzip the <code>.zip</code>, then drag <b>Adar</b> to <b>Applications</b>.'],
+        ['First launch', 'Adar is signed with a Developer ID and notarized by Apple. When macOS asks whether to open the downloaded app, choose <b>Open</b>.'],
         ['Stay current', 'Adar updates itself from GitHub Releases — <i>Adar → Check for Updates…</i>'],
       ],
       win: [
@@ -139,7 +130,7 @@ const en = {
       ],
     },
     copyCommand: 'Copy command',
-    build: ['Build from source', 'Commands to build Adar from source', 'Node.js 22+, Git 2.26+, macOS. Read <a class="link" href="https://github.com/mikelgarciaurbina/adar/blob/main/AGENTS.md">AGENTS.md</a> before sending a pull request.'],
+    build: ['Build from source', 'Commands to build Adar from source', 'Node.js 22+, Git 2.26+. Read <a class="link" href="https://github.com/mikelgarciaurbina/adar/blob/main/AGENTS.md">AGENTS.md</a> before sending a pull request.'],
     releases: ['Every release', 'Release notes, older versions and checksums live on GitHub. The changelog on the roadmap page is read from the same place.', 'All releases', 'Changelog'],
   },
   together: {
@@ -157,25 +148,18 @@ export type HomeContent = typeof en;
 
 const es: HomeContent = {
   meta: {
-    title: 'Adar — un cliente de Git visual que crece contigo',
-    description: 'Adar es un cliente de Git visual, rápido, gratuito y de código abierto para macOS. Mira y revisa lo que suben tus agentes de IA y tus compañeros, con tu propio git y tus credenciales: GitHub, GitLab, Bitbucket, Azure DevOps o tu propio servidor.',
-    ogTitle: 'Adar — Mira cómo crece tu Git',
-    ogDescription: 'Un cliente de Git visual y rápido para cualquier repositorio. Gratis y de código abierto para macOS.',
-    jsonLd: 'Un cliente de Git visual y rápido para cualquier repositorio: GitHub, GitLab, Bitbucket, Azure DevOps o tu propio servidor.',
-    allSystems: {
-      description: 'Adar es un cliente de Git visual, rápido, gratuito y de código abierto para macOS, Windows y Linux. Mira y revisa lo que suben tus agentes de IA y tus compañeros, con tu propio git y tus credenciales: GitHub, GitLab, Bitbucket, Azure DevOps o tu propio servidor.',
-      ogDescription: 'Un cliente de Git visual y rápido para cualquier repositorio. Gratis y de código abierto para macOS, Windows y Linux.',
-    },
+    title: 'Adar | Cliente visual de Git para macOS, Windows y Linux',
+    description: 'Explora el historial de Git, prepara commits línea a línea y revisa pull requests con Adar. Gratis y de código abierto para macOS, Windows y Linux.',
   },
   hero: {
     newIn: 'Nuevo en', latest: 'Última versión', whatsNew: 'Novedades',
-    title: 'Mira cómo <span class="serif">crece</span> tu Git.',
-    lede: 'Adar es un cliente de Git visual y rápido para cualquier repositorio. Tus agentes de IA y tus compañeros suben cambios; Adar te enseña qué ha cambiado, te deja revisarlo y te avisa cuando hay más, con el git y las claves que ya usas.',
+    title: 'Tus ramas de Git, <span class="serif">de un vistazo.</span>',
+    lede: 'Adar es un cliente visual de Git para repositorios públicos y privados. Sigue una rama en el grafo de commits, elige qué líneas incluir y revisa los cambios de tu equipo o de tus agentes de IA.',
     agents: 'Trabajar con agentes de IA',
-    download: 'Descargar para macOS', downloadAll: 'Descargar', star: 'Estrella en GitHub',
+    download: 'Descargar Adar', star: 'Ver en GitHub',
     fine: 'Gratis y de código abierto · MIT · Sin cuenta · Sin telemetría',
     fig: '<span>fig. 1</span> orein adarrak — <i>la cornamenta de un ciervo</i> · <span data-points>38.000</span> puntos',
-    scroll: 'Baja — entra en el bosque',
+    scroll: '¿Por qué se llama Adar?',
   },
   name: {
     mark: 'Por qué «Adar»',
@@ -197,8 +181,8 @@ const es: HomeContent = {
   },
   branches: {
     story: 'Las ramas se separan para alcanzar la luz, crecen por su cuenta y a veces vuelven a unirse.',
-    title: 'Todo lo que haces en git. <span class="serif">Ahora lo ves.</span>',
-    text: 'Adar es todo tu git del día a día —commits, ramas, rebases, conflictos, remotos y los pull requests que abren otros— al alcance de la mano, con un botón de deshacer para cuando tocas lo que no debías.',
+    title: 'Herramientas de Git <span class="serif">para el día a día.</span>',
+    text: 'Sigue una rama en el grafo, compara los cambios y elige las líneas que entran en tu próximo commit. Cuando la rama esté lista para revisión, abre un pull request.',
     graph: ['Grafo de commits', 'Carriles de colores, avatares, etiquetas de ramas, tags y remotos, stashes y un nodo <code>// WIP</code>. Busca por mensaje, autor, SHA, contenido o ruta, fluido incluso con decenas de miles de commits.'],
     drag: ['Arrastrar y soltar', 'Suelta una rama sobre otra para hacer merge, rebase, fast-forward o push.'],
     stage: ['Staging por líneas', 'Prepara o descarta archivos enteros, bloques sueltos o solo las líneas que quieres.'],
@@ -212,7 +196,7 @@ const es: HomeContent = {
     worktrees: ['Worktrees', 'Una carpeta y una pestaña por rama, para avanzar con varias funciones —o varios agentes— a la vez, y cada una dice qué está haciendo. Revisa el trabajo de un agente antes de su pull request y, cuando se mergea, el worktree se va en un paso.'],
     recover: ['Recupera commits perdidos', 'Un reset, una rama borrada o un force push que se pasó de la raya: Adar encuentra en el reflog lo que quedó atrás y lo recupera.'],
     moreAria: 'Más funciones',
-    more: ['Diffs unificados y en paralelo', 'Cambios dentro de la línea', 'Diffs de imágenes', 'Paleta de comandos y consola de git', 'Amend', 'Stashes', 'Submódulos', 'Tags', 'Fetch en segundo plano', 'Pull: ff-only, merge o rebase', 'Force-push with lease', 'Clonado con progreso', 'Temas claro y oscuro', 'Actualizaciones integradas', 'Pensado para el teclado', 'Limpieza de ramas mergeadas', 'Panel en la barra de menús', 'Fotos de los autores desde GitHub'],
+    more: ['Diffs unificados y en paralelo', 'Cambios dentro de la línea', 'Diffs de imágenes', 'Paleta de comandos y consola de git', 'Amend', 'Stashes', 'Submódulos', 'Tags', 'Fetch en segundo plano', 'Pull: ff-only, merge o rebase', 'Force-push with lease', 'Clonado con progreso', 'Temas claro y oscuro', 'Actualizaciones integradas', 'Pensado para el teclado', 'Limpieza de ramas mergeadas', 'Panel en la barra de menús de macOS', 'Fotos de los autores desde GitHub'],
     agents: {
       title: 'Tus agentes escriben el código. <span class="serif">Tú sigues al mando.</span>',
       text: 'Un worktree por agente, qué hace cada uno ahora mismo, una revisión de solo lo que ha cambiado y un aviso cuando suben cambios o se paran: así encaja Adar en tu trabajo con Claude, Copilot, Codex o Cursor.',
@@ -233,18 +217,18 @@ const es: HomeContent = {
     },
   },
   roots: {
-    story: 'Las raíces beben de lo que ya hay en la tierra. Adar funciona con el git, las claves y la terminal que ya tienes en tu Mac.',
+    story: 'Las raíces beben de lo que ya hay en la tierra. Adar funciona con el git, las claves y la terminal que ya usas en tu equipo.',
     title: 'Tu git. Tus claves. <span class="serif">Tu máquina.</span>',
-    text: 'Adar usa el <code>git</code> que ya tienes instalado en tu Mac, así que funciona exactamente con las mismas credenciales que usas en la terminal. Cuando git necesita un usuario, un token o la frase de paso de una clave SSH, Adar te la pide en un diálogo y git la guarda con tu helper de credenciales de siempre.',
+    text: 'Adar usa el <code>git</code> de tu equipo, con el mismo agente SSH y el mismo gestor de credenciales que la terminal. Si Git necesita una contraseña o un token, Adar te lo pide.',
     ticks: ['Claves SSH y el agente', 'Llavero de macOS', '<code>gh auth</code> y helpers de credenciales', 'Git LFS y hooks'],
     ownServer: 'tu propio servidor',
     pillars: [
       ['Sin cuenta', 'Nada en lo que registrarse, sin servidores intermedios y sin límites sobre qué repositorios abres.'],
-      ['Sin telemetría', 'Adar no envía datos a ningún sitio. Todo lo que hablaría con un servicio de terceros es opcional.'],
-      ['Seguro por defecto', 'Las acciones destructivas preguntan antes y se pueden deshacer. Los repositorios cuya configuración ejecutaría comandos solo se abren cuando confías en ellos.'],
+      ['Sin telemetría', 'Adar no recopila estadísticas de uso. Tú eliges si quieres conectar un servicio de pull requests.'],
+      ['Seguro por defecto', 'Adar pide confirmación antes de una operación destructiva. Muchas operaciones se pueden deshacer. Los repositorios cuya configuración ejecutaría comandos solo se abren cuando confías en ellos.'],
     ],
     cli: {
-      eyebrow: 'Línea de comandos',
+      eyebrow: 'Terminal de macOS',
       aria: 'Ejemplo de terminal: abrir repositorios con el comando adar',
       title: 'De la terminal al grafo <span class="serif">en cuatro letras.</span>',
       text: 'Escribe <code>adar</code> en cualquier repositorio —como <code>code .</code>— y se abre en una pestaña nueva. Apúntalo a una carpeta con varios repositorios y se abren juntos como un grupo de pestañas. Instálalo una vez desde <i>Adar → Install Command Line Tool…</i>',
@@ -253,8 +237,8 @@ const es: HomeContent = {
   },
   dawn: {
     story: 'Después de cada invierno, el ciervo muda la cornamenta y le crece una nueva, más grande y con más puntas a medida que envejece. Adar crece igual.',
-    title: 'Una cornamenta nueva <span class="serif">en cada versión.</span>',
-    text: 'Cada versión se ramifica un poco más, y la app se actualiza sola cuando sale la siguiente.',
+    title: 'Descarga <span class="serif">Adar.</span>',
+    text: 'Elige tu sistema operativo para ver el instalador y los pasos que debes seguir.',
     antlersAria: 'Versiones, de la más antigua a la más reciente',
     eyebrow: 'Descarga',
     card: { mac: 'Adar para <span class="serif">macOS</span>', win: 'Adar para <span class="serif">Windows</span>', linux: 'Adar para <span class="serif">Linux</span>' },
@@ -267,13 +251,13 @@ const es: HomeContent = {
       win: 'Necesita Windows 10 u 11 de 64 bits y Git for Windows 2.26 o posterior (<a class="link" href="https://git-scm.com/downloads/win">git-scm.com</a> o <code>winget install Git.Git</code>). Los repositorios dentro de WSL usan el git de su distribución.',
       linux: 'Necesita una distribución de 64 bits (x86-64) y Git 2.26 o posterior (<code>sudo apt install git</code> o el equivalente de tu gestor de paquetes). El AppImage también necesita FUSE 2 (<code>libfuse2</code>).',
     },
-    platform: (href: string) => `Parece que usas otro sistema. Por ahora Adar funciona en macOS; Linux y Windows están <a href="${href}">en la hoja de ruta</a>: el código es casi todo portable y cualquier ayuda es bienvenida.`,
+    releasesLink: 'Descargar la última versión en GitHub',
     noBuild: 'Parece que usas otro sistema, y Adar aún no tiene una versión para él.',
     sums: 'Sumas SHA-256',
     steps: {
       mac: [
-        ['Instala', 'Abre el <code>.dmg</code> y arrastra <b>Adar</b> a <b>Aplicaciones</b>.'],
-        ['Primera vez', 'Adar está firmado y notarizado por Apple: la primera vez, macOS solo pregunta si quieres abrir una app descargada de Internet. Pulsa <b>Abrir</b>.'],
+        ['Instala', 'Abre el <code>.dmg</code> o descomprime el <code>.zip</code> y arrastra <b>Adar</b> a <b>Aplicaciones</b>.'],
+        ['Primera vez', 'Adar lleva la firma del desarrollador y la notarización de Apple. Cuando macOS te pregunte si quieres abrir la aplicación descargada, pulsa <b>Abrir</b>.'],
         ['Mantente al día', 'Adar se actualiza solo desde GitHub Releases: <i>Adar → Check for Updates…</i>'],
       ],
       win: [
@@ -289,7 +273,7 @@ const es: HomeContent = {
       ],
     },
     copyCommand: 'Copiar comando',
-    build: ['Compilar desde el código', 'Comandos para compilar Adar desde el código', 'Node.js 22+, Git 2.26+, macOS. Lee <a class="link" href="https://github.com/mikelgarciaurbina/adar/blob/main/AGENTS.md">AGENTS.md</a> antes de enviar un pull request.'],
+    build: ['Compilar desde el código', 'Comandos para compilar Adar desde el código', 'Node.js 22+, Git 2.26+. Lee <a class="link" href="https://github.com/mikelgarciaurbina/adar/blob/main/AGENTS.md">AGENTS.md</a> antes de enviar un pull request.'],
     releases: ['Todas las versiones', 'Las notas de versión, las versiones anteriores y las sumas de comprobación están en GitHub. Las novedades de la hoja de ruta salen del mismo sitio.', 'Todas las versiones', 'Novedades'],
   },
   together: {
@@ -305,25 +289,18 @@ const es: HomeContent = {
 
 const eu: HomeContent = {
   meta: {
-    title: 'Adar — zurekin hazten den Git bezero bisuala',
-    description: 'Adar macOSerako Git bezero bisual, azkar, doako eta kode irekikoa da. Ikusi eta berrikusi zure AA agenteek eta lankideek igotzen dutena, zure git-arekin eta kredentzialekin: GitHub, GitLab, Bitbucket, Azure DevOps edo zure zerbitzaria.',
-    ogTitle: 'Adar — Ikusi zure Git-a hazten',
-    ogDescription: 'Edozein biltegitarako Git bezero bisual eta azkarra. Doakoa eta kode irekikoa, macOSerako.',
-    jsonLd: 'Edozein biltegitarako Git bezero bisual eta azkarra: GitHub, GitLab, Bitbucket, Azure DevOps edo zure zerbitzaria.',
-    allSystems: {
-      description: 'Adar macOS, Windows eta Linuxerako Git bezero bisual, azkar, doako eta kode irekikoa da. Ikusi eta berrikusi zure AA agenteek eta lankideek igotzen dutena, zure git-arekin eta kredentzialekin: GitHub, GitLab, Bitbucket, Azure DevOps edo zure zerbitzaria.',
-      ogDescription: 'Edozein biltegitarako Git bezero bisual eta azkarra. Doakoa eta kode irekikoa, macOS, Windows eta Linuxerako.',
-    },
+    title: 'Adar | Git bezero bisuala macOS, Windows eta Linuxerako',
+    description: 'Arakatu Git historia, prestatu commitak lerroz lerro eta berrikusi pull requestak Adarrekin. Doakoa eta kode irekikoa da, macOS, Windows eta Linuxerako.',
   },
   hero: {
     newIn: 'Berria:', latest: 'Azken bertsioa', whatsNew: 'Berritasunak',
-    title: 'Ikusi zure Git-a <span class="serif">hazten.</span>',
-    lede: 'Adar edozein biltegitarako Git bezero bisual eta azkarra da. Zure AA agenteek eta lankideek aldaketak igotzen dituzte; Adarrek zer aldatu den erakusten dizu, berrikusten uzten dizu eta gehiago dagoenean abisatzen dizu, dagoeneko erabiltzen dituzun git-arekin eta gakoekin.',
+    title: 'Zure Git adarrak, <span class="serif">begi-bistan.</span>',
+    lede: 'Adar biltegi publiko zein pribatuetarako Git bezero bisuala da. Jarraitu adar baten ibilbidea commit-grafoan, aukeratu zein lerro sartu commitean eta berrikusi taldekideen edo AAko agenteen aldaketak.',
     agents: 'AA agenteekin lan egin',
-    download: 'Deskargatu macOSerako', downloadAll: 'Deskargatu', star: 'Eman izarra GitHub-en',
+    download: 'Deskargatu Adar', star: 'Ikusi GitHuben',
     fine: 'Doakoa eta kode irekikoa · MIT · Konturik gabe · Telemetriarik gabe',
     fig: '<span>1. irud.</span> orein adarrak · <span data-points>38.000</span> puntu',
-    scroll: 'Jaitsi — sartu basoan',
+    scroll: 'Zergatik du Adar izena?',
   },
   name: {
     mark: 'Zergatik «Adar»',
@@ -345,8 +322,8 @@ const eu: HomeContent = {
   },
   branches: {
     story: 'Adarrak bereizi egiten dira argira iristeko, beren kabuz hazten dira, eta batzuetan berriro elkartzen dira.',
-    title: 'Git-en egiten duzun guztia. <span class="serif">Orain ikus dezakezu.</span>',
-    text: 'Adar zure eguneroko git osoa da —commitak, adarrak, rebaseak, gatazkak, urrunekoak eta besteek irekitzen dituzten pull requestak— eskura, eta desegiteko botoi bat, ukitu behar ez zenuena ukitzen duzunerako.',
+    title: 'Git tresnak <span class="serif">eguneroko lanerako.</span>',
+    text: 'Jarraitu adar bati grafoan, alderatu aldaketak eta aukeratu hurrengo commitean sartuko diren lerroak. Adarra berrikusteko prest dagoenean, ireki pull request bat.',
     graph: ['Commit grafoa', 'Kolorezko erreiak, avatarrak, adar, etiketa eta urruneko etiketak, stashak eta <code>// WIP</code> nodo bat. Bilatu mezuz, egilez, SHAz, edukiz edo bidez, arin hamarnaka mila committen artean ere.'],
     drag: ['Arrastatu eta jaregin', 'Jaregin adar bat beste baten gainera merge, rebase, fast-forward edo push egiteko.'],
     stage: ['Lerroka prestatu', 'Prestatu edo baztertu fitxategi osoak, zati bakarrak edo nahi dituzun lerroak bakarrik.'],
@@ -360,7 +337,7 @@ const eu: HomeContent = {
     worktrees: ['Worktreeak', 'Karpeta eta fitxa bana adar bakoitzeko, hainbat funtzio —edo hainbat agente— batera aurrera egin dezaten, bakoitzak zertan ari den esanez. Berrikusi agente baten lana bere pull requesta baino lehen, eta hura mergeatzean, worktreea urrats bakarrean doa.'],
     recover: ['Berreskuratu galdutako commitak', 'Reset bat, ezabatutako adar bat edo gehiegi joan zen force push bat: Adarrek reflogean aurkitzen du atzean geratu zena, eta berreskuratu egiten du.'],
     moreAria: 'Ezaugarri gehiago',
-    more: ['Diff bateratuak eta alboz albokoak', 'Lerro barneko aldaketak', 'Irudien diffak', 'Komando-paleta eta git kontsola', 'Amend', 'Stashak', 'Azpimoduluak', 'Etiketak', 'Atzeko planoko fetch-a', 'Pull: ff-only, merge edo rebase', 'Force-push with lease', 'Klonazioa aurrerapenarekin', 'Gai argia eta iluna', 'Aplikazio barneko eguneraketak', 'Teklatuz erabiltzeko', 'Mergeatutako adarren garbiketa', 'Menu-barrako panela', 'Egileen argazkiak GitHub-etik'],
+    more: ['Diff bateratuak eta alboz albokoak', 'Lerro barneko aldaketak', 'Irudien diffak', 'Komando-paleta eta git kontsola', 'Amend', 'Stashak', 'Azpimoduluak', 'Etiketak', 'Atzeko planoko fetch-a', 'Pull: ff-only, merge edo rebase', 'Force-push with lease', 'Klonazioa aurrerapenarekin', 'Gai argia eta iluna', 'Aplikazio barneko eguneraketak', 'Teklatuz erabiltzeko', 'Mergeatutako adarren garbiketa', 'macOSeko menu-barrako panela', 'Egileen argazkiak GitHub-etik'],
     agents: {
       title: 'Zure agenteek kodea idazten dute. <span class="serif">Zuk agintzen duzu.</span>',
       text: 'Worktree bat agente bakoitzeko, bakoitza une honetan zertan ari den, aldatu dena bakarrik berrikusteko aukera eta abisu bat aldaketak igotzen dituztenean edo gelditzen direnean: horrela egokitzen da Adar Claude, Copilot, Codex edo Cursorrekin egiten duzun lanera.',
@@ -381,18 +358,18 @@ const eu: HomeContent = {
     },
   },
   roots: {
-    story: 'Sustraiek lurrean dagoeneko dagoena edaten dute. Adarrek zure Mac-ean dagoeneko dituzun git-arekin, gakoekin eta terminalarekin egiten du lan.',
+    story: 'Sustraiek lurrean dagoeneko dagoena edaten dute. Adarrek zure ordenagailuan dagoeneko dituzun git-arekin, gakoekin eta terminalarekin egiten du lan.',
     title: 'Zure git-a. Zure gakoak. <span class="serif">Zure makina.</span>',
-    text: 'Adarrek zure Mac-ean instalatuta dagoen <code>git</code>-a erabiltzen du, beraz terminalean erabiltzen dituzun kredentzial berberekin dabil. Git-ek erabiltzaile-izen bat, token bat edo SSH pasaesaldi bat behar duenean, Adarrek elkarrizketa-koadro batean eskatzen dizu, eta git-ek ohiko kredentzial-laguntzailearekin gordetzen du.',
+    text: 'Adarrek zure ordenagailuko <code>git</code> erabiltzen du, terminaleko SSH agente eta kredentzial-kudeatzaile berekin. Git-ek pasahitza edo tokena behar duenean, Adarrek eskatuko dizu.',
     ticks: ['SSH gakoak eta agentea', 'macOS Keychain', '<code>gh auth</code> eta kredentzial-laguntzaileak', 'Git LFS eta hook-ak'],
     ownServer: 'zure zerbitzaria',
     pillars: [
       ['Konturik ez', 'Ez dago ezertan izena eman beharrik, ez tarteko zerbitzaririk, ez mugarik irekitzen dituzun biltegietan.'],
-      ['Telemetriarik ez', 'Adarrek ez du daturik inora bidaltzen. Hirugarrenen zerbitzu batekin hitz egingo lukeen guztia aukerakoa da.'],
-      ['Segurua berez', 'Ekintza suntsitzaileek lehenago galdetzen dute eta desegin daitezke. Komandoak exekutatuko lituzkeen konfigurazioa duten biltegiak haietaz fidatzen zarenean bakarrik irekitzen dira.'],
+      ['Telemetriarik ez', 'Adarrek ez du erabilera-estatistikarik biltzen. Zuk aukeratzen duzu pull requesten zerbitzua konektatu nahi duzun.'],
+      ['Segurua berez', 'Adarrek berrespena eskatzen du eragiketa suntsitzaileen aurretik. Eragiketa asko desegin daitezke. Komandoak exekutatuko lituzkeen konfigurazioa duten biltegiak haietaz fidatzen zarenean bakarrik irekitzen dira.'],
     ],
     cli: {
-      eyebrow: 'Komando-lerroa',
+      eyebrow: 'macOSeko terminala',
       aria: 'Terminal adibidea: biltegiak adar komandoarekin irekitzea',
       title: 'Terminaletik grafora <span class="serif">lau letratan.</span>',
       text: 'Idatzi <code>adar</code> edozein biltegitan —<code>code .</code> bezala— eta fitxa berri batean irekiko da. Eman biltegi bat baino gehiago dituen karpeta bat, eta fitxa-talde gisa irekiko dira elkarrekin. Instalatu behin <i>Adar → Install Command Line Tool…</i> menutik.',
@@ -401,8 +378,8 @@ const eu: HomeContent = {
   },
   dawn: {
     story: 'Negu bakoitzaren ondoren, oreinak adarrak botatzen ditu eta berriak hazten zaizkio, handiagoak eta punta gehiagorekin, zahartu ahala. Adar ere horrela hazten da.',
-    title: 'Adar berriak <span class="serif">bertsio bakoitzean.</span>',
-    text: 'Bertsio bakoitza pixka bat gehiago adarkatzen da, eta aplikazioa bere kabuz eguneratzen da hurrengoa ateratzen denean.',
+    title: 'Deskargatu <span class="serif">Adar.</span>',
+    text: 'Aukeratu zure sistema eragilea instalatzailea eta instalatzeko argibideak ikusteko.',
     antlersAria: 'Bertsioak, zaharrenetik berrienera',
     eyebrow: 'Deskarga',
     card: { mac: 'Adar <span class="serif">macOSerako</span>', win: 'Adar <span class="serif">Windowserako</span>', linux: 'Adar <span class="serif">Linuxerako</span>' },
@@ -415,13 +392,13 @@ const eu: HomeContent = {
       win: '64 biteko Windows 10 edo 11 eta Git for Windows 2.26 edo berriagoa behar ditu (<a class="link" href="https://git-scm.com/downloads/win">git-scm.com</a> edo <code>winget install Git.Git</code>). WSL barruko biltegiek beren banaketako git-a erabiltzen dute.',
       linux: '64 biteko (x86-64) banaketa bat eta Git 2.26 edo berriagoa behar ditu (<code>sudo apt install git</code> edo zure pakete-kudeatzailearen baliokidea). AppImage-ak FUSE 2 ere behar du (<code>libfuse2</code>).',
     },
-    platform: (href: string) => `Badirudi beste sistema bat erabiltzen duzula. Oraingoz Adarrek macOSen bakarrik funtzionatzen du; Linux eta Windows <a href="${href}">bide-orrian</a> daude: kodea ia osorik da eramangarria, eta laguntza ongi etorria da.`,
+    releasesLink: 'Deskargatu azken bertsioa GitHubetik',
     noBuild: 'Badirudi beste sistema bat erabiltzen duzula, eta Adarrek ez du hartarako bertsiorik oraindik.',
     sums: 'SHA-256 kontrol-baturak',
     steps: {
       mac: [
-        ['Instalatu', 'Ireki <code>.dmg</code> fitxategia eta arrastatu <b>Adar</b> <b>Aplikazioak</b> karpetara.'],
-        ['Lehen aldia', 'Adar Applek sinatuta eta notarizatuta dago: lehen aldian, Internetetik deskargatutako aplikazio bat ireki nahi duzun bakarrik galdetuko dizu macOSek. Onartu, eta Adar irekiko da.'],
+        ['Instalatu', 'Ireki <code>.dmg</code> fitxategia edo deskonprimitu <code>.zip</code> fitxategia. Ondoren, arrastatu <b>Adar</b> <b>Aplikazioak</b> karpetara.'],
+        ['Lehen aldia', 'Adarrek garatzailearen sinadura eta Appleren notarizazioa ditu. Deskargatutako aplikazioa ireki nahi duzun galdetzen dizunean, aukeratu <b>Ireki</b>.'],
         ['Egon egunean', 'Adarrek bere burua eguneratzen du GitHub Releases-etik: <i>Adar → Check for Updates…</i>'],
       ],
       win: [
@@ -437,7 +414,7 @@ const eu: HomeContent = {
       ],
     },
     copyCommand: 'Kopiatu komandoa',
-    build: ['Iturburu-kodetik eraiki', 'Adar iturburu-kodetik eraikitzeko komandoak', 'Node.js 22+, Git 2.26+, macOS. Irakurri <a class="link" href="https://github.com/mikelgarciaurbina/adar/blob/main/AGENTS.md">AGENTS.md</a> pull request bat bidali aurretik.'],
+    build: ['Iturburu-kodetik eraiki', 'Adar iturburu-kodetik eraikitzeko komandoak', 'Node.js 22+, Git 2.26+. Irakurri <a class="link" href="https://github.com/mikelgarciaurbina/adar/blob/main/AGENTS.md">AGENTS.md</a> pull request bat bidali aurretik.'],
     releases: ['Bertsio guztiak', 'Bertsio-oharrak, aurreko bertsioak eta kontrol-baturak GitHub-en daude. Bide-orriko berritasunak leku beretik irakurtzen dira.', 'Bertsio guztiak', 'Berritasunak'],
   },
   together: {

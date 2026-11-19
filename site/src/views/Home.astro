@@ -13,10 +13,10 @@ import Rings from '../components/Rings.astro';
 import Antlers from '../components/Antlers.astro';
 import '../styles/home.css';
 import '../styles/story.css';
-import { url, REPO_URL } from '../lib/url';
+import { url, REPO_URL, SITE_URL } from '../lib/url';
 import { getReleases, getLatest, formatSize, type Asset } from '../lib/releases';
 import { chaptersFor } from '../lib/story';
-import { absoluteUrl, formatDateIn, pageUrl, type Locale } from '../i18n/config';
+import { DEFAULT_LOCALE, absoluteUrl, formatDateIn, pageUrl, type Locale } from '../i18n/config';
 import { home } from '../i18n/home';
 import { ui } from '../i18n/ui';
 
@@ -37,32 +37,27 @@ const exe = assetNamed(/^[\w.-]+-win-x64\.exe$/);
 const appImage = assetNamed(/^[\w.-]+-linux-x86_64\.AppImage$/);
 const deb = assetNamed(/^[\w.-]+-linux-amd64\.deb$/);
 
-// One entry per system with a build in the latest release: macOS always (its buttons fall back to the releases
-// page), Windows and Linux once their assets are there. With more than one, a picker shows one system at a time.
+// Only offer files present in the latest stable release.
 type Os = 'mac' | 'win' | 'linux';
-interface Build { os: Os; name: string; ld: string; files: { asset?: Asset; label: string }[]; steps: string[][] }
+interface Build { os: Os; name: string; files: { asset: Asset; label: string }[]; steps: string[][] }
 const S = t.dawn.steps;
-const builds = [
-  {
-    os: 'mac', name: 'macOS', ld: 'macOS (Apple Silicon)',
-    files: [{ asset: dmg, label: '.dmg' }, { asset: zip, label: '.zip' }],
-    steps: S.mac,
-  },
-  exe && { os: 'win', name: 'Windows', ld: 'Windows (x64)', files: [{ asset: exe, label: '.exe' }], steps: S.win },
-  (appImage || deb) && {
-    os: 'linux', name: 'Linux', ld: 'Linux (x64)',
-    files: [{ asset: appImage, label: 'AppImage' }, { asset: deb, label: '.deb' }].filter((f) => f.asset),
-    steps: [
-      ...(appImage ? [[...S.linux[0], `chmod +x ${appImage.name}\n./${appImage.name}`]] : []),
-      ...(deb ? [[...S.linux[1], `sudo apt install ./${deb.name}`]] : []),
-      S.linux[2],
-    ],
-  },
-].filter(Boolean) as Build[];
+const builds: Build[] = [];
+const macFiles = [dmg, zip].filter((asset): asset is Asset => !!asset);
+if (macFiles.length) builds.push({
+  os: 'mac', name: 'macOS', files: macFiles.map((asset) => ({ asset, label: asset === dmg ? '.dmg' : '.zip' })), steps: S.mac,
+});
+if (exe) builds.push({ os: 'win', name: 'Windows', files: [{ asset: exe, label: '.exe' }], steps: S.win });
+if (appImage || deb) builds.push({
+  os: 'linux', name: 'Linux',
+  files: [appImage, deb].filter((asset): asset is Asset => !!asset).map((asset) => ({ asset, label: asset === appImage ? 'AppImage' : '.deb' })),
+  steps: [
+    ...(appImage ? [[...S.linux[0], `chmod +x ${appImage.name}\n./${appImage.name}`]] : []),
+    ...(deb ? [[...S.linux[1], `sudo apt install ./${deb.name}`]] : []),
+    S.linux[2],
+  ],
+});
 const several = builds.length > 1;
-const sums = builds.flatMap((b) => b.files.flatMap(({ asset }) => (asset?.sha256 ? [{ os: b.os, asset }] : [])));
-// Search results and social cards name every system once the release has them all.
-const meta = builds.length === 3 ? t.meta.allSystems : t.meta;
+const sums = builds.flatMap((b) => b.files.flatMap(({ asset }) => asset.sha256 ? [{ os: b.os, asset }] : []));
 // The app screenshot is served as AVIF/WebP in a few widths; structured data points at the WebP.
 const screenshotWebp = await getImage({ src: screenshot, format: 'webp', width: 1440 });
 const self = absoluteUrl('home', lang);
@@ -71,30 +66,34 @@ const jsonLd = JSON.stringify({
   '@context': 'https://schema.org',
   '@type': 'SoftwareApplication',
   name: 'Adar',
-  description: t.meta.jsonLd,
-  inLanguage: lang,
+  description: t.meta.description,
   url: self,
-  image: new URL('assets/og.jpg', self).href,
+  image: new URL('assets/og.jpg', SITE_URL).href,
   screenshot: new URL(screenshotWebp.src, self).href,
+  inLanguage: 'en',
   applicationCategory: 'DeveloperApplication',
-  operatingSystem: builds.map((b) => b.ld).join(', '),
+  operatingSystem: ['macOS (Apple Silicon)', 'Windows (x64)', 'Linux (x64)'],
   isAccessibleForFree: true,
   offers: { '@type': 'Offer', price: '0', priceCurrency: 'EUR' },
   license: `${REPO_URL}/blob/main/LICENSE`,
   author: { '@type': 'Person', name: 'Mikel García' },
   sameAs: [REPO_URL],
-  ...(latest && { softwareVersion: latest.version, datePublished: latest.date.slice(0, 10), downloadUrl: dmg?.url ?? latest.url }),
+  downloadUrl: latest?.url ?? `${REPO_URL}/releases/latest`,
+  ...(latest && { softwareVersion: latest.version }),
 }).replace(/</g, '\\u003c');
 ---
-<Base lang={lang} page="home" title={t.meta.title} description={meta.description} ogTitle={t.meta.ogTitle} ogDescription={meta.ogDescription}
+<Base lang={lang} page="home" title={t.meta.title} description={t.meta.description}
   client={{ figs: t.name.figs }}>
   <script slot="head" type="application/ld+json" is:inline set:html={jsonLd} />
+  {lang === DEFAULT_LOCALE && <script slot="head" type="application/ld+json" is:inline set:html={JSON.stringify({
+    '@context': 'https://schema.org', '@type': 'WebSite', name: 'Adar', url: SITE_URL,
+  }).replace(/</g, '\\u003c')} />}
   <Sky />
   <Rail chapters={C} label={ui[lang].chapters} />
   <canvas class="scene" id="scene" aria-hidden="true"></canvas>
   <div class="scene-fallback" aria-hidden="true"><img src={url('assets/adar-mark.svg')} width="64" height="64" alt=""></div>
 
-  <main id="main" class="story">
+  <main id="main" tabindex="-1" class="story">
     <div id="zone">
       <!-- 0 · Gaua -->
       <section class="hero" id={C[0].id} aria-labelledby="hero-title">
@@ -103,11 +102,11 @@ const jsonLd = JSON.stringify({
             <span class="dot"></span>{latest ? <>{t.hero.newIn} {latest.version}</> : t.hero.latest}<span class="hero__news-sep"></span><span class="hero__news-cta">{t.hero.whatsNew}</span>
             <Icon name="arrow-right" size={14} />
           </a>
-          <h1 class="hero__title rise" id="hero-title" style="--delay:80ms" set:html={t.hero.title} />
-          <p class="hero__lede rise" style="--delay:160ms">{t.hero.lede}</p>
+          <h1 class="hero__title" id="hero-title" set:html={t.hero.title} />
+          <p class="hero__lede">{t.hero.lede}</p>
           <div class="hero__ctas rise" style="--delay:240ms">
             <a class="btn btn--primary btn--lg" href={at(6)}>
-              <Icon name="download" />{several ? t.hero.downloadAll : t.hero.download}<span class="btn__meta">{several ? builds.map((b) => b.name).join(' · ') : 'Apple Silicon'}</span>
+              <Icon name="download" />{t.hero.download}<span class="btn__meta">macOS · Windows · Linux</span>
             </a>
             <a class="btn btn--ghost btn--lg" href={REPO_URL}>
               <Icon name="star" />{t.hero.star}<span class="btn__meta" data-gh="stars"></span>
@@ -133,7 +132,7 @@ const jsonLd = JSON.stringify({
                 </header>
                 <ol class="dict__senses">
                   {t.name.senses.map((s, i) => (
-                    <li class={i === 0 ? 'is-active' : undefined} data-sense={i}><span class="dict__n">{i + 1}</span><p set:html={s} /></li>
+                    <li class={i === 0 ? 'is-active' : undefined} data-sense={i}><span class="dict__n" aria-hidden="true">{i + 1}</span><p set:html={s} /></li>
                   ))}
                 </ol>
               </article>
@@ -181,7 +180,7 @@ const jsonLd = JSON.stringify({
 
         <div class="bento">
           <article class="feat feat--graph card tilt spotlight reveal" data-animate>
-            <div class="feat__art" aria-hidden="true">
+            <div class="feat__art" aria-hidden="true" data-nosnippet>
               <svg class="mini-graph" viewBox="0 0 520 300">
                 <g class="mg-lanes" fill="none" stroke-width="2.5" stroke-linecap="round">
                   <path class="mg-l" style="--c:var(--lane-1);--d:0s" d="M40 60 V284"/>
@@ -228,7 +227,7 @@ const jsonLd = JSON.stringify({
           </article>
 
           <article class="feat feat--drag card tilt spotlight reveal" data-animate style="--delay:60ms">
-            <div class="feat__art" aria-hidden="true">
+            <div class="feat__art" aria-hidden="true" data-nosnippet>
               <div class="dd">
                 <span class="ref dd__target" style="--ref:var(--lane-1)"><Icon name="laptop" />main</span>
                 <span class="ref dd__drag" style="--ref:var(--lane-3)"><Icon name="laptop" />feature/login</span>
@@ -246,7 +245,7 @@ const jsonLd = JSON.stringify({
           </article>
 
           <article class="feat feat--stage card tilt spotlight reveal" data-animate style="--delay:120ms">
-            <div class="feat__art" aria-hidden="true">
+            <div class="feat__art" aria-hidden="true" data-nosnippet>
               <div class="diffbox">
                 <div class="dl-row"><i></i><span class="ln">12</span><code>export function grow(tree) {'{'}</code></div>
                 <div class="dl-row dl-del"><i></i><span class="ln">13</span><code>-  return tree.branches</code></div>
@@ -264,7 +263,7 @@ const jsonLd = JSON.stringify({
           </article>
 
           <article class="feat feat--rebase card tilt spotlight reveal" data-animate>
-            <div class="feat__art" aria-hidden="true">
+            <div class="feat__art" aria-hidden="true" data-nosnippet>
               <ol class="rb">
                 <li class="rb__row"><Icon name="grip" /><span class="rb__act">pick</span>Add login form</li>
                 <li class="rb__row rb__row--move"><Icon name="grip" /><span class="rb__act rb__act--sq">squash</span>Fix typo in form</li>
@@ -279,7 +278,7 @@ const jsonLd = JSON.stringify({
           </article>
 
           <article class="feat feat--conflict card tilt spotlight reveal" data-animate style="--delay:120ms">
-            <div class="feat__art" aria-hidden="true">
+            <div class="feat__art" aria-hidden="true" data-nosnippet>
               <div class="cfx">
                 <div class="cfx__col"><b>A · main</b><i style="--w:70%"></i><i class="a" style="--w:84%"></i><i style="--w:52%"></i></div>
                 <div class="cfx__col"><b>B · feature</b><i style="--w:70%"></i><i class="b" style="--w:62%"></i><i style="--w:52%"></i></div>
@@ -293,7 +292,7 @@ const jsonLd = JSON.stringify({
           </article>
 
           <article class="feat feat--palette card tilt spotlight reveal" data-animate>
-            <div class="feat__art" aria-hidden="true">
+            <div class="feat__art" aria-hidden="true" data-nosnippet>
               <div class="pal">
                 <div class="pal__input"><Icon name="search" /><span class="pal__typed" data-type="rebase onto"></span><span class="pal__caret"></span><span class="kbd">⌘P</span></div>
                 <ul>
@@ -310,7 +309,7 @@ const jsonLd = JSON.stringify({
           </article>
 
           <article class="feat feat--pulls card tilt spotlight reveal" data-animate>
-            <div class="feat__art" aria-hidden="true">
+            <div class="feat__art" aria-hidden="true" data-nosnippet>
               <div class="prs">
                 <ul class="prs__list">
                   <li class="prs__row" style="--c:var(--lane-1);--i:0"><span class="prs__host">GitHub</span><span class="prs__num">#42</span><em>Workspaces: a dashboard per tab group</em><span class="prs__st prs__st--ok"><Icon name="check" />4 checks</span></li>
@@ -327,7 +326,7 @@ const jsonLd = JSON.stringify({
           </article>
 
           <article class="feat feat--groups card tilt spotlight reveal" data-animate style="--delay:60ms">
-            <div class="feat__art" aria-hidden="true">
+            <div class="feat__art" aria-hidden="true" data-nosnippet>
               <div class="tabs">
                 <span class="tabs__group"><i></i>shop</span>
                 <span class="tabs__tab is-active"><Icon name="folder" />api</span>
@@ -343,7 +342,7 @@ const jsonLd = JSON.stringify({
           </article>
 
           <article class="feat feat--review card tilt spotlight reveal" data-animate>
-            <div class="feat__art" aria-hidden="true">
+            <div class="feat__art" aria-hidden="true" data-nosnippet>
               <div class="rvw">
                 <div class="rvw__bar">
                   <span class="rvw__seg"><span>All changes <i>5</i></span><span class="is-on">Since your review <i>2</i></span></span>
@@ -367,7 +366,7 @@ const jsonLd = JSON.stringify({
           </article>
 
           <article class="feat feat--inbox card tilt spotlight reveal" data-animate style="--delay:60ms">
-            <div class="feat__art" aria-hidden="true">
+            <div class="feat__art" aria-hidden="true" data-nosnippet>
               <div class="ibx">
                 <ul>
                   <li class="is-new" style="--i:0"><span class="ibx__n">#42</span><em>Workspaces per tab group</em><span class="ibx__pill">2 new</span></li>
@@ -384,7 +383,7 @@ const jsonLd = JSON.stringify({
           </article>
 
           <article class="feat feat--worktrees card tilt spotlight reveal" data-animate>
-            <div class="feat__art" aria-hidden="true">
+            <div class="feat__art" aria-hidden="true" data-nosnippet>
               <ul class="wts">
                 <li style="--i:0"><Icon name="folder" /><em>booking-web</em><span class="ref" style="--ref:var(--lane-1)">main</span></li>
                 <li style="--i:1"><Icon name="folder" /><em>booking-web-rooms</em><span class="ref" style="--ref:var(--lane-2)">claude/rooms</span></li>
@@ -398,7 +397,7 @@ const jsonLd = JSON.stringify({
           </article>
 
           <article class="feat feat--recover card tilt spotlight reveal" data-animate style="--delay:60ms">
-            <div class="feat__art" aria-hidden="true">
+            <div class="feat__art" aria-hidden="true" data-nosnippet>
               <div class="rcv">
                 <div class="rcv__head"><Icon name="history" /><span><b>main</b> was reset · 3 commits left behind</span></div>
                 <ul>
@@ -446,7 +445,7 @@ const jsonLd = JSON.stringify({
               <div>
                 <h3 set:html={t.rings.undo[0]} />
                 <p>{t.rings.undo[1]}</p>
-                <div class="history__keys" aria-label={t.rings.shortcuts}><span class="kbd">⌘</span><span class="kbd">Z</span><span class="kbd">⇧⌘Z</span></div>
+                <div class="history__keys" role="group" aria-label={t.rings.shortcuts}><span class="kbd">⌘</span><span class="kbd">Z</span><span class="kbd">⇧⌘Z</span></div>
               </div>
             </li>
             <li class="history__item card reveal" style="--delay:80ms">
@@ -494,9 +493,9 @@ const jsonLd = JSON.stringify({
       <div class="wrap cli__grid">
         <figure class="term card reveal" data-term aria-label={t.roots.cli.aria}>
           <div class="term__bar" aria-hidden="true"><i></i><i></i><i></i><span>~/code — zsh</span></div>
-          <pre class="term__body"><code data-term-body></code><span class="term__caret" aria-hidden="true"></span></pre>
-          <noscript><pre class="term__body"><code>$ adar
-$ adar ~/code/shop</code></pre></noscript>
+          <pre class="term__body term__animation" aria-hidden="true"><code data-term-body></code><span class="term__caret"></span></pre>
+          <pre class="term__body term__example"><code>$ adar
+$ adar ~/code/shop</code></pre>
         </figure>
         <div class="cli__copy reveal" style="--delay:80ms">
           <p class="eyebrow">{t.roots.cli.eyebrow}</p>
@@ -523,7 +522,8 @@ $ adar ~/code/shop</code></pre></noscript>
           <div class="dl__main">
             <div class="dl__icon" aria-hidden="true"><img src={url('assets/favicon.svg')} width="96" height="96" alt=""></div>
             <p class="eyebrow">{t.dawn.eyebrow}</p>
-            {builds.map((b) => <h2 data-os={b.os} set:html={t.dawn.card[b.os]} />)}
+            {!builds.length && <a class="btn btn--primary" href={`${REPO_URL}/releases/latest`}><Icon name="download" />{t.dawn.releasesLink}</a>}
+            {builds.map((b) => <h3 data-os={b.os} set:html={t.dawn.card[b.os]} />)}
             <p class="dl__meta">{latest ? <><span>Adar {latest.version}</span><span>{formatDateIn(latest.date, lang)}</span></> : <span>{t.dawn.latest}</span>}</p>
             {several && (
               <div class="dl__os" role="radiogroup" aria-label={t.dawn.system}>
@@ -535,15 +535,15 @@ $ adar ~/code/shop</code></pre></noscript>
                 <p class="dl__arch"><Icon name="laptop" />{t.dawn.arch[b.os]}</p>
                 <div class="dl__ctas">
                   {b.files.map(({ asset, label }, i) => (
-                    <a class={`btn ${i ? 'btn--ghost' : 'btn--primary'} btn--lg`} href={asset?.url ?? `${REPO_URL}/releases/latest`}>
-                      {i === 0 && <Icon name="download" />}{i ? label : t.dawn.download(label)}{asset && <span class="btn__meta">{formatSize(asset.size)}</span>}
+                    <a class={`btn ${i ? 'btn--ghost' : 'btn--primary'} btn--lg`} href={asset.url}>
+                      {i === 0 && <Icon name="download" />}{t.dawn.download(label)}<span class="btn__meta">{formatSize(asset.size)}</span>
                     </a>
                   ))}
                 </div>
                 <p class="dl__req" set:html={t.dawn.req[b.os]} />
               </div>
             ))}
-            <p class="dl__platform" data-dl="platform" hidden set:html={several ? t.dawn.noBuild : t.dawn.platform(pageUrl('roadmap', lang, 'later'))} />
+            {builds.length > 0 && <p class="dl__platform" data-dl="platform" hidden>{t.dawn.noBuild}</p>}
             {sums.length > 0 && (
               <details class="dl__sums">
                 <summary>{t.dawn.sums}</summary>
@@ -556,9 +556,9 @@ $ adar ~/code/shop</code></pre></noscript>
               <ol class="dl__steps" data-os={b.os}>
                 {b.steps.map(([title, text, code], i) => (
                   <li>
-                    <span class="dl__n">{i + 1}</span>
+                    <span class="dl__n" aria-hidden="true">{i + 1}</span>
                     <div>
-                      <h3>{title}</h3>
+                      <h4>{title}</h4>
                       <p set:html={text} />
                       {code && <div class="code"><code>{code}</code><button class="copy" type="button" data-copy aria-label={t.dawn.copyCommand}><Icon name="copy" /><span data-label={ui[lang].client.copy}>{ui[lang].client.copy}</span></button></div>}
                     </div>

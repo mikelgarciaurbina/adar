@@ -47,7 +47,7 @@ const ringClass = (i: number) => {
 };
 ---
 <figure class="rings reveal" data-animate>
-  <svg class="rings__svg" viewBox="0 0 860 600" role="img" aria-labelledby="rings-title">
+  <svg class="rings__svg" viewBox="0 0 860 600" role={chrono.length ? "img" : undefined} aria-hidden={!chrono.length || undefined} aria-labelledby={chrono.length ? "rings-title" : undefined}>
     <title id="rings-title">{chrono.length ? copy.title(chrono[0].tag, chrono[chrono.length - 1].tag) : ''}</title>
     <defs>
       <radialGradient id="wood" cx="0.5" cy="0.5" r="0.5">

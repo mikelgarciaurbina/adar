@@ -59,10 +59,15 @@ $$('[data-filter]').forEach((b) => b.addEventListener('click', () => {
 const gfiToggle = $('[data-gfi-toggle]');
 gfiToggle.addEventListener('change', () => { state.gfi = gfiToggle.checked; apply(); });
 $('[data-search]').addEventListener('input', (e) => { state.q = e.target.value.trim().toLowerCase(); apply(); });
-$$('[data-show-gfi]').forEach((b) => b.addEventListener('click', () => {
+$$('[data-show-gfi]').forEach((b) => b.addEventListener('click', (event) => {
+  if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+  event.preventDefault();
+  $('[data-search]').value = '';
+  state.q = '';
   gfiToggle.checked = true;
   state.gfi = true;
   $('[data-filter="all"]').click();
-  $('.rm-list').scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'start' });
+  gfiToggle.focus({ preventScroll: true });
+  $('[data-bar]').scrollIntoView({ behavior: motion.paused ? 'instant' : 'smooth', block: 'start' });
 }));
 apply();

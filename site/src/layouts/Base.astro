@@ -53,6 +53,11 @@ const strings = JSON.stringify({ ...t.client, ...client }).replace(/</g, '\\u003
     <meta property="og:title" content={ogTitle}>
     <meta property="og:description" content={ogDescription}>
     <meta property="og:image" content={`${SITE_URL}assets/og.jpg`}>
+    <meta property="og:image:type" content="image/jpeg">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content={t.socialImage}>
+    <meta name="twitter:image:alt" content={t.socialImage}>
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:image" content={`${SITE_URL}assets/og.jpg`}>
   </>}
@@ -66,15 +71,15 @@ const strings = JSON.stringify({ ...t.client, ...client }).replace(/</g, '\\u003
 <body>
   <a class="skip-link" href="#main">{t.skip}</a>
   {page && <Nav lang={lang} page={page} />}
-  <slot />
-  {page && <Footer lang={lang} page={page} />}
   {page && (
-    <button class="motion-toggle" type="button" aria-pressed="false" data-motion-toggle>
+    <button class="motion-toggle" type="button" data-motion-toggle>
       <Icon name="pause" class="motion-toggle__pause" /><Icon name="play" class="motion-toggle__play" />
       <span class="motion-toggle__label" data-motion-label>{t.client.pause}</span>
     </button>
   )}
-  <p class="visually-hidden" aria-live="polite" data-announce></p>
+  <slot />
+  {page && <Footer lang={lang} page={page} />}
+  <p class="visually-hidden" role="status" data-announce></p>
   <script type="application/json" id="i18n" is:inline set:html={strings} />
 </body>
 </html>

@@ -6,7 +6,7 @@ type Section = 'principles' | 'logo' | 'color' | 'type' | 'space' | 'motion' | '
 const en = {
   meta: {
     title: 'Basoa — the Adar design system',
-    description: 'Basoa is Adar’s open design system: the antler-and-branch logo, a palette named after the Basque forest, type, motion, icons, components and the visual language of the commit graph.',
+    description: 'Explore Basoa, Adar’s open design system. Download the logo, SVG icons and CSS tokens, and see how colours and symbols identify branches in the Git graph.',
     ogDescription: 'Logo, colour, type, motion, icons and components behind Adar. Open and free to reuse.',
   },
   hero: {
@@ -14,7 +14,7 @@ const en = {
     lede: '<i lang="eu">Basoa</i> is Basque for <b>forest</b> — where branches, antlers and moss live. It is the visual language of Adar: one mark, a palette named after the woods at night, three typefaces and a graph that everything else grows from.',
     assets: 'Get the assets',
     markAria: 'The Adar mark, extruded in 3D',
-    fig: '<span>fig. 6</span> the mark, extruded — drag to turn it',
+    turn: 'Rotate the logo',
   },
   toc: 'Contents', tocAria: 'On this page',
   ids: { principles: 'principles', logo: 'logo', color: 'color', type: 'type', space: 'space', motion: 'motion', icons: 'icons', graph: 'graph', components: 'components', voice: 'voice', story: 'story', downloads: 'downloads' } as Record<Section, string>,
@@ -77,6 +77,7 @@ const en = {
   },
   story: {
     text: 'The story is what makes Adar different. In Basque one word, <i lang="eu">adar</i>, names a tree’s branch and a deer’s antler, and a git branch grows the same way. The website tells it as one night in the forest, from dark to dawn, and every chapter pairs a Basque word with a part of the product.',
+    table: 'Chapters of the Adar homepage',
     head: ['#', 'Euskara', 'Meaning', 'In the forest', 'In Adar'],
     rules: [
       ['The story frames, the product sells.', 'One sentence of forest, then a literal headline about what Adar does.'],
@@ -91,7 +92,7 @@ const en = {
     text: 'Everything is MIT-licensed with the rest of Adar. Use it for articles, talks, forks and integrations — just don’t present a fork as the official Adar.',
     items: ['Mark', 'Mark · ink', 'Lockup · night', 'Lockup · day', 'App tile', 'Icon sprite', 'Design tokens', 'Fonts'],
   },
-  client: {
+  tokens: {
     swatches: [
       ['Fern', 'The brand colour: calls to action, focus, the main branch.'],
       ['Moss', 'Success, additions, staged changes.'],
@@ -117,7 +118,7 @@ export type DesignContent = typeof en;
 const es: DesignContent = {
   meta: {
     title: 'Basoa — el sistema de diseño de Adar',
-    description: 'Basoa es el sistema de diseño abierto de Adar: el logo de cornamenta y ramas, una paleta con nombres del bosque vasco, tipografía, movimiento, iconos, componentes y el lenguaje visual del grafo de commits.',
+    description: 'Explora Basoa, el sistema de diseño de Adar. Descarga el logotipo, los iconos SVG y las variables CSS. Consulta los colores y símbolos del grafo de Git.',
     ogDescription: 'El logo, los colores, la tipografía, el movimiento, los iconos y los componentes de Adar. Abierto y libre para reutilizar.',
   },
   hero: {
@@ -125,7 +126,7 @@ const es: DesignContent = {
     lede: '<i lang="eu">Basoa</i> significa <b>bosque</b> en euskera: donde viven las ramas, las cornamentas y el musgo. Es el lenguaje visual de Adar: un símbolo, una paleta con nombres del bosque de noche, tres tipografías y un grafo del que crece todo lo demás.',
     assets: 'Descargar los recursos',
     markAria: 'El símbolo de Adar, extruido en 3D',
-    fig: '<span>fig. 6</span> el símbolo, extruido — arrástralo para girarlo',
+    turn: 'Girar el logotipo',
   },
   toc: 'Contenido', tocAria: 'En esta página',
   ids: { principles: 'principios', logo: 'logo', color: 'color', type: 'tipografia', space: 'espacio', motion: 'movimiento', icons: 'iconos', graph: 'grafo', components: 'componentes', voice: 'voz', story: 'historia', downloads: 'descargas' },
@@ -188,6 +189,7 @@ const es: DesignContent = {
   },
   story: {
     text: 'La historia es lo que hace diferente a Adar. En euskera una sola palabra, <i lang="eu">adar</i>, nombra la rama de un árbol y la cuerna de un ciervo, y una rama de git crece igual. La web lo cuenta como una noche en el bosque, de la oscuridad al amanecer, y cada capítulo une una palabra en euskera con una parte del producto.',
+    table: 'Capítulos de la portada de Adar',
     head: ['#', 'Euskera', 'Significado', 'En el bosque', 'En Adar'],
     rules: [
       ['La historia enmarca, el producto vende.', 'Una frase de bosque y después un titular literal sobre lo que hace Adar.'],
@@ -202,7 +204,7 @@ const es: DesignContent = {
     text: 'Todo tiene licencia MIT, como el resto de Adar. Úsalo en artículos, charlas, forks e integraciones; solo no presentes un fork como el Adar oficial.',
     items: ['Símbolo', 'Símbolo · tinta', 'Logotipo · noche', 'Logotipo · día', 'Icono de la app', 'Sprite de iconos', 'Tokens de diseño', 'Tipografías'],
   },
-  client: {
+  tokens: {
     swatches: [
       ['Helecho', 'El color de la marca: llamadas a la acción, foco, la rama principal.'],
       ['Musgo', 'Éxito, añadidos, cambios preparados.'],
@@ -226,7 +228,7 @@ const es: DesignContent = {
 const eu: DesignContent = {
   meta: {
     title: 'Basoa — Adarren diseinu-sistema',
-    description: 'Basoa Adarren diseinu-sistema irekia da: adarrez eta oreinaren adarrez egindako logoa, euskal basoaren izenak dituen paleta, tipografia, mugimendua, ikonoak, osagaiak eta commit grafoaren hizkera bisuala.',
+    description: 'Ezagutu Basoa, Adarren diseinu-sistema. Deskargatu logotipoa, SVG ikonoak eta CSS aldagaiak. Ikusi nola adierazten diren adarrak Git grafoan.',
     ogDescription: 'Adarren logoa, koloreak, tipografia, mugimendua, ikonoak eta osagaiak. Irekiak eta berrerabiltzeko libre.',
   },
   hero: {
@@ -234,7 +236,7 @@ const eu: DesignContent = {
     lede: '<i lang="eu">Basoa</i> adarrak, oreinak eta goroldioa bizi diren lekua da. Adarren hizkera bisuala da: ikur bat, gaueko basoaren izenak dituen paleta bat, hiru tipografia eta beste guztia hazten den grafo bat.',
     assets: 'Deskargatu baliabideak',
     markAria: 'Adarren ikurra, 3Dn estrusionatuta',
-    fig: '<span>6. irud.</span> ikurra, estrusionatuta — arrastatu biratzeko',
+    turn: 'Biratu logotipoa',
   },
   toc: 'Edukia', tocAria: 'Orri honetan',
   ids: { principles: 'printzipioak', logo: 'logoa', color: 'kolorea', type: 'tipografia', space: 'espazioa', motion: 'mugimendua', icons: 'ikonoak', graph: 'grafoa', components: 'osagaiak', voice: 'ahotsa', story: 'istorioa', downloads: 'deskargak' },
@@ -297,6 +299,7 @@ const eu: DesignContent = {
   },
   story: {
     text: 'Istorioa da Adar desberdin egiten duena. Euskaraz hitz bakar batek, <i lang="eu">adar</i>-ek, izendatzen ditu zuhaitzaren adarra eta oreinaren adarra, eta git adar bat ere horrela hazten da. Webguneak basoko gau bat bezala kontatzen du, iluntasunetik egunsentira, eta kapitulu bakoitzak euskal hitz bat produktuaren zati batekin lotzen du.',
+    table: 'Adarren hasierako orriko kapituluak',
     head: ['#', 'Euskara', 'Esanahia', 'Basoan', 'Adarren'],
     rules: [
       ['Istorioak markoa jartzen du, produktuak saltzen du.', 'Basoko esaldi bat, eta gero Adarrek egiten duenari buruzko izenburu literal bat.'],
@@ -311,7 +314,7 @@ const eu: DesignContent = {
     text: 'Dena MIT lizentziapean dago, Adarren gainerakoa bezala. Erabili artikuluetan, hitzaldietan, fork-etan eta integrazioetan; ez aurkeztu, ordea, fork bat Adar ofizial gisa.',
     items: ['Ikurra', 'Ikurra · tinta', 'Logotipoa · gaua', 'Logotipoa · eguna', 'Aplikazioaren ikonoa', 'Ikono-sprite-a', 'Diseinu-tokenak', 'Tipografiak'],
   },
-  client: {
+  tokens: {
     swatches: [
       ['', 'Markaren kolorea: ekintzarako deiak, fokua, adar nagusia.'],
       ['', 'Arrakasta, gehikuntzak, prestatutako aldaketak.'],
