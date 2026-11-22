@@ -84,6 +84,10 @@ describe('the state of a terminal', () => {
 
   it('lets a bell ask for attention where no agent reports its state', () => {
     expect(run(bell('Build finished'))).toEqual({ state: 'needs-you', message: 'Build finished', by: 'bell' })
+    // Codex's notification for the end of a turn means finished; its others ask for the user.
+    expect(run(bell('Agent turn complete'))).toEqual({ state: 'finished', message: '', by: 'bell' })
+    expect(run(bell('Approval requested: npm test'))).toMatchObject({ state: 'needs-you', message: 'Approval requested: npm test' })
+    expect(afterSeen(run(bell('Agent turn complete')))).toBe(IDLE_RUN)
     // An agent that says what it does needs no bell to repeat it.
     const working = run(agent('working'))
     expect(afterSignal(working, bell())).toBe(working)
@@ -91,8 +95,10 @@ describe('the state of a terminal', () => {
 
   it('moves on when the user answers, interrupts or looks', () => {
     const asked = run(agent('working'), agent('asks'))
-    expect(afterInput(asked, '2')).toBe(asked)
+    // One key answers an agent's menu; a bell waits for a whole line.
+    expect(afterInput(asked, '2')).toMatchObject({ state: 'working', by: 'agent' })
     expect(afterInput(asked, '\r')).toMatchObject({ state: 'working', by: 'agent' })
+    expect(afterInput(run(bell()), 'l')).toMatchObject({ state: 'needs-you' })
     expect(afterInput(run(bell()), 'ls\r')).toBe(IDLE_RUN)
     expect(afterInput(run(agent('working')), '\x1b')).toBe(IDLE_RUN)
     // An arrow key starts with Esc and interrupts nothing.

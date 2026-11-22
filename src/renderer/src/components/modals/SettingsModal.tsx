@@ -306,7 +306,7 @@ function TerminalSection() {
         </SettingRow>
         <SettingRow
           label="Let agents say what they are doing"
-          description="Claude Code is started with hooks that tell Adar when it works, asks or finishes (they do nothing outside Adar), and Codex with its terminal notifications on. That is what the dot on a tab shows."
+          description="Claude Code is started with hooks that tell Adar when it works, asks or finishes (they do nothing outside Adar), and Codex with its terminal notifications on, which say when it asks or finishes. That is what the dot on a tab shows."
         >
           <Switch label="Let agents say what they are doing" checked={s.terminalAgentState} onChange={(terminalAgentState) => update({ terminalAgentState })} />
         </SettingRow>

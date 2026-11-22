@@ -57,10 +57,12 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
     per terminal, node-pty loaded on first use; a launcher's program runs first and the shell takes over when it ends;
     recent output is kept for a UI that starts drawing later and sent on in batches, held back when far ahead of the
     window; the output is read for signals and the state sent as 'terminal-info' events; Claude Code is started with
-    `--settings <userData>/terminal/claude-hooks.json`, hooks that print Adar's own escape sequence to the terminal, and
-    Codex with its terminal notifications on), `shell.ts` (what Adar adds to zsh: `$ZDOTDIR` points at start-up files of
-    Adar's own that run the user's first and give `$ZDOTDIR` back, then report the folder with OSC 7 and complete file
-    and folder names in any case; history, key bindings and prompt stay the user's) and `ops.ts` (the `terminal*` API
+    `--settings <userData>/terminal/claude-hooks.json`, hooks that append a line to `<userData>/terminal/signals`
+    (`$ADAR_SIGNALS`: a hook has no terminal to print to), which the manager watches, and Codex with its terminal
+    notifications on; a terminal's environment never carries an agent session Adar itself was started from), `shell.ts` (what Adar adds to zsh: `$ZDOTDIR` points at start-up files of
+    Adar's own that run the user's first and give `$ZDOTDIR` back, then report the folder with OSC 7, complete file
+    and folder names in any case and start `claude` and `codex` typed by hand the way a launcher does; history, key
+    bindings and prompt stay the user's) and `ops.ts` (the `terminal*` API
     methods; none over the HTTP bridge).
     Terminals outlive the window: they end when closed, when their shell exits or when Adar quits.
   - `menuBar.ts` — macOS menu bar extra: the tray icon (template images in `resources/tray`, drawn by
@@ -252,8 +254,10 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
   `window.e2e` (click/type/key/drag/contextMenu/menuItem/waitFor/state/errors). `window.__adar = { store, api, updates }`.
   Seed `<workdir>/ud/settings.json` with `{"openTabs":["/abs/repo"],"activeTab":"/abs/repo","autoFetchMinutes":0}`.
 - Terminals in a scripted run: `window.__adar.api.terminalList()` / `terminalWrite(id, 'echo hi\\r')` drive a terminal
-  (it runs the developer's own login shell); printing `\\033]7717;adar;working\\007` (or `asks`, `notify;<text>`,
-  `finished`, `idle`) there is what an agent's hooks do. A build made outside the project finds node-pty in the working
+  (it runs the developer's own login shell); appending `"$ADAR_TERMINAL" working` (or `asks <text>`, `notify <text>`,
+  `finished`, `idle`) as a line to `"$ADAR_SIGNALS"` there is what Claude Code's hooks do. Started from inside an agent's
+  session, a scripted run cannot sign the agents in its terminals in: check their hooks with the hooks file and a clean
+  environment instead. A build made outside the project finds node-pty in the working
   directory. `npm install` runs `scripts/fix-node-pty.cjs`, which restores the execute bit node-pty's macOS prebuilds lack.
 - Fixtures: `scripts/make-fixture-repo.sh <dir> [--conflict]` (demo repo + bare origin),
   `node scripts/make-big-repo.mjs <dir> [commits] [branches]` (performance).

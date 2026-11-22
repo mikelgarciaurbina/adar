@@ -7,7 +7,7 @@ import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_SETTINGS, type AdarEvent } from '@shared/types'
 import type { TerminalInfo } from '@shared/terminal'
-import { claudeHooks, defaultLang, spawnPlan, terminalEnv, TerminalManager, withAgentState } from './manager'
+import { claudeHooks, defaultLang, parseSignalLine, spawnPlan, terminalEnv, TerminalManager, withAgentState } from './manager'
 import { integrates, zshFiles } from './shell'
 
 describe('starting a terminal', () => {
@@ -51,12 +51,43 @@ describe('starting a terminal', () => {
     expect(withAgentState('claude', false)).toBe('claude')
   })
 
-  it('writes hooks that speak through the terminal and stay silent elsewhere', () => {
+  it('writes hooks that tell Adar through its signals file and stay silent elsewhere', () => {
     const hooks = (claudeHooks() as { hooks: Record<string, Array<{ matcher?: string; hooks: Array<{ type: string; command: string }> }>> }).hooks
-    expect(Object.keys(hooks).sort()).toEqual(['Notification', 'PostToolUse', 'PreToolUse', 'SessionEnd', 'SessionStart', 'Stop', 'UserPromptSubmit'])
-    expect(hooks.Stop[0].hooks[0]).toEqual({ type: 'command', command: `[ -n "$ADAR_TERMINAL" ] && printf '\\033]7717;adar;finished\\007' > /dev/tty 2>/dev/null; true` })
+    expect(Object.keys(hooks).sort()).toEqual([
+      'Notification',
+      'PermissionRequest',
+      'PostToolUse',
+      'PostToolUseFailure',
+      'PreToolUse',
+      'SessionEnd',
+      'SessionStart',
+      'Stop',
+      'StopFailure',
+      'UserPromptSubmit'
+    ])
+    // A hook has no terminal to print to: it appends a line, with the terminal it is about.
+    expect(hooks.Stop[0].hooks[0]).toEqual({ type: 'command', command: `[ -n "$ADAR_SIGNALS" ] && printf '%s finished\\n' "$ADAR_TERMINAL" >> "$ADAR_SIGNALS"; true` })
     expect(hooks.PreToolUse[0].matcher).toBe('AskUserQuestion|ExitPlanMode')
-    for (const list of Object.values(hooks)) for (const h of list.flatMap((l) => l.hooks)) expect(h.command).toContain('$ADAR_TERMINAL')
+    expect(hooks.Notification[0].matcher).toBe('permission_prompt|elicitation_dialog')
+    expect(hooks.PermissionRequest[0].hooks[0].command).toContain('Permission to use ')
+    for (const list of Object.values(hooks)) for (const h of list.flatMap((l) => l.hooks)) expect(h.command).toContain('"$ADAR_SIGNALS"')
+  })
+
+  it('reads a line of the signals file, and nothing that is not one', () => {
+    expect(parseSignalLine('t3-abc working')).toEqual({ id: 't3-abc', signal: { kind: 'agent', what: 'working', message: '' } })
+    expect(parseSignalLine('t3-abc asks Permission to use Bash')).toEqual({ id: 't3-abc', signal: { kind: 'agent', what: 'asks', message: 'Permission to use Bash' } })
+    expect(parseSignalLine('t3-abc notify  two\twords\x1b[31m ')?.signal).toMatchObject({ message: 'two words [31m' })
+    expect(parseSignalLine('t3-abc dance')).toBeNull()
+    expect(parseSignalLine('working')).toBeNull()
+    expect(parseSignalLine('')).toBeNull()
+  })
+
+  it('keeps an agent session Adar was started from out of the agents run in its terminals', () => {
+    const inside = { PATH: '/usr/bin', CLAUDECODE: '1', CLAUDE_CODE_SIMPLE: '1', CLAUDE_CODE_SESSION_ID: 's', ANTHROPIC_BASE_URL: 'http://127.0.0.1:1', ANTHROPIC_API_KEY: 'mine' }
+    expect(Object.keys(terminalEnv(inside, {}, '1', 'en-US')).filter((k) => /CLAUDE|ANTHROPIC/.test(k))).toEqual(['ANTHROPIC_API_KEY'])
+    // Variables of the user's own, with no session around them, are theirs to pass on.
+    const own = terminalEnv({ PATH: '/usr/bin', CLAUDE_CODE_USE_BEDROCK: '1', ANTHROPIC_BASE_URL: 'https://proxy.example' }, {}, '1', 'en-US')
+    expect(own).toMatchObject({ CLAUDE_CODE_USE_BEDROCK: '1', ANTHROPIC_BASE_URL: 'https://proxy.example' })
   })
 })
 
@@ -166,6 +197,32 @@ describe.skipIf(process.platform === 'win32')('TerminalManager', () => {
     await vi.waitFor(() => expect(manager.attach(info.id).replay).toContain('still-2'), { timeout: 8000 })
   })
 
+  it('follows what an agent’s hooks append to the signals file', async () => {
+    const { manager, dir, infos } = start()
+    const info = await manager.open({ owner: dir, cwd: dir, cols: 80, rows: 24 })
+    manager.attach(info.id)
+    const said = async (state: string | null, message = '') => {
+      await vi.waitFor(
+        async () => {
+          await manager.readSignalsNow()
+          expect(infos(info.id).at(-1) ?? { state: null, message: '' }).toMatchObject({ state, message })
+        },
+        { timeout: 8000 }
+      )
+    }
+    // What a hook runs: the shell's environment says where to write and which terminal it is.
+    manager.write(info.id, `printf '%s working\\n' "$ADAR_TERMINAL" >> "$ADAR_SIGNALS"\r`)
+    await said('working')
+    // Typed by hand into a plain shell: the terminal is called after the agent while it speaks.
+    expect(infos(info.id).at(-1)?.name).toBe('Claude Code')
+    manager.write(info.id, `printf '%s asks Permission to use Bash\\n' "$ADAR_TERMINAL" >> "$ADAR_SIGNALS"\r`)
+    await said('needs-you', 'Permission to use Bash')
+    // Lines about a terminal that is not there, or that say nothing known, are passed over.
+    manager.write(info.id, `printf 't-nobody finished\\nnonsense\\n%s finished\\n' "$ADAR_TERMINAL" >> "$ADAR_SIGNALS"\r`)
+    await said('finished')
+    expect(fs.statSync(path.join(dir, 'terminal', 'signals')).mode & 0o077).toBe(0)
+  })
+
   it('takes a bell for a call for attention, unless it answers what was just typed', async () => {
     const { manager, dir, infos } = start()
     const info = await manager.open({ owner: dir, cwd: dir, cols: 80, rows: 24 })
@@ -197,6 +254,10 @@ describe.skipIf(process.platform === 'win32')('TerminalManager', () => {
     manager.write(info.id, 'echo "m=$MARK e=$FROM_ENV z=$ZDOTDIR h=${HISTFILE:-none}"\r')
     await vi.waitFor(() => expect(output(info.id)).toContain(`m=mine e=theirs z=${home} h=`), { timeout: 15000 })
     expect(output(info.id)).not.toContain(path.join(dir, 'terminal', 'zsh', '.zsh_history'))
+
+    // Agents typed by hand are started so that they report, unless the user has a function of that name.
+    manager.write(info.id, 'whence -w claude codex\r')
+    await vi.waitFor(() => expect(output(info.id)).toMatch(/claude: function[\s\S]*codex: function/), { timeout: 15000 })
 
     // "cd adar" + Tab finds "Adar Web", and the shell says where it went.
     // (zsh rewrites only what differs on the line, so the proof is where the shell ends up.)

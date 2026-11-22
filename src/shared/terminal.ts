@@ -264,6 +264,9 @@ export interface RunState {
 
 export const IDLE_RUN: RunState = { state: null, message: '', by: null }
 
+/** A notification that only says a turn is over. */
+const TURN_ENDED = /^agent turn complete/i
+
 const same = (a: RunState, b: RunState) => a.state === b.state && a.message === b.message && a.by === b.by
 
 /** The state after a signal from the terminal's output (the same object when nothing changes). */
@@ -278,7 +281,10 @@ export function afterSignal(cur: RunState, sig: TerminalSignal): RunState {
     else if (cur.state === 'working' || cur.state === 'needs-you') next = { state: 'needs-you', message: sig.message || cur.message, by: 'agent' }
   } else if (sig.kind === 'attention') {
     // An agent that reports its own state needs no bell to say it again.
-    if (cur.by !== 'agent' || cur.state === null) next = { state: 'needs-you', message: sig.message || cur.message, by: 'bell' }
+    if (cur.by !== 'agent' || cur.state === null) {
+      // Codex says the end of a turn in these words (its terminal notifications); anything else asks for the user.
+      next = TURN_ENDED.test(sig.message) ? { state: 'finished', message: '', by: 'bell' } : { state: 'needs-you', message: sig.message || cur.message, by: 'bell' }
+    }
   }
   return same(cur, next) ? cur : next
 }
@@ -286,8 +292,9 @@ export function afterSignal(cur: RunState, sig: TerminalSignal): RunState {
 /** The state after the user typed into the terminal. */
 export function afterInput(cur: RunState, data: string): RunState {
   if (cur.state === 'finished') return IDLE_RUN
-  // An answer: the agent goes on (a bell had nothing more to say).
-  if (cur.state === 'needs-you' && data.includes('\r')) return cur.by === 'agent' ? { state: 'working', message: '', by: 'agent' } : IDLE_RUN
+  // An answer to what an agent asked (one key is enough for its menus): it goes on. A bell had nothing more to say.
+  if (cur.state === 'needs-you' && cur.by === 'agent') return { state: 'working', message: '', by: 'agent' }
+  if (cur.state === 'needs-you' && data.includes('\r')) return IDLE_RUN
   // Esc or Ctrl-C alone: the turn was interrupted, and nothing reports that.
   if (cur.state === 'working' && (data === '\x1b' || data === '\x03')) return IDLE_RUN
   return cur

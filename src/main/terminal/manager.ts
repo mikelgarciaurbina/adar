@@ -4,7 +4,7 @@
 // title, bell, what an agent says about itself) and tells the UI what each one is doing with 'terminal-info'
 // events. Terminals outlive Adar's window: they end when closed, when their shell exits or when Adar quits.
 
-import { promises as fs } from 'node:fs'
+import { promises as fs, watch, type FSWatcher } from 'node:fs'
 import { createRequire } from 'node:module'
 import os from 'node:os'
 import path from 'node:path'
@@ -16,6 +16,7 @@ import {
   afterSeen,
   afterSignal,
   agentOfCommand,
+  cleanText,
   IDLE_RUN,
   MAX_TERMINALS,
   newScan,
@@ -54,6 +55,9 @@ const REPLAY_MAX = 400_000
 const REPLAY_KEEP = 300_000
 /** A bell this soon after a key is the shell answering it (nothing to complete), not a call for attention. */
 const TYPING_BELL_MS = 1500
+/** The signals file is also looked at this often (file events are not reliable everywhere), and emptied past this size. */
+const SIGNALS_POLL_MS = 1500
+const SIGNALS_MAX_BYTES = 256_000
 /** Output is sent on in batches: at most this often, or sooner when this much is waiting. */
 const FLUSH_MS = 6
 const FLUSH_AT = 64_000
@@ -72,6 +76,8 @@ interface Session {
   run: RunState
   /** The shell's own name ("zsh"): anything else in front is a program running. */
   shell: string
+  /** The name its launcher gave it ('' for a plain shell), for when an agent typed by hand is gone again. */
+  launcherName: string
   replay: string
   pending: string
   timer: NodeJS.Timeout | null
@@ -87,6 +93,10 @@ interface Session {
 /** Variables of Adar's own process that mean nothing, or the wrong thing, to a shell started from it. */
 const DROPPED_ENV = /^(ELECTRON_|ADAR_|CHROME_|VITE_|npm_|ORIGINAL_XDG_|GOOGLE_API_KEY$|INIT_CWD$|NODE_ENV$|NODE_CHANNEL_FD$)/
 
+/** What a terminal whose agent was typed by hand is called while Claude Code's hooks speak for it. */
+const CLAUDE_NAME = 'Claude Code'
+const NESTED_ENV = /^(CLAUDECODE$|CLAUDE_|ANTHROPIC_BASE_URL$|MCP_)/
+
 /** "es-ES" → "es_ES.UTF-8": what a terminal app sets when the system gave the process no locale. */
 export function defaultLang(locale: string): string {
   const m = /^([a-z]{2,3})[-_]([A-Za-z]{2})\b/.exec(locale)
@@ -96,7 +106,13 @@ export function defaultLang(locale: string): string {
 /** The environment a terminal's shell starts with. */
 export function terminalEnv(base: NodeJS.ProcessEnv, extra: Record<string, string>, version: string, locale: string): Record<string, string> {
   const env: Record<string, string> = {}
-  for (const [k, v] of Object.entries(base)) if (typeof v === 'string' && !DROPPED_ENV.test(k)) env[k] = v
+  // Started from inside an agent's session (a development run): its markers and its sign-in are not for the
+  // agents run here, which must start as from a terminal of the user's own.
+  const nested = base.CLAUDECODE !== undefined
+  for (const [k, v] of Object.entries(base)) {
+    if (typeof v !== 'string' || DROPPED_ENV.test(k) || (nested && NESTED_ENV.test(k))) continue
+    env[k] = v
+  }
   env.TERM = 'xterm-256color'
   env.COLORTERM = 'truecolor'
   env.TERM_PROGRAM = 'Adar'
@@ -105,33 +121,53 @@ export function terminalEnv(base: NodeJS.ProcessEnv, extra: Record<string, strin
   return Object.assign(env, extra)
 }
 
-/** A shell line that tells Adar something through the terminal itself; silent anywhere else. */
+/**
+ * A shell line that tells Adar something from a hook: a line appended to the file it watches ($ADAR_SIGNALS), with
+ * the terminal it is about. Hooks have no terminal of their own to print to; outside Adar's terminals the variable
+ * is not there and the line does nothing.
+ */
 function sayLine(what: string): string {
-  return `[ -n "$ADAR_TERMINAL" ] && printf '\\033]${ADAR_OSC};adar;${what}\\007' > /dev/tty 2>/dev/null; true`
+  return `[ -n "$ADAR_SIGNALS" ] && printf '%s ${what}\\n' "$ADAR_TERMINAL" >> "$ADAR_SIGNALS"; true`
+}
+
+/** The same with a few words taken from the JSON the hook reads (the value of `key`; quotes inside it end the capture). */
+function sayWith(what: string, key: string, prefix = ''): string {
+  return (
+    `[ -n "$ADAR_SIGNALS" ] || exit 0; m=$(sed -n 's/.*"${key}"[[:space:]]*:[[:space:]]*"\\([^"\\\\]*\\).*/\\1/p' | head -c 200 | tr -d '\\000-\\037'); ` +
+    `printf '%s ${what} ${prefix}%s\\n' "$ADAR_TERMINAL" "$m" >> "$ADAR_SIGNALS"; true`
+  )
 }
 
 /**
- * Claude Code settings that make it say what it is doing: hooks that print one of Adar's messages to the terminal
- * when a prompt is sent, when it asks something, when it says it waits and when its turn ends. Loaded with
- * `claude --settings <file>`, on top of the user's own settings; they do nothing outside Adar's terminals.
+ * Claude Code settings that make it say what it is doing: hooks for when a prompt is sent, when it asks for a
+ * permission or a question, when a tool is done and when its turn ends. Loaded with `claude --settings <file>`,
+ * on top of the user's own settings; they do nothing outside Adar's terminals.
  */
 export function claudeHooks(): unknown {
-  const hook = (command: string) => [{ hooks: [{ type: 'command', command }] }]
-  // The notification's own words, from the JSON the hook reads; quotes inside them end the capture early.
-  const notify =
-    `[ -n "$ADAR_TERMINAL" ] || exit 0; m=$(sed -n 's/.*"message"[[:space:]]*:[[:space:]]*"\\([^"\\\\]*\\).*/\\1/p' | head -c 200 | tr -d '\\000-\\037;'); ` +
-    `printf '\\033]${ADAR_OSC};adar;notify;%s\\007' "$m" > /dev/tty 2>/dev/null; true`
+  const hook = (command: string, matcher?: string) => [{ ...(matcher ? { matcher } : {}), hooks: [{ type: 'command', command }] }]
   return {
     hooks: {
       SessionStart: hook(sayLine('idle')),
       UserPromptSubmit: hook(sayLine('working')),
-      PreToolUse: [{ matcher: 'AskUserQuestion|ExitPlanMode', hooks: [{ type: 'command', command: sayLine('asks') }] }],
-      PostToolUse: [{ matcher: 'AskUserQuestion|ExitPlanMode', hooks: [{ type: 'command', command: sayLine('working') }] }],
-      Notification: hook(notify),
+      // It needs the user: a permission to give, a question, a plan to approve.
+      PermissionRequest: hook(sayWith('asks', 'tool_name', 'Permission to use ')),
+      PreToolUse: hook(sayLine('asks'), 'AskUserQuestion|ExitPlanMode'),
+      Notification: hook(sayWith('notify', 'message'), 'permission_prompt|elicitation_dialog'),
+      // A tool ran: whatever it was waiting for was answered.
+      PostToolUse: hook(sayLine('working')),
+      PostToolUseFailure: hook(sayLine('working')),
       Stop: hook(sayLine('finished')),
+      StopFailure: hook(sayLine('finished')),
       SessionEnd: hook(sayLine('idle'))
     }
   }
+}
+
+/** One line of the signals file: "<terminal> <what> [text]". */
+export function parseSignalLine(line: string): { id: string; signal: TerminalSignal } | null {
+  const m = /^(\S{1,64}) (working|asks|notify|finished|idle)(?: (.*))?$/.exec(line)
+  if (!m) return null
+  return { id: m[1], signal: { kind: 'agent', what: m[2] as 'working' | 'asks' | 'notify' | 'finished' | 'idle', message: cleanText(m[3] ?? '') } }
 }
 
 /** A launcher's command with what makes its agent report its state (nothing for programs Adar does not know). */
@@ -197,6 +233,12 @@ export class TerminalManager {
   private pty: Promise<Pty> | null = null
   private poll: NodeJS.Timeout | null = null
   private hooksFile: Promise<string> | null = null
+  /** The file hooks append to, how far it was read, and what watches it. */
+  private signals: Promise<string> | null = null
+  private signalsRead = 0
+  private signalsWatch: FSWatcher | null = null
+  private signalsPoll: NodeJS.Timeout | null = null
+  private readingSignals = false
 
   constructor(private readonly deps: TerminalDeps) {}
 
@@ -225,6 +267,81 @@ export class TerminalManager {
     return this.hooksFile
   }
 
+  /** The file agents' hooks write to, emptied once per run and watched from then on; '' when it cannot be made. */
+  private signalsFile(): Promise<string> {
+    if (!this.signals) {
+      const file = path.join(this.deps.userDataDir, 'terminal', 'signals')
+      this.signals = fs
+        .mkdir(path.dirname(file), { recursive: true })
+        .then(() => fs.writeFile(file, '', { mode: 0o600 }))
+        .then(
+          () => {
+            this.signalsRead = 0
+            try {
+              this.signalsWatch = watch(file, () => void this.readSignals(file))
+              this.signalsWatch.on('error', () => undefined)
+            } catch {
+              this.signalsWatch = null
+            }
+            // File events are not to be trusted everywhere: a slow look as well.
+            this.signalsPoll = setInterval(() => void this.readSignals(file), SIGNALS_POLL_MS)
+            this.signalsPoll.unref?.()
+            return file
+          },
+          () => {
+            this.signals = null
+            return ''
+          }
+        )
+    }
+    return this.signals
+  }
+
+  /** Read what was appended since the last look, a whole line at a time. */
+  private async readSignals(file: string): Promise<void> {
+    if (this.readingSignals) return
+    this.readingSignals = true
+    try {
+      const handle = await fs.open(file, 'r')
+      try {
+        const { size } = await handle.stat()
+        if (size < this.signalsRead) this.signalsRead = 0
+        if (size === this.signalsRead) return
+        const buf = Buffer.alloc(Math.min(size - this.signalsRead, 1_000_000))
+        const { bytesRead } = await handle.read(buf, 0, buf.length, this.signalsRead)
+        const text = buf.subarray(0, bytesRead).toString('utf8')
+        const end = text.lastIndexOf('\n')
+        if (end < 0) return
+        this.signalsRead += Buffer.byteLength(text.slice(0, end + 1))
+        for (const line of text.slice(0, end).split('\n')) {
+          const parsed = parseSignalLine(line)
+          const s = parsed && this.sessions.get(parsed.id)
+          if (!parsed || !s) continue
+          // Only Claude Code's hooks write here: a shell it was typed into by hand is its terminal for now.
+          if (!s.info.name && parsed.signal.kind === 'agent' && parsed.signal.what !== 'idle') s.info.name = CLAUDE_NAME
+          this.onSignal(s, parsed.signal)
+        }
+      } finally {
+        await handle.close()
+      }
+      // Read to its end and grown large: start it again.
+      if (this.signalsRead > SIGNALS_MAX_BYTES) {
+        await fs.truncate(file, 0).catch(() => undefined)
+        this.signalsRead = 0
+      }
+    } catch {
+      /* the next change reads again */
+    } finally {
+      this.readingSignals = false
+    }
+  }
+
+  /** Read the signals file now (tests). */
+  async readSignalsNow(): Promise<void> {
+    const file = await this.signalsFile()
+    if (file) await this.readSignals(file)
+  }
+
   async open(raw: unknown): Promise<TerminalInfo> {
     const o = (raw && typeof raw === 'object' ? raw : {}) as Partial<TerminalOpen>
     if (typeof o.owner !== 'string' || !o.owner || o.owner.length > 4096) throw invalid('A terminal needs an owner')
@@ -243,14 +360,12 @@ export class TerminalManager {
     }
     const id = `t${++this.seq}-${Date.now().toString(36)}`
     const extra: Record<string, string> = { ADAR_TERMINAL: id }
-    let command: string | null = null
-    if (launcher) {
-      command = withAgentState(launcher.command, settings.terminalAgentState)
-      if (command.includes('$ADAR_CLAUDE_SETTINGS')) {
-        const file = await this.claudeSettings()
-        if (file) extra.ADAR_CLAUDE_SETTINGS = file
-        else command = launcher.command
-      }
+    const posix = process.platform !== 'win32'
+    // What agents need to say what they are doing: the file their hooks write to, and Claude Code's hooks.
+    if (settings.terminalAgentState && posix) {
+      const [signals, hooks] = await Promise.all([this.signalsFile(), this.claudeSettings()])
+      if (signals) extra.ADAR_SIGNALS = signals
+      if (signals && hooks) extra.ADAR_CLAUDE_SETTINGS = hooks
     }
     const shell = process.env.SHELL || ''
     let integrated = false
@@ -261,6 +376,9 @@ export class TerminalManager {
         integrated = true
       }
     }
+    let command: string | null = null
+    // With Adar's start-up files the shell itself starts the agents it knows that way, typed by hand or by a launcher.
+    if (launcher) command = integrated ? launcher.command : withAgentState(launcher.command, !!extra.ADAR_CLAUDE_SETTINGS)
     const plan = spawnPlan(o.cwd, command, process.env, process.platform, integrated)
     const pty = await this.load()
     // Terminals may be opened while this one loads: the limit is checked again by the time it exists.
@@ -294,6 +412,7 @@ export class TerminalManager {
       scan: newScan(),
       run: IDLE_RUN,
       shell: plan.shell,
+      launcherName: launcher?.name ?? '',
       replay: '',
       pending: '',
       timer: null,
@@ -387,6 +506,10 @@ export class TerminalManager {
   dispose(): void {
     if (this.poll) clearInterval(this.poll)
     this.poll = null
+    if (this.signalsPoll) clearInterval(this.signalsPoll)
+    this.signalsPoll = null
+    this.signalsWatch?.close()
+    this.signalsWatch = null
     for (const s of [...this.sessions.values()]) this.kill(s)
     this.sessions.clear()
   }
@@ -486,7 +609,7 @@ export class TerminalManager {
     if (name !== s.info.process || busy !== s.info.busy) {
       // Back at the shell: whatever ran there said its last word.
       if (!busy && s.run !== IDLE_RUN && s.run.by === 'agent') s.run = IDLE_RUN
-      this.change(s, { process: name, busy, state: s.run.state, message: s.run.message })
+      this.change(s, { process: name, busy, state: s.run.state, message: s.run.message, ...(busy ? {} : { name: s.launcherName }) })
     }
   }
 

@@ -55,6 +55,19 @@ if [[ -n $ADAR_COMPLETE_ANY_CASE ]]; then
   zstyle ':completion:*:*:*:*:(local-|path-|)directories' matcher 'm:{a-z}={A-Z}'
 fi
 
+if [[ -n $ADAR_CLAUDE_SETTINGS ]]; then
+  # Agents typed by hand say what they are doing like the ones a launcher starts (the dot on the tab): Claude Code
+  # with Adar's hooks on top of your settings, Codex with its terminal notifications on. Functions of your own win.
+  if (( ! $+functions[claude] )); then
+    claude() {
+      if [[ " $* " == *" --settings"* ]]; then command claude "$@"; else command claude --settings "$ADAR_CLAUDE_SETTINGS" "$@"; fi
+    }
+  fi
+  if (( ! $+functions[codex] )); then
+    codex() { command codex -c tui.notifications=true "$@" }
+  fi
+fi
+
 # A login shell has its .zlogin left to read; for any other this was the last file.
 [[ -o login ]] && ZDOTDIR=$ADAR_ZDOTDIR
 `,
