@@ -4,7 +4,7 @@
   keeps running while you look at the graph or at another tab.
 - **Tabs and splits.** Several terminals per project in tabs, and panes split right (⌘D) or down (⇧⌘D) that you resize
   by their divider, zoom (⇧⌘↩) and move between (⌥⌘ and the arrows, ⌘[ and ⌘]). ⌘T opens a terminal, ⌘W closes the
-  pane, ⌘K clears it and ⌘F finds in it. On Windows and Linux, Ctrl+Shift takes ⌘'s place.
+  pane, ⌘K clears it and ⌘F finds in it. On Windows and Linux, Ctrl+Shift takes ⌘'s place for most of them.
 - **Run Claude Code or Codex there.** *+* on the terminals' strip starts a shell or a launcher: Claude Code, Codex or
   any program you add in *Settings → Terminal*. Typing `claude` or `codex` yourself works the same.
 - **A dot that says what the agent is doing.** Blue and pulsing while it works, amber when it needs you (a question, a
@@ -27,6 +27,12 @@
   group and the repository.
 - **New commits after a fetch** are notified for every local branch that tracks a remote, not only the checked-out one.
 - *Open in Terminal* is now *Open in External Terminal*.
+
+### Good to know
+- The terminal was built and tried on macOS. On Windows (PowerShell, or the distribution's shell for a repository
+  inside WSL) and Linux it has only passed its automated tests so far: please open an issue with what you find.
+- The dot needs the agent to be signed in and running in one of Adar's terminals; an agent you run in another app is
+  still told apart by its commits and pushes, as before.
 
 ### Install
 **macOS** (Apple Silicon): download `Adar-0.25.0-arm64.dmg` and drag Adar to Applications. The first time, macOS asks
