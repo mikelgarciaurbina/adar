@@ -73,8 +73,22 @@ export function repoFixture<T extends object>(populate: (dir: string) => T) {
       template = { dir, data: populate(dir) }
     }
     const dir = tmpDir()
-    fs.cpSync(template.dir, dir, { recursive: true })
+    copyTree(template.dir, dir)
     return { ...template.data, dir }
+  }
+}
+
+/** Copy a folder into an empty one. A copy that fails part-way (seen on macOS runners: ENOENT in .git) starts again. */
+function copyTree(from: string, to: string, attempts = 4): void {
+  for (let i = 1; ; i++) {
+    try {
+      fs.cpSync(from, to, { recursive: true })
+      return
+    } catch (e) {
+      if (i >= attempts) throw e
+      fs.rmSync(to, { recursive: true, force: true })
+      fs.mkdirSync(to, { recursive: true })
+    }
   }
 }
 

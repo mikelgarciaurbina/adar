@@ -118,14 +118,29 @@ describe.skipIf(process.platform === 'win32')('TerminalManager', () => {
   const dirs: string[] = []
   const shellBefore = process.env.SHELL
   const zdotdirBefore = process.env.ZDOTDIR
-  afterEach(() => {
-    manager?.dispose()
+  let exited: string[] = []
+  afterEach(async () => {
+    const m = manager
     manager = null
+    if (m) {
+      // A shell on its way out still writes its history and its completion cache: wait until each one is gone
+      // before taking its folders away.
+      const ids = m.list().map((t) => t.id)
+      for (const id of ids) m.close(id)
+      await vi.waitFor(() => expect(ids.filter((id) => !exited.includes(id))).toEqual([]), { timeout: 10000 }).catch(() => undefined)
+      m.dispose()
+    }
+    exited = []
     process.env.SHELL = shellBefore
     if (zdotdirBefore === undefined) delete process.env.ZDOTDIR
     else process.env.ZDOTDIR = zdotdirBefore
-    // A shell on its way out may still be writing its history there.
-    for (const d of dirs.splice(0)) fs.rmSync(d, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
+    for (const d of dirs.splice(0)) {
+      try {
+        fs.rmSync(d, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
+      } catch {
+        // A temporary folder left behind is not a failed test.
+      }
+    }
   })
 
   function start(launchers = DEFAULT_SETTINGS.terminalLaunchers, shell = '/bin/sh') {
@@ -135,7 +150,10 @@ describe.skipIf(process.platform === 'win32')('TerminalManager', () => {
     dirs.push(dir)
     const events: AdarEvent[] = []
     manager = new TerminalManager({
-      emit: (e) => events.push(e),
+      emit: (e) => {
+        events.push(e)
+        if (e.type === 'terminal-exit') exited.push(e.id)
+      },
       settings: async () => ({ terminalLaunchers: launchers, terminalAgentState: true, terminalShellIntegration: true, terminalCompleteAnyCase: true }),
       userDataDir: dir,
       appVersion: '0.0.0-test',
