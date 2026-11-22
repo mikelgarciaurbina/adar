@@ -52,19 +52,20 @@ since your review (a rebase with the same changes or a merge of main told apart)
 changes, approve or request changes, the conversation and the commits, with the agents that co-wrote them · an inbox of
 the pull requests of every open repository (waiting for your review, the ones you follow, yours), a blue dot on what
 changed since you looked, also in the left panel and on the branch where the commit you reviewed is marked, and
-notifications for review requests, new commits or replies, and reviews or failed checks on yours · agents at work: the
-worktrees of the open repositories as they work (working, quiet with work left — it may be waiting for an answer — or
-idle), with the files changing now, the last 30 minutes and which agent (Co-Authored-By trailers, the branch prefix or
-the folder), in the left panel, the tabs, the graph (a dashed row for each worktree's work in progress), an Agents view
-and the menu bar panel, and notifications when an agent commits, pushes or goes quiet · moving a whole tab group, by
-its label or from its menu · pull requests reviewed in Adar on GitLab, Bitbucket (Cloud and Data Center) and Azure
+notifications for review requests, new commits or replies, and reviews or failed checks on yours · notifications when
+an agent commits or pushes, in a repository's folder or a worktree, with which agent (Co-Authored-By trailers, the
+branch prefix or the folder) · moving a whole tab group, by its label or from its menu · pull requests reviewed in Adar on GitLab, Bitbucket (Cloud and Data Center) and Azure
 DevOps too, with their own reviews (GitLab's draft notes, Bitbucket Data Center's pending comments), approvals or votes,
 threads to resolve, suggested changes where the service has them and Viewed marks Adar keeps where it has none; and
 their activity (reviews, comments, pushes) for the inbox's blue dots and the notifications · an agent's work reviewed
 before its pull request: its commits and its changes not committed against the base branch, with Viewed marks and
 notes on lines copied as one message for the agent's chat, and on the next round only what changed since · on Windows,
 repositories inside WSL run the distribution's own git (its SSH keys, credential helpers and hooks), opened from
-**Open Repository in WSL…** or any `\\wsl.localhost\…` folder.
+**Open Repository in WSL…** or any `\\wsl.localhost\…` folder · terminals inside Adar: a project's tab shows the graph,
+a terminal or both, with terminal tabs and panes split right or down, a terminal of its own for each tab group in the
+folder its repositories share, launchers for Claude Code and Codex, and a dot on the tab that says whether the agent
+there is working, needs you or has finished, with a notification for the last two (it takes the place of the Agents
+view of 0.20) · new-commit notifications after a fetch for every local branch that tracks a remote.
 
 ---
 
@@ -135,7 +136,7 @@ Less pressing now that agents make most commits, merges and stashes themselves.
 - [ ] **Git LFS**: file status, lock/unlock, pointer-file awareness in diffs.
 - [ ] Submodules: init/update per submodule, open a submodule in its own tab, show its diff as a commit range.
 - [ ] Patch workflow: export (`format-patch`), apply (`am`), copy a diff as a patch.
-- [ ] Embedded terminal (xterm.js) next to the git console; streaming output and cancel for long console commands.
+- [ ] Streaming output and cancel for long commands in the git console.
 - [ ] Multiple identities: per-folder profiles (`includeIf`), SSH key helper.
 
 ### Scale and performance
