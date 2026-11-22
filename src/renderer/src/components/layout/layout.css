@@ -247,6 +247,38 @@
   outline: 2px solid var(--tb-group);
   outline-offset: -2px;
 }
+/* The group's own terminal: a small button after its label; lit while that view is in front. */
+.tb-group-term {
+  -webkit-app-region: no-drag;
+  flex: none;
+  align-self: center;
+  height: 24px;
+  margin-top: 3px;
+  padding: 0 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--tb-group-ink);
+  opacity: 0.75;
+}
+.tb-group-term:hover {
+  opacity: 1;
+  background: color-mix(in srgb, var(--tb-group) 16%, transparent);
+}
+.tb-group-term-on,
+.tb-group-term-on:hover {
+  opacity: 1;
+  background: color-mix(in srgb, var(--tb-group) 26%, transparent);
+}
+.tb-group-front {
+  background: color-mix(in srgb, var(--tb-group) 16%, transparent);
+}
+.tb-group-chip .tm-dot {
+  margin-left: 1px;
+}
 .tb-group-mark {
   flex: none;
   width: 8px;
@@ -684,11 +716,6 @@
   background: var(--success);
   box-shadow: 0 0 0 2px var(--bg-2);
 }
-.tb-tool-quiet .tb-badge {
-  background: var(--warning);
-  color: var(--bg-0);
-  box-shadow: 0 0 0 2px var(--bg-2);
-}
 .tb-badge {
   position: absolute;
   top: -6px;
@@ -770,6 +797,68 @@
 .tb-util-active:hover {
   color: var(--accent);
   background: var(--accent-soft);
+}
+
+/* Graph / Both / Terminal: what the tab shows. */
+.tb-view {
+  flex: none;
+  display: flex;
+  gap: 2px;
+  margin-right: 8px;
+  padding: 2px;
+  border-radius: var(--radius);
+  background: var(--bg-0);
+  border: 1px solid var(--border);
+}
+.tb-view-seg {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-2);
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+}
+.tb-view-seg:hover {
+  color: var(--text-0);
+}
+.tb-view-on,
+.tb-view-on:hover {
+  background: var(--bg-4);
+  color: var(--text-0);
+  font-weight: 500;
+}
+.tb-view-on > svg {
+  color: var(--accent);
+}
+.tb-view-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 16px;
+  padding: 0 6px;
+  border-radius: 8px;
+  background: var(--bg-3);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 400;
+  color: var(--text-1);
+}
+.tb-view-count .tm-dot {
+  width: 6px;
+  height: 6px;
+}
+@container tb-toolbar (max-width: 1240px) {
+  .tb-view-label {
+    display: none;
+  }
+  .tb-view-seg {
+    padding: 0 8px;
+  }
 }
 
 @container tb-toolbar (max-width: 900px) {

@@ -1,7 +1,9 @@
 // Domain types shared by the main process (git backend), the dev HTTP bridge
 // and the renderer. Everything here must be JSON-serialisable.
 
-import { DEFAULT_AGENT_PREFIXES, DEFAULT_QUIET_MINUTES, type AgentEvent, type AgentsScope, type AgentOpen, type AgentPrefix, type AgentWorktree, type WorktreeSeen } from './agents'
+import type { AgentEvent, AgentOpen } from './agents'
+import type { TerminalCursor, TerminalInfo, TerminalLauncher, TerminalViewMode } from './terminal'
+import { DEFAULT_TERMINAL_LAUNCHERS } from './terminal'
 import type { AzureOrganization, BitbucketServer, GithubServer, GitlabServer } from './hosting'
 
 /** Unix timestamp in seconds (as git reports it). */
@@ -548,6 +550,8 @@ export interface TabGroup {
   repos: string[]
   /** Only the group's chip (and its active tab) is shown. */
   collapsed: boolean
+  /** Where the group's own terminals start; the folder its repositories share when absent. */
+  folder?: string
 }
 
 /** A Git repository found directly inside a folder (see AdarApi.findRepositories). */
@@ -587,8 +591,34 @@ export interface AppSettings {
   zoom: number
   /** Shell command used for "Open in editor", e.g. "code" or "cursor". Empty = system default. */
   editorCommand: string
-  /** "Terminal", "iTerm", "Warp"... */
+  /** "Terminal", "iTerm", "Warp"... (Open in External Terminal). */
   terminalApp: string
+  /** Terminals inside Adar: the programs a new terminal can start with, besides the shell. */
+  terminalLaunchers: TerminalLauncher[]
+  /** Start the agents Adar knows so that they say what they are doing (the dot on a tab, its notifications). */
+  terminalAgentState: boolean
+  /** The terminals' font; '' is Geist Mono, the bundled one. */
+  terminalFontFamily: string
+  terminalFontSize: number
+  terminalCursor: TerminalCursor
+  terminalCursorBlink: boolean
+  /** Lines of output kept per terminal. */
+  terminalScrollback: number
+  /** macOS: Option sends Meta (Alt) instead of typing its characters. */
+  terminalOptionAsMeta: boolean
+  terminalCopyOnSelect: boolean
+  /** Panes without focus are drawn dimmer. */
+  terminalDimUnfocused: boolean
+  /** Ask before closing a terminal with a program running in it. */
+  terminalConfirmClose: boolean
+  /** Height of the terminal docked under the graph (the "Both" view). */
+  terminalDockHeight: number
+  /** What each project's tab shows (path → view); the graph where absent. */
+  terminalViews: Record<string, TerminalViewMode>
+  /** A notification when an agent in a terminal asks something or waits for an answer. */
+  notifyTerminalNeedsYou: boolean
+  /** A notification when an agent in a terminal ends its turn. */
+  notifyTerminalFinished: boolean
   /** Repos open as tabs, restored on launch. */
   openTabs: string[]
   activeTab: string | null
@@ -612,7 +642,7 @@ export interface AppSettings {
   checkForUpdates: boolean
   /** macOS: the antlers in the menu bar, with a panel for the active project. */
   menuBarIcon: boolean
-  /** A system notification when a fetch brings new commits to the checked-out branch's upstream. */
+  /** A system notification when a fetch brings new commits to the upstream of a local branch (any that tracks a remote). */
   notifyNewCommits: boolean
   /** A notification when someone asks for the user's review (or asks again). */
   notifyReviewRequests: boolean
@@ -628,24 +658,8 @@ export interface AppSettings {
   pullsUnfollowed: string[]
   /** What the user last looked at in each pull request: its head then, and when ("host/owner/name#12" → mark). */
   pullsSeen: Record<string, PullSeen>
-  /** Agents at work: the live state of the open repositories' worktrees (left panel, tabs, graph, Agents view). */
-  agentsOn: boolean
-  /** Also watch each repository's own folder, for agents that work there rather than in a worktree. */
-  agentsWatchMain: boolean
-  /** What the Agents view and the toolbar's Agents button show: the active repository's worktrees, its tab group's or every open tab's. */
-  agentsScope: AgentsScope
-  /** A notification when an agent commits or pushes (not for what Adar itself does). */
+  /** A notification when a commit or a push happens that Adar did not make (an agent's, in a terminal or a worktree). */
   notifyAgentCommits: boolean
-  /** A notification when an agent goes quiet with work left (it may be waiting for an answer). */
-  notifyAgentQuiet: boolean
-  /** Minutes without a change before a worktree with work left counts as quiet. */
-  agentQuietMinutes: number
-  /** Branch prefixes that name the agent working on a branch ("claude/" → Claude), after Co-Authored-By trailers. */
-  agentPrefixes: AgentPrefix[]
-  /** Worktrees (paths) whose going quiet is never notified. */
-  agentsQuietMuted: string[]
-  /** What the user last saw of each worktree: its HEAD then, and when (path → mark). */
-  worktreesSeen: Record<string, WorktreeSeen>
   /** Version the user chose to skip ('' = none). */
   skippedUpdateVersion: string
   /** Adar version that last ran with these settings ('' = none recorded): a newer one shows What's new once. */
@@ -693,6 +707,21 @@ export const DEFAULT_SETTINGS: AppSettings = {
   zoom: 1,
   editorCommand: '',
   terminalApp: 'Terminal',
+  terminalLaunchers: DEFAULT_TERMINAL_LAUNCHERS.map((l) => ({ ...l })),
+  terminalAgentState: true,
+  terminalFontFamily: '',
+  terminalFontSize: 13,
+  terminalCursor: 'block',
+  terminalCursorBlink: true,
+  terminalScrollback: 10000,
+  terminalOptionAsMeta: true,
+  terminalCopyOnSelect: false,
+  terminalDimUnfocused: true,
+  terminalConfirmClose: true,
+  terminalDockHeight: 340,
+  terminalViews: {},
+  notifyTerminalNeedsYou: true,
+  notifyTerminalFinished: true,
   openTabs: [],
   activeTab: null,
   tabGroups: [],
@@ -715,15 +744,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   pullsFollowed: [],
   pullsUnfollowed: [],
   pullsSeen: {},
-  agentsOn: true,
-  agentsWatchMain: false,
-  agentsScope: 'repo',
   notifyAgentCommits: true,
-  notifyAgentQuiet: true,
-  agentQuietMinutes: DEFAULT_QUIET_MINUTES,
-  agentPrefixes: DEFAULT_AGENT_PREFIXES.map((p) => ({ ...p })),
-  agentsQuietMuted: [],
-  worktreesSeen: {},
   skippedUpdateVersion: '',
   lastRunVersion: '',
   githubAuth: '',
@@ -836,16 +857,38 @@ export type AdarEvent =
       view: 'review' | 'conversation' | 'inbox'
     }
   | {
-      /** Agents at work: worktrees looked at again (or no longer watched), and what happened in them. */
+      /** Commits and pushes Adar did not make, in the open repositories (see agents.ts). */
       type: 'agents'
-      worktrees: AgentWorktree[]
-      removed: string[]
       events: AgentEvent[]
     }
   | ({
-      /** An agent notification was clicked: open the worktree (on its changes or a commit) or the Agents view. */
+      /** A commit or push notification was clicked: open that folder's tab on its changes or the commit. */
       type: 'open-agent'
     } & AgentOpen)
+  | {
+      /** Output of a terminal the UI is drawing (see src/shared/terminal.ts). */
+      type: 'terminal-data'
+      id: string
+      data: string
+    }
+  | {
+      /** A terminal changed: the program in front, its title, what its agent is doing. */
+      type: 'terminal-info'
+      info: TerminalInfo
+    }
+  | {
+      /** A terminal's shell ended. */
+      type: 'terminal-exit'
+      id: string
+      code: number
+      signal: number
+    }
+  | {
+      /** A terminal notification was clicked: show that terminal. */
+      type: 'open-terminal'
+      owner: string
+      id: string
+    }
 
 export const MENU_COMMANDS = [
   'open-repo',
@@ -869,7 +912,24 @@ export const MENU_COMMANDS = [
   'show-reflog',
   'pull-requests',
   'review-pull-request',
-  'agents',
+  'toggle-terminal',
+  'view-graph',
+  'view-both',
+  'view-terminal',
+  'terminal-new',
+  'terminal-claude',
+  'terminal-codex',
+  'terminal-split-right',
+  'terminal-split-down',
+  'terminal-zoom',
+  'terminal-equalize',
+  'terminal-next-pane',
+  'terminal-prev-pane',
+  'terminal-next-tab',
+  'terminal-prev-tab',
+  'terminal-find',
+  'terminal-clear',
+  'terminal-close',
   'refresh',
   'toggle-left-panel',
   'toggle-right-panel',

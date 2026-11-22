@@ -1,60 +1,35 @@
-// Agents at work, main side: parsing what git says about a worktree, looking at a real one (changes, lines,
-// commits with their agents) and the tracker following a linked worktree through edits, commits (an agent's and
-// Adar's own) and a first push.
+// The commit tracker: reading a folder's HEAD and upstream, and following a repository's folder and a linked
+// worktree through commits (an agent's and Adar's own) and pushes.
 
 import fs from 'node:fs'
 import path from 'node:path'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { AgentEvent } from '@shared/agents'
-import { DEFAULT_SETTINGS, type AdarEvent, type AppSettings } from '@shared/types'
+import type { AdarEvent } from '@shared/types'
 import { createGitContext } from '../git/context'
-import { lookAtWorktree, parseAgentLog, parseNumstat, parseStatusLook } from '../git/read/activity'
-import { cleanupTmp, commitFile, fakePlatform, git, initRepo, isolateGitConfig, tmpDir, write } from '../git/write/__tests__/helpers'
+import { lookAtHead, parseAgentLog } from '../git/read/activity'
+import { cleanupTmp, commitFile, fakePlatform, git, initRepo, isolateGitConfig, tmpDir } from '../git/write/__tests__/helpers'
 import { ActivityTracker } from './activity'
 
 beforeAll(() => isolateGitConfig())
 afterAll(() => cleanupTmp())
 
-describe('parsing', () => {
-  it('reads the branch, upstream and changes of git status v2', () => {
-    const out = [
-      '# branch.oid 1111111111111111111111111111111111111111',
-      '# branch.head claude/hold rooms',
-      '# branch.upstream origin/claude/hold',
-      '# branch.ab +2 -0',
-      '1 .M N... 100644 100644 100644 aaa bbb src/a file.ts',
-      '1 A. N... 000000 100644 100644 000 ccc new.ts',
-      '2 R. N... 100644 100644 100644 ddd ddd R100 moved.ts',
-      'old.ts',
-      'u UU N... 100644 100644 100644 100644 e f g both.ts',
-      '? notes.md',
-      ''
-    ].join('\0')
-    expect(parseStatusLook(out)).toEqual({
-      head: '1111111111111111111111111111111111111111',
-      branch: 'claude/hold rooms',
-      upstream: 'origin/claude/hold',
-      ahead: 2,
-      entries: [
-        { path: 'src/a file.ts', status: 'M' },
-        { path: 'new.ts', status: 'A' },
-        { path: 'moved.ts', status: 'R' },
-        { path: 'both.ts', status: 'U' },
-        { path: 'notes.md', status: '?' }
-      ]
-    })
-    expect(parseStatusLook('# branch.oid (initial)\0# branch.head (detached)\0')).toMatchObject({ head: null, branch: null })
-  })
+function worktreeSetup() {
+  const repo = fs.realpathSync(initRepo())
+  commitFile(repo, 'a.txt', 'one\ntwo\n', 'first')
+  const wt = path.join(fs.realpathSync(tmpDir('adar-agents-')), 'claude-rooms')
+  git(repo, ['worktree', 'add', '-q', '-b', 'claude/hold-rooms', wt])
+  return { repo, wt }
+}
 
-  it('reads numstat, renames and binary files included', () => {
-    const out = ['3\t1\ta.ts', '-\t-\timage.png', '5\t0\t', 'old.ts', 'new.ts', ''].join('\0')
-    expect([...parseNumstat(out)]).toEqual([
-      ['a.ts', [3, 1]],
-      ['image.png', [0, 0]],
-      ['new.ts', [5, 0]]
-    ])
-  })
+function addOrigin(repo: string): string {
+  const origin = path.join(fs.realpathSync(tmpDir('adar-agents-origin-')), 'origin.git')
+  git(repo, ['init', '-q', '--bare', origin])
+  git(repo, ['remote', 'add', 'origin', origin])
+  return origin
+}
 
+describe('reading', () => {
   it('reads commits and the agents of their Co-Authored-By trailers', () => {
     const rec = (sha: string, t: number, s: string, trailers: string) => `${sha}\x1f${t}\x1f${s}\x1f${trailers}\x1e\n`
     const out =
@@ -68,35 +43,20 @@ describe('parsing', () => {
       coAuthors: ['Claude', 'Codex']
     })
   })
-})
 
-function worktreeSetup() {
-  const repo = fs.realpathSync(initRepo())
-  commitFile(repo, 'a.txt', 'one\ntwo\n', 'first')
-  const wt = path.join(fs.realpathSync(tmpDir('adar-agents-')), 'claude-rooms')
-  git(repo, ['worktree', 'add', '-q', '-b', 'claude/hold-rooms', wt])
-  return { repo, wt }
-}
-
-describe('lookAtWorktree', () => {
-  it('lists the changes with their lines and the branch’s own commits', async () => {
-    const { wt } = worktreeSetup()
+  it('says where a folder’s HEAD and upstream are', async () => {
+    const { repo, wt } = worktreeSetup()
     const ctx = createGitContext(fakePlatform, () => undefined)
-    commitFile(wt, 'hold.ts', 'export const hold = 1\n', 'Hold rooms\n\nCo-Authored-By: Claude <noreply@anthropic.com>')
-    write(wt, 'a.txt', 'one\ntwo\nthree\n')
-    write(wt, 'notes.md', 'a\nb\nc\n')
-    fs.rmSync(path.join(wt, 'hold.ts'))
+    const head = git(repo, ['rev-parse', 'HEAD']).trim()
+    expect(await lookAtHead(ctx, wt)).toEqual({ head, branch: 'claude/hold-rooms', upstream: null, upstreamSha: null })
 
-    const look = await lookAtWorktree(ctx, wt, 'main')
-    expect(look).toMatchObject({ branch: 'claude/hold-rooms', upstream: null, unpushed: null, ahead: 1, added: 4, removed: 1, coAuthors: ['Claude'] })
-    expect(look!.commits.map((c) => c.subject)).toEqual(['Hold rooms'])
-    expect(look!.files.map((f) => [f.path, f.status, f.added, f.removed]).sort()).toEqual([
-      ['a.txt', 'M', 1, 0],
-      ['hold.ts', 'D', 0, 1],
-      ['notes.md', '?', 3, 0]
-    ])
-    expect(look!.files.find((f) => f.path === 'hold.ts')!.at).toBe(0)
-    expect(look!.files.find((f) => f.path === 'a.txt')!.at).toBeGreaterThan(Date.now() - 60_000)
+    addOrigin(repo)
+    git(repo, ['push', '-q', '-u', 'origin', 'main'])
+    expect(await lookAtHead(ctx, repo)).toEqual({ head, branch: 'main', upstream: 'origin/main', upstreamSha: head })
+
+    git(wt, ['checkout', '-q', '--detach'])
+    expect(await lookAtHead(ctx, wt)).toMatchObject({ head, branch: null, upstream: null })
+    expect(await lookAtHead(ctx, path.join(repo, 'no-such-folder'))).toBeNull()
   })
 })
 
@@ -104,47 +64,60 @@ describe('ActivityTracker', () => {
   let tracker: ActivityTracker | null = null
   afterEach(() => tracker?.dispose())
 
-  function track(settings: Partial<AppSettings> = {}) {
+  function track(on = true) {
     const events: AdarEvent[] = []
     const ctx = createGitContext(fakePlatform, () => undefined)
-    tracker = new ActivityTracker({
-      ctx,
-      emit: (e) => events.push(e),
-      settings: async () => ({ ...DEFAULT_SETTINGS, ...settings }),
-      watcher: { fsWatch: false, pollMs: 0 },
-      ownGraceMs: 200
-    })
+    tracker = new ActivityTracker({ ctx, emit: (e) => events.push(e), settings: async () => ({ notifyAgentCommits: on }), ownGraceMs: 200 })
     const said = () => events.flatMap((e): AgentEvent[] => (e.type === 'agents' ? e.events : []))
     return { tracker, events, said }
   }
 
-  it('follows a linked worktree through edits, commits and a first push', async ({ onTestFinished }) => {
+  it('follows the repository’s folder and its worktrees, and nothing while the notifications are off', async () => {
+    const { repo, wt } = worktreeSetup()
+    const on = track()
+    await on.tracker.watch([repo])
+    await on.tracker.lookNow()
+    expect(on.tracker.list()).toEqual([
+      { path: repo, repo, isMain: true, branch: 'main' },
+      { path: wt, repo, isMain: false, branch: 'claude/hold-rooms' }
+    ])
+    // Nothing happened yet: the first look only records where things are.
+    expect(on.said()).toEqual([])
+    on.tracker.dispose()
+
+    const off = track(false)
+    await off.tracker.watch([repo])
+    await off.tracker.lookNow()
+    expect(off.tracker.list()).toEqual([])
+  })
+
+  it('tells of an agent’s commits and its first push, and marks Adar’s own', async ({ onTestFinished }) => {
     const { repo, wt } = worktreeSetup()
     const { tracker, said } = track()
     await tracker.watch([repo])
     await tracker.lookNow()
-    // The repository's own folder is not watched unless asked.
-    expect(tracker.list().map((w) => [w.name, w.branch, w.repo, w.isMain])).toEqual([['claude-rooms', 'claude/hold-rooms', repo, false]])
-    expect(tracker.list()[0]).toMatchObject({ fileCount: 0, ahead: 0, lastChange: null, base: 'main' })
 
-    write(wt, 'hold.ts', 'a\nb\n')
-    await tracker.lookNow()
-    const editing = tracker.list()[0]
-    expect(editing.files.map((f) => [f.path, f.status, f.added])).toEqual([['hold.ts', '?', 2]])
-    expect(editing.lastChange).toBeGreaterThan(Date.now() - 60_000)
-    expect(editing.activity.reduce((n, [, c]) => n + c, 0)).toBe(1)
-
-    git(wt, ['add', 'hold.ts'])
-    git(wt, ['commit', '-q', '-m', 'Hold rooms while paying\n\nCo-Authored-By: Claude <noreply@anthropic.com>'])
+    commitFile(wt, 'hold.ts', 'a\nb\n', 'Hold rooms while paying\n\nCo-Authored-By: Claude <noreply@anthropic.com>')
     await tracker.lookNow()
     expect(said()).toEqual([
-      expect.objectContaining({ kind: 'commit', path: wt, repo, files: 1, own: false, commits: [expect.objectContaining({ subject: 'Hold rooms while paying' })] })
+      {
+        kind: 'commit',
+        path: wt,
+        repo,
+        branch: 'claude/hold-rooms',
+        isMain: false,
+        files: 1,
+        agent: 'Claude',
+        own: false,
+        commits: [expect.objectContaining({ subject: 'Hold rooms while paying' })]
+      }
     ])
-    expect(tracker.list()[0]).toMatchObject({ fileCount: 0, ahead: 1, unpushed: null, coAuthors: ['Claude'] })
 
     // What Adar commits itself is its own.
     vi.useFakeTimers({ toFake: ['Date'] })
-    onTestFinished(() => { vi.useRealTimers() })
+    onTestFinished(() => {
+      vi.useRealTimers()
+    })
     tracker.ownStart(wt)
     commitFile(wt, 'b.txt', 'b\n', 'From Adar')
     tracker.ownEnd(wt)
@@ -152,29 +125,42 @@ describe('ActivityTracker', () => {
     expect(said().at(-1)).toMatchObject({ kind: 'commit', own: true })
     vi.setSystemTime(Date.now() + 300)
 
-    const origin = path.join(fs.realpathSync(tmpDir('adar-agents-origin-')), 'origin.git')
-    git(repo, ['init', '-q', '--bare', origin])
-    git(repo, ['remote', 'add', 'origin', origin])
+    addOrigin(repo)
     git(wt, ['push', '-q', '-u', 'origin', 'claude/hold-rooms'])
     await tracker.lookNow()
-    expect(said().at(-1)).toMatchObject({ kind: 'push', upstream: 'origin/claude/hold-rooms', count: 2, own: false })
-    expect(tracker.list()[0]).toMatchObject({ unpushed: 0, upstream: 'origin/claude/hold-rooms' })
+    // A first push counts from the base the branch started at; the agent is the one its commits name.
+    expect(said().at(-1)).toMatchObject({ kind: 'push', path: wt, upstream: 'origin/claude/hold-rooms', count: 2, subject: 'From Adar', agent: 'Claude', own: false })
   })
 
-  it('watches the repository’s own folder when asked, and nothing while Agents at work is off', async () => {
-    const { repo } = worktreeSetup()
-    const on = track({ agentsWatchMain: true })
-    await on.tracker.watch([repo])
-    await on.tracker.lookNow()
-    expect(on.tracker.list().map((w) => [w.isMain, w.branch])).toEqual([
-      [true, 'main'],
-      [false, 'claude/hold-rooms']
-    ])
-    on.tracker.dispose()
+  it('names the commit pushed on the base branch, in the repository’s own folder', async () => {
+    const repo = fs.realpathSync(initRepo())
+    commitFile(repo, 'a.txt', 'one\n', 'first')
+    addOrigin(repo)
+    git(repo, ['push', '-q', '-u', 'origin', 'main'])
+    const { tracker, said } = track()
+    await tracker.watch([repo])
+    await tracker.lookNow()
 
-    const off = track({ agentsOn: false })
-    await off.tracker.watch([repo])
-    await off.tracker.lookNow()
-    expect(off.tracker.list()).toEqual([])
+    commitFile(repo, 'hero.css', 'h1 { margin: 0 }\n', 'Fix hero spacing')
+    commitFile(repo, 'nav.css', 'nav { gap: 8px }\n', 'Tighten the nav')
+    await tracker.lookNow()
+    expect(said()).toEqual([expect.objectContaining({ kind: 'commit', path: repo, isMain: true, branch: 'main', agent: null, files: 2 })])
+    git(repo, ['push', '-q'])
+    await tracker.lookNow()
+    expect(said().at(-1)).toMatchObject({ kind: 'push', path: repo, isMain: true, upstream: 'origin/main', count: 2, subject: 'Tighten the nav', own: false })
+  })
+
+  it('looks again when the tabs’ watcher reports a change of refs', async () => {
+    const { repo, wt } = worktreeSetup()
+    const { tracker, said } = track()
+    await tracker.watch([repo])
+    await tracker.lookNow()
+    commitFile(wt, 'hold.ts', 'a\n', 'Hold rooms')
+    // Files changing is no reason to look; refs are (they are shared by every worktree of the repository).
+    tracker.repoChanged({ type: 'repo-changed', repoPath: repo, scopes: ['worktree'] })
+    await new Promise((r) => setTimeout(r, 150))
+    expect(said()).toEqual([])
+    tracker.repoChanged({ type: 'repo-changed', repoPath: repo, scopes: ['refs'] })
+    await vi.waitFor(() => expect(said()).toEqual([expect.objectContaining({ kind: 'commit', path: wt })]), { timeout: 8000 })
   })
 })

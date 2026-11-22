@@ -75,7 +75,7 @@ import {
 
 const ROW_H = 24
 const SECTION_H = 26
-/** Worktree rows have two lines: the folder and what it is doing, then its branch (Agents at work). */
+/** Worktree rows have two lines: the folder, then its branch. */
 const WORKTREE_H = 38
 const heightOf = (r: Row | undefined) => (r?.kind === 'section' ? SECTION_H : r?.kind === 'worktree' ? WORKTREE_H : ROW_H)
 const EMPTY_REMOTES: RemoteInfo[] = []

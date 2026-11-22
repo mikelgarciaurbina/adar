@@ -6,6 +6,7 @@ import { MENUBAR_METHODS, PANEL_API_METHODS, type MenuBarMethod } from '@shared/
 import type { AppSettings, MenuCommand, AdarEvent, RepoInfo } from '@shared/types'
 import { UPDATE_METHODS, type UpdateMethod } from '@shared/update'
 import { CLI_METHODS, parseOpenRepoArgs, type CliMethod } from '@shared/cli'
+import { TERMINAL_WINDOW_METHODS } from '@shared/terminal'
 import { toErrorPayload } from '@shared/errors'
 import { createBackend, type Backend } from './backend'
 import { dispatch } from './dispatch'
@@ -52,6 +53,7 @@ const UPDATE_METHOD_SET: ReadonlySet<string> = new Set(UPDATE_METHODS)
 const CLI_METHOD_SET: ReadonlySet<string> = new Set(CLI_METHODS)
 const MENUBAR_METHOD_SET: ReadonlySet<string> = new Set(MENUBAR_METHODS)
 const PANEL_API_SET: ReadonlySet<string> = new Set(PANEL_API_METHODS)
+const TERMINAL_WINDOW_SET: ReadonlySet<string> = new Set(TERMINAL_WINDOW_METHODS)
 /** Backend calls that talk to a remote: the menu bar icon animates while they run. */
 const NETWORK_METHODS: ReadonlySet<string> = new Set(['fetch', 'pull', 'push'])
 /** Calls that open a repository (past the trust check): the menu bar panel may then read it. */
@@ -96,7 +98,11 @@ function showNotice(notice: { title: string; subtitle: string; body: string }, o
   }
   if (!Notification.isSupported()) return
   const mac = process.platform === 'darwin'
-  const n = new Notification({ title: notice.title, ...(mac ? { subtitle: notice.subtitle } : {}), body: mac ? notice.body : `${notice.subtitle}\n${notice.body}` })
+  const n = new Notification({
+    title: notice.title,
+    ...(mac ? { subtitle: notice.subtitle } : {}),
+    body: mac ? notice.body : [notice.subtitle, notice.body].filter(Boolean).join('\n')
+  })
   n.on('click', open)
   // Kept until clicked or closed, so its click still arrives.
   notices.add(n)
@@ -119,11 +125,7 @@ function emit(event: AdarEvent): void {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send(IPC_EVENT_CHANNEL, event)
   }
-  if (event.type === 'repo-changed' || event.type === 'agents') menuBar?.sendToPanel(event)
-  if (event.type === 'agents') {
-    const quiet = event.events.filter((e) => e.kind === 'quiet').map((e) => e.path)
-    if (quiet.length) menuBar?.agentsQuiet(quiet)
-  }
+  if (event.type === 'repo-changed') menuBar?.sendToPanel(event)
 }
 
 /** The renderer is listening again (it asked for the open requests): deliver what waited for it. */
@@ -209,6 +211,12 @@ const platform: PlatformAdapter = {
       emit({ type: 'open-agent', ...notice.open })
     })
   },
+  notifyTerminal(notice) {
+    showNotice(notice, () => {
+      openInAdar(null)
+      emit({ type: 'open-terminal', ...notice.open })
+    })
+  },
   fetch: (input, init) => net.fetch(input, init),
   // Development only (scripted e2e runs): a fake GitHub API on this machine.
   githubApi: !app.isPackaged && /^http:\/\/127\.0\.0\.1:\d+$/.test(process.env['ADAR_GITHUB_API'] ?? '') ? process.env['ADAR_GITHUB_API'] : undefined,
@@ -264,9 +272,14 @@ function createWindow(): void {
   loadRendererPage(mainWindow, 'index')
 
   // Open requests arriving while the page (re)loads are queued until the renderer asks for them.
-  mainWindow.webContents.on('did-start-loading', () => pauseOpenRequests())
+  // Terminals go on without a window (or while it reloads): nothing draws them until it attaches again.
+  mainWindow.webContents.on('did-start-loading', () => {
+    pauseOpenRequests()
+    backend?.terminals?.detachAll()
+  })
   mainWindow.on('closed', () => {
     pauseOpenRequests()
+    backend?.terminals?.detachAll()
     mainWindow = null
   })
 
@@ -450,11 +463,38 @@ function buildMenu(): void {
         { type: 'separator' },
         item('Pull Requests', 'pull-requests', 'CmdOrCtrl+Shift+R'),
         item('Review Pull Request', 'review-pull-request'),
-        item('Agents at Work', 'agents', 'CmdOrCtrl+Shift+E'),
         { type: 'separator' },
-        item('Open in Terminal', 'open-in-terminal', 'CmdOrCtrl+Alt+T'),
+        item('Open in External Terminal', 'open-in-terminal', 'CmdOrCtrl+Alt+T'),
         item(isMac ? 'Reveal in Finder' : 'Show in Folder', 'open-in-finder', 'CmdOrCtrl+Alt+R'),
         item('Git Console', 'git-console', 'Ctrl+`')
+      ]
+    },
+    {
+      // Cmd shortcuts on macOS, as in other terminals; elsewhere Ctrl belongs to the shell, so only Ctrl+Shift ones.
+      label: 'Terminal',
+      submenu: [
+        item('Switch Between Graph and Terminal', 'toggle-terminal', 'CmdOrCtrl+E'),
+        item('Show the Graph Only', 'view-graph'),
+        item('Show the Graph and the Terminal', 'view-both'),
+        item('Show the Terminal Only', 'view-terminal'),
+        { type: 'separator' },
+        item('New Terminal', 'terminal-new', isMac ? 'Cmd+T' : 'Ctrl+Shift+T'),
+        item('New Terminal: Claude Code', 'terminal-claude'),
+        item('New Terminal: Codex', 'terminal-codex'),
+        item('Split Right', 'terminal-split-right', isMac ? 'Cmd+D' : 'Ctrl+Shift+D'),
+        item('Split Down', 'terminal-split-down', isMac ? 'Cmd+Shift+D' : undefined),
+        { type: 'separator' },
+        item('Zoom Pane', 'terminal-zoom', isMac ? 'Cmd+Shift+Enter' : 'Ctrl+Shift+Enter'),
+        item('Equalize Splits', 'terminal-equalize', isMac ? 'Ctrl+Cmd+=' : undefined),
+        item('Next Pane', 'terminal-next-pane', isMac ? 'Cmd+]' : undefined),
+        item('Previous Pane', 'terminal-prev-pane', isMac ? 'Cmd+[' : undefined),
+        item('Next Terminal Tab', 'terminal-next-tab', isMac ? 'Cmd+Shift+]' : undefined),
+        item('Previous Terminal Tab', 'terminal-prev-tab', isMac ? 'Cmd+Shift+[' : undefined),
+        { type: 'separator' },
+        // In a terminal, Find Commit (Cmd+F), Toggle Right Panel (Cmd+K) and Close Tab (Cmd+W) mean these.
+        item('Find in Terminal…', 'terminal-find'),
+        item('Clear', 'terminal-clear'),
+        item('Close Pane', 'terminal-close')
       ]
     },
     {
@@ -513,8 +553,7 @@ app.whenReady().then(() => {
         return menuBar.handle(method as MenuBarMethod, a).then((value) => ({ ok: true, value: value ?? null }), (err) => ({ ok: false, error: toErrorPayload(err) }))
       }
       if (typeof method === 'string' && PANEL_API_SET.has(method)) {
-        // Agents at work lists only the worktrees of the tabs Adar opened.
-        if (method !== 'getSettings' && method !== 'getRecentRepos' && method !== 'getAgentWorktrees' && !menuBar.isAdmitted(a[0])) {
+        if (method !== 'getSettings' && method !== 'getRecentRepos' && !menuBar.isAdmitted(a[0])) {
           return { ok: false, error: { message: 'Adar has not opened this repository', code: 'INVALID_ARGUMENT' } }
         }
         return invokeBackend(method, args, true)
@@ -542,6 +581,11 @@ app.whenReady().then(() => {
         }
       }
       return run().then((value) => ({ ok: true, value: value ?? null }), (err) => ({ ok: false, error: toErrorPayload(err) }))
+    }
+    if (typeof method === 'string' && TERMINAL_WINDOW_SET.has(method)) {
+      // A shell needs Ctrl+W, Ctrl+R, Ctrl+K… for itself; on macOS the menu's shortcuts are Cmd ones and stay.
+      if (process.platform !== 'darwin') mainWindow.webContents.setIgnoreMenuShortcuts((Array.isArray(args) ? args[0] : false) === true)
+      return { ok: true, value: null }
     }
     if (typeof method === 'string' && UPDATE_METHOD_SET.has(method)) {
       const fn = updater![method as UpdateMethod] as (...a: unknown[]) => Promise<unknown>

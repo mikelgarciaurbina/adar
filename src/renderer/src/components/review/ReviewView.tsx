@@ -10,9 +10,8 @@ import * as git from '@renderer/actions/git'
 import { openWebPage } from '@renderer/actions/pulls'
 import { commentOnConversation, keyOf, loadReview, REVIEW_PAGE, setViewed } from '@renderer/actions/review'
 import { loadWorkReview } from '@renderer/actions/workReview'
-import { api } from '@renderer/api/client'
+import { api, onAdarEvent } from '@renderer/api/client'
 import { Button, EmptyState, IconButton, Spinner } from '@renderer/components/common/Button'
-import { useAgents } from '@renderer/components/agents/agentStore'
 import { Avatar } from '@renderer/components/common/Avatar'
 import { goToCommit } from '@renderer/components/details/CommitPanel'
 import { StatusBadge } from '@renderer/components/diff/parts'
@@ -72,7 +71,13 @@ export function ReviewView({ tab, view }: { tab: RepoTab; view: View }) {
   const groups = useMemo(() => (entry.files ? fileGroups(entry.files, mode === 'since' ? (entry.sinceFiles ?? []) : null) : null), [entry.files, entry.sinceFiles, mode])
   const tabName = view.tab === 'conversation' && work ? 'files' : view.tab
   // An agent's work goes on while it is reviewed: say when the worktree changed after this view looked at it.
-  const lastChange = useAgents((s) => (work ? (s.worktrees[repo]?.lastChange ?? null) : null))
+  const [lastChange, setLastChange] = useState<number | null>(null)
+  useEffect(() => {
+    if (!work) return
+    return onAdarEvent((ev) => {
+      if (ev.type === 'repo-changed' && ev.repoPath === repo && (ev.scopes.includes('worktree') || ev.scopes.includes('refs'))) setLastChange(Date.now())
+    })
+  }, [work, repo])
   const stale = work && !entry.loading && !!entry.at && !!lastChange && lastChange > entry.at
 
   return (

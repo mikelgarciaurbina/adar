@@ -1,59 +1,35 @@
-// Agents at work: opening a worktree from the Agents view, a graph row, the menu bar or a notification (on its
-// changes or on a commit), the Agents view itself, marking a worktree as seen and silencing its "went quiet"
-// notifications. What each worktree is doing comes from components/agents/agentStore.ts.
+// Opening a repository's folder or worktree on its changes or on a commit: from a commit or push notification
+// (components/agents), and from the worktrees section.
 
-import type { AgentOpen, AgentWorktree } from '@shared/agents'
+import type { AgentOpen } from '@shared/agents'
 import { goToCommit } from '@renderer/components/details/CommitPanel'
 import { revealWorkingTree } from '@renderer/components/diff/nav'
 import { useApp } from '@renderer/store/appStore'
+import { setTerminalView, viewOf } from './terminal'
 import { openWorktree } from './worktrees'
 
 const store = () => useApp.getState()
-
-/** The Agents view, in the active tab. */
-export function openAgents(): void {
-  const repo = store().activePath
-  if (repo) store().setCenter(repo, { kind: 'agents' })
-}
 
 /** Switch to a worktree's tab, opening it in the group of its repository's tab when it has none; false when it could not be opened. */
 export async function focusWorktree(path: string, repo?: string): Promise<boolean> {
   if (!store().tabs.some((t) => t.path === path)) {
     const from = store().tabs.find((t) => t.path === repo || t.info?.mainWorktree === repo)?.path ?? store().activePath ?? repo ?? path
     if (!(await openWorktree(from, path))) return false
-  } else if (store().activePath !== path) store().setActive(path)
+  } else store().setActive(path)
   return true
 }
 
 /** Switch to a worktree's tab (see focusWorktree) on its graph, its changes or a commit. */
 export async function showWorktree(path: string, repo: string, view: 'changes' | 'commit' | 'graph' = 'graph', sha?: string): Promise<void> {
   if (!(await focusWorktree(path, repo))) return
+  // The graph side has to be on screen for any of these: beside the terminal when only that was showing.
+  if (viewOf(path) === 'terminal') setTerminalView(path, 'both')
   if (view === 'changes') revealWorkingTree(path)
   else if (view === 'commit' && sha) goToCommit(path, sha)
   else store().setCenter(path, { kind: 'graph' })
 }
 
-/** A notification, or the menu bar panel, asked for a worktree or the Agents view. */
+/** A commit or push notification was clicked. */
 export function openFromAgentNotice(open: AgentOpen): void {
-  if (open.view === 'agents' || !open.path) openAgents()
-  else void showWorktree(open.path, open.repo, open.view, open.sha)
-}
-
-/** The commits made so far count as seen: the blue dot goes. */
-export function markWorktreeSeen(list: readonly AgentWorktree[]): void {
-  const seen = { ...store().settings.worktreesSeen }
-  let changed = false
-  for (const w of list) {
-    if (!w.head || seen[w.path]?.sha === w.head) continue
-    seen[w.path] = { sha: w.head, at: Date.now() }
-    changed = true
-  }
-  if (changed) void store().updateSettings({ worktreesSeen: seen })
-}
-
-/** "Don't tell me when it goes quiet" for one worktree, and back. */
-export function setQuietMuted(path: string, muted: boolean): void {
-  const list = store().settings.agentsQuietMuted.filter((p) => p !== path)
-  if (muted) list.push(path)
-  void store().updateSettings({ agentsQuietMuted: list })
+  void showWorktree(open.path, open.repo, open.view, open.sha)
 }

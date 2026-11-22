@@ -3,7 +3,7 @@
    these variables (never hard-coded colours) so both themes work. Class prefixes per module:
    app- (shell), ui- (common), tb- (toolbar/tabs/status), sb- (left panel),
    gr- (graph), det- (right panel), diff- (diff/blame/history), cf- (conflicts),
-   rb- (interactive rebase), md- (modals), pal- (palette/console), wl- (welcome).
+   rb- (interactive rebase), md- (modals), pal- (palette/console), wl- (welcome), tm- (terminals).
 
    Accent roles: --accent is fern for lines, icons and text (deep fern on light surfaces);
    --accent-fill is the fern of buttons and badges, with --accent-text on top of it. */
@@ -122,6 +122,43 @@
   --group-sun-ink: var(--lane-6-ink);
   --group-bone-ink: #eee6d4;
   --group-mist-ink: #a9b4ac;
+
+  /* Terminals: the 16 colours programs print with, drawn from the palette (ember, moss, sun, sea, heather). */
+  --term-bg: var(--bg-0);
+  --term-fg: var(--text-1);
+  --term-cursor: var(--text-0);
+  --term-selection: rgb(197 245 106 / 0.26);
+  --term-selection-inactive: rgb(214 240 222 / 0.14);
+  --term-scrollbar: rgb(214 240 222 / 0.14);
+  --term-scrollbar-hover: rgb(214 240 222 / 0.26);
+  --term-match: #33401f;
+  --term-match-active: #7a5c00;
+  --term-black: #1b2220;
+  --term-red: #ff8c5f;
+  --term-green: #46e2b4;
+  --term-yellow: #ffd36e;
+  --term-blue: #6cb4ff;
+  --term-magenta: #b595ff;
+  --term-cyan: #6fd8e0;
+  --term-white: #cad3cb;
+  --term-bright-black: #77837c;
+  --term-bright-red: #ffa988;
+  --term-bright-green: #7af0cc;
+  --term-bright-yellow: #ffe19a;
+  --term-bright-blue: #9ccbff;
+  --term-bright-magenta: #cbb5ff;
+  --term-bright-cyan: #9be7ec;
+  --term-bright-white: #f3f6f1;
+
+  /* What an agent in a terminal is doing: working (sea), needs you (sun), finished (moss). */
+  --state-working: #6cb4ff;
+  --state-working-ink: #6cb4ff;
+  --state-working-pulse: rgb(108 180 255 / 0.55);
+  --state-needs-you: #ffd36e;
+  --state-needs-you-ink: #ffd36e;
+  --state-needs-you-soft: rgb(255 211 110 / 0.22);
+  --state-finished: #46e2b4;
+  --state-finished-ink: #46e2b4;
 }
 
 [data-theme='light'] {
@@ -202,6 +239,38 @@
   --group-mist: #5d6862;
   --group-bone-ink: #6b5a3a;
   --group-mist-ink: #4a554e;
+
+  --term-selection: rgb(63 106 6 / 0.2);
+  --term-selection-inactive: rgb(20 30 22 / 0.1);
+  --term-scrollbar: rgb(20 30 22 / 0.16);
+  --term-scrollbar-hover: rgb(20 30 22 / 0.3);
+  --term-match: #dfe8c4;
+  --term-match-active: #f2d27a;
+  --term-black: #0c110e;
+  --term-red: #c4471b;
+  --term-green: #12825f;
+  --term-yellow: #8a6400;
+  --term-blue: #1f6fd1;
+  --term-magenta: #5b3cc0;
+  --term-cyan: #0f7c8a;
+  --term-white: #66716a;
+  --term-bright-black: #66716a;
+  --term-bright-red: #a8461c;
+  --term-bright-green: #0c684f;
+  --term-bright-yellow: #6f5000;
+  --term-bright-blue: #1b5fb0;
+  --term-bright-magenta: #4a2fa3;
+  --term-bright-cyan: #0b6470;
+  --term-bright-white: #2d3631;
+
+  --state-working: #2b7fe0;
+  --state-working-ink: #1b5fb0;
+  --state-working-pulse: rgb(43 127 224 / 0.45);
+  --state-needs-you: #c79200;
+  --state-needs-you-ink: #8a6400;
+  --state-needs-you-soft: rgb(199 146 0 / 0.22);
+  --state-finished: #12a07a;
+  --state-finished-ink: #0c684f;
 }
 
 :root {

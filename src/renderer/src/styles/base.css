@@ -119,6 +119,14 @@ body.ui-resizing * {
   border-top: 1px solid var(--border);
 }
 
+/* The terminal docked under the graph (the "Both" view). */
+.app-dock {
+  flex: none;
+  display: flex;
+  min-height: 0;
+  max-height: calc(100% - 280px);
+}
+
 .app-left,
 .app-right {
   flex: none;

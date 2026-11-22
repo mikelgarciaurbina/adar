@@ -68,7 +68,7 @@ export function bundle(notices: PendingNotice[]): PendingNotice[] {
         number: notices[0].notice.number,
         title: `${pluralize(notices.length, 'pull request')} changed`,
         subtitle: 'Pull requests you follow, and yours',
-        body: `${names.slice(0, 3).join(', ')} and ${pluralize(notices.length - 3, 'more')}`,
+        body: `${names.slice(0, 3).join(', ')} and ${notices.length - 3} more`,
         open: 'inbox'
       }
     }

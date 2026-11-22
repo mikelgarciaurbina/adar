@@ -11,6 +11,7 @@ import { createReflogOps } from './reflog'
 import { createRefsOps } from './refs'
 import { createWorktreeReadOps } from './worktrees'
 import { createAgentOps } from '../../system/activity'
+import { createTerminalOps } from '../../terminal/ops'
 import { createRepoOps } from './repo'
 import { createStatusOps } from './status'
 import { createWorkReviewOps } from './workReview'
@@ -38,6 +39,7 @@ export function createReadOps(ctx: GitContext, services: SystemServices): ReadOp
     ...createReflogOps(rctx),
     ...createWorktreeReadOps(rctx),
     ...createAgentOps(services),
+    ...createTerminalOps(services),
     ...createWorkReviewOps(rctx),
     ...createStatusOps(rctx),
     ...createDiffOps(rctx),

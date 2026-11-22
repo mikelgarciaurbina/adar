@@ -10,7 +10,8 @@
 //    rejecting when the only problem is conflicts.
 //  - `opId` (optional) lets the renderer correlate 'progress' events.
 
-import type { AgentNotice, AgentWorktree } from './agents'
+import type { AgentNotice } from './agents'
+import type { TerminalAttach, TerminalInfo, TerminalNotice, TerminalOpen } from './terminal'
 import type {
   AppInfo,
   AppSettings,
@@ -127,12 +128,32 @@ export interface AdarApi {
   findDanglingCommits(repo: string): Promise<DanglingCommit[]>
   /** The repository's worktrees (the main one first), with their branch and changed files. */
   getWorktrees(repo: string): Promise<Worktree[]>
-  /** Agents at work: watch the worktrees of these repositories (the open tabs); an empty list stops watching. */
+  /**
+   * Follow the folders and worktrees of these repositories (the open tabs) for commits and pushes Adar did not make;
+   * they come as 'agents' events. An empty list stops.
+   */
   watchAgents(repos: string[]): Promise<void>
-  /** What each watched worktree is doing now; changes follow as 'agents' events. */
-  getAgentWorktrees(): Promise<AgentWorktree[]>
-  /** A system notification about an agent; clicking it sends an 'open-agent' event. */
+  /** A system notification about such a commit or push; clicking it sends an 'open-agent' event. */
   notifyAgent(notice: AgentNotice): Promise<void>
+  /**
+   * Terminals (desktop app only, see terminal.ts). Start one in a folder, with the user's login shell or a launcher's
+   * program; it runs until closed, its shell exits or Adar quits.
+   */
+  terminalOpen(opts: TerminalOpen): Promise<TerminalInfo>
+  /** Start drawing a terminal: its output so far; what follows comes as 'terminal-data' events. */
+  terminalAttach(id: string): Promise<TerminalAttach>
+  /** What the user typed or pasted. */
+  terminalWrite(id: string, data: string): Promise<void>
+  terminalResize(id: string, cols: number, rows: number): Promise<void>
+  /** This much output was drawn (a terminal far ahead of its window is held back). */
+  terminalAck(id: string, chars: number): Promise<void>
+  /** The user looked at it: "finished" and bells are news only until then. */
+  terminalSeen(id: string): Promise<void>
+  terminalClose(id: string): Promise<void>
+  /** Every running terminal, with the program in front of each right now. */
+  terminalList(): Promise<TerminalInfo[]>
+  /** A system notification about a terminal; clicking it sends an 'open-terminal' event. */
+  notifyTerminal(notice: TerminalNotice): Promise<void>
   /**
    * A worktree's work as one comparison with its base branch: its branch's own commits and its changes not committed
    * (a snapshot tree; the worktree's index, HEAD and branches are left as they are), and how it moved on since the
@@ -420,8 +441,16 @@ export const API_METHODS = [
   'findDanglingCommits',
   'getWorktrees',
   'watchAgents',
-  'getAgentWorktrees',
   'notifyAgent',
+  'terminalOpen',
+  'terminalAttach',
+  'terminalWrite',
+  'terminalResize',
+  'terminalAck',
+  'terminalSeen',
+  'terminalClose',
+  'terminalList',
+  'notifyTerminal',
   'prepareWorkReview',
   'getCommitDetails',
   'getCompareFiles',

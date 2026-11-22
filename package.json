@@ -14,6 +14,7 @@
   "private": true,
   "type": "commonjs",
   "scripts": {
+    "postinstall": "node scripts/fix-node-pty.cjs",
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "start": "electron-vite preview",
@@ -29,8 +30,15 @@
   },
   "dependencies": {
     "@tanstack/react-virtual": "^3.14.21",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/addon-search": "^0.16.0",
+    "@xterm/addon-unicode11": "^0.9.0",
+    "@xterm/addon-web-links": "^0.12.0",
+    "@xterm/addon-webgl": "^0.19.0",
+    "@xterm/xterm": "^6.0.0",
     "highlight.js": "^11.12.0",
     "lucide-react": "^1.59.0",
+    "node-pty": "^1.1.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "zustand": "^5.0.15"

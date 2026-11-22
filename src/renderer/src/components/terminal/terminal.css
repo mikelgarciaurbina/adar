@@ -1,0 +1,511 @@
+/* Terminals (tm-): the strip with terminal tabs and split controls, the panes, the dot for an agent's state. */
+
+.tm-root {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--term-bg);
+  position: relative;
+}
+
+/* ── Strip ─────────────────────────────────────────────────────────────── */
+
+.tm-strip {
+  flex: none;
+  height: 34px;
+  display: flex;
+  align-items: stretch;
+  padding: 0 8px 0 6px;
+  background: var(--bg-1);
+  border-bottom: 1px solid var(--border);
+}
+.tm-tabs {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.tm-tabs::-webkit-scrollbar {
+  display: none;
+}
+.tm-tab {
+  flex: none;
+  display: flex;
+  align-items: stretch;
+  color: var(--text-2);
+}
+.tm-tab:hover {
+  color: var(--text-0);
+}
+.tm-tab-active {
+  color: var(--text-0);
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+.tm-tab-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 4px 0 12px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.tm-tab-active .tm-tab-main {
+  font-weight: 500;
+}
+.tm-tab-main:focus-visible,
+.tm-tab-close:focus-visible,
+.tm-add:focus-visible,
+.tm-tool:focus-visible,
+.tm-pane-close:focus-visible,
+.tm-empty-button:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+.tm-tab-name {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tm-tab-count {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  font-weight: 400;
+  color: var(--text-3);
+}
+.tm-tab-close {
+  align-self: center;
+  width: 18px;
+  height: 18px;
+  margin-right: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--text-3);
+  opacity: 0;
+  cursor: pointer;
+}
+.tm-tab:hover .tm-tab-close,
+.tm-tab-active .tm-tab-close,
+.tm-tab-close:focus-visible {
+  opacity: 1;
+}
+.tm-tab-close:hover {
+  background: var(--bg-4);
+  color: var(--text-0);
+}
+.tm-add {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 8px;
+  border: 0;
+  background: none;
+  color: var(--text-2);
+  cursor: pointer;
+}
+.tm-add:hover {
+  color: var(--text-0);
+}
+.tm-tools {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--text-2);
+}
+.tm-tool {
+  width: 28px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 5px;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+.tm-tool:hover:not(:disabled) {
+  background: var(--bg-3);
+  color: var(--text-0);
+}
+.tm-tool:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.tm-tool[aria-pressed='true'] {
+  color: var(--accent);
+}
+
+/* ── Panes ─────────────────────────────────────────────────────────────── */
+
+.tm-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  position: relative;
+}
+.tm-split {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+}
+.tm-split-column {
+  flex-direction: column;
+}
+.tm-side {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+}
+.tm-divider {
+  flex: none;
+  position: relative;
+  z-index: 2;
+  background: var(--border-strong);
+}
+.tm-split-row > .tm-divider {
+  width: 1px;
+  cursor: col-resize;
+}
+.tm-split-column > .tm-divider {
+  height: 1px;
+  cursor: row-resize;
+}
+/* A wider area to grab than the line drawn. */
+.tm-divider::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+}
+.tm-divider:hover,
+.tm-divider-drag {
+  background: var(--accent-line);
+}
+.tm-pane {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--term-bg);
+}
+.tm-pane-head {
+  flex: none;
+  height: 27px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0 6px 0 12px;
+  background: var(--bg-1);
+  border-bottom: 1px solid var(--border);
+  font-size: 11.5px;
+  color: var(--text-3);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.tm-pane-focused > .tm-pane-head {
+  box-shadow: inset 0 2px 0 var(--border-strong);
+}
+.tm-pane-keyboard > .tm-pane-head {
+  box-shadow: inset 0 2px 0 var(--accent);
+}
+.tm-pane-name {
+  flex: none;
+  font-family: var(--font-mono);
+  font-weight: 500;
+  color: var(--text-2);
+}
+.tm-pane-focused .tm-pane-name {
+  color: var(--text-0);
+}
+.tm-pane-cwd {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--font-mono);
+}
+.tm-pane-state {
+  flex: none;
+}
+.tm-state-working {
+  color: var(--state-working-ink);
+}
+.tm-state-needs-you {
+  color: var(--state-needs-you-ink);
+}
+.tm-state-finished {
+  color: var(--state-finished-ink);
+}
+.tm-pane-close {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--text-3);
+  opacity: 0;
+  cursor: pointer;
+}
+.tm-pane:hover .tm-pane-close,
+.tm-pane-close:focus-visible {
+  opacity: 1;
+}
+.tm-pane-close:hover {
+  background: var(--bg-4);
+  color: var(--text-0);
+}
+.tm-pane-body {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+}
+/* xterm draws here; the gap around it is the terminal's padding. */
+.tm-host {
+  position: absolute;
+  inset: 8px 2px 6px 12px;
+  transition: opacity 120ms var(--ease);
+}
+.tm-pane-dim .tm-host {
+  opacity: 0.68;
+}
+.tm-host .xterm {
+  height: 100%;
+}
+.tm-host .xterm-viewport {
+  background-color: transparent !important;
+}
+
+/* ── State dot ─────────────────────────────────────────────────────────── */
+
+.tm-dot {
+  flex: none;
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.tm-dot-working {
+  background: var(--state-working);
+  animation: tm-pulse 1.6s ease-out infinite;
+}
+.tm-dot-needs-you {
+  background: var(--state-needs-you);
+  box-shadow: 0 0 0 3px var(--state-needs-you-soft);
+}
+.tm-dot-finished {
+  background: var(--state-finished);
+}
+@keyframes tm-pulse {
+  0% {
+    box-shadow: 0 0 0 0 var(--state-working-pulse);
+  }
+  70%,
+  100% {
+    box-shadow: 0 0 0 6px transparent;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tm-dot-working {
+    animation: none;
+  }
+}
+
+/* ── Find, empty ───────────────────────────────────────────────────────── */
+
+.tm-find {
+  position: absolute;
+  top: 8px;
+  right: 14px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 4px 0 10px;
+  border-radius: var(--radius);
+  background: var(--bg-2);
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-1);
+  color: var(--text-2);
+}
+.tm-find-input {
+  width: 200px;
+  border: 0;
+  outline: 0;
+  background: none;
+  color: var(--text-0);
+  font: inherit;
+  font-size: var(--fs-sm);
+}
+.tm-find-none {
+  font-size: var(--fs-xs);
+  color: var(--danger);
+  white-space: nowrap;
+}
+.tm-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--text-3);
+}
+.tm-empty-title {
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  color: var(--text-1);
+}
+.tm-empty-actions {
+  display: flex;
+  gap: 8px;
+}
+.tm-empty-button {
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border-strong);
+  background: none;
+  color: var(--text-1);
+  font: inherit;
+  cursor: pointer;
+}
+.tm-empty-button:hover {
+  background: var(--bg-3);
+  color: var(--text-0);
+}
+
+/* ── A tab group's view ────────────────────────────────────────────────── */
+
+.tm-group-bar {
+  box-shadow: inset 0 2px 0 var(--tb-group);
+}
+.tm-group-folder {
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+}
+.tm-repos-head {
+  flex: none;
+  height: var(--panel-header-h);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+.tm-repos-count {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-weight: 400;
+  color: var(--text-3);
+}
+.tm-repos {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.tm-repo {
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: none;
+  color: var(--text-1);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.tm-repo:hover {
+  background: var(--bg-3);
+}
+.tm-repo:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+.tm-repo-icon {
+  flex: none;
+  margin-top: 1px;
+  color: var(--text-2);
+}
+.tm-repo-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.tm-repo-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.tm-repo-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  color: var(--text-0);
+}
+.tm-repo-branch {
+  margin-left: auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+}
+.tm-repo-detail {
+  font-size: var(--fs-sm);
+  color: var(--text-3);
+}
+.tm-repo-changed {
+  color: var(--state-needs-you-ink);
+}
+
+/* The status bar's word about a terminal that needs the user or finished. */
+.tm-status {
+  gap: 6px;
+  max-width: 420px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tm-status .tm-dot {
+  width: 7px;
+  height: 7px;
+}

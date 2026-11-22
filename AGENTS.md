@@ -3,7 +3,8 @@
 Guide for contributors and coding agents. "Adar" means "branch" in Basque (the app was briefly called "Rama";
 settings migrate from `~/Library/Application Support/Rama`).
 
-Electron 44 + electron-vite 6 + React 19 + TypeScript 7 + zustand. The backend shells out to the system `git`
+Electron 44 + electron-vite 6 + React 19 + TypeScript 7 + zustand (terminals: xterm.js in the renderer, node-pty in the
+main process). The backend shells out to the system `git`
 binary, so it works with every repository the user's git can access (SSH keys, Keychain, credential helpers,
 private hosts). Clean-room implementation: never copy GitKraken code, assets or branding. MIT licensed.
 
@@ -12,9 +13,11 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
   API, plus `API_METHODS`), `errors.ts` (`AdarError`, `describeError`, `errorDetail`), `update.ts` (updater types and
   pure helpers), `patch.ts` (partial-staging patch builder), `menubar.ts` (the menu bar panel's calls and limits),
   `hosting.ts` (provider-neutral pull request types, GitHub's GraphQL query and the pure mapping of its answers),
-  `agents.ts` (Agents at work: what a watched worktree is doing — `AgentWorktree`, `AgentEvent` — and the rules both
-  sides share: `agentState` working / quiet / idle, `agentOf` from Co-Authored-By trailers, the branch prefix or the
-  folder, the 30-minute strip, `newSince`, the settings sanitizers and `parseAgentNotice`),
+  `agents.ts` (commits and pushes Adar did not make itself — `AgentEvent`, with the agent their Co-Authored-By trailers,
+  branch prefix or folder name: `agentOf` — and `parseAgentNotice`),
+  `terminal.ts` (terminals inside Adar: `TerminalInfo`, the launchers — "Claude Code" → `claude` —, the signals read from
+  a terminal's output — `scanOutput`: bell, title, folder, OSC 9/777 notifications and Adar's own `OSC 7717;adar;…` —
+  and the rules that turn them into the state a tab's dot shows: `afterSignal`, `afterInput`, `afterSeen`, `topState`),
   `review.ts` (reviewing a pull request in Adar, whatever the service: threads, reviews, Viewed marks, the timeline,
   an agent's work before its pull request — `WorkReviewRange`, `WorkReviewMark`, `WORK_FEATURES` —,
   `ReviewFeatures` — what each service lets a review do: Viewed marks of its own or kept by Adar, comments on several
@@ -44,12 +47,19 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
     events); Open in Terminal opens a shell of the distribution. "Open Repository in WSL…" (Windows only) starts the
     picker in the default distribution's home (`wslHomeFolder`). Not testable on macOS beyond the pure helpers.
   - `system/` — settings/recents/trusted repos store, askpass bridge (credential prompts → UI), file watcher with
-    polling fallback, login-shell `PATH` fix. `activity.ts` is Agents at work's `ActivityTracker`: a WatcherManager of
-    its own on the linked worktrees of the open tabs (and each repository's folder with `agentsWatchMain`), a look at a
-    worktree when it changes (`git/read/activity.ts`: status, numstat, its own commits, all with GIT_OPTIONAL_LOCKS=0),
-    files dated by their modification time, commits and pushes (`own` when they happen during or just after an
-    operation Adar ran there: `backend.ts` wraps `exclusive` and `gitNetwork`), quiet once per stop, all sent as
-    'agents' events; `watchAgents`, `getAgentWorktrees` and `notifyAgent` (a click sends 'open-agent').
+    polling fallback, login-shell `PATH` fix. `activity.ts` is the commit tracker (`ActivityTracker`): for the
+    folders and worktrees of the open tabs it keeps where HEAD and the upstream were (`git/read/activity.ts`, read-only
+    with GIT_OPTIONAL_LOCKS=0), looks again whenever the tabs' watcher reports that refs changed (it has no watcher of
+    its own) and sends the commits and pushes it finds as 'agents' events (`own` when they happen during or just after
+    an operation Adar ran there: `backend.ts` wraps `exclusive` and `gitNetwork`); `watchAgents` and `notifyAgent` (a
+    click sends 'open-agent').
+  - `terminal/` — the terminals Adar runs: `manager.ts` (`TerminalManager`: a pseudo-terminal with the user's login shell
+    per terminal, node-pty loaded on first use; a launcher's program runs first and the shell takes over when it ends;
+    recent output is kept for a UI that starts drawing later and sent on in batches, held back when far ahead of the
+    window; the output is read for signals and the state sent as 'terminal-info' events; Claude Code is started with
+    `--settings <userData>/terminal/claude-hooks.json`, hooks that print Adar's own escape sequence to the terminal, and
+    Codex with its terminal notifications on) and `ops.ts` (the `terminal*` API methods; none over the HTTP bridge).
+    Terminals outlive the window: they end when closed, when their shell exits or when Adar quits.
   - `menuBar.ts` — macOS menu bar extra: the tray icon (template images in `resources/tray`, drawn by
     `scripts/render-tray-icons.cjs`: at rest, a dot for new commits, four fetch-animation frames), the panel window
     (`src/renderer/menubar.html`) and new-commit notifications after a fetch (every platform). The panel's window may
@@ -124,8 +134,8 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
     branch in); `components/pulls/` — the store and its sync (`pullStore.ts`: the active repository after each fetch, on
     focus, at most once a minute; every open one every three minutes), the chip on branch labels, the details panel and
     the dialogs; pure helpers in `lib/pulls.ts`.
-  - `actions/workReview.tsx` — reviewing an agent's work before its pull request, in its worktree's tab (`Review` on an
-    Agents card, the worktree's menu, the palette): `prepareWorkReview` (`git/read/workReview.ts`) compares the base
+  - `actions/workReview.tsx` — reviewing an agent's work before its pull request, in its worktree's tab (the worktree's menu, the
+    palette): `prepareWorkReview` (`git/read/workReview.ts`) compares the base
     branch's merge base with HEAD or, when there are changes not committed, a snapshot tree of the working tree made
     through a throwaway copy of the index (`git add --all` with `GIT_INDEX_FILE`: the worktree's index, HEAD and refs are
     never touched; the same files give the same tree). The review view's `work-review` mode (`ReviewId` 'work'), Adar's
@@ -133,15 +143,22 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
     message for the agent's chat (`agentPrompt` in `components/review/model.ts`) and the version reviewed kept
     (`reviewed` in the review store), so the next round shows only what changed since. Right panel:
     `components/review/WorkReviewPanel.tsx`.
-  - `actions/agents.tsx` — Agents at work: opening a worktree on its changes or a commit (`showWorktree`), the Agents
-    view, marking a worktree as seen (`settings.worktreesSeen`), silencing its quiet notifications. `components/agents/`
-    — `agentStore.ts` (the watched worktrees from the main process, the clock, which tabs are watched, seen marks,
-    notifications), `model.ts` (pure: labels, the tab dot, the view's columns, `noticesFor`), `parts.tsx` (mark, state,
-    strip), `AgentsView.tsx` (a centre view: working, quiet and idle cards of the active repository's worktrees, its tab
-    group's or every open tab's — `settings.agentsScope`, which the toolbar's badge follows too),
-    `graph.ts` (the graph's dashed rows for other worktrees' work in progress, `AgentRow` in `graph/model.ts`, and the
-    commits new since the user looked). Worktree rows in the left panel have two lines; the tab bar, the toolbar
-    (Agents, ⇧⌘E) and the menu bar panel ("At work", `menuBarOpenAgent`) show the state too.
+  - `actions/agents.tsx` — opening a folder or worktree on its changes or a commit (`showWorktree`), as a commit or push
+    notification's click does. `components/agents/` — `agentStore.ts` (`useAgentSync`: which repositories the main
+    process follows, and its events turned into notifications) and `model.ts` (pure: `noticesFor`, what each
+    notification says — "Pushed 1 commit to origin/main", "Basoa › landing · with Claude" — and which are left out).
+  - `actions/terminal.tsx` — terminals: what a project's tab shows (`settings.terminalViews`: graph, both, terminal),
+    the terminal commands of the menu and the palette, and showing the terminal a notification was about.
+    `components/terminal/` — `terminalStore.ts` (one xterm.js instance per terminal, kept while it lives and moved in
+    and out of the page; each owner's terminal tabs and their panes — a repository's path or `group:<id>` —, focus,
+    keyboard shortcuts, notifications; the layout survives a reload in localStorage), `layout.ts` (pure: the split
+    tree), `model.ts` (pure: labels, an owner's state, `noticeFor`), `TerminalView.tsx` (the strip with terminal tabs
+    and split controls, the panes, find), `GroupView.tsx` (a tab group's own view: its terminals in the folder its
+    repositories share — `groupFolder`, or `TabGroup.folder` — with the group's repositories on the left) and
+    `parts.tsx` (`StateDot`, the status bar's word). The tab bar, the toolbar's Graph / Both / Terminal switch and the
+    worktrees section show the state too. While a terminal has the keyboard, ⌘W, ⌘F and ⌘K mean close pane, find and
+    clear (`commands.ts`: `IN_TERMINAL`); elsewhere than macOS the native menu's shortcuts are turned off meanwhile
+    (`terminalFocusChanged`), since Ctrl belongs to the shell.
   - `actions/review.tsx` — reviewing in Adar and keeping up: `openReview` (GitHub, GitLab, Bitbucket and Azure DevOps),
     `openInbox`, loading what the review shows, line comments kept for the review (`components/review/reviewStore.ts`,
     in localStorage until submitted), replies, resolve, Viewed marks (the service's on GitHub; elsewhere Adar's own,
@@ -197,7 +214,7 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
 - CSS class prefixes per module: `app-` shell, `ui-` common, `tb-`/`wl-` toolbar, tabs, status bar, welcome, `sb-` left
   panel, `gr-` graph, `det-` right panel, `diff-` diff/blame/history, `cf-` conflicts, `rb-` rebase, `md-` modals,
   `pal-` palette/console, `up-` updates, `mb-` menu bar panel, `pr-` pull requests, `rl-` reflog, `rv-` review, `ib-` pull
-  request inbox, `ag-` agents at work. Each module imports its own `.css` file.
+  request inbox, `tm-` terminals. Each module imports its own `.css` file.
 - Icons: `lucide-react`. Virtualised lists: `@tanstack/react-virtual`. Syntax highlighting: `highlight.js`.
 - Do not add npm dependencies without discussing it first.
 
@@ -213,6 +230,9 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
 - Destructive actions confirm first (`confirm({ danger: true })`) and, where possible, push an undo entry. Undo/redo
   entries record HEAD and refuse to run when the repository changed since.
 - Never log or persist credentials; redact `user:token@` in URLs.
+- Terminals are the user's own shell: only the main window may start or write to one (never the menu bar panel, never
+  the HTTP bridge), a launcher's command comes from the settings and nowhere else, and nothing read from a repository
+  or from a terminal's output is ever run or typed (signals only change a dot; their text is cleaned before it is shown).
 
 ## Testing
 - During an edit, use `npm run test:changed` for tests affected by changes since HEAD, or keep `npm run test:watch`
@@ -228,6 +248,10 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
   so pull request notifications are sent. Load `scripts/e2e-helpers.js` first for
   `window.e2e` (click/type/key/drag/contextMenu/menuItem/waitFor/state/errors). `window.__adar = { store, api, updates }`.
   Seed `<workdir>/ud/settings.json` with `{"openTabs":["/abs/repo"],"activeTab":"/abs/repo","autoFetchMinutes":0}`.
+- Terminals in a scripted run: `window.__adar.api.terminalList()` / `terminalWrite(id, 'echo hi\\r')` drive a terminal
+  (it runs the developer's own login shell); printing `\\033]7717;adar;working\\007` (or `asks`, `notify;<text>`,
+  `finished`, `idle`) there is what an agent's hooks do. A build made outside the project finds node-pty in the working
+  directory. `npm install` runs `scripts/fix-node-pty.cjs`, which restores the execute bit node-pty's macOS prebuilds lack.
 - Fixtures: `scripts/make-fixture-repo.sh <dir> [--conflict]` (demo repo + bare origin),
   `node scripts/make-big-repo.mjs <dir> [commits] [branches]` (performance).
 - Website: `cd site && npm install && npm run dev` (http://localhost:4321/), or `npm run build && npm run preview`

@@ -8,14 +8,15 @@ import {
   ArrowDownToLine,
   ArrowUpFromLine,
   Archive,
-  Bot,
   ChevronDown,
   Code,
   FolderOpen,
   GitBranchPlus,
+  GitGraph,
   History,
   Inbox,
   Network,
+  PanelBottom,
   Redo2,
   RefreshCw,
   Search,
@@ -26,13 +27,15 @@ import {
   UserRound
 } from 'lucide-react'
 import { isMac } from '@renderer/api/client'
+import { setTerminalView, terminalsAvailable } from '@renderer/actions/terminal'
+import { ownerCount, ownerState } from '@renderer/components/terminal/model'
+import { StateDot } from '@renderer/components/terminal/parts'
+import { useTerminals } from '@renderer/components/terminal/terminalStore'
+import type { TerminalViewMode } from '@shared/terminal'
 import * as git from '@renderer/actions/git'
 import { openReflog } from '@renderer/actions/reflog'
 import { selectPull } from '@renderer/actions/pulls'
 import { openInbox } from '@renderer/actions/review'
-import { openAgents } from '@renderer/actions/agents'
-import { useAgentScope, useAgents } from '@renderer/components/agents/agentStore'
-import { stateOf } from '@renderer/components/agents/model'
 import { useNeedsYou } from '@renderer/components/pulls/InboxView'
 import { PullChip } from '@renderer/components/pulls/PullChip'
 import { anyPullsOn, usePullForRefs, usePulls } from '@renderer/components/pulls/pullStore'
@@ -134,38 +137,39 @@ function ReviewsButton({ repo }: { repo: string }) {
   )
 }
 
-/**
- * Agents at work: shown while worktrees are watched; its badge counts the quiet ones, a dot says one is working —
- * among the worktrees the Agents view shows (the active repository's, its group's or every open tab's).
- */
-function AgentsButton({ repo }: { repo: string }) {
-  const settings = useApp((s) => s.settings)
-  const { list, total } = useAgentScope(repo)
-  const now = useAgents((s) => s.now)
-  const shown = useApp((s) => s.tabs.find((t) => t.path === repo)?.center.kind === 'agents')
-  const afterReviews = usePulls((s) => anyPullsOn(s))
-  if (!settings.agentsOn || !total) return null
-  const states = list.map((w) => stateOf(w, now, settings))
-  const quiet = states.filter((s) => s === 'quiet').length
-  const working = states.filter((s) => s === 'working').length
-  const title = quiet
-    ? `${quiet === 1 ? 'An agent went' : `${quiet} agents went`} quiet with work left: it may be waiting for you`
-    : working
-      ? `${working === 1 ? 'An agent is' : `${working} agents are`} working`
-      : 'What the agents in your worktrees are doing'
+/** What the tab shows: the graph, the graph with the terminal under it, or the terminal alone. */
+function ViewSwitch({ repo }: { repo: string }) {
+  const view = useApp((s) => s.settings.terminalViews[repo] ?? 'graph')
+  const infos = useTerminals((s) => s.infos)
+  if (!terminalsAvailable) return null
+  const count = ownerCount(infos, repo)
+  const state = ownerState(infos, repo)
+  const seg = (to: TerminalViewMode, label: string, icon: ReactNode, title: string, extra?: ReactNode) => (
+    <button className={`tb-view-seg${view === to ? ' tb-view-on' : ''}`} aria-pressed={view === to} title={title} onClick={() => setTerminalView(repo, to)}>
+      {icon}
+      <span className="tb-view-label">{label}</span>
+      {extra}
+    </button>
+  )
+  const running = count ? `${count === 1 ? 'One terminal' : `${count} terminals`} running` : 'A terminal in this repository'
   return (
-    <>
-      {!afterReviews && <span className="tb-tool-sep" aria-hidden="true" />}
-      <ToolButton
-        icon={<Bot size={18} />}
-        label="Agents"
-        title={withShortcut(title, 'agents')}
-        badge={badgeCount(quiet)}
-        dot={working > 0}
-        className={`${shown ? 'tb-tool-on' : ''}${quiet ? ' tb-tool-quiet' : ''}`.trim() || undefined}
-        onClick={() => (shown ? git.showGraph(repo) : openAgents())}
-      />
-    </>
+    <div className="tb-view" role="group" aria-label="What this tab shows">
+      {seg('graph', 'Graph', <GitGraph size={14} />, 'The commit graph')}
+      {seg('both', 'Both', <PanelBottom size={14} />, 'The graph, with the terminal under it')}
+      {seg(
+        'terminal',
+        'Terminal',
+        <SquareTerminal size={14} />,
+        withShortcut(running, 'toggle-terminal'),
+        // While the terminal is out of sight, what runs there shows here.
+        view === 'graph' && count > 0 ? (
+          <span className="tb-view-count">
+            {state && <StateDot state={state} />}
+            {count}
+          </span>
+        ) : null
+      )}
+    </div>
   )
 }
 
@@ -357,12 +361,11 @@ export function Toolbar({ tab }: { tab: RepoTab }) {
           onClick={() => void git.popStash(repo)}
         />
         <ReviewsButton repo={repo} />
-        <AgentsButton repo={repo} />
       </div>
 
       <div className="tb-toolbar-right">
+        <ViewSwitch repo={repo} />
         <UtilityButton icon={<Search size={16} />} title={withShortcut('Find commit', 'search-commits')} onClick={() => runCommand('search-commits')} />
-        <UtilityButton icon={<SquareTerminal size={16} />} title={withShortcut('Open in terminal', 'open-in-terminal')} onClick={() => void git.openInTerminal(repo)} />
         <UtilityButton
           icon={<Terminal size={16} />}
           title={withShortcut(consoleOpen ? 'Hide Git console' : 'Show Git console', 'git-console')}

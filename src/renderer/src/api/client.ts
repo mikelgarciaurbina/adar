@@ -8,6 +8,7 @@ import type { AdarEvent } from '@shared/types'
 import type { UpdateApi } from '@shared/update'
 import type { CliApi } from '@shared/cli'
 import type { MenuBarApi } from '@shared/menubar'
+import type { TerminalWindowApi } from '@shared/terminal'
 
 type Transport = (method: string, args: unknown[]) => Promise<InvokeResponse>
 
@@ -166,5 +167,14 @@ export const menuBar: MenuBarApi = new Proxy({} as MenuBarApi, {
   get(_t, prop) {
     if (typeof prop !== 'string') return undefined
     return (...args: unknown[]) => invoke(prop, args)
+  }
+})
+
+/** The window's own calls about terminals (Electron only; see src/shared/terminal.ts). */
+export const terminalWindow: TerminalWindowApi = new Proxy({} as TerminalWindowApi, {
+  get(_t, prop) {
+    if (typeof prop !== 'string') return undefined
+    // The browser bridge has neither terminals nor a native menu.
+    return (...args: unknown[]) => (isElectron ? invoke(prop, args) : Promise.resolve())
   }
 })

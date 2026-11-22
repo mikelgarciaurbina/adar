@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { ContextMenuHost } from '@renderer/components/common/ContextMenu'
 import { DialogHost } from '@renderer/components/common/dialogs'
 import { ErrorBoundary } from '@renderer/components/common/ErrorBoundary'
-import { Resizer } from '@renderer/components/common/Resizer'
+import { Resizer, RowResizer } from '@renderer/components/common/Resizer'
 import { ToastHost } from '@renderer/components/common/toast'
 import { Spinner } from '@renderer/components/common/Button'
 import { ConflictView } from '@renderer/components/conflicts/ConflictView'
@@ -27,9 +27,12 @@ import { usePullRequestSync } from '@renderer/components/pulls/pullStore'
 import { ReflogView } from '@renderer/components/reflog/ReflogView'
 import { ReviewView } from '@renderer/components/review/ReviewView'
 import { InboxView } from '@renderer/components/pulls/InboxView'
-import { AgentsView } from '@renderer/components/agents/AgentsView'
 import { useAgentSync } from '@renderer/components/agents/agentStore'
 import { LeftPanel } from '@renderer/components/sidebar/LeftPanel'
+import { GroupWorkspace } from '@renderer/components/terminal/GroupView'
+import { TerminalWorkspace } from '@renderer/components/terminal/TerminalView'
+import { useTerminalSync } from '@renderer/components/terminal/terminalStore'
+import { showTerminal, terminalsAvailable } from '@renderer/actions/terminal'
 import { useAutoFetch, useBackendEvents, useGlobalShortcuts, useOpenRequests, useRefreshOnFocus, useTheme } from '@renderer/hooks/useAppEffects'
 import { useActiveTab, useApp, type RepoTab } from '@renderer/store/appStore'
 
@@ -54,8 +57,6 @@ function CenterPanel({ tab }: { tab: RepoTab }) {
       return <ReviewView key="work" tab={tab} view={view} />
     case 'inbox':
       return <InboxView tab={tab} />
-    case 'agents':
-      return <AgentsView tab={tab} />
     default:
       return <CommitGraph tab={tab} />
   }
@@ -67,10 +68,26 @@ function RepoWorkspace({ tab }: { tab: RepoTab }) {
   const leftWidth = useApp((s) => s.settings.leftPanelWidth)
   const rightWidth = useApp((s) => s.settings.rightPanelWidth)
   const updateSettings = useApp((s) => s.updateSettings)
-  // A review has its own file list on the left; the inbox and the Agents view span the window.
-  const wide = tab.center.kind === 'inbox' || tab.center.kind === 'agents'
+  // A review has its own file list on the left; the inbox spans the window.
+  const wide = tab.center.kind === 'inbox'
   const left = !leftCollapsed && tab.center.kind !== 'review' && tab.center.kind !== 'work-review' && !wide
   const right = !rightCollapsed && !wide
+  // What the tab shows: the graph, the terminal, or the graph with the terminal docked under it.
+  const view = useApp((s) => (terminalsAvailable ? (s.settings.terminalViews[tab.path] ?? 'graph') : 'graph'))
+  const dock = useApp((s) => s.settings.terminalDockHeight)
+
+  if (view === 'terminal') {
+    return (
+      <>
+        <Toolbar tab={tab} />
+        <div className="app-main">
+          <ErrorBoundary area="the terminal" resetKey={tab.path}>
+            <TerminalWorkspace owner={tab.path} cwd={tab.path} />
+          </ErrorBoundary>
+        </div>
+      </>
+    )
+  }
 
   return (
     <>
@@ -105,6 +122,16 @@ function RepoWorkspace({ tab }: { tab: RepoTab }) {
           </>
         )}
       </div>
+      {view === 'both' && (
+        <>
+          <RowResizer height={dock} min={140} max={() => Math.max(180, window.innerHeight - 280)} onResize={(h) => void updateSettings({ terminalDockHeight: h })} />
+          <div className="app-dock" style={{ height: dock }}>
+            <ErrorBoundary area="the terminal" resetKey={tab.path}>
+              <TerminalWorkspace owner={tab.path} cwd={tab.path} />
+            </ErrorBoundary>
+          </div>
+        </>
+      )}
     </>
   )
 }
@@ -112,6 +139,8 @@ function RepoWorkspace({ tab }: { tab: RepoTab }) {
 export function App() {
   const ready = useApp((s) => s.ready)
   const tab = useActiveTab()
+  // A tab group's own view (its terminals) may be in front instead of a repository's tab.
+  const group = useApp((s) => (s.groupView ? (s.settings.tabGroups.find((g) => `group:${g.id}` === s.groupView) ?? null) : null))
 
   useEffect(() => {
     void useApp.getState().init()
@@ -127,6 +156,7 @@ export function App() {
   useTheme()
   usePullRequestSync()
   useAgentSync()
+  useTerminalSync(showTerminal)
 
   return (
     <div className="app">
@@ -135,6 +165,8 @@ export function App() {
         <div className="app-loading">
           <Spinner size="lg" />
         </div>
+      ) : group ? (
+        <GroupWorkspace key={group.id} group={group} />
       ) : tab ? (
         <RepoWorkspace key={tab.path} tab={tab} />
       ) : (

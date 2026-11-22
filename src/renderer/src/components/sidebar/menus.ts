@@ -50,10 +50,7 @@ import {
 } from '@renderer/actions/worktrees'
 import { keepMenuItem, openBranchCleanup, openKeptBranches, useSafeToDelete } from '@renderer/actions/cleanup'
 import { openReflog } from '@renderer/actions/reflog'
-import { markWorktreeSeen, setQuietMuted } from '@renderer/actions/agents'
 import { openWorkReview } from '@renderer/actions/workReview'
-import { useAgents } from '@renderer/components/agents/agentStore'
-import { newCommits } from '@renderer/components/agents/model'
 import { checkoutPull, copyPullLink, openWebPage, startPullRequest } from '@renderer/actions/pulls'
 import type { MenuItem } from '@renderer/components/common/ContextMenu'
 import { branchPullItems } from '@renderer/components/pulls/menus'
@@ -417,25 +414,11 @@ export function worktreeMenu(ctx: SidebarMenuCtx, wt: Worktree, merged: PullRequ
     { type: 'header', label: wt.name },
     { label: here ? 'This tab' : 'Open in a new tab', icon: icon(ExternalLink), disabled: here || wt.missing, onClick: () => void openWorktree(repo, wt.path) },
     { label: 'Reveal in Finder', icon: icon(FolderOpen), disabled: wt.missing, onClick: () => git.showInFolder(wt.path) },
-    { label: 'Open in terminal', icon: icon(SquareTerminal), disabled: wt.missing, onClick: () => git.openInTerminal(wt.path) },
+    { label: 'Open in external terminal', icon: icon(SquareTerminal), disabled: wt.missing, onClick: () => git.openInTerminal(wt.path) },
     { label: 'Review its work', icon: icon(ScanEye), disabled: wt.missing, onClick: () => void openWorkReview(wt.path, repo) },
     SEP,
     { label: 'Copy path', icon: icon(Copy), onClick: () => git.copyText(wt.path, 'Copied the worktree path') }
   ]
-  // Agents at work: what is new since the user looked, and whether going quiet is worth a notification.
-  const live = useAgents.getState().worktrees[wt.path]
-  if (live) {
-    const s = useApp.getState().settings
-    const fresh = newCommits(live, s.worktreesSeen).length
-    const muted = s.agentsQuietMuted.includes(wt.path)
-    items.push(
-      SEP,
-      { label: fresh ? `Mark ${fresh === 1 ? 'the new commit' : `${fresh} new commits`} as seen` : 'Nothing new since you looked', icon: icon(CheckCheck), disabled: !fresh, onClick: () => markWorktreeSeen([live]) },
-      muted
-        ? { label: 'Tell me when it goes quiet', icon: icon(Bell), onClick: () => setQuietMuted(wt.path, false) }
-        : { label: 'Don’t tell me when it goes quiet', icon: icon(BellOff), onClick: () => setQuietMuted(wt.path, true) }
-    )
-  }
   if (wt.isMain) return items
   items.push({ label: wt.locked ? 'Unlock' : 'Lock (keep it if the folder goes away)', icon: icon(Lock), onClick: () => void setWorktreeLocked(repo, wt, !wt.locked) }, SEP)
   if (merged && data) items.push({ label: `Remove worktree and ${wt.branch}…`, icon: icon(Trash2), danger: true, onClick: () => void finishWorktree(repo, wt, merged, data) })

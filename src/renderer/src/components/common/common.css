@@ -669,6 +669,29 @@ select.ui-input {
   left: 1.5px;
 }
 
+/* The same handle lying down, above a panel docked at the bottom. */
+.ui-resizer-row {
+  width: auto;
+  height: 5px;
+  margin: -2px 0;
+  cursor: row-resize;
+}
+.ui-resizer-row::after {
+  top: 2px;
+  bottom: auto;
+  left: 0;
+  right: 0;
+  width: auto;
+  height: 1px;
+  background: var(--border-strong);
+}
+.ui-resizer-row:hover::after {
+  top: 1.5px;
+  left: 0;
+  width: auto;
+  height: 2px;
+}
+
 /* ── Misc ──────────────────────────────────────────────────────────────── */
 
 .ui-empty {

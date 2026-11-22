@@ -12,10 +12,9 @@ import { localForRemote } from '@renderer/lib/refs'
 import type { Ref, RefsResult } from '@shared/types'
 import { remoteWebUrl } from '@shared/remoteUrl'
 import { splitMatch, type Row, type SectionId } from './tree'
-import { useAgents } from '@renderer/components/agents/agentStore'
-import { stateOf } from '@renderer/components/agents/model'
-import { AgentMark, NewChip, StateLabel, useWorktreeState } from '@renderer/components/agents/parts'
-import { useApp } from '@renderer/store/appStore'
+import { ownerState, STATE_TITLE } from '@renderer/components/terminal/model'
+import { StateDot } from '@renderer/components/terminal/parts'
+import { useTerminals } from '@renderer/components/terminal/terminalStore'
 import { pullRef } from '@renderer/lib/pulls'
 
 export type HiddenState = 'none' | 'some' | 'all'
@@ -167,17 +166,18 @@ function EyeToggle({ state, onToggle, what }: { state: HiddenState; onToggle: ()
 
 type WorktreeRowData = Extract<Row, { kind: 'worktree' }>
 
-/** A worktree: its folder and what it is doing now (Agents at work), then its branch, agent and new commits. */
+/** A worktree: its folder (and what an agent in its terminals is doing), then its branch. */
 function WorktreeRow({ row, common, classes, pending, q, h }: { row: WorktreeRowData; common: Record<string, unknown>; classes: string[]; pending?: boolean; q: string; h: RowHandlers }) {
   const wt = row.node.worktree
   const merged = row.node.merged
-  const live = useWorktreeState(wt.missing ? null : wt.path)
+  // A worktree open as a tab may have terminals of its own.
+  const state = useTerminals((s) => ownerState(s.infos, wt.path))
   const cls = [...classes]
   if (wt.isCurrent) cls.push('sb-worktree-current')
   if (wt.missing) cls.push('sb-worktree-missing')
-  const title = live
-    ? `${live.title}\n${wt.path}`
-    : [wt.path, wt.branch ? `Branch ${wt.branch}` : 'Detached HEAD', wt.isMain ? 'The main folder' : null, wt.locked ? 'Locked' : null].filter(Boolean).join('\n')
+  const title = [wt.path, wt.branch ? `Branch ${wt.branch}` : 'Detached HEAD', wt.isMain ? 'The main folder' : null, wt.locked ? 'Locked' : null, state ? STATE_TITLE[state] : null]
+    .filter(Boolean)
+    .join('\n')
   return (
     <div {...common} className={cls.join(' ')} title={title}>
       <span className="sb-chevron-space" />
@@ -196,9 +196,7 @@ function WorktreeRow({ row, common, classes, pending, q, h }: { row: WorktreeRow
           {wt.missing ? (
             <span className="sb-worktree-gone">folder missing</span>
           ) : wt.isCurrent ? (
-            live && live.state !== 'idle' ? <StateLabel state={live.state} label={live.label} /> : <span className="sb-worktree-note">this tab</span>
-          ) : live ? (
-            <StateLabel state={live.state} label={live.label} />
+            <span className="sb-worktree-note">this tab</span>
           ) : (
             !!wt.changes && (
               <span className="sb-worktree-dirty" title={`${wt.changes} ${wt.changes === 1 ? 'file has' : 'files have'} changes`}>
@@ -219,8 +217,7 @@ function WorktreeRow({ row, common, classes, pending, q, h }: { row: WorktreeRow
               {wt.branch ?? 'detached HEAD'}
             </span>
           )}
-          {live?.agent && <AgentMark name={live.agent} compact={live.fresh.length > 0} />}
-          {live && <NewChip count={live.fresh.length} title={`${live.fresh.length} new since you last looked: ${live.fresh.map((c) => c.subject).slice(0, 3).join(' · ')}`} />}
+          {state && <StateDot state={state} />}
         </span>
       </span>
       {wt.missing ? (
@@ -243,16 +240,6 @@ function WorktreeRow({ row, common, classes, pending, q, h }: { row: WorktreeRow
       )}
     </div>
   )
-}
-
-/** "● 2 working" on the Worktrees section. */
-function WorkingCount() {
-  const worktrees = useAgents((s) => s.worktrees)
-  const now = useAgents((s) => s.now)
-  const settings = useApp((s) => s.settings)
-  const working = Object.values(worktrees).filter((w) => stateOf(w, now, settings) === 'working').length
-  if (!working) return null
-  return <StateLabel state="working" label={`${working} working`} />
 }
 
 export const RowView = memo(function RowView(props: RowViewProps) {
@@ -320,7 +307,6 @@ export const RowView = memo(function RowView(props: RowViewProps) {
               {props.cleanup}
             </button>
           )}
-          {row.id === 'worktrees' && <WorkingCount />}
           {!(row.id === 'pulls' && props.addDisabled) && <span className="sb-count">{row.count}</span>}
         </div>
       )

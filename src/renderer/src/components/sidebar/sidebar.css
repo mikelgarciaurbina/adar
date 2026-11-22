@@ -640,9 +640,6 @@ mark.sb-match {
 .sb-worktree-sub .sb-worktree-merged {
   margin-left: 0;
 }
-.sb-worktree-line .ag-state {
-  margin-right: 4px;
-}
 /* The folder name keeps its width first; the state gives way. */
 .sb-worktree-name {
   flex: 0 1 auto;
@@ -719,10 +716,4 @@ mark.sb-match {
 .sb-worktree-remove:hover {
   background: var(--bg-4);
   color: var(--text-0);
-}
-.sb-section .ag-state {
-  margin-right: 6px;
-  font-weight: 500;
-  letter-spacing: 0;
-  text-transform: none;
 }

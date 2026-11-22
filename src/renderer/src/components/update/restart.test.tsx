@@ -14,10 +14,12 @@ const updatesMock = vi.hoisted(() => ({
 const dialogs = vi.hoisted(() => ({
   confirm: vi.fn(async (_opts: { title: string; danger?: boolean; confirmLabel?: string; cancelLabel?: string }) => false)
 }))
+/** The terminals the main process says are running. */
+const terminals = vi.hoisted(() => ({ terminalList: vi.fn(async (): Promise<Array<{ id: string; busy: boolean; name: string; process: string }>> => []) }))
 const toasts = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn(), info: vi.fn(), loading: vi.fn(() => 7), dismiss: vi.fn() }))
 
 vi.mock('@renderer/api/client', () => ({
-  api: {},
+  api: terminals,
   updates: updatesMock,
   isElectron: true,
   isMac: true,
@@ -107,6 +109,19 @@ describe('"Restart to update"', () => {
     await installUpdate()
     expect(dialogs.confirm).toHaveBeenCalledTimes(2)
     expect(updatesMock.updateInstall).not.toHaveBeenCalled()
+  })
+
+  it('asks while a terminal still runs a program, not for idle shells', async () => {
+    terminals.terminalList.mockResolvedValueOnce([{ id: 't1', busy: false, name: '', process: 'zsh' }])
+    await installUpdate()
+    expect(dialogs.confirm).not.toHaveBeenCalled()
+
+    terminals.terminalList.mockResolvedValueOnce([
+      { id: 't1', busy: true, name: 'Claude Code', process: 'claude' },
+      { id: 't2', busy: true, name: '', process: 'node' }
+    ])
+    await installUpdate()
+    expect(dialogs.confirm).toHaveBeenCalledTimes(1)
   })
 
   it('does not ask for "Open installer" (Adar is not restarted)', async () => {

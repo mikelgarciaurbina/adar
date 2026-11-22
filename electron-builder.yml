@@ -7,6 +7,10 @@ directories:
 files:
   - out/**
   - package.json
+# Terminals: node-pty's native module and the helper each terminal starts through are run from disk, so they stay
+# outside the archive (node-pty looks for them in app.asar.unpacked).
+asarUnpack:
+  - node_modules/node-pty/**
 # macOS assets are named by architecture only (Adar-<version>-arm64.zip): installed apps (0.5.x) and the website pick
 # them that way. Windows and Linux put the system in the name and never ship a .zip or .dmg, so no macOS updater
 # can mistake them for its own.

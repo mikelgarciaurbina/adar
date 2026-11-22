@@ -54,8 +54,6 @@ export type CenterView =
   | { kind: 'work-review'; mode: ReviewMode; tab: ReviewTab; path?: string }
   /** The pull requests of every open repository, what waits for the user first. */
   | { kind: 'inbox' }
-  /** Agents at work: what the worktrees of the open repositories (or the tab group in front) are doing. */
-  | { kind: 'agents' }
 
 export type ReviewMode = 'all' | 'since'
 export type ReviewTab = 'files' | 'conversation' | 'commits'
@@ -159,6 +157,13 @@ export interface ProgressState {
   repoPath?: string
 }
 
+/** Asked before a tab closes: false keeps it open. */
+type CloseGuard = (path: string) => Promise<boolean>
+const closeGuards: CloseGuard[] = []
+export function addCloseGuard(guard: CloseGuard): void {
+  closeGuards.push(guard)
+}
+
 export interface AppState {
   ready: boolean
   appInfo: AppInfo | null
@@ -166,6 +171,8 @@ export interface AppState {
   recent: RecentRepo[]
   tabs: RepoTab[]
   activePath: string | null
+  /** A tab group's own view (its terminals) is in front instead of a repository's tab: `group:<id>`. */
+  groupView: string | null
   leftCollapsed: boolean
   rightCollapsed: boolean
   modal: ModalState | null
@@ -183,6 +190,8 @@ export interface AppState {
   openRepo(path: string): Promise<string>
   closeTab(path: string): Promise<void>
   setActive(path: string | null): void
+  /** Show a tab group's view (`group:<id>`), or go back to the active tab (null). */
+  setGroupView(owner: string | null): void
   moveTab(from: number, to: number): void
 
   // tab groups (settings.tabGroups; groups outlive their tabs)
@@ -190,7 +199,7 @@ export interface AppState {
   createGroup(paths: string[], opts?: { name?: string; color?: GroupColor }): string
   /** Move a repository into a group, or out of its group (null). */
   setTabGroup(path: string, groupId: string | null): void
-  updateGroup(id: string, patch: Partial<Pick<TabGroup, 'name' | 'color' | 'collapsed'>>): void
+  updateGroup(id: string, patch: Partial<Pick<TabGroup, 'name' | 'color' | 'collapsed' | 'folder'>>): void
   /** Forget a group; its open tabs stay, ungrouped. */
   deleteGroup(id: string): void
   /** Tab bar drag & drop: move tab `from` to index `to` (splice semantics) and into group `groupId`. */
@@ -374,6 +383,7 @@ export const useApp = create<AppState>()((set, get) => {
     recent: [],
     tabs: [],
     activePath: null,
+    groupView: null,
     leftCollapsed: false,
     rightCollapsed: false,
     modal: null,
@@ -437,6 +447,9 @@ export const useApp = create<AppState>()((set, get) => {
     },
 
     async closeTab(path) {
+      if (!get().tabs.some((t) => t.path === path)) return
+      // What lives with the tab (its terminals) may ask first, and goes with it.
+      for (const guard of closeGuards) if (!(await guard(path))) return
       const { tabs, activePath } = get()
       const idx = tabs.findIndex((t) => t.path === path)
       if (idx < 0) return
@@ -454,10 +467,15 @@ export const useApp = create<AppState>()((set, get) => {
     },
 
     setActive(path) {
-      if (get().activePath === path) return
-      set({ activePath: path })
+      // Choosing a tab leaves a group's view, also when it is the tab already active behind it.
+      if (get().activePath === path) return void (get().groupView && set({ groupView: null }))
+      set({ activePath: path, groupView: null })
       persistTabs()
       if (path) void get().refresh(path, ['status'])
+    },
+
+    setGroupView(owner) {
+      if (get().groupView !== owner) set({ groupView: owner })
     },
 
     moveTab(from, to) {
@@ -663,6 +681,12 @@ export const useApp = create<AppState>()((set, get) => {
 
     setCenter(path, view) {
       updateTab(path, () => ({ center: view }))
+      // A view of the git side was asked for while only the terminal shows: it needs the room.
+      const views = get().settings.terminalViews
+      if (view.kind !== 'graph' && views[path] === 'terminal') {
+        const { [path]: _terminal, ...rest } = views
+        void get().updateSettings({ terminalViews: rest })
+      }
     },
 
     setSearch(path, patch) {

@@ -25,11 +25,36 @@ export interface MenuBarDeps {
   emit(event: AdarEvent): void
 }
 
-/** What a repository's checked-out branch tracked at the last look, to tell when a fetch brought new commits. */
+/** What a local branch tracked at the last look, to tell when a fetch brought new commits to it. */
 interface Upstream {
   branch: string
   sha: string
   behind: number
+  remote: string
+  /** The checked-out one. */
+  head: boolean
+}
+
+/** A branch a fetch brought commits to, and how many. */
+export interface NewCommits {
+  branch: string
+  remote: string
+  added: number
+  head: boolean
+}
+
+/** "3 new commits on main from origin. Also on release/1.0 (1) and feature/x (2)." */
+export function newCommitsText(moved: readonly NewCommits[]): string {
+  const count = (n: number) => `${n} new commit${n === 1 ? '' : 's'}`
+  const head = moved.find((m) => m.head)
+  const others = moved.filter((m) => !m.head)
+  const list = others.slice(0, 3).map((m) => `${m.branch} (${m.added})`)
+  const more = others.length > 3 ? ` and ${others.length - 3} more` : ''
+  // "a, b and c", or "a, b, c and 2 more".
+  const names = more || list.length < 2 ? list.join(', ') : `${list.slice(0, -1).join(', ')} and ${list[list.length - 1]}`
+  if (head) return `${count(head.added)} on ${head.branch} from ${head.remote}.${others.length ? ` Also on ${names}${more}.` : ''}`
+  if (others.length === 1) return `${count(others[0].added)} on ${others[0].branch} from ${others[0].remote}.`
+  return `New commits on ${names}${more}.`
 }
 
 /** Fetch animation: the commits light up from the root to the tips, hold, and start again. */
@@ -53,7 +78,8 @@ export class MenuBar {
   private hiddenAt = 0
   /** Scripted captures (ADAR_CAPTURE_STEPS) keep the panel open when it loses focus. */
   stayOpen = false
-  private readonly upstreams = new Map<string, Upstream>()
+  /** Repository → its local branches with an upstream, by name. */
+  private readonly upstreams = new Map<string, Map<string, Upstream>>()
   private readonly lastFetch = new Map<string, number>()
   /** Repositories opened through openRepo (and so past its trust check) since Adar started: the panel may read them. */
   private readonly opened = new Set<string>()
@@ -109,56 +135,63 @@ export class MenuBar {
     this.updateIcon()
   }
 
-  /** Before a fetch: what the checked-out branch tracks now, to compare with afterwards. */
+  /** Before a fetch: what each local branch tracks now, to compare with afterwards. */
   async beforeFetch(repo: string): Promise<void> {
-    const now = await this.readUpstream(repo)
+    const now = await this.readUpstreams(repo)
     if (now) this.upstreams.set(repo, now)
     else this.upstreams.delete(repo)
   }
 
-  /** After a successful fetch: a dot on the icon and a notification when it brought commits to pull. */
+  /**
+   * After a successful fetch: a notification when it brought commits to pull to any local branch that tracks a
+   * remote, and a dot on the icon when one of them is the checked-out branch (the one the panel shows).
+   */
   async afterFetch(repo: string): Promise<void> {
     this.lastFetch.set(repo, Date.now())
     const before = this.upstreams.get(repo)
-    const now = await this.readUpstream(repo)
+    const now = await this.readUpstreams(repo)
     if (!now) return
     this.upstreams.set(repo, now)
-    if (!before || before.branch !== now.branch || before.sha === now.sha) return
-    const added = now.behind - before.behind
-    if (added <= 0) return
-    this.unseen = true
-    this.updateIcon()
-    if (this.settings?.notifyNewCommits) this.notify(repo, now.branch, now.remote, added)
+    if (!before) return
+    const moved: NewCommits[] = []
+    for (const n of now.values()) {
+      const b = before.get(n.branch)
+      // The same branch (the checked-out one must still be it), tracking something new, further behind than before.
+      if (!b || b.sha === n.sha || b.head !== n.head) continue
+      const added = n.behind - b.behind
+      if (added > 0) moved.push({ branch: n.branch, remote: n.remote, added, head: n.head })
+    }
+    if (!moved.length) return
+    if (moved.some((m) => m.head)) {
+      this.unseen = true
+      this.updateIcon()
+    }
+    if (this.settings?.notifyNewCommits) this.notify(repo, moved)
   }
 
-  /** Agents went quiet (Agents at work): the icon carries the dot too, unless the user turned that off. */
-  agentsQuiet(paths: readonly string[]): void {
-    const s = this.settings
-    if (!s?.notifyAgentQuiet || !paths.some((p) => !s.agentsQuietMuted.includes(p))) return
-    this.unseen = true
-    this.updateIcon()
-  }
-
-  private async readUpstream(repo: string): Promise<(Upstream & { remote: string }) | null> {
+  private async readUpstreams(repo: string): Promise<Map<string, Upstream> | null> {
     try {
       const refs = await this.deps.backend.getRefs(repo)
-      const head = refs.branches.find((b) => b.isHead)
-      if (!head?.upstream || head.upstreamGone) return null
-      const up = refs.remotes.find((r) => r.name === head.upstream)
-      if (!up) return null
-      return { branch: head.name, sha: up.sha, behind: head.behind ?? 0, remote: up.remote ?? head.upstream.split('/')[0] }
+      const out = new Map<string, Upstream>()
+      for (const b of refs.branches) {
+        if (!b.upstream || b.upstreamGone) continue
+        const up = refs.remotes.find((r) => r.name === b.upstream)
+        if (!up) continue
+        out.set(b.name, { branch: b.name, sha: up.sha, behind: b.behind ?? 0, remote: up.remote ?? b.upstream.split('/')[0], head: !!b.isHead })
+      }
+      return out
     } catch {
       return null
     }
   }
 
-  private notify(repo: string, branch: string, remote: string, count: number): void {
+  private notify(repo: string, moved: readonly NewCommits[]): void {
     if (!Notification.isSupported()) return
     const name = path.basename(repo)
     const group = this.settings?.tabGroups.find((g) => g.repos.includes(repo))
     const n = new Notification({
       title: group?.name ? `${name} · ${group.name}` : name,
-      body: `${count} new commit${count === 1 ? '' : 's'} on ${branch} from ${remote}.`
+      body: newCommitsText(moved)
     })
     n.on('click', () => this.deps.openInAdar(repo))
     n.show()
@@ -332,17 +365,6 @@ export class MenuBar {
         this.hidePanel()
         this.deps.openInAdar(typeof args[0] === 'string' && path.isAbsolute(args[0]) ? args[0] : null)
         return null
-      case 'menuBarOpenAgent': {
-        const open = args[0] as Record<string, unknown> | null
-        const abs = (v: unknown): v is string => typeof v === 'string' && path.isAbsolute(v)
-        if (!open || !abs(open.repo) || (open.path !== null && !abs(open.path)) || (open.view !== 'changes' && open.view !== 'agents')) {
-          throw new AdarError({ code: 'INVALID_ARGUMENT', message: 'Expected a worktree' })
-        }
-        this.hidePanel()
-        this.deps.openInAdar(null)
-        this.deps.emit({ type: 'open-agent', path: open.path, repo: open.repo, view: open.view })
-        return null
-      }
       case 'menuBarHide':
         this.hidePanel()
         return null

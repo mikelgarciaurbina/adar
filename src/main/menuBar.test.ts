@@ -47,7 +47,7 @@ vi.mock('electron', () => {
 
 import { DEFAULT_SETTINGS, type AppSettings, type RefsResult, type RepoInfo } from '@shared/types'
 import type { Backend } from './backend'
-import { MenuBar } from './menuBar'
+import { newCommitsText, MenuBar } from './menuBar'
 
 const REPO = '/work/api'
 
@@ -106,6 +106,36 @@ describe('MenuBar', () => {
     expect(trays[0].image).toBe('trayNewTemplate')
     notifications[0].click?.()
     expect(opened).toEqual([REPO])
+  })
+
+  it('tells of new commits on other local branches too, and marks the icon only for the checked-out one', async () => {
+    const withOthers = (releaseSha: string, releaseBehind: number, featureSha = 'f1', featureBehind = 0): RefsResult => {
+      const r = refs('up1', 0)
+      for (const [name, sha, behind] of [['release/1.0', releaseSha, releaseBehind], ['feature/x', featureSha, featureBehind]] as const) {
+        r.branches.push({ name, fullName: `refs/heads/${name}`, type: 'branch', sha: 'l', isHead: false, upstream: `origin/${name}`, ahead: 0, behind })
+        r.remotes.push({ name: `origin/${name}`, fullName: `refs/remotes/origin/${name}`, type: 'remote', sha, remote: 'origin' })
+      }
+      return r
+    }
+    const { mb } = setup()
+    current = withOthers('r1', 0)
+    await mb.beforeFetch(REPO)
+    current = withOthers('r2', 2)
+    await mb.afterFetch(REPO)
+    expect(notifications).toEqual([expect.objectContaining({ title: 'api · OBSFootball', body: '2 new commits on release/1.0 from origin.' })])
+    // The panel shows the checked-out branch: nothing new there.
+    expect(trays[0].image).toBe('trayTemplate')
+
+    expect(newCommitsText([{ branch: 'main', remote: 'origin', added: 3, head: true }])).toBe('3 new commits on main from origin.')
+    expect(
+      newCommitsText([
+        { branch: 'release/1.0', remote: 'origin', added: 1, head: false },
+        { branch: 'main', remote: 'origin', added: 1, head: true },
+        { branch: 'feature/x', remote: 'origin', added: 2, head: false }
+      ])
+    ).toBe('1 new commit on main from origin. Also on release/1.0 (1) and feature/x (2).')
+    const four = ['a', 'b', 'c', 'd'].map((branch) => ({ branch, remote: 'origin', added: 1, head: false }))
+    expect(newCommitsText(four)).toBe('New commits on a (1), b (1), c (1) and 1 more.')
   })
 
   it('stays quiet when nothing new arrived, the branch changed, or notifications are off', async () => {

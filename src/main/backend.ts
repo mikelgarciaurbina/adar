@@ -15,6 +15,7 @@ import { createHostingOps } from './hosting'
 import type { PlatformAdapter } from './platform'
 import { createSystemServices, type SystemOptions } from './system'
 import type { ActivityTracker } from './system/activity'
+import type { TerminalManager } from './terminal/manager'
 
 export interface BackendDeps {
   platform: PlatformAdapter
@@ -23,7 +24,11 @@ export interface BackendDeps {
   system?: Partial<SystemOptions>
 }
 
-export type Backend = AdarApi & { dispose(): Promise<void> }
+export type Backend = AdarApi & {
+  dispose(): Promise<void>
+  /** The terminals Adar runs (desktop app only): the host tells it when no window draws them. */
+  terminals: TerminalManager | null
+}
 
 type ReadMethod = Exclude<keyof AdarApi, WriteMethod | HostingMethod>
 
@@ -43,7 +48,7 @@ function gateContext(ctx: GitContext, ready: Promise<void>): GitContext {
   }
 }
 
-/** Tell the agents tracker about every operation Adar runs that may commit, move a branch or push. */
+/** Tell the commit tracker about every operation Adar runs that may commit, move a branch or push. */
 function ownContext(ctx: GitContext, activity: ActivityTracker): GitContext {
   const mark = <T>(repo: string | null | undefined, run: () => Promise<T>): Promise<T> => {
     if (!repo) return run()
@@ -83,8 +88,16 @@ const NON_REPO_METHODS: ReadonlySet<string> = new Set([
   'findRepositories',
   'answerCredentialRequest',
   'watchAgents',
-  'getAgentWorktrees',
   'notifyAgent',
+  'terminalOpen',
+  'terminalAttach',
+  'terminalWrite',
+  'terminalResize',
+  'terminalAck',
+  'terminalSeen',
+  'terminalClose',
+  'terminalList',
+  'notifyTerminal',
   'openRepo',
   'trustRepo',
   'closeRepo',
@@ -140,7 +153,7 @@ export function createBackend(deps: BackendDeps): Backend {
   const ctx = gateContext(base, services.ready)
 
   const read: ReadOps = createReadOps(ctx, services)
-  // What Adar itself commits or pushes is not news about an agent (Agents at work).
+  // What Adar itself commits or pushes is not news.
   const own = ownContext(ctx, services.activity)
   const write = createWriteOps(own)
   const hosting = createHostingOps(own, services)
@@ -150,6 +163,7 @@ export function createBackend(deps: BackendDeps): Backend {
     ...bindMethods(read, READ_METHODS),
     ...bindMethods(write, WRITE_METHODS),
     ...bindMethods(hosting, HOSTING_METHODS),
+    terminals: services.terminals,
     dispose() {
       if (!disposed) disposed = services.dispose()
       return disposed

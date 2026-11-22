@@ -2,8 +2,8 @@
 // (persisted, debounced, by the store). The Git section edits the global identity.
 
 import { useEffect, useId, useRef, useState } from 'react'
-import { Bot, Download, FileDiff, GitBranch, GitGraph, Plug, Plus, RefreshCw, Settings, SlidersHorizontal, X } from 'lucide-react'
-import { api, cli, isElectron } from '@renderer/api/client'
+import { Download, FileDiff, GitBranch, GitGraph, Plug, Plus, RefreshCw, Settings, SlidersHorizontal, SquareTerminal, X } from 'lucide-react'
+import { api, cli, isElectron, isMac } from '@renderer/api/client'
 import { installCliCommand, uninstallCliCommand } from '@renderer/actions/cli'
 import { openConnect, turnOffAzure, turnOffBitbucket, turnOffGithubServer, turnOffGitlab, turnOffPullRequests } from '@renderer/actions/pulls'
 import { GITLAB_COM } from '@shared/hosting'
@@ -17,18 +17,18 @@ import { checkForUpdatesNow, installUpdate, startUpdate } from '@renderer/compon
 import { useUpdates } from '@renderer/components/update/updateStore'
 import { useApp, useSettings } from '@renderer/store/appStore'
 import type { AppSettings, DiffViewMode, Identity, PullMode, ThemeSetting } from '@shared/types'
-import { QUIET_MINUTES, type AgentPrefix } from '@shared/agents'
+import { MAX_TERMINAL_LAUNCHERS, type TerminalLauncher } from '@shared/terminal'
 import { closeIfTopmost, Segmented, Select, SettingGroup, SettingRow, Switch } from './controls'
 import { validateIdentity } from './identity'
 import { describeUpdateStatus, type UpdateAction } from './updates'
 
-type SectionId = 'general' | 'graph' | 'diff' | 'agents' | 'integrations' | 'git'
+type SectionId = 'general' | 'graph' | 'diff' | 'terminal' | 'integrations' | 'git'
 
 const SECTIONS: Array<{ id: SectionId; label: string; icon: React.ReactNode }> = [
   { id: 'general', label: 'General', icon: <SlidersHorizontal size={15} /> },
   { id: 'graph', label: 'Graph', icon: <GitGraph size={15} /> },
   { id: 'diff', label: 'Diff', icon: <FileDiff size={15} /> },
-  { id: 'agents', label: 'Agents at work', icon: <Bot size={15} /> },
+  { id: 'terminal', label: 'Terminal', icon: <SquareTerminal size={15} /> },
   { id: 'integrations', label: 'Integrations', icon: <Plug size={15} /> },
   { id: 'git', label: 'Git', icon: <GitBranch size={15} /> }
 ]
@@ -94,7 +94,7 @@ export function SettingsModal({ section }: { section?: string }) {
           {active === 'general' && <GeneralSection />}
           {active === 'graph' && <GraphSection />}
           {active === 'diff' && <DiffSection />}
-          {active === 'agents' && <AgentsSection />}
+          {active === 'terminal' && <TerminalSection />}
           {active === 'integrations' && <IntegrationsSection />}
           {active === 'git' && <GitSection />}
         </div>
@@ -247,7 +247,7 @@ function GeneralSection() {
       </SettingGroup>
       <SettingGroup title="Notifications">
         {desktop && (
-          <SettingRow label="Notify about new commits" description="A notification when a fetch, auto-fetch included, brings new commits to the checked-out branch's upstream.">
+          <SettingRow label="Notify about new commits" description="A notification when a fetch, auto-fetch included, brings new commits to a local branch that tracks a remote.">
             <Switch label="Notify about new commits" checked={s.notifyNewCommits} onChange={(notifyNewCommits) => update({ notifyNewCommits })} />
           </SettingRow>
         )}
@@ -278,95 +278,148 @@ function GeneralSection() {
   )
 }
 
-/** Agents at work: the live state of the worktrees, what is watched, its notifications and how agents are named. */
-function AgentsSection() {
+const FONT_SIZES = [10, 11, 12, 13, 14, 15, 16, 18, 20]
+const SCROLLBACKS = [1000, 5000, 10000, 50000, 100000]
+
+/** Terminals: what a new one can start with, how they look and behave, and what they notify. */
+function TerminalSection() {
   const s = useSettings()
   const appInfo = useApp((st) => st.appInfo)
-  const desktop = appInfo?.isElectron ?? isElectron
-  const quietId = useId()
+  const mac = (appInfo?.platform ?? (isMac ? 'darwin' : '')) === 'darwin'
+  const fontId = useId()
+  const sizeId = useId()
+  const scrollId = useId()
+  if (!(appInfo?.isElectron ?? isElectron)) {
+    return (
+      <SettingGroup>
+        <SettingRow label="Terminals need the desktop app" description="A shell behind the browser bridge would be a remote shell, so Adar has none here.">
+          <span />
+        </SettingRow>
+      </SettingGroup>
+    )
+  }
   return (
     <>
-      <SettingGroup title="Watching">
-        <SettingRow label="Show what agents are doing" description="Live state of the worktrees of the open repositories: the left panel, the tabs, the graph and the Agents view (⇧⌘E).">
-          <Switch label="Show what agents are doing" checked={s.agentsOn} onChange={(agentsOn) => update({ agentsOn })} />
-        </SettingRow>
-        <SettingRow label="Watch" description="Choose the second when agents also work in a repository's own folder, not only in worktrees of their own.">
-          <Segmented
-            ariaLabel="Watch"
-            disabled={!s.agentsOn}
-            value={s.agentsWatchMain ? 'all' : 'worktrees'}
-            onChange={(v) => update({ agentsWatchMain: v === 'all' })}
-            options={[
-              { value: 'worktrees', label: 'Worktrees' },
-              { value: 'all', label: 'Worktrees and each repository’s folder' }
-            ]}
-          />
+      <SettingGroup title="Launchers" description="What a new terminal can start with, besides your shell: each runs its command in your login shell, in the project's folder.">
+        <SettingRow label="Programs" stacked>
+          <LauncherEditor value={s.terminalLaunchers} />
         </SettingRow>
         <SettingRow
-          label="When an agent goes quiet"
-          description="It stopped with changes not committed or commits not pushed: it may be waiting for an answer. Its tab and the Agents button turn sun after this long."
-          htmlFor={quietId}
+          label="Let agents say what they are doing"
+          description="Claude Code is started with hooks that tell Adar when it works, asks or finishes (they do nothing outside Adar), and Codex with its terminal notifications on. That is what the dot on a tab shows."
         >
-          <Select id={quietId} disabled={!s.agentsOn} value={s.agentQuietMinutes} onChange={(e) => update({ agentQuietMinutes: Number(e.target.value) })}>
-            {QUIET_MINUTES.map((m) => (
-              <option key={m} value={m}>
-                after {m} min
+          <Switch label="Let agents say what they are doing" checked={s.terminalAgentState} onChange={(terminalAgentState) => update({ terminalAgentState })} />
+        </SettingRow>
+      </SettingGroup>
+      <SettingGroup title="Appearance">
+        <SettingRow label="Font" description="A font installed on this computer; empty for Geist Mono, the one Adar brings." htmlFor={fontId}>
+          <div className="md-term-font">
+            <input
+              id={fontId}
+              className="ui-input"
+              placeholder="Geist Mono"
+              spellCheck={false}
+              defaultValue={s.terminalFontFamily}
+              onBlur={(e) => update({ terminalFontFamily: e.target.value.trim().slice(0, 80) })}
+              onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+            />
+            <Select id={sizeId} aria-label="Font size" value={s.terminalFontSize} onChange={(e) => update({ terminalFontSize: Number(e.target.value) })}>
+              {(FONT_SIZES.includes(s.terminalFontSize) ? FONT_SIZES : [...FONT_SIZES, s.terminalFontSize].sort((x, y) => x - y)).map((n) => (
+                <option key={n} value={n}>
+                  {n} px
+                </option>
+              ))}
+            </Select>
+          </div>
+        </SettingRow>
+        <SettingRow label="Cursor">
+          <div className="md-term-cursor">
+            <Segmented
+              ariaLabel="Cursor"
+              value={s.terminalCursor}
+              onChange={(terminalCursor) => update({ terminalCursor })}
+              options={[
+                { value: 'block', label: 'Block' },
+                { value: 'bar', label: 'Bar' },
+                { value: 'underline', label: 'Underline' }
+              ]}
+            />
+            <Switch label="Blinking cursor" checked={s.terminalCursorBlink} onChange={(terminalCursorBlink) => update({ terminalCursorBlink })} />
+          </div>
+        </SettingRow>
+        <SettingRow label="Dim the panes without focus" description="With several panes in a tab, the one with the keyboard stands out.">
+          <Switch label="Dim the panes without focus" checked={s.terminalDimUnfocused} onChange={(terminalDimUnfocused) => update({ terminalDimUnfocused })} />
+        </SettingRow>
+      </SettingGroup>
+      <SettingGroup title="Behaviour">
+        <SettingRow label="Scrollback" description="Lines of output kept per terminal." htmlFor={scrollId}>
+          <Select id={scrollId} value={s.terminalScrollback} onChange={(e) => update({ terminalScrollback: Number(e.target.value) })}>
+            {(SCROLLBACKS.includes(s.terminalScrollback) ? SCROLLBACKS : [...SCROLLBACKS, s.terminalScrollback].sort((x, y) => x - y)).map((n) => (
+              <option key={n} value={n}>
+                {n.toLocaleString('en-US')} lines
               </option>
             ))}
           </Select>
         </SettingRow>
+        {mac && (
+          <SettingRow label="Option key as Meta" description="⌥ sends Meta (Alt) to the shell instead of typing its characters: ⌥← and ⌥→ move by words.">
+            <Switch label="Option key as Meta" checked={s.terminalOptionAsMeta} onChange={(terminalOptionAsMeta) => update({ terminalOptionAsMeta })} />
+          </SettingRow>
+        )}
+        <SettingRow label="Copy on select">
+          <Switch label="Copy on select" checked={s.terminalCopyOnSelect} onChange={(terminalCopyOnSelect) => update({ terminalCopyOnSelect })} />
+        </SettingRow>
+        <SettingRow label="Ask before closing a terminal with a program running">
+          <Switch label="Ask before closing a terminal with a program running" checked={s.terminalConfirmClose} onChange={(terminalConfirmClose) => update({ terminalConfirmClose })} />
+        </SettingRow>
       </SettingGroup>
-      {desktop && (
-        <SettingGroup title="Notifications">
-          <SettingRow label="An agent goes quiet" description="Once per stop, after the time above.">
-            <Switch label="Notify when an agent goes quiet" disabled={!s.agentsOn} checked={s.notifyAgentQuiet} onChange={(notifyAgentQuiet) => update({ notifyAgentQuiet })} />
-          </SettingRow>
-          <SettingRow label="An agent commits or pushes" description="Not for commits or pushes made from Adar.">
-            <Switch label="Notify when an agent commits or pushes" disabled={!s.agentsOn} checked={s.notifyAgentCommits} onChange={(notifyAgentCommits) => update({ notifyAgentCommits })} />
-          </SettingRow>
-        </SettingGroup>
-      )}
-      <SettingGroup title="Naming agents">
-        <SettingRow
-          label="Agent branch prefixes"
-          description="How Adar tells which agent works in a worktree, with the Co-Authored-By trailers of its commits and the folder (.claude, .codex, .cursor)."
-          stacked
-        >
-          <PrefixEditor value={s.agentPrefixes} disabled={!s.agentsOn} />
+      <SettingGroup title="Notifications">
+        <SettingRow label="An agent needs you" description="It asks a question or for permission, in a terminal you are not looking at.">
+          <Switch label="Notify when an agent needs you" checked={s.notifyTerminalNeedsYou} onChange={(notifyTerminalNeedsYou) => update({ notifyTerminalNeedsYou })} />
+        </SettingRow>
+        <SettingRow label="An agent finishes its task" description="Its turn ended, in a terminal you are not looking at.">
+          <Switch label="Notify when an agent finishes its task" checked={s.notifyTerminalFinished} onChange={(notifyTerminalFinished) => update({ notifyTerminalFinished })} />
+        </SettingRow>
+        <SettingRow label="An agent commits or pushes" description="Commits and pushes Adar did not make, in a project that is not in front.">
+          <Switch label="Notify when an agent commits or pushes" checked={s.notifyAgentCommits} onChange={(notifyAgentCommits) => update({ notifyAgentCommits })} />
         </SettingRow>
       </SettingGroup>
     </>
   )
 }
 
-function PrefixEditor({ value, disabled }: { value: AgentPrefix[]; disabled: boolean }) {
+function LauncherEditor({ value }: { value: TerminalLauncher[] }) {
   const [adding, setAdding] = useState(false)
-  const [prefix, setPrefix] = useState('')
   const [name, setName] = useState('')
-  const set = (agentPrefixes: AgentPrefix[]) => update({ agentPrefixes })
-  const ok = prefix.trim() && name.trim() && !prefix.trim().startsWith('-') && !value.some((p) => p.prefix === prefix.trim())
+  const [command, setCommand] = useState('')
+  const set = (terminalLaunchers: TerminalLauncher[]) => update({ terminalLaunchers })
+  const ok = !!name.trim() && !!command.trim() && value.length < MAX_TERMINAL_LAUNCHERS
   const add = () => {
     if (!ok) return
-    set([...value, { prefix: prefix.trim(), name: name.trim() }])
-    setPrefix('')
+    // An id of its own: the name in lower case, numbered when taken.
+    const base = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'launcher'
+    let id = base
+    for (let n = 2; id === 'shell' || value.some((l) => l.id === id); n++) id = `${base}-${n}`
+    set([...value, { id, name: name.trim(), command: command.trim() }])
     setName('')
+    setCommand('')
     setAdding(false)
   }
   return (
     <div className="md-prefixes">
-      {value.map((p) => (
-        <span key={p.prefix} className="md-prefix">
-          <code>{p.prefix}</code> → {p.name}
-          <button type="button" aria-label={`Remove ${p.prefix}`} disabled={disabled} onClick={() => set(value.filter((x) => x.prefix !== p.prefix))}>
+      {value.map((l) => (
+        <span key={l.id} className="md-prefix">
+          {l.name} → <code>{l.command}</code>
+          <button type="button" aria-label={`Remove ${l.name}`} onClick={() => set(value.filter((x) => x.id !== l.id))}>
             <X size={11} />
           </button>
         </span>
       ))}
       {adding ? (
         <span className="md-prefix-add">
-          <input className="ui-input" autoFocus placeholder="devin/" aria-label="Branch prefix" value={prefix} onChange={(e) => setPrefix(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && add()} />
+          <input className="ui-input" autoFocus placeholder="Aider" aria-label="Name" value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && add()} />
           <span>→</span>
-          <input className="ui-input" placeholder="Devin" aria-label="Agent name" value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && add()} />
+          <input className="ui-input" placeholder="aider --model sonnet" aria-label="Command" spellCheck={false} value={command} onChange={(e) => setCommand(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && add()} />
           <Button size="sm" variant="primary" disabled={!ok} onClick={add}>
             Add
           </Button>
@@ -375,11 +428,10 @@ function PrefixEditor({ value, disabled }: { value: AgentPrefix[]; disabled: boo
           </Button>
         </span>
       ) : (
-        <button type="button" className="md-prefix md-prefix-new" disabled={disabled} onClick={() => setAdding(true)}>
+        <button type="button" className="md-prefix md-prefix-new" disabled={value.length >= MAX_TERMINAL_LAUNCHERS} onClick={() => setAdding(true)}>
           <Plus size={11} /> Add
         </button>
       )}
-      {value.length === 0 && !adding && <span className="md-prefix-none">None: only the trailers and the folder name the agent.</span>}
     </div>
   )
 }

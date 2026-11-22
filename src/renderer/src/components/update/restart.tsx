@@ -5,7 +5,7 @@
 // cannot replace itself (the administrator password was cancelled, a read-only copy),
 // it explains how to install the download by hand.
 
-import { updates } from '@renderer/api/client'
+import { api, isElectron, updates } from '@renderer/api/client'
 import { confirm } from '@renderer/components/common/dialogs'
 import { toast } from '@renderer/components/common/toast'
 import { unsavedConflictEdits } from '@renderer/components/conflicts/editorCache'
@@ -28,9 +28,18 @@ export function workLostOnRestart(state: Pick<AppState, 'busy' | 'tabs'>, confli
   return lines
 }
 
+/** Terminals end with Adar: a line for those with a program still running (none in the browser, which has no terminals). */
+async function terminalsLost(): Promise<string[]> {
+  if (!isElectron) return []
+  const busy = (await api.terminalList().catch(() => [])).filter((t) => t.busy)
+  if (!busy.length) return []
+  const names = [...new Set(busy.map((t) => t.name || t.process || 'a program'))].join(', ')
+  return [`${busy.length === 1 ? 'A terminal' : `${pluralize(busy.length, 'terminal')}`} running ${names}`]
+}
+
 /** True when it is fine to restart now: nothing would be lost, or the user agreed. */
 export async function confirmRestartForUpdate(): Promise<boolean> {
-  const lost = workLostOnRestart(useApp.getState(), unsavedConflictEdits())
+  const lost = [...workLostOnRestart(useApp.getState(), unsavedConflictEdits()), ...(await terminalsLost())]
   if (!lost.length) return true
   return confirm({
     title: 'Restart Adar to update?',
@@ -116,7 +125,7 @@ export async function startUpdate(): Promise<void> {
 
 /** Cmd+Q / quitting: ask before interrupting running git operations or losing unsaved work. */
 export async function confirmQuit(): Promise<boolean> {
-  const lost = workLostOnRestart(useApp.getState(), unsavedConflictEdits())
+  const lost = [...workLostOnRestart(useApp.getState(), unsavedConflictEdits()), ...(await terminalsLost())]
   if (!lost.length) return true
   return confirm({
     title: 'Quit Adar?',

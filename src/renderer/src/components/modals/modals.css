@@ -1329,3 +1329,19 @@
   font-size: var(--fs-sm);
   color: var(--text-3);
 }
+
+/* Settings › Terminal: the font's name beside its size, the cursor's shape beside its blinking. */
+.md-term-font {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.md-term-font > input {
+  flex: 1;
+  min-width: 120px;
+}
+.md-term-cursor {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}

@@ -10,9 +10,11 @@ import { closeGroup, fetchGroup, newGroup, openGroup, renameGroup, setGroupColor
 import { showContextMenu, showMenuBelow, type MenuItem } from '@renderer/components/common/ContextMenu'
 import { getCommand } from '@renderer/commands'
 import { useUpdates } from '@renderer/components/update/updateStore'
-import { useAgents } from '@renderer/components/agents/agentStore'
-import { tabDot } from '@renderer/components/agents/model'
-import { StateDot } from '@renderer/components/agents/parts'
+import { terminalsAvailable } from '@renderer/actions/terminal'
+import { ownerState } from '@renderer/components/terminal/model'
+import { StateDot } from '@renderer/components/terminal/parts'
+import { useTerminals } from '@renderer/components/terminal/terminalStore'
+import { groupOwner, topState } from '@shared/terminal'
 import { customColorsInUse, GROUP_COLOR_LABELS, groupLine } from '@renderer/lib/groupColors'
 import { isMod, shortcutLabel } from '@renderer/lib/keys'
 import { dropPlacement, groupOf, tabSegments } from '@renderer/lib/tabGroups'
@@ -91,6 +93,7 @@ export function TabBar() {
   // not on every status/log refresh of a tab.
   const tabsKey = useApp((s) => s.tabs.map((t) => `${t.path}\u0000${t.name}\u0000${t.info?.mainWorktree ?? ''}\u0000${t.info?.head.branch ?? ''}`).join('\u0001'))
   const activePath = useApp((s) => s.activePath)
+  const groupView = useApp((s) => s.groupView)
   const busyKey = useApp((s) => Object.keys(s.busy).join('\u0001'))
   const tabs = useMemo<TabLite[]>(
     () =>
@@ -364,6 +367,7 @@ export function TabBar() {
         ]
       },
       { label: group.collapsed ? 'Expand' : 'Collapse', onClick: () => st.updateGroup(group.id, { collapsed: !group.collapsed }) },
+      ...(terminalsAvailable ? [{ label: 'Open the Group’s Terminal', icon: <SquareTerminal size={14} />, onClick: () => st.setGroupView(groupOwner(group.id)) }] : []),
       ...moveItems(group),
       ...(openCount < group.repos.length ? [{ label: 'Open All Repositories', onClick: () => void openGroup(group.id) }] : []),
       {
@@ -388,7 +392,8 @@ export function TabBar() {
   const updateReady = useUpdates((s) => s.status?.state === 'downloaded')
 
   const renderTab = (tab: TabLite, i: number, group: TabGroup | null) => {
-    const active = tab.path === activePath
+    // While a group's own view is in front, no tab is.
+    const active = tab.path === activePath && !groupView
     const isBusy = busyRepos.has(tab.path)
     const groupHere = !group && groupDrop?.key === `tab:${tab.path}` ? groupDrop : null
     const indicator = groupHere
@@ -465,7 +470,7 @@ export function TabBar() {
           {tab.name}
           {hints.has(tab.path) && <span className="tb-tab-hint">{hints.get(tab.path)}</span>}
         </span>
-        <TabAgentDot path={tab.path} mainWorktree={tab.mainWorktree ?? null} />
+        <TabTerminalDot path={tab.path} />
         {tab.mainWorktree && (
           <span className="tb-tab-worktree" aria-label="Worktree">
             <GitBranch size={10} />
@@ -509,7 +514,7 @@ export function TabBar() {
           return (
             <div
               key={`group:${group.id}`}
-              className={`tb-group${group.collapsed ? ' tb-group-collapsed' : ''}${chipDrop === group.id ? ' tb-group-drop' : ''}${drop?.chip === group.id || (groupDrop?.key === `group:${group.id}` && !groupDrop.after) ? ' tb-drop-before' : ''}${groupDrop?.key === `group:${group.id}` && groupDrop.after ? ' tb-drop-after' : ''}${groupDrag === group.id ? ' tb-group-dragging' : ''}`}
+              className={`tb-group${group.collapsed ? ' tb-group-collapsed' : ''}${groupView === groupOwner(group.id) ? ' tb-group-front' : ''}${chipDrop === group.id ? ' tb-group-drop' : ''}${drop?.chip === group.id || (groupDrop?.key === `group:${group.id}` && !groupDrop.after) ? ' tb-drop-before' : ''}${groupDrop?.key === `group:${group.id}` && groupDrop.after ? ' tb-drop-after' : ''}${groupDrag === group.id ? ' tb-group-dragging' : ''}`}
               style={{
                 ...groupStyle(colourPreview?.id === group.id ? colourPreview.color : group.color),
                 // The tray shares the bar like its tabs would on their own (its tabs split the tray).
@@ -551,7 +556,9 @@ export function TabBar() {
                 <span className="tb-group-mark" aria-hidden="true" />
                 <span className="tb-group-name">{label}</span>
                 {group.collapsed && <span className="tb-group-count">{seg.tabs.length}</span>}
+                {group.collapsed && <GroupTabsDot paths={seg.tabs.map((x) => x.tab.path)} />}
               </button>
+              {terminalsAvailable && <GroupTerminalButton group={group} label={label} front={groupView === groupOwner(group.id)} />}
               {shown.map((x) => renderTab(x.tab, x.index, group))}
             </div>
           )
@@ -594,17 +601,32 @@ export function TabBar() {
   )
 }
 
-/** Agents at work on a tab: green while its worktree (or one of its repository's) works, sun when it went quiet. */
-function TabAgentDot({ path, mainWorktree }: { path: string; mainWorktree: string | null }) {
-  const worktrees = useAgents((s) => s.worktrees)
-  const now = useAgents((s) => s.now)
-  const quietMinutes = useApp((s) => s.settings.agentQuietMinutes)
-  const state = tabDot({ path, mainWorktree }, Object.values(worktrees), now, { agentQuietMinutes: quietMinutes })
-  if (!state) return null
-  const title = state === 'working' ? (worktrees[path] ? 'An agent is working here' : 'An agent is working in one of its worktrees') : 'The agent here went quiet with work left: it may be waiting for you'
+/** What the agents in a tab's terminals are doing: working, needs you or finished (the most urgent of them). */
+function TabTerminalDot({ path }: { path: string }) {
+  const state = useTerminals((s) => ownerState(s.infos, path))
+  return state ? <StateDot state={state} /> : null
+}
+
+/** A collapsed group hides its tabs: their dots add up on its label. */
+function GroupTabsDot({ paths }: { paths: string[] }) {
+  const state = useTerminals((s) => topState(paths.map((p) => ownerState(s.infos, p))))
+  return state ? <StateDot state={state} /> : null
+}
+
+/** The group's own terminals, started in the folder its repositories share: opens their view; says what runs there. */
+function GroupTerminalButton({ group, label, front }: { group: TabGroup; label: string; front: boolean }) {
+  const owner = groupOwner(group.id)
+  const state = useTerminals((s) => ownerState(s.infos, owner))
   return (
-    <span className="ag-tab-dot" title={title} aria-label={title}>
-      <StateDot state={state} />
-    </span>
+    <button
+      className={`tb-group-term${front ? ' tb-group-term-on' : ''}`}
+      title={`The terminal of ${label}: a shell in the folder its repositories share`}
+      aria-label={`Open the terminal of the group ${label}`}
+      aria-pressed={front}
+      onClick={() => useApp.getState().setGroupView(front ? null : owner)}
+    >
+      <SquareTerminal size={13} />
+      {state && <StateDot state={state} />}
+    </button>
   )
 }

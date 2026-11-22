@@ -5,10 +5,25 @@
 import * as git from '@renderer/actions/git'
 import { installCliCommand, uninstallCliCommand } from '@renderer/actions/cli'
 import { openBranchCleanup, openKeptBranches } from '@renderer/actions/cleanup'
-import { openAgents } from '@renderer/actions/agents'
 import { openReflog } from '@renderer/actions/reflog'
 import { openWorkReview } from '@renderer/actions/workReview'
 import { newWorktree } from '@renderer/actions/worktrees'
+import {
+  clearFocusedTerminal,
+  closeFocusedTerminal,
+  equalizeTerminals,
+  findInTerminal,
+  focusPane,
+  newTerminal,
+  setTerminalView,
+  splitTerminal,
+  stepTerminalTab,
+  terminalHasKeyboard,
+  terminalOwner,
+  terminalsAvailable,
+  toggleTerminal,
+  zoomTerminal
+} from '@renderer/actions/terminal'
 import { openConnect, selectPull, startPullRequest, turnOffPullRequests } from '@renderer/actions/pulls'
 import { openInbox, openReview } from '@renderer/actions/review'
 import { anyPullsOn, hostingOn, pullIndexOf, repoHosting, usePulls } from '@renderer/components/pulls/pullStore'
@@ -23,7 +38,7 @@ export interface Command {
   id: string
   label: string
   /** Group shown in the palette. */
-  group: 'Repository' | 'Branch' | 'Remote' | 'Stash' | 'View' | 'App' | 'Changes'
+  group: 'Repository' | 'Branch' | 'Remote' | 'Stash' | 'View' | 'App' | 'Changes' | 'Terminal'
   /** Shortcut spec for display, e.g. "Mod+Shift+S" (see lib/keys.ts shortcutLabel). */
   shortcut?: string
   /** Hidden from the palette when it returns false. */
@@ -125,7 +140,6 @@ export const COMMANDS: Command[] = [
     })
   },
   { id: 'pull-requests', label: 'Pull Requests', group: 'Remote', shortcut: 'Mod+Shift+R', when: () => hasRepo() && anyPullsOn(), run: () => openInbox() },
-  { id: 'agents', label: 'Agents at Work', group: 'Repository', shortcut: 'Mod+Shift+E', when: () => hasRepo() && useApp.getState().settings.agentsOn, run: () => openAgents() },
   { id: 'review-work', label: 'Review the Work in This Worktree', group: 'Repository', when: () => hasRepo(), run: withRepo((r) => void openWorkReview(r)) },
   {
     id: 'review-pull-request',
@@ -195,7 +209,7 @@ export const COMMANDS: Command[] = [
   { id: 'zoom-in', label: 'Zoom In', group: 'View', shortcut: 'Mod+=', run: () => zoom(1) },
   { id: 'zoom-out', label: 'Zoom Out', group: 'View', shortcut: 'Mod+-', run: () => zoom(-1) },
   { id: 'zoom-reset', label: 'Actual Size', group: 'View', shortcut: 'Mod+0', run: () => zoom(0) },
-  { id: 'open-in-terminal', label: 'Open in Terminal', group: 'Repository', shortcut: 'Mod+Alt+T', when: hasRepo, run: withRepo((r) => git.openInTerminal(r)) },
+  { id: 'open-in-terminal', label: 'Open in External Terminal', group: 'Repository', shortcut: 'Mod+Alt+T', when: hasRepo, run: withRepo((r) => git.openInTerminal(r)) },
   { id: 'open-in-finder', label: 'Reveal in Finder', group: 'Repository', shortcut: 'Mod+Alt+R', when: hasRepo, run: withRepo((r) => git.showInFolder(r)) },
   { id: 'open-in-editor', label: 'Open in Editor', group: 'Repository', when: hasRepo, run: withRepo((r) => git.openInEditor(r)) },
   { id: 'git-console', label: 'Git Console', group: 'Repository', shortcut: 'Ctrl+`', when: hasRepo, run: () => useApp.getState().setConsoleOpen(!useApp.getState().consoleOpen) },
@@ -205,6 +219,38 @@ export const COMMANDS: Command[] = [
   { id: 'update-submodules', label: 'Update Submodules', group: 'Repository', when: () => !!getActiveTab()?.refs?.submodules.length, run: withRepo((r) => git.updateSubmodules(r)) }
 ]
 
+// Terminals (desktop app): the shortcuts are Cmd ones on macOS, Ctrl+Shift elsewhere, where Ctrl belongs to the shell.
+const isMacApp = platform === 'darwin'
+const hasTerminals = () => terminalsAvailable && hasRepo()
+const terminalShowing = () => !!terminalOwner()
+const launcher = (id: string) => useApp.getState().settings.terminalLaunchers.find((l) => l.id === id)
+COMMANDS.push(
+  { id: 'toggle-terminal', label: 'Switch Between Graph and Terminal', group: 'View', shortcut: 'Mod+E', when: hasTerminals, run: () => toggleTerminal() },
+  { id: 'view-graph', label: 'Show the Graph Only', group: 'View', when: hasTerminals, run: withRepo((r) => setTerminalView(r, 'graph')) },
+  { id: 'view-both', label: 'Show the Graph and the Terminal', group: 'View', when: hasTerminals, run: withRepo((r) => setTerminalView(r, 'both')) },
+  { id: 'view-terminal', label: 'Show the Terminal Only', group: 'View', when: hasTerminals, run: withRepo((r) => setTerminalView(r, 'terminal')) },
+  { id: 'terminal-new', label: 'New Terminal', group: 'Terminal', shortcut: isMacApp ? 'Mod+T' : 'Ctrl+Shift+T', when: hasTerminals, run: () => newTerminal() },
+  { id: 'terminal-claude', label: 'New Terminal: Claude Code', group: 'Terminal', when: () => hasTerminals() && !!launcher('claude'), run: () => newTerminal('claude') },
+  { id: 'terminal-codex', label: 'New Terminal: Codex', group: 'Terminal', when: () => hasTerminals() && !!launcher('codex'), run: () => newTerminal('codex') },
+  { id: 'terminal-split-right', label: 'Split Terminal Right', group: 'Terminal', shortcut: isMacApp ? 'Mod+D' : 'Ctrl+Shift+D', when: hasTerminals, run: () => splitTerminal('row') },
+  { id: 'terminal-split-down', label: 'Split Terminal Down', group: 'Terminal', shortcut: isMacApp ? 'Mod+Shift+D' : undefined, when: hasTerminals, run: () => splitTerminal('column') },
+  { id: 'terminal-zoom', label: 'Zoom Terminal Pane', group: 'Terminal', shortcut: isMacApp ? 'Mod+Shift+Enter' : 'Ctrl+Shift+Enter', when: terminalShowing, run: () => zoomTerminal() },
+  { id: 'terminal-equalize', label: 'Equalize Terminal Splits', group: 'Terminal', shortcut: isMacApp ? 'Ctrl+Mod+=' : undefined, when: terminalShowing, run: () => equalizeTerminals() },
+  { id: 'terminal-next-pane', label: 'Next Terminal Pane', group: 'Terminal', shortcut: isMacApp ? 'Mod+]' : undefined, when: terminalShowing, run: () => focusPane(1) },
+  { id: 'terminal-prev-pane', label: 'Previous Terminal Pane', group: 'Terminal', shortcut: isMacApp ? 'Mod+[' : undefined, when: terminalShowing, run: () => focusPane(-1) },
+  { id: 'terminal-next-tab', label: 'Next Terminal Tab', group: 'Terminal', shortcut: isMacApp ? 'Mod+Shift+]' : undefined, when: terminalShowing, run: () => stepTerminalTab(1) },
+  { id: 'terminal-prev-tab', label: 'Previous Terminal Tab', group: 'Terminal', shortcut: isMacApp ? 'Mod+Shift+[' : undefined, when: terminalShowing, run: () => stepTerminalTab(-1) },
+  { id: 'terminal-find', label: 'Find in Terminal…', group: 'Terminal', when: terminalShowing, run: () => findInTerminal() },
+  { id: 'terminal-clear', label: 'Clear Terminal', group: 'Terminal', when: terminalShowing, run: () => clearFocusedTerminal() },
+  { id: 'terminal-close', label: 'Close Terminal Pane', group: 'Terminal', when: terminalShowing, run: () => closeFocusedTerminal() }
+)
+
+/**
+ * While a terminal has the keyboard, these shortcuts of the git side mean the terminal's own (as in any terminal
+ * app): ⌘W closes the pane, ⌘F finds in it, ⌘K clears it. macOS's menu takes those keys before the page sees them.
+ */
+const IN_TERMINAL: Record<string, string> = { 'close-tab': 'terminal-close', 'search-commits': 'terminal-find', 'toggle-right-panel': 'terminal-clear' }
+
 const byId = new Map(COMMANDS.map((c) => [c.id, c]))
 
 export function getCommand(id: string): Command | undefined {
@@ -212,7 +258,7 @@ export function getCommand(id: string): Command | undefined {
 }
 
 export function runCommand(id: MenuCommand | string): void {
-  const cmd = byId.get(id)
+  const cmd = byId.get(terminalHasKeyboard() ? (IN_TERMINAL[id] ?? id) : id)
   if (!cmd) {
     console.warn('[adar] unknown command', id)
     return

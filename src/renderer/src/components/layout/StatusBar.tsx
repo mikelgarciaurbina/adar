@@ -9,6 +9,7 @@ import { useActiveTab, useApp } from '@renderer/store/appStore'
 import { BranchDot } from './BranchDot'
 import { busyLabelsFor, formatGitVersion, pickProgress, tildify } from './chrome'
 import { useNow } from './hooks'
+import { TerminalAttention } from '@renderer/components/terminal/parts'
 import { AdarLogo } from './Logo'
 import './layout.css'
 
@@ -87,6 +88,7 @@ export function StatusBar() {
         {left}
       </div>
       <div className="tb-status-right">
+        <TerminalAttention />
         {tab && (
           <span className="tb-status-item" title={tab.lastFetch ? new Date(tab.lastFetch).toLocaleString() : 'Not fetched in this session'}>
             <CloudDownload size={11} />

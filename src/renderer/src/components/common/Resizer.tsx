@@ -42,3 +42,25 @@ export function Resizer({ side, width, min, max, onResize }: ResizerProps) {
 
   return <div className="ui-resizer" onPointerDown={onPointerDown} role="separator" aria-orientation="vertical" />
 }
+
+/** Horizontal drag handle above a panel docked at the bottom: dragging up grows it. */
+export function RowResizer({ height, min, max, onResize }: { height: number; min: number; max: () => number; onResize: (height: number) => void }) {
+  const onPointerDown = (e: React.PointerEvent) => {
+    e.preventDefault()
+    const start = { y: e.clientY, h: height }
+    const target = e.currentTarget as HTMLElement
+    target.setPointerCapture(e.pointerId)
+    document.body.classList.add('ui-resizing')
+    const move = (ev: PointerEvent) => onResize(Math.round(Math.max(min, Math.min(max(), start.h - (ev.clientY - start.y)))))
+    const up = () => {
+      document.body.classList.remove('ui-resizing')
+      target.removeEventListener('pointermove', move)
+      target.removeEventListener('pointerup', up)
+      target.removeEventListener('pointercancel', up)
+    }
+    target.addEventListener('pointermove', move)
+    target.addEventListener('pointerup', up)
+    target.addEventListener('pointercancel', up)
+  }
+  return <div className="ui-resizer ui-resizer-row" onPointerDown={onPointerDown} role="separator" aria-orientation="horizontal" />
+}

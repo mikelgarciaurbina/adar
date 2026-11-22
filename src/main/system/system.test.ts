@@ -259,9 +259,22 @@ describe('settings', () => {
     expect(s.autoFetchMinutes).toBe(DEFAULT_SETTINGS.autoFetchMinutes)
     expect(sanitizeSettings(DEFAULT_SETTINGS, 'garbage')).toEqual(DEFAULT_SETTINGS)
     expect(sanitizeSettings(DEFAULT_SETTINGS, { theme: 'purple', diffViewMode: 'split' })).toMatchObject({ theme: 'dark', diffViewMode: 'split' })
-    expect(DEFAULT_SETTINGS.agentsScope).toBe('repo')
-    expect(sanitizeSettings(DEFAULT_SETTINGS, { agentsScope: 'all' })).toMatchObject({ agentsScope: 'all' })
-    expect(sanitizeSettings(DEFAULT_SETTINGS, { agentsScope: 'everything' as never })).toMatchObject({ agentsScope: 'repo' })
+    // Settings of features that are gone (Agents at work) are dropped when read.
+    expect(sanitizeSettings(DEFAULT_SETTINGS, { agentsOn: true, agentsScope: 'all', worktreesSeen: {} })).toEqual(DEFAULT_SETTINGS)
+    // Terminals: launchers and numbers are kept well formed, views only for real folders.
+    expect(sanitizeSettings(DEFAULT_SETTINGS, { terminalCursor: 'bar', terminalFontSize: 99, terminalScrollback: 3, terminalDockHeight: 400.4 })).toMatchObject({
+      terminalCursor: 'bar',
+      terminalFontSize: 32,
+      terminalScrollback: 500,
+      terminalDockHeight: 400
+    })
+    expect(sanitizeSettings(DEFAULT_SETTINGS, { terminalCursor: 'beam' as never }).terminalCursor).toBe('block')
+    expect(
+      sanitizeSettings(DEFAULT_SETTINGS, {
+        terminalLaunchers: [{ id: 'aider', name: 'Aider', command: 'aider' }, { id: 'x y', name: 'bad', command: 'x' }],
+        terminalViews: { '/p/landing': 'terminal', '/p/api': 'graph', 'relative/path': 'both', '/p/web': 'sideways' }
+      })
+    ).toMatchObject({ terminalLaunchers: [{ id: 'aider', name: 'Aider', command: 'aider' }], terminalViews: { '/p/landing': 'terminal' } })
     expect(DEFAULT_SETTINGS).toMatchObject({ imageDiffMode: 'side', imageDiffIgnoreAntialiasing: true })
     expect(sanitizeSettings(DEFAULT_SETTINGS, { imageDiffMode: 'difference', imageDiffIgnoreAntialiasing: false })).toMatchObject({
       imageDiffMode: 'difference',

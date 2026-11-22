@@ -16,7 +16,8 @@ import {
   Globe,
   Layers,
   Search,
-  SquareStack
+  SquareStack,
+  SquareTerminal
 } from 'lucide-react'
 import * as git from '@renderer/actions/git'
 import { openGroup } from '@renderer/actions/groups'
@@ -47,7 +48,7 @@ interface Entry {
   idle?: string
 }
 
-const GROUP_ORDER: Command['group'][] = ['Remote', 'Branch', 'Stash', 'Changes', 'Repository', 'View', 'App']
+const GROUP_ORDER: Command['group'][] = ['Remote', 'Branch', 'Stash', 'Changes', 'Repository', 'Terminal', 'View', 'App']
 
 const GROUP_ICON: Record<Command['group'], ReactNode> = {
   Repository: <SquareStack size={14} />,
@@ -56,7 +57,8 @@ const GROUP_ICON: Record<Command['group'], ReactNode> = {
   Stash: <Archive size={14} />,
   View: <Eye size={14} />,
   App: <AppWindow size={14} />,
-  Changes: <GitCommitHorizontal size={14} />
+  Changes: <GitCommitHorizontal size={14} />,
+  Terminal: <SquareTerminal size={14} />
 }
 
 function rememberCommand(id: string) {

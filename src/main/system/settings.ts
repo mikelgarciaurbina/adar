@@ -5,7 +5,7 @@
 import { randomBytes } from 'node:crypto'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
-import { AGENT_SCOPES, MAX_WORKTREES_SEEN, QUIET_MINUTES, sanitizeAgentPrefixes, sanitizeWorktreesSeen } from '@shared/agents'
+import { sanitizeTerminalLaunchers, TERMINAL_CURSORS, TERMINAL_VIEWS, type TerminalViewMode } from '@shared/terminal'
 import type { HostingServer, ServerAuth } from '@shared/hosting'
 import { normalizeHexColor } from '@shared/groupColor'
 import {
@@ -39,7 +39,7 @@ const ENUMS: Partial<Record<keyof AppSettings, readonly string[]>> = {
   imageDiffMode: ['side', 'swipe', 'onion', 'difference'],
   githubAuth: ['', 'gh', 'token', 'browser'],
   bitbucketAuth: ['', 'token'],
-  agentsScope: AGENT_SCOPES
+  terminalCursor: TERMINAL_CURSORS
 }
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
@@ -79,7 +79,8 @@ export function sanitizeTabGroups(raw: unknown): TabGroup[] | null {
       name: typeof g.name === 'string' ? g.name.replace(/[\r\n\t]+/g, ' ').trim().slice(0, MAX_GROUP_NAME) : '',
       color: groupColor(g.color),
       repos: unique,
-      collapsed: g.collapsed === true
+      collapsed: g.collapsed === true,
+      ...(typeof g.folder === 'string' && path.isAbsolute(g.folder) && g.folder.length <= 4096 ? { folder: g.folder } : {})
     })
     if (out.length >= MAX_TAB_GROUPS) break
   }
@@ -139,6 +140,15 @@ export function sanitizePullsSeen(raw: unknown): Record<string, PullSeen> | null
   return Object.fromEntries(marks.slice(0, MAX_PULLS_SEEN))
 }
 
+/** Projects whose view (terminal, both) is remembered. */
+const MAX_TERMINAL_VIEWS = 300
+/** Number settings kept inside a range. */
+const NUMBER_RANGES: Record<string, readonly [number, number]> = {
+  terminalFontSize: [8, 32],
+  terminalScrollback: [500, 200_000],
+  terminalDockHeight: [120, 2000]
+}
+
 export function sanitizeSettings(base: AppSettings, rawPatch: unknown): AppSettings {
   const out: AppSettings = structuredClone(base)
   if (!isPlainObject(rawPatch)) return out
@@ -178,22 +188,25 @@ export function sanitizeSettings(base: AppSettings, rawPatch: unknown): AppSetti
       if (Array.isArray(value)) target[key] = [...new Set(value.filter((v): v is string => typeof v === 'string' && PULL_KEY.test(v)))].slice(-MAX_PULLS_SEEN)
       continue
     }
-    if (key === 'agentPrefixes') {
-      const prefixes = sanitizeAgentPrefixes(value)
-      if (prefixes) target[key] = prefixes
+    if (key === 'terminalLaunchers') {
+      const launchers = sanitizeTerminalLaunchers(value)
+      if (launchers) target[key] = launchers
       continue
     }
-    if (key === 'worktreesSeen') {
-      const seen = sanitizeWorktreesSeen(value)
-      if (seen) target[key] = seen
+    if (key === 'terminalViews') {
+      if (isPlainObject(value)) {
+        const views: Record<string, TerminalViewMode> = {}
+        for (const [repo, view] of Object.entries(value).slice(-MAX_TERMINAL_VIEWS)) {
+          // The graph is the default: only the others are worth keeping.
+          if (path.isAbsolute(repo) && view !== 'graph' && (TERMINAL_VIEWS as readonly unknown[]).includes(view)) views[repo] = view as TerminalViewMode
+        }
+        target[key] = views
+      }
       continue
     }
-    if (key === 'agentsQuietMuted') {
-      if (Array.isArray(value)) target[key] = [...new Set(value.filter((v): v is string => typeof v === 'string' && path.isAbsolute(v)))].slice(-MAX_WORKTREES_SEEN)
-      continue
-    }
-    if (key === 'agentQuietMinutes') {
-      if ((QUIET_MINUTES as readonly unknown[]).includes(value)) target[key] = value
+    if (key in NUMBER_RANGES) {
+      const [min, max] = NUMBER_RANGES[key]
+      if (typeof value === 'number' && Number.isFinite(value)) target[key] = Math.min(max, Math.max(min, Math.round(value)))
       continue
     }
     if (key === 'bitbucketServers' || key === 'gitlabServers' || key === 'azureServers' || key === 'githubServers') {

@@ -159,3 +159,22 @@ export function groupForFolder(groups: readonly TabGroup[], folder: string): Tab
   const f = folder.replace(/[\\/]+$/, '')
   return groups.find((g) => g.repos.length > 0 && g.repos.every((p) => parentFolder(p) === f))
 }
+
+/** The folder every one of these paths is under (the parent of a single one); '' for none. */
+export function commonFolder(paths: readonly string[]): string {
+  if (!paths.length) return ''
+  const sep = paths[0].includes('\\') && !paths[0].includes('/') ? '\\' : '/'
+  let common = paths[0].split(/[\\/]/).slice(0, -1)
+  for (const p of paths.slice(1)) {
+    const parts = p.split(/[\\/]/).slice(0, -1)
+    let i = 0
+    while (i < common.length && i < parts.length && common[i] === parts[i]) i++
+    common = common.slice(0, i)
+  }
+  return common.join(sep) || sep
+}
+
+/** Where a group's own terminals start: the folder chosen for it, else the one its repositories share. */
+export function groupFolder(group: Pick<TabGroup, 'repos' | 'folder'>): string {
+  return group.folder || commonFolder(group.repos)
+}

@@ -5,12 +5,14 @@ import { createHash } from 'node:crypto'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import type { AgentNotice } from '@shared/agents'
+import type { TerminalNotice } from '@shared/terminal'
 import type { AdarEvent } from '@shared/types'
 import type { GitContext } from '../git/context'
 import { parseStatusV2 } from '../git/parsers/status'
 import { runGit } from '../git/runner'
 import type { PlatformAdapter } from '../platform'
 import { ActivityTracker } from './activity'
+import { TerminalManager } from '../terminal/manager'
 import { AskpassService } from './askpass'
 import { SettingsStore } from './settings'
 import { fixShellPath } from './shellEnv'
@@ -30,10 +32,13 @@ export interface SystemServices {
   ready: Promise<void>
   settings: SettingsStore
   watcher: WatcherManager
-  /** Agents at work: what the open repositories' worktrees are doing. */
+  /** Notices commits and pushes Adar did not make, in the open repositories. */
   activity: ActivityTracker
   /** Show an agent notification (none where the host has no notifications). */
   notifyAgent(notice: AgentNotice): void
+  /** The terminals Adar runs; null where there are none (the browser bridge). */
+  terminals: TerminalManager | null
+  notifyTerminal(notice: TerminalNotice): void
   askpass: AskpassService | null
   /** "2.54.0 (Apple Git-157)", or '' when git is not installed. */
   gitVersion(): Promise<string>
@@ -96,16 +101,19 @@ export function createSystemServices(
 ): SystemServices {
   const opts: SystemOptions = { fixShellPath: true, askpass: true, shellPathTimeoutMs: 3000, ...options }
   const settings = new SettingsStore(platform.userDataDir)
-  const watcher = new WatcherManager(emit, {
-    worktreeSignature: (target) => worktreeSignature(target.repoPath),
-    ignoredPaths
-  })
-  const activity = new ActivityTracker({
-    ctx,
-    emit,
-    settings: () => settings.getSettings(),
-    watcher: { worktreeSignature: (target) => worktreeSignature(target.repoPath), ignoredPaths }
-  })
+  const activity = new ActivityTracker({ ctx, emit, settings: () => settings.getSettings() })
+  // What the tabs' watcher reports also tells the commit tracker when to look.
+  const watcher = new WatcherManager(
+    (e) => {
+      emit(e)
+      activity.repoChanged(e)
+    },
+    { worktreeSignature: (target) => worktreeSignature(target.repoPath), ignoredPaths }
+  )
+  // A shell behind an HTTP bridge would be a remote shell: terminals exist in the desktop app only.
+  const terminals = platform.isElectron
+    ? new TerminalManager({ emit, settings: () => settings.getSettings(), userDataDir: platform.userDataDir, appVersion: platform.appVersion })
+    : null
   const askpass = opts.askpass ? new AskpassService(path.join(platform.userDataDir, 'askpass'), emit) : null
 
   const pathReady = opts.fixShellPath ? fixShellPath(opts.shellPathTimeoutMs) : Promise.resolve()
@@ -147,11 +155,14 @@ export function createSystemServices(
     watcher,
     activity,
     notifyAgent: (notice) => platform.notifyAgent?.(notice),
+    terminals,
+    notifyTerminal: (notice) => platform.notifyTerminal?.(notice),
     askpass,
     gitVersion,
     async dispose() {
       watcher.stopAll()
       activity.dispose()
+      terminals?.dispose()
       await Promise.allSettled([askpass?.dispose(), settings.flush()])
     }
   }
