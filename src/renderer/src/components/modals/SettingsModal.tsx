@@ -366,6 +366,23 @@ function TerminalSection() {
             <Switch label="Option key as Meta" checked={s.terminalOptionAsMeta} onChange={(terminalOptionAsMeta) => update({ terminalOptionAsMeta })} />
           </SettingRow>
         )}
+        <SettingRow
+          label="Follow the shell’s folder"
+          description="zsh tells Adar where it is, so a pane’s header follows cd and a new pane starts where the one beside it is. Your own start-up files run as always; applies to new terminals."
+        >
+          <Switch label="Follow the shell’s folder" checked={s.terminalShellIntegration} onChange={(terminalShellIntegration) => update({ terminalShellIntegration })} />
+        </SettingRow>
+        <SettingRow
+          label="Complete file and folder names in any case"
+          description="“cd adar” and Tab finds Adar; commands and options stay exact. zsh only: Adar starts its completion system when your own files have not."
+        >
+          <Switch
+            label="Complete file and folder names in any case"
+            disabled={!s.terminalShellIntegration}
+            checked={s.terminalShellIntegration && s.terminalCompleteAnyCase}
+            onChange={(terminalCompleteAnyCase) => update({ terminalCompleteAnyCase })}
+          />
+        </SettingRow>
         <SettingRow label="Copy on select">
           <Switch label="Copy on select" checked={s.terminalCopyOnSelect} onChange={(terminalCopyOnSelect) => update({ terminalCopyOnSelect })} />
         </SettingRow>

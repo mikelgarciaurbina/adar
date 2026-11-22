@@ -611,6 +611,10 @@ export interface AppSettings {
   terminalDimUnfocused: boolean
   /** Ask before closing a terminal with a program running in it. */
   terminalConfirmClose: boolean
+  /** zsh tells Adar the folder it is in (a new pane starts where its neighbour is); see src/main/terminal/shell.ts. */
+  terminalShellIntegration: boolean
+  /** With the above: file and folder names complete whatever their case ("cd adar" + Tab finds Adar). */
+  terminalCompleteAnyCase: boolean
   /** Height of the terminal docked under the graph (the "Both" view). */
   terminalDockHeight: number
   /** What each project's tab shows (path → view); the graph where absent. */
@@ -718,6 +722,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   terminalCopyOnSelect: false,
   terminalDimUnfocused: true,
   terminalConfirmClose: true,
+  terminalShellIntegration: true,
+  terminalCompleteAnyCase: true,
   terminalDockHeight: 340,
   terminalViews: {},
   notifyTerminalNeedsYou: true,

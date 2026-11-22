@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_SETTINGS, type AdarEvent } from '@shared/types'
 import type { TerminalInfo } from '@shared/terminal'
 import { claudeHooks, defaultLang, spawnPlan, terminalEnv, TerminalManager, withAgentState } from './manager'
+import { integrates, zshFiles } from './shell'
 
 describe('starting a terminal', () => {
   it('runs the login shell, alone or after a launcher’s program', () => {
@@ -17,6 +18,8 @@ describe('starting a terminal', () => {
     // The program, then word that it ended, then the shell again.
     expect(plan.args[3]).toBe(`claude --resume; printf '\\033]7717;adar;idle\\007'; exec '/opt/it'\\''s/fish' -l -i`)
     expect(spawnPlan('/p', null, {}, 'linux').file).toBe('/bin/bash')
+    // With Adar's start-up files in use, the shell that takes over reads them too.
+    expect(spawnPlan('/p', 'claude', { SHELL: '/bin/zsh' }, 'darwin', true).args[3]).toBe(`claude; printf '\\033]7717;adar;idle\\007'; ZDOTDIR="$ADAR_ZDOTDIR" exec '/bin/zsh' -l -i`)
   })
 
   it('opens PowerShell on Windows, and the distribution’s shell for a folder inside WSL', () => {
@@ -57,29 +60,56 @@ describe('starting a terminal', () => {
   })
 })
 
+describe('what Adar adds to zsh', () => {
+  it('only for zsh, and not on Windows', () => {
+    expect(integrates('/bin/zsh', 'darwin')).toBe(true)
+    expect(integrates('/opt/homebrew/bin/zsh', 'linux')).toBe(true)
+    expect(integrates('/bin/bash', 'darwin')).toBe(false)
+    expect(integrates('zsh', 'win32')).toBe(false)
+  })
+
+  it('reads each of the user’s start-up files first and gives $ZDOTDIR back', () => {
+    const files = zshFiles()
+    expect(Object.keys(files).sort()).toEqual(['.zlogin', '.zprofile', '.zshenv', '.zshrc'])
+    for (const [name, text] of Object.entries(files)) expect(text).toContain(`builtin source "\${ZDOTDIR:-$HOME}/${name}"`)
+    // The history file the system put beside Adar's files goes back with the user's.
+    expect(files['.zshrc']).toContain('[[ $HISTFILE == "$ADAR_ZDOTDIR/.zsh_history" ]] && HISTFILE=${ADAR_USER_ZDOTDIR:-$HOME}/.zsh_history')
+    // Names of files and folders in any case, only when asked; commands are left exact.
+    expect(files['.zshrc']).toContain("zstyle ':completion:*:*:*:*:(local-|path-|)directories' matcher 'm:{a-z}={A-Z}'")
+    expect(files['.zshrc'].indexOf('ADAR_COMPLETE_ANY_CASE')).toBeLessThan(files['.zshrc'].indexOf('compinit'))
+    // .zlogin is the last one: nothing sets Adar's folder again after it.
+    expect(files['.zlogin']).not.toContain('ZDOTDIR=$ADAR_ZDOTDIR')
+  })
+})
+
 describe.skipIf(process.platform === 'win32')('TerminalManager', () => {
   let manager: TerminalManager | null = null
   const dirs: string[] = []
   const shellBefore = process.env.SHELL
+  const zdotdirBefore = process.env.ZDOTDIR
   afterEach(() => {
     manager?.dispose()
     manager = null
     process.env.SHELL = shellBefore
-    for (const d of dirs.splice(0)) fs.rmSync(d, { recursive: true, force: true })
+    if (zdotdirBefore === undefined) delete process.env.ZDOTDIR
+    else process.env.ZDOTDIR = zdotdirBefore
+    // A shell on its way out may still be writing its history there.
+    for (const d of dirs.splice(0)) fs.rmSync(d, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 
-  function start(launchers = DEFAULT_SETTINGS.terminalLaunchers) {
+  function start(launchers = DEFAULT_SETTINGS.terminalLaunchers, shell = '/bin/sh') {
     // A plain shell: the developer's own start-up files would make the output theirs.
-    process.env.SHELL = '/bin/sh'
+    process.env.SHELL = shell
     const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'adar-term-')))
     dirs.push(dir)
     const events: AdarEvent[] = []
     manager = new TerminalManager({
       emit: (e) => events.push(e),
-      settings: async () => ({ terminalLaunchers: launchers, terminalAgentState: true }),
+      settings: async () => ({ terminalLaunchers: launchers, terminalAgentState: true, terminalShellIntegration: true, terminalCompleteAnyCase: true }),
       userDataDir: dir,
       appVersion: '0.0.0-test',
-      flushMs: 1
+      flushMs: 1,
+      typingBellMs: 150
     })
     const output = (id: string) => events.map((e) => (e.type === 'terminal-data' && e.id === id ? e.data : '')).join('')
     const infos = (id: string) => events.flatMap((e): TerminalInfo[] => (e.type === 'terminal-info' && e.info.id === id ? [e.info] : []))
@@ -134,6 +164,46 @@ describe.skipIf(process.platform === 'win32')('TerminalManager', () => {
     // The shell took over: it still answers.
     manager.write(info.id, 'echo still-$((1+1))\r')
     await vi.waitFor(() => expect(manager.attach(info.id).replay).toContain('still-2'), { timeout: 8000 })
+  })
+
+  it('takes a bell for a call for attention, unless it answers what was just typed', async () => {
+    const { manager, dir, infos } = start()
+    const info = await manager.open({ owner: dir, cwd: dir, cols: 80, rows: 24 })
+    manager.attach(info.id)
+    // The shell beeping at a key (nothing to complete) asks for nothing.
+    manager.write(info.id, `printf '\\a'; echo rang\r`)
+    await vi.waitFor(() => expect(manager.attach(info.id).replay).toContain('rang'), { timeout: 8000 })
+    expect(infos(info.id).some((i) => i.state === 'needs-you')).toBe(false)
+    // A program that rings later on its own does.
+    manager.write(info.id, `(sleep 0.5; printf '\\a') &\r`)
+    await vi.waitFor(() => expect(infos(info.id).at(-1)).toMatchObject({ state: 'needs-you' }), { timeout: 8000 })
+    manager.seen(info.id)
+    expect(infos(info.id).at(-1)?.state).toBeNull()
+  })
+
+  it.skipIf(!fs.existsSync('/bin/zsh'))('adds to zsh without taking anything from the user’s own files', async () => {
+    // The "user": start-up files of their own in a folder of their choice, as $ZDOTDIR.
+    const home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'adar-zsh-home-')))
+    dirs.push(home)
+    fs.writeFileSync(path.join(home, '.zshenv'), 'export FROM_ENV=theirs\n')
+    fs.writeFileSync(path.join(home, '.zshrc'), "MARK=mine\nPS1='%% '\nunsetopt beep\n")
+    process.env.ZDOTDIR = home
+    const { manager, dir, output, infos } = start(DEFAULT_SETTINGS.terminalLaunchers, '/bin/zsh')
+    fs.mkdirSync(path.join(dir, 'Adar Web'))
+    const info = await manager.open({ owner: dir, cwd: dir, cols: 100, rows: 30 })
+    manager.attach(info.id)
+
+    // Their files ran, and $ZDOTDIR and the history are theirs again once the shell is up.
+    manager.write(info.id, 'echo "m=$MARK e=$FROM_ENV z=$ZDOTDIR h=${HISTFILE:-none}"\r')
+    await vi.waitFor(() => expect(output(info.id)).toContain(`m=mine e=theirs z=${home} h=`), { timeout: 15000 })
+    expect(output(info.id)).not.toContain(path.join(dir, 'terminal', 'zsh', '.zsh_history'))
+
+    // "cd adar" + Tab finds "Adar Web", and the shell says where it went.
+    // (zsh rewrites only what differs on the line, so the proof is where the shell ends up.)
+    manager.write(info.id, 'cd adar\t')
+    await vi.waitFor(() => expect(output(info.id).split('cd adar').pop()).toContain('Web'), { timeout: 15000 })
+    manager.write(info.id, '\r')
+    await vi.waitFor(() => expect(infos(info.id).at(-1)?.cwd).toBe(path.join(dir, 'Adar Web')), { timeout: 15000 })
   })
 
   it('refuses what it cannot start', async () => {

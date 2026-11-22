@@ -32,23 +32,28 @@ import {
 import type { AdarEvent, AppSettings } from '@shared/types'
 import { wslExecutable, wslTarget } from '../git/wsl'
 import { writeJsonAtomic } from '../system/settings'
+import { integrates, shellIntegration } from './shell'
 
 type Pty = typeof import('node-pty')
 
 export interface TerminalDeps {
   emit(event: AdarEvent): void
-  settings(): Promise<Pick<AppSettings, 'terminalLaunchers' | 'terminalAgentState'>>
+  settings(): Promise<Pick<AppSettings, 'terminalLaunchers' | 'terminalAgentState' | 'terminalShellIntegration' | 'terminalCompleteAnyCase'>>
   /** Where the agents' settings file is kept. */
   userDataDir: string
   appVersion: string
   /** Tests: another way to load node-pty, and no waiting between output and its event. */
   load?: () => Promise<Pty>
   flushMs?: number
+  /** Tests: how long after a key a bell is still the shell's answer to it (default TYPING_BELL_MS). */
+  typingBellMs?: number
 }
 
 /** Output kept per terminal for a UI that starts drawing it later (characters). */
 const REPLAY_MAX = 400_000
 const REPLAY_KEEP = 300_000
+/** A bell this soon after a key is the shell answering it (nothing to complete), not a call for attention. */
+const TYPING_BELL_MS = 1500
 /** Output is sent on in batches: at most this often, or sooner when this much is waiting. */
 const FLUSH_MS = 6
 const FLUSH_AT = 64_000
@@ -70,6 +75,8 @@ interface Session {
   replay: string
   pending: string
   timer: NodeJS.Timeout | null
+  /** When the user last typed into it. */
+  lastInput: number
   /** A UI is drawing it: output goes out as events and is counted until acknowledged. */
   attached: boolean
   unacked: number
@@ -149,7 +156,14 @@ interface SpawnPlan {
 }
 
 /** How a terminal is started on this system: the login shell there, alone or running the launcher's command first. */
-export function spawnPlan(cwd: string, command: string | null, env: NodeJS.ProcessEnv = process.env, platform: NodeJS.Platform = process.platform): SpawnPlan {
+export function spawnPlan(
+  cwd: string,
+  command: string | null,
+  env: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform,
+  /** The shell that takes over from a launcher reads Adar's start-up files too (they gave $ZDOTDIR back). */
+  integrated = false
+): SpawnPlan {
   if (platform === 'win32') {
     const wsl = wslTarget(cwd, platform)
     // A folder inside WSL: a shell of its distribution there.
@@ -161,7 +175,7 @@ export function spawnPlan(cwd: string, command: string | null, env: NodeJS.Proce
   const shell = path.basename(file)
   if (!command) return { file, args: ['-l', '-i'], cwd, shell }
   // The program first, in a login shell that has read the user's files (PATH, aliases); the shell again when it ends.
-  const line = `${command}; printf '\\033]${ADAR_OSC};adar;idle\\007'; exec ${shellQuote(file)} -l -i`
+  const line = `${command}; printf '\\033]${ADAR_OSC};adar;idle\\007'; ${integrated ? 'ZDOTDIR="$ADAR_ZDOTDIR" ' : ''}exec ${shellQuote(file)} -l -i`
   return { file, args: ['-l', '-i', '-c', line], cwd, shell }
 }
 
@@ -238,7 +252,16 @@ export class TerminalManager {
         else command = launcher.command
       }
     }
-    const plan = spawnPlan(o.cwd, command)
+    const shell = process.env.SHELL || ''
+    let integrated = false
+    if (settings.terminalShellIntegration && integrates(shell)) {
+      const env = await shellIntegration(this.deps.userDataDir, { anyCase: settings.terminalCompleteAnyCase, userZdotdir: process.env.ZDOTDIR })
+      if (env) {
+        Object.assign(extra, env)
+        integrated = true
+      }
+    }
+    const plan = spawnPlan(o.cwd, command, process.env, process.platform, integrated)
     const pty = await this.load()
     // Terminals may be opened while this one loads: the limit is checked again by the time it exists.
     let proc: IPty
@@ -274,6 +297,7 @@ export class TerminalManager {
       replay: '',
       pending: '',
       timer: null,
+      lastInput: 0,
       attached: false,
       unacked: 0,
       paused: false,
@@ -316,6 +340,7 @@ export class TerminalManager {
     if (typeof data !== 'string' || data.length > MAX_WRITE) throw invalid('Invalid input')
     if (s.ended) return
     s.pty.write(data)
+    s.lastInput = Date.now()
     this.setRun(s, afterInput(s.run, data))
   }
 
@@ -418,7 +443,11 @@ export class TerminalManager {
       if (sig.title !== s.info.title) this.change(s, { title: sig.title })
     } else if (sig.kind === 'cwd') {
       if (path.isAbsolute(sig.cwd) && sig.cwd !== s.info.cwd) this.change(s, { cwd: sig.cwd })
-    } else this.setRun(s, afterSignal(s.run, sig))
+    } else {
+      // The shell beeps at what was just typed (nothing to complete, the start of the line): that asks for nothing.
+      if (sig.kind === 'attention' && !sig.message && Date.now() - s.lastInput < (this.deps.typingBellMs ?? TYPING_BELL_MS)) return
+      this.setRun(s, afterSignal(s.run, sig))
+    }
   }
 
   private setRun(s: Session, run: RunState): void {

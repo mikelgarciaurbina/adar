@@ -58,7 +58,10 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
     recent output is kept for a UI that starts drawing later and sent on in batches, held back when far ahead of the
     window; the output is read for signals and the state sent as 'terminal-info' events; Claude Code is started with
     `--settings <userData>/terminal/claude-hooks.json`, hooks that print Adar's own escape sequence to the terminal, and
-    Codex with its terminal notifications on) and `ops.ts` (the `terminal*` API methods; none over the HTTP bridge).
+    Codex with its terminal notifications on), `shell.ts` (what Adar adds to zsh: `$ZDOTDIR` points at start-up files of
+    Adar's own that run the user's first and give `$ZDOTDIR` back, then report the folder with OSC 7 and complete file
+    and folder names in any case; history, key bindings and prompt stay the user's) and `ops.ts` (the `terminal*` API
+    methods; none over the HTTP bridge).
     Terminals outlive the window: they end when closed, when their shell exits or when Adar quits.
   - `menuBar.ts` — macOS menu bar extra: the tray icon (template images in `resources/tray`, drawn by
     `scripts/render-tray-icons.cjs`: at rest, a dot for new commits, four fetch-animation frames), the panel window
