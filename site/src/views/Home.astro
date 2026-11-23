@@ -262,6 +262,50 @@ const jsonLd = JSON.stringify({
             </div>
           </article>
 
+          <article class="feat feat--terminal card tilt spotlight reveal" data-animate>
+            <div class="feat__art" aria-hidden="true" data-nosnippet>
+              <div class="tmx">
+                <div class="tmx__tabs">
+                  <span class="tabs__group"><i></i>shop</span>
+                  <span class="tmx__tab"><b class="st st--working"></b>api</span>
+                  <span class="tmx__tab is-active"><b class="st st--needs"></b>landing</span>
+                  <span class="tmx__tab"><b class="st st--done"></b>app</span>
+                  <span class="tmx__switch"><span>Graph</span><span>Both</span><span class="is-on">Terminal</span></span>
+                </div>
+                <div class="tmx__panes">
+                  <div class="tmx__pane">
+                    <div class="tmx__head"><b class="st st--needs"></b><strong>Claude Code</strong><em>~/shop/landing</em></div>
+                    <div class="tmx__out">
+                      <p style="--i:0"><span class="p">›</span> Add a pricing section to the home page</p>
+                      <p style="--i:1" class="dim">Edited src/pages/index.astro <span class="add">+42</span> <span class="del">−3</span></p>
+                      <p style="--i:2">Run <code>npm run build</code>?</p>
+                      <p style="--i:3" class="tmx__ask"><b>Yes</b><span>Yes, always</span><span>No</span></p>
+                    </div>
+                  </div>
+                  <div class="tmx__pane">
+                    <div class="tmx__head"><strong>zsh</strong><em>~/shop/landing</em></div>
+                    <div class="tmx__out">
+                      <p style="--i:0"><span class="p">%</span> git status -sb</p>
+                      <p style="--i:1" class="dim">## feature/pricing</p>
+                      <p style="--i:2"><span class="mod">M</span> src/pages/index.astro</p>
+                      <p style="--i:3"><span class="p">%</span> npm run dev</p>
+                      <p style="--i:4" class="dim">ready in 412 ms<i class="term__caret"></i></p>
+                    </div>
+                  </div>
+                </div>
+                <div class="tmx__toast"><Icon name="bell" /><span><b>Claude Code needs you</b>shop › landing</span></div>
+              </div>
+            </div>
+            <div class="feat__body">
+              <h3><Icon name="terminal" /><Fragment set:html={t.branches.terminal[0]} /></h3>
+              <p set:html={t.branches.terminal[1]} />
+              <ul class="tmx-states">
+                {['working', 'needs', 'done'].map((state, i) => <li><b class={`st st--${state}`}></b>{t.branches.terminalStates[i]}</li>)}
+              </ul>
+              <p class="tmx-note">{t.branches.terminalNote}</p>
+            </div>
+          </article>
+
           <article class="feat feat--rebase card tilt spotlight reveal" data-animate>
             <div class="feat__art" aria-hidden="true" data-nosnippet>
               <ol class="rb">
