@@ -65,7 +65,8 @@ repositories inside WSL run the distribution's own git (its SSH keys, credential
 a terminal or both, with terminal tabs and panes split right or down, a terminal of its own for each tab group in the
 folder its repositories share, launchers for Claude Code and Codex, and a dot on the tab that says whether the agent
 there is working, needs you or has finished, with a notification for the last two (it takes the place of the Agents
-view of 0.20) · new-commit notifications after a fetch for every local branch that tracks a remote.
+view of 0.20), and terminal tabs that say what goes on in them: an agent with its task, the command a shell runs or
+the folder it is in · new-commit notifications after a fetch for every local branch that tracks a remote.
 
 ---
 
