@@ -7,7 +7,7 @@ import { STATE_TITLE, whereOf } from './model'
 import { useTerminals } from './terminalStore'
 import './terminal.css'
 
-/** The dot for what an agent is doing: blue and pulsing while it works, amber when it needs you, green when done. */
+/** The dot for what an agent is doing: violet and pulsing while it works, amber when it needs you, green when done. */
 export function StateDot({ state, title }: { state: AgentRunState; title?: string }) {
   const label = title ?? STATE_TITLE[state]
   return <span className={`tm-dot tm-dot-${state}`} role="img" aria-label={label} title={label} />

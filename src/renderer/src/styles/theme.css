@@ -150,10 +150,11 @@
   --term-bright-cyan: #9be7ec;
   --term-bright-white: #f3f6f1;
 
-  /* What an agent in a terminal is doing: working (sea), needs you (sun), finished (moss). */
-  --state-working: #6cb4ff;
-  --state-working-ink: #6cb4ff;
-  --state-working-pulse: rgb(108 180 255 / 0.55);
+  /* What an agent in a terminal is doing: working (heather), needs you (sun), finished (moss). Heather and not sea:
+     on a dot this small, blue and green are the pair the eye tells apart worst. */
+  --state-working: #b595ff;
+  --state-working-ink: #b595ff;
+  --state-working-pulse: rgb(181 149 255 / 0.55);
   --state-needs-you: #ffd36e;
   --state-needs-you-ink: #ffd36e;
   --state-needs-you-soft: rgb(255 211 110 / 0.22);
@@ -263,9 +264,9 @@
   --term-bright-cyan: #0b6470;
   --term-bright-white: #2d3631;
 
-  --state-working: #2b7fe0;
-  --state-working-ink: #1b5fb0;
-  --state-working-pulse: rgb(43 127 224 / 0.45);
+  --state-working: #7b55e0;
+  --state-working-ink: #5b3cc0;
+  --state-working-pulse: rgb(123 85 224 / 0.45);
   --state-needs-you: #c79200;
   --state-needs-you-ink: #8a6400;
   --state-needs-you-soft: rgb(199 146 0 / 0.22);
