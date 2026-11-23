@@ -10,7 +10,7 @@ import { isMac } from '@renderer/api/client'
 import { useApp } from '@renderer/store/appStore'
 import { SHELL_LAUNCHER, STATE_LABEL, type AgentRunState, type TerminalInfo } from '@shared/terminal'
 import { panesOf, type PaneTree, type SplitPath } from './layout'
-import { shortFolder, terminalLabel } from './model'
+import { labelText, shortFolder, tabLabels, terminalLabel, type TabLabel } from './model'
 import { StateDot } from './parts'
 import {
   clearTerminal,
@@ -61,6 +61,10 @@ export function TerminalWorkspace({ owner, cwd }: { owner: string; cwd: string }
   const ready = useTerminals((s) => s.ready)
   const [finding, setFinding] = useState(false)
   const tab = ws.tabs.find((t) => t.id === ws.active) ?? ws.tabs[0]
+  const labels = tabLabels(
+    ws.tabs.map((t) => ({ name: t.name, info: infos[t.focused] })),
+    cwd
+  )
 
   useEffect(() => setOwnerFolder(owner, cwd), [owner, cwd])
 
@@ -98,7 +102,7 @@ export function TerminalWorkspace({ owner, cwd }: { owner: string; cwd: string }
       { label: 'Clear', shortcut: termShortcut('K'), onClick: () => clearTerminal(tab.focused) },
       { type: 'separator' },
       { label: 'Equalize Splits', shortcut: isMac ? '⌃⌘=' : undefined, disabled: panes.length < 2, onClick: () => equalizeSplits(owner) },
-      { label: 'Rename Tab…', onClick: () => void renameTab(owner, tab, infos) },
+      { label: 'Rename Tab…', onClick: () => void renameTab(owner, tab, labels[ws.tabs.indexOf(tab)]) },
       { type: 'separator' },
       { label: 'Close Tab', danger: true, onClick: () => void closeTermTab(owner, tab.id) }
     ])
@@ -108,8 +112,8 @@ export function TerminalWorkspace({ owner, cwd }: { owner: string; cwd: string }
     <div className="tm-root">
       <div className="tm-strip">
         <div className="tm-tabs" role="tablist" aria-label="Terminals">
-          {ws.tabs.map((t) => (
-            <TabButton key={t.id} owner={owner} tab={t} active={t.id === tab?.id} infos={infos} />
+          {ws.tabs.map((t, i) => (
+            <TabButton key={t.id} owner={owner} tab={t} label={labels[i]} active={t.id === tab?.id} infos={infos} />
           ))}
           <button className="tm-add" title="New terminal" aria-label="New terminal: shell, or one of the launchers" onClick={(e) => showMenuBelow(e.currentTarget, launcherItems(owner, cwd))}>
             <Plus size={14} />
@@ -169,12 +173,12 @@ export function TerminalWorkspace({ owner, cwd }: { owner: string; cwd: string }
   )
 }
 
-async function renameTab(owner: string, tab: TermTab, infos: Record<string, TerminalInfo>): Promise<void> {
-  const name = await prompt({ title: 'Rename terminal tab', label: 'Name', defaultValue: tab.name || terminalLabel(infos[tab.focused]), confirmLabel: 'Rename' })
+async function renameTab(owner: string, tab: TermTab, label: TabLabel): Promise<void> {
+  const name = await prompt({ title: 'Rename terminal tab', label: 'Name', defaultValue: tab.name || label.text, confirmLabel: 'Rename' })
   if (name !== null) renameTermTab(owner, tab.id, name)
 }
 
-function TabButton({ owner, tab, active, infos }: { owner: string; tab: TermTab; active: boolean; infos: Record<string, TerminalInfo> }) {
+function TabButton({ owner, tab, label, active, infos }: { owner: string; tab: TermTab; label: TabLabel; active: boolean; infos: Record<string, TerminalInfo> }) {
   const ids = panesOf(tab.tree)
   // A tab says what its most urgent pane says.
   const state = ids.reduce<AgentRunState | null>((top, id) => {
@@ -182,30 +186,32 @@ function TabButton({ owner, tab, active, infos }: { owner: string; tab: TermTab;
     const rank = (x: AgentRunState | null) => (x === 'needs-you' ? 3 : x === 'finished' ? 2 : x === 'working' ? 1 : 0)
     return rank(s) > rank(top) ? s : top
   }, null)
-  const label = tab.name || terminalLabel(infos[tab.focused])
+  const full = labelText(label)
+  const folder = infos[tab.focused]?.cwd
   return (
     <div className={`tm-tab${active ? ' tm-tab-active' : ''}`}>
       <button
         className="tm-tab-main"
         role="tab"
         aria-selected={active}
-        title={infos[tab.focused]?.title || label}
+        title={folder ? `${full} — ${shortFolder(folder)}` : full}
         onClick={() => selectTermTab(owner, tab.id)}
-        onDoubleClick={() => void renameTab(owner, tab, infos)}
+        onDoubleClick={() => void renameTab(owner, tab, label)}
         onAuxClick={(e) => e.button === 1 && void closeTermTab(owner, tab.id)}
         onContextMenu={(e) =>
           showContextMenu(e, [
-            { label: 'Rename Tab…', onClick: () => void renameTab(owner, tab, infos) },
+            { label: 'Rename Tab…', onClick: () => void renameTab(owner, tab, label) },
             { type: 'separator' },
             { label: 'Close Tab', danger: true, onClick: () => void closeTermTab(owner, tab.id) }
           ])
         }
       >
         {state && <StateDot state={state} />}
-        <span className="tm-tab-name">{label}</span>
+        <span className="tm-tab-name">{label.text}</span>
+        {label.detail && <span className="tm-tab-task">{label.detail}</span>}
         {ids.length > 1 && <span className="tm-tab-count">{ids.length} panes</span>}
       </button>
-      <button className="tm-tab-close" title="Close tab" aria-label={`Close ${label}`} onClick={() => void closeTermTab(owner, tab.id)}>
+      <button className="tm-tab-close" title="Close tab" aria-label={`Close ${full}`} onClick={() => void closeTermTab(owner, tab.id)}>
         <X size={12} />
       </button>
     </div>

@@ -33,8 +33,9 @@
 .tm-tabs::-webkit-scrollbar {
   display: none;
 }
+/* A crowded strip takes room from the agents' tasks first; the names stay whole and the strip scrolls after that. */
 .tm-tab {
-  flex: none;
+  flex: 0 1 auto;
   display: flex;
   align-items: stretch;
   color: var(--text-2);
@@ -46,10 +47,11 @@
   color: var(--text-0);
   box-shadow: inset 0 -2px 0 var(--accent);
 }
+/* Columns, so that the narrowest a tab can get leaves out the task and nothing else. */
 .tm-tab-main {
-  display: flex;
+  display: grid;
+  grid-template-columns: [dot] max-content [name] max-content [task] minmax(0, max-content) [count] max-content;
   align-items: center;
-  gap: 8px;
   padding: 0 4px 0 12px;
   border: 0;
   background: none;
@@ -58,6 +60,10 @@
   font-size: var(--fs-sm);
   white-space: nowrap;
   cursor: pointer;
+}
+.tm-tab-main > .tm-dot {
+  grid-area: 1 / dot;
+  margin-right: 8px;
 }
 .tm-tab-active .tm-tab-main {
   font-weight: 500;
@@ -72,17 +78,38 @@
   outline-offset: -2px;
 }
 .tm-tab-name {
+  grid-area: 1 / name;
   max-width: 180px;
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* What an agent says it is doing, after its name. */
+.tm-tab-task {
+  grid-area: 1 / task;
+  min-width: 0;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 400;
+  color: var(--text-3);
+}
+.tm-tab-task::before {
+  content: '·';
+  margin: 0 6px;
+}
+.tm-tab-active .tm-tab-task {
+  color: var(--text-2);
+}
 .tm-tab-count {
+  grid-area: 1 / count;
+  margin-left: 8px;
   font-family: var(--font-mono);
   font-size: var(--fs-xs);
   font-weight: 400;
   color: var(--text-3);
 }
 .tm-tab-close {
+  flex: none;
   align-self: center;
   width: 18px;
   height: 18px;

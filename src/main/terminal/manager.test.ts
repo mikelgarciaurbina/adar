@@ -285,6 +285,48 @@ describe.skipIf(process.platform === 'win32')('TerminalManager', () => {
     await vi.waitFor(() => expect(infos(info.id).at(-1)?.cwd).toBe(path.join(dir, 'Adar Web')), { timeout: 15000 })
   })
 
+  it.skipIf(!fs.existsSync('/bin/zsh'))('hears from zsh what it runs, and calls an agent typed by hand by its name', async () => {
+    const home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'adar-zsh-home-')))
+    dirs.push(home)
+    // A program called claude that gives its terminal a title, as the agent does, and stays a moment.
+    const bin = path.join(home, 'bin')
+    fs.mkdirSync(bin)
+    fs.writeFileSync(path.join(bin, 'claude'), "#!/bin/sh\nprintf '\\033]0;✳ Fix the login form\\007'\nsleep 2\n", { mode: 0o755 })
+    fs.writeFileSync(path.join(home, '.zshrc'), `PS1='%% '\nunsetopt beep\npath=(${bin} $path)\n`)
+    process.env.ZDOTDIR = home
+    const { manager, dir, output, infos } = start([{ id: 'hello', name: 'Hello', command: 'echo launched-$((6*7))' }], '/bin/zsh')
+    const info = await manager.open({ owner: dir, cwd: dir, cols: 100, rows: 30 })
+    manager.attach(info.id)
+    const last = () => infos(info.id).at(-1)
+
+    // A command, without the variable set in front of it; then the prompt again.
+    manager.write(info.id, 'TOKEN=secret sleep 2\r')
+    await vi.waitFor(() => expect(last()).toMatchObject({ command: 'sleep 2', busy: true, process: 'sleep', name: '' }), { timeout: 15000 })
+    await vi.waitFor(() => expect(last()).toMatchObject({ command: '', busy: false, process: 'zsh' }), { timeout: 15000 })
+    expect(infos(info.id).some((i) => i.command.includes('secret'))).toBe(false)
+
+    // A line that starts with a space is not told, as it is kept out of the history.
+    manager.write(info.id, ' sleep 0.3; echo spaced-$((1+1))\r')
+    await vi.waitFor(() => expect(output(info.id)).toContain('spaced-2'), { timeout: 15000 })
+    expect(infos(info.id).some((i) => i.command.includes('spaced'))).toBe(false)
+
+    // An agent typed by hand goes by its name, with the title it gives the terminal; both end with it.
+    manager.write(info.id, 'claude\r')
+    await vi.waitFor(() => expect(infos(info.id).some((i) => i.name === 'Claude Code' && i.command === 'claude' && i.title === '✳ Fix the login form' && i.busy)).toBe(true), {
+      timeout: 15000
+    })
+    await vi.waitFor(() => expect(last()).toMatchObject({ name: '', command: '', title: '', busy: false }), { timeout: 15000 })
+
+    // A launcher's name is its program's: what is typed into the shell that took over is called by what it is.
+    const launched = await manager.open({ owner: dir, cwd: dir, cols: 100, rows: 30, launcher: 'hello' })
+    manager.attach(launched.id)
+    expect(launched.name).toBe('Hello')
+    await vi.waitFor(() => expect(output(launched.id)).toContain('launched-42'), { timeout: 15000 })
+    manager.write(launched.id, 'sleep 2\r')
+    await vi.waitFor(() => expect(infos(launched.id).at(-1)).toMatchObject({ command: 'sleep 2', busy: true, name: '' }), { timeout: 15000 })
+    await vi.waitFor(() => expect(infos(launched.id).at(-1)).toMatchObject({ command: '', busy: false, name: '' }), { timeout: 15000 })
+  })
+
   it('refuses what it cannot start', async () => {
     const { manager, dir } = start()
     await expect(manager.open({ owner: dir, cwd: 'relative/path', cols: 80, rows: 24 })).rejects.toMatchObject({ code: 'INVALID_ARGUMENT' })

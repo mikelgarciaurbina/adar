@@ -12,6 +12,7 @@ import {
   parseTerminalNotice,
   sanitizeTerminalLaunchers,
   scanOutput,
+  shownCommand,
   topState,
   type RunState,
   type TerminalSignal
@@ -51,6 +52,28 @@ describe('scanOutput', () => {
     expect(scan(`\x1b]52;c;${'A'.repeat(5000)}\x07`)).toEqual([])
     expect(scan('\x1bPq#0;2;0;0;0\x07#1~~\x1b\\', 'after\x07')).toEqual([{ kind: 'attention', message: '' }])
     expect(scan('\x1b_Gf=100;AAAA\x1b\\')).toEqual([])
+  })
+
+  it('reads what the shell says it runs, and that it is back at its prompt', () => {
+    expect(scan('\x1b]7717;adar;command;npm run dev\x07')).toEqual([{ kind: 'command', command: 'npm run dev' }])
+    expect(scan('\x1b]7717;adar;command;echo a; echo b\x07')).toEqual([{ kind: 'command', command: 'echo a; echo b' }])
+    expect(scan('\x1b]7717;adar;command;\x07', '\x1b]7717;adar;command\x1b\\')).toEqual([
+      { kind: 'command', command: '' },
+      { kind: 'command', command: '' }
+    ])
+    expect(scan('\x1b]7717;other;command;npm run dev\x07')).toEqual([])
+  })
+
+  it('shows a command without the variables set in front of it', () => {
+    expect(shownCommand('npm run dev')).toBe('npm run dev')
+    expect(shownCommand('  git   log\t--oneline ')).toBe('git log --oneline')
+    expect(shownCommand('TOKEN=abc123 npm test')).toBe('npm test')
+    expect(shownCommand('NODE_ENV=production API_KEY="a b c" node server.js --port=3000')).toBe('node server.js --port=3000')
+    expect(shownCommand("GREETING='it''s me' A=b\\ c ./run.sh x=1")).toBe('./run.sh x=1')
+    // Nothing but a variable, or a quote never closed: nothing to show.
+    expect(shownCommand('TOKEN=abc123')).toBe('')
+    expect(shownCommand('TOKEN="abc 123 npm test')).toBe('')
+    expect(shownCommand(`echo ${'x'.repeat(300)}`).length).toBe(80)
   })
 
   it('cleans what it shows', () => {

@@ -12,6 +12,7 @@ import type { IPty } from 'node-pty'
 import { AdarError } from '@shared/errors'
 import {
   ADAR_OSC,
+  AGENT_NAMES,
   afterInput,
   afterSeen,
   afterSignal,
@@ -65,6 +66,8 @@ const FLUSH_AT = 64_000
 const HIGH = 1_500_000
 const LOW = 300_000
 const PROCESS_POLL_MS = 1500
+/** After the shell says it started a command, how long until the program is the one in front. */
+const COMMAND_LOOK_MS = 150
 const MAX_WRITE = 2_000_000
 
 const invalid = (message: string) => new AdarError({ message, code: 'INVALID_ARGUMENT' })
@@ -76,7 +79,7 @@ interface Session {
   run: RunState
   /** The shell's own name ("zsh"): anything else in front is a program running. */
   shell: string
-  /** The name its launcher gave it ('' for a plain shell), for when an agent typed by hand is gone again. */
+  /** The name its launcher gave it, for when an agent typed by hand is gone again; '' for a plain shell, and once something was typed into the shell that took over. */
   launcherName: string
   replay: string
   pending: string
@@ -94,7 +97,7 @@ interface Session {
 const DROPPED_ENV = /^(ELECTRON_|ADAR_|CHROME_|VITE_|npm_|ORIGINAL_XDG_|GOOGLE_API_KEY$|INIT_CWD$|NODE_ENV$|NODE_CHANNEL_FD$)/
 
 /** What a terminal whose agent was typed by hand is called while Claude Code's hooks speak for it. */
-const CLAUDE_NAME = 'Claude Code'
+const CLAUDE_NAME = AGENT_NAMES.claude
 const NESTED_ENV = /^(CLAUDECODE$|CLAUDE_|ANTHROPIC_BASE_URL$|MCP_)/
 
 /** "es-ES" → "es_ES.UTF-8": what a terminal app sets when the system gave the process no locale. */
@@ -403,6 +406,7 @@ export class TerminalManager {
         name: launcher?.name ?? '',
         process: launcher ? (agentOfCommand(launcher.command) ?? '') : plan.shell,
         title: '',
+        command: '',
         busy: !!launcher,
         state: null,
         message: '',
@@ -566,11 +570,32 @@ export class TerminalManager {
       if (sig.title !== s.info.title) this.change(s, { title: sig.title })
     } else if (sig.kind === 'cwd') {
       if (path.isAbsolute(sig.cwd) && sig.cwd !== s.info.cwd) this.change(s, { cwd: sig.cwd })
+    } else if (sig.kind === 'command') {
+      this.onCommand(s, sig.command)
     } else {
       // The shell beeps at what was just typed (nothing to complete, the start of the line): that asks for nothing.
       if (sig.kind === 'attention' && !sig.message && Date.now() - s.lastInput < (this.deps.typingBellMs ?? TYPING_BELL_MS)) return
       this.setRun(s, afterSignal(s.run, sig))
     }
+  }
+
+  /** The shell says it runs what was typed, or ('') that it is back at its prompt. */
+  private onCommand(s: Session, command: string): void {
+    const patch: Partial<TerminalInfo> = {}
+    if (command !== s.info.command) patch.command = command
+    // The title on the terminal was the last program's.
+    if (s.info.title) patch.title = ''
+    if (command) {
+      // Typed by hand: a launcher's program is over by now, and an agent goes by its own name.
+      s.launcherName = ''
+      const agent = agentOfCommand(command)
+      const name = agent ? AGENT_NAMES[agent] : ''
+      if (name !== s.info.name) patch.name = name
+    }
+    if (Object.keys(patch).length) this.change(s, patch)
+    // The program in front changes with it: the shell again at a prompt, the command once it had time to start.
+    if (command) setTimeout(() => this.readProcess(s), COMMAND_LOOK_MS).unref?.()
+    else this.readProcess(s)
   }
 
   private setRun(s: Session, run: RunState): void {

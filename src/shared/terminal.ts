@@ -43,6 +43,8 @@ export interface TerminalInfo {
   process: string
   /** The title the program gave its terminal, if any. */
   title: string
+  /** The command line the shell is running, as typed; '' at its prompt, and where the shell does not say. */
+  command: string
   /** A program other than the shell runs in it (closing asks first). */
   busy: boolean
   state: AgentRunState | null
@@ -109,7 +111,10 @@ export function sanitizeTerminalLaunchers(v: unknown): TerminalLauncher[] | null
   return out
 }
 
-/** The agent a launcher command starts, by its first word ("claude --resume" → claude). */
+/** What an agent is called when nothing else names it (typed by hand into a shell). */
+export const AGENT_NAMES: Record<'claude' | 'codex', string> = { claude: 'Claude Code', codex: 'Codex' }
+
+/** The agent a command starts, by its first word ("claude --resume" → claude). */
 export function agentOfCommand(command: string): 'claude' | 'codex' | null {
   const first = command.trim().split(/\s+/)[0] ?? ''
   const base = first.split(/[\\/]/).pop() ?? ''
@@ -130,6 +135,8 @@ export type TerminalSignal =
   | { kind: 'attention'; message: string }
   | { kind: 'title'; title: string }
   | { kind: 'cwd'; cwd: string }
+  /** The shell started what was typed (what Adar adds to zsh says so); '' when it is back at its prompt. */
+  | { kind: 'command'; command: string }
 
 const NORMAL = 0
 const ESCAPE = 1
@@ -163,6 +170,32 @@ export function cleanText(s: string, max = 200): string {
   return out.replace(/\s+/g, ' ').trim().slice(0, max)
 }
 
+/**
+ * A command line as a terminal's tab shows it: one line, cut, and without the variables set in front of it
+ * (`TOKEN=… npm test` → "npm test": they say little, and are the part most likely to be a secret).
+ */
+export function shownCommand(line: string): string {
+  let s = cleanText(line, 400)
+  for (;;) {
+    const m = /^[A-Za-z_][A-Za-z0-9_]*=/.exec(s)
+    if (!m) break
+    // The value ends at the first space outside quotes.
+    let i = m[0].length
+    let quote = ''
+    for (; i < s.length; i++) {
+      const ch = s[i]
+      if (quote) {
+        if (ch === quote) quote = ''
+        else if (ch === '\\' && quote === '"') i++
+      } else if (ch === '\\') i++
+      else if (ch === '"' || ch === "'") quote = ch
+      else if (ch === ' ') break
+    }
+    s = s.slice(i).trimStart()
+  }
+  return s.slice(0, 80)
+}
+
 function oscSignal(body: string): TerminalSignal | null {
   const semi = body.indexOf(';')
   const code = semi < 0 ? body : body.slice(0, semi)
@@ -194,6 +227,7 @@ function oscSignal(body: string): TerminalSignal | null {
     if (what === 'working' || what === 'asks' || what === 'notify' || what === 'finished' || what === 'idle') {
       return { kind: 'agent', what, message: cleanText(more.join(';')) }
     }
+    if (what === 'command') return { kind: 'command', command: shownCommand(more.join(';')) }
   }
   return null
 }

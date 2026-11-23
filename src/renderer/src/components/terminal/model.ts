@@ -6,11 +6,71 @@ import { isGroupOwner, topState, type AgentRunState, type TerminalInfo, type Ter
 import { pluralize } from '@renderer/lib/format'
 import { groupOf } from '@renderer/lib/tabGroups'
 
-/** What runs in a terminal, in a word or two: the launcher while its program runs, else the program in front. */
+/**
+ * What runs in a terminal, in a few words: the launcher or agent while its program runs, else the command the shell
+ * says it runs ("npm run dev"), else the program in front.
+ */
 export function terminalLabel(info: TerminalInfo | undefined): string {
   if (!info) return 'terminal'
-  if (info.name && info.busy) return info.name
+  if (info.busy) return info.name || info.command || info.process || 'shell'
   return info.process || 'shell'
+}
+
+/** What agents call their terminal before they have a task to name. */
+const AGENT_TITLES = new Set(['claude code', 'claude', 'codex', 'openai codex'])
+
+/**
+ * An agent's own words for its task, from the title it gives its terminal ("✳ Fix the login form" → "Fix the login
+ * form": the mark in front says it is working, which the dot already does); '' while the title only names the program.
+ */
+export function taskOf(info: TerminalInfo): string {
+  const task = info.title.replace(/^(?:[\p{S}\p{P}]\s+)+/u, '').trim()
+  const low = task.toLowerCase()
+  if (!task || AGENT_TITLES.has(low)) return ''
+  if ([info.name, info.process, info.command].some((own) => own && own.toLowerCase() === low)) return ''
+  // A shell's own title for what it runs is the command again, perhaps cut short.
+  if (info.command && info.command.toLowerCase().startsWith(low.replace(/(\.{3}|…)$/, ''))) return ''
+  return task
+}
+
+/** A terminal tab's words: what it is and, after it and dimmer, an agent's task. */
+export interface TabLabel {
+  text: string
+  detail: string
+}
+
+export const labelText = (l: TabLabel): string => (l.detail ? `${l.text} · ${l.detail}` : l.text)
+
+/** The folder an idle shell is in, by its own name ("site"); '' in the folder its terminals start in. */
+function placeOf(cwd: string, folder: string): string {
+  const trim = (p: string) => (p.length > 1 ? p.replace(/[\\/]+$/, '') : p)
+  if (!cwd || trim(cwd) === trim(folder)) return ''
+  if (shortFolder(trim(cwd)) === '~') return '~'
+  return trim(cwd).split(/[\\/]/).pop() || cwd
+}
+
+/**
+ * What a terminal's tab says, for telling it from its neighbours: an agent with its task ("Claude Code · Fix the
+ * login form"), the command that runs ("npm run dev"), or for a shell at its prompt the folder it is in when that is
+ * not the one its terminals start in (`folder`), else the shell's name.
+ */
+export function tabLabel(info: TerminalInfo | undefined, folder: string): TabLabel {
+  if (!info) return { text: 'terminal', detail: '' }
+  if (info.busy) return { text: terminalLabel(info), detail: info.name ? taskOf(info) : '' }
+  return { text: placeOf(info.cwd, folder) || info.process || 'shell', detail: '' }
+}
+
+/** Each tab's label, in order: the user's own name for it, else `tabLabel`; those that would read the same are numbered. */
+export function tabLabels(tabs: ReadonlyArray<{ name: string; info: TerminalInfo | undefined }>, folder: string): TabLabel[] {
+  const seen = new Map<string, number>()
+  return tabs.map((t) => {
+    if (t.name) return { text: t.name, detail: '' }
+    const label = tabLabel(t.info, folder)
+    const key = labelText(label)
+    const n = (seen.get(key) ?? 0) + 1
+    seen.set(key, n)
+    return n > 1 ? { ...label, text: `${label.text} ${n}` } : label
+  })
 }
 
 /** "~/Projects/landing" for a folder under the user's home (told by the path itself: /Users/x or /home/x). */

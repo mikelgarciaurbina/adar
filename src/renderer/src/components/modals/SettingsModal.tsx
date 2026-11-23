@@ -367,10 +367,10 @@ function TerminalSection() {
           </SettingRow>
         )}
         <SettingRow
-          label="Follow the shell’s folder"
-          description="zsh tells Adar where it is, so a pane’s header follows cd and a new pane starts where the one beside it is. Your own start-up files run as always; applies to new terminals."
+          label="Follow the shell’s folder and commands"
+          description="zsh tells Adar where it is and what it runs, so a pane’s header follows cd, a new pane starts where the one beside it is and a tab says the command running in it. Your own start-up files run as always; applies to new terminals."
         >
-          <Switch label="Follow the shell’s folder" checked={s.terminalShellIntegration} onChange={(terminalShellIntegration) => update({ terminalShellIntegration })} />
+          <Switch label="Follow the shell’s folder and commands" checked={s.terminalShellIntegration} onChange={(terminalShellIntegration) => update({ terminalShellIntegration })} />
         </SettingRow>
         <SettingRow
           label="Complete file and folder names in any case"

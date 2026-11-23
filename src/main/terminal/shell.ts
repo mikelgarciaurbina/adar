@@ -1,6 +1,6 @@
 // What Adar adds to the user's shell in its terminals (zsh, the shell macOS comes with): the shell tells the terminal
-// which folder it is in, so a new pane starts where its neighbour is, and file and folder names complete whatever
-// their case ("cd adar" + Tab finds Adar). zsh reads its start-up files from $ZDOTDIR, so Adar points that at a
+// which folder it is in, so a new pane starts where its neighbour is, and what it is running, so its tab says so;
+// and file and folder names complete whatever their case ("cd adar" + Tab finds Adar). zsh reads its start-up files from $ZDOTDIR, so Adar points that at a
 // folder of its own whose files run the user's own first, exactly as without Adar, add these few lines and give
 // $ZDOTDIR back. Nothing of the user's is changed, and everything else about the shell (history, key bindings,
 // prompt) stays what their own files make it.
@@ -44,6 +44,21 @@ _adar_report_cwd() {
 autoload -Uz add-zsh-hook
 add-zsh-hook chpwd _adar_report_cwd
 _adar_report_cwd
+
+# What this shell runs, told to the terminal (an OSC of Adar's own): its tab says "npm run dev" while that runs,
+# and the shell's name or folder again at the prompt. A line that starts with a space is kept out, as zsh's
+# history may be told to do. These run before your own hooks, which may give the terminal a title of yours.
+_adar_report_command() {
+  emulate -L zsh
+  local line=\${1:-$2}
+  [[ $line == ' '* ]] && line=
+  line=\${line//[[:cntrl:]]/ }
+  builtin printf '\\e]7717;adar;command;%s\\a' "\${line[1,400]}"
+}
+_adar_report_prompt() { builtin printf '\\e]7717;adar;command;\\a' }
+typeset -ga preexec_functions precmd_functions
+preexec_functions=(_adar_report_command \${preexec_functions:#_adar_report_command})
+precmd_functions=(_adar_report_prompt \${precmd_functions:#_adar_report_prompt})
 
 if [[ -n $ADAR_COMPLETE_ANY_CASE ]]; then
   # File and folder names complete whatever their case; commands and options stay exact. It takes zsh's completion

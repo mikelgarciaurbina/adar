@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_SETTINGS, type WorkingStatus } from '@shared/types'
 import type { TerminalInfo } from '@shared/terminal'
-import { changesText, noticeFor, ownerCount, ownerState, shortFolder, shouldNotify, terminalLabel, whereOf } from './model'
+import { changesText, labelText, noticeFor, ownerCount, ownerState, shortFolder, shouldNotify, tabLabel, tabLabels, taskOf, terminalLabel, whereOf } from './model'
 
 const info = (over: Partial<TerminalInfo> = {}): TerminalInfo => ({
   id: 't1',
@@ -13,6 +13,7 @@ const info = (over: Partial<TerminalInfo> = {}): TerminalInfo => ({
   name: 'Claude Code',
   process: 'claude',
   title: '',
+  command: '',
   busy: true,
   state: null,
   message: '',
@@ -30,9 +31,72 @@ describe('terminals in the UI', () => {
     expect(terminalLabel(info({ busy: false, process: 'zsh' }))).toBe('zsh')
     expect(terminalLabel(info({ launcher: 'shell', name: '', process: 'node' }))).toBe('node')
     expect(terminalLabel(undefined)).toBe('terminal')
+    // The command the shell says it runs tells more than the program in front.
+    expect(terminalLabel(info({ launcher: 'shell', name: '', process: 'node', command: 'npm run dev' }))).toBe('npm run dev')
+    expect(terminalLabel(info({ launcher: 'shell', name: '', process: 'zsh', command: 'npm run dev', busy: false }))).toBe('zsh')
     expect(shortFolder('/Users/ana/Projects/landing')).toBe('~/Projects/landing')
     expect(shortFolder('/home/ana')).toBe('~')
     expect(shortFolder('/opt/code/landing')).toBe('/opt/code/landing')
+  })
+
+  it('takes an agent’s task from the title it gives its terminal', () => {
+    // Claude Code's own titles: its name at first, then the task behind a mark that turns while it works.
+    expect(taskOf(info({ title: '✳ Claude Code' }))).toBe('')
+    expect(taskOf(info({ title: '◐ Claude Code' }))).toBe('')
+    expect(taskOf(info({ title: '◐ Pricing section heading rename' }))).toBe('Pricing section heading rename')
+    expect(taskOf(info({ title: '◑ Pricing section heading rename' }))).toBe('Pricing section heading rename')
+    expect(taskOf(info({ title: '✳ Pricing section heading rename' }))).toBe('Pricing section heading rename')
+    expect(taskOf(info({ title: '' }))).toBe('')
+    // Only a mark and a space are taken off the front: the rest is the agent's.
+    expect(taskOf(info({ title: '[WIP] ~/landing: fix #12' }))).toBe('[WIP] ~/landing: fix #12')
+    // A title that only says what runs is no task: the launcher, the program, or the command a shell put there.
+    expect(taskOf(info({ name: 'Claude (fast)', title: 'Claude (fast)' }))).toBe('')
+    expect(taskOf(info({ title: 'CLAUDE' }))).toBe('')
+    expect(taskOf(info({ name: 'Codex', process: 'codex', title: 'codex' }))).toBe('')
+    expect(taskOf(info({ command: 'claude --resume --model opus', title: 'claude --resume' }))).toBe('')
+    expect(taskOf(info({ command: 'claude --resume --model opus', title: 'claude --resume --mo…' }))).toBe('')
+  })
+
+  it('says on a tab what goes on in it', () => {
+    const at = '/Users/ana/Projects/basoa/landing'
+    const shell = (over: Partial<TerminalInfo> = {}) => info({ launcher: 'shell', name: '', process: 'zsh', busy: false, ...over })
+    // An agent: its name and, once it has one, its task.
+    expect(tabLabel(info(), at)).toEqual({ text: 'Claude Code', detail: '' })
+    expect(tabLabel(info({ title: '◐ Pricing section heading rename' }), at)).toEqual({ text: 'Claude Code', detail: 'Pricing section heading rename' })
+    expect(labelText(tabLabel(info({ title: '◐ Pricing section heading rename' }), at))).toBe('Claude Code · Pricing section heading rename')
+    // A command: what was typed; whatever title that program sets is its own business.
+    expect(tabLabel(shell({ busy: true, process: 'node', command: 'npm run dev', title: 'vite' }), at)).toEqual({ text: 'npm run dev', detail: '' })
+    expect(tabLabel(shell({ busy: true, process: 'node' }), at)).toEqual({ text: 'node', detail: '' })
+    // A shell at its prompt: the folder it went to, or its own name where its terminals start.
+    expect(tabLabel(shell(), at)).toEqual({ text: 'zsh', detail: '' })
+    expect(tabLabel(shell({ cwd: `${at}/` }), at).text).toBe('zsh')
+    expect(tabLabel(shell({ cwd: `${at}/site` }), at).text).toBe('site')
+    expect(tabLabel(shell({ cwd: `${at}/site/src/pages` }), at).text).toBe('pages')
+    expect(tabLabel(shell({ cwd: '/Users/ana' }), at).text).toBe('~')
+    expect(tabLabel(shell({ cwd: '/' }), at).text).toBe('/')
+    expect(tabLabel(shell({ cwd: 'C:\\Users\\ana\\code\\api', process: 'powershell' }), 'C:\\Users\\ana\\code').text).toBe('api')
+    // The title an earlier program left behind is not the shell's.
+    expect(tabLabel(shell({ title: '✳ Pricing section heading rename' }), at)).toEqual({ text: 'zsh', detail: '' })
+    expect(tabLabel(undefined, at)).toEqual({ text: 'terminal', detail: '' })
+  })
+
+  it('numbers the tabs that would read the same, and leaves the user’s names alone', () => {
+    const at = '/Users/ana/Projects/basoa/landing'
+    const shell = (over: Partial<TerminalInfo> = {}) => info({ launcher: 'shell', name: '', process: 'zsh', busy: false, ...over })
+    const labels = tabLabels(
+      [
+        { name: '', info: shell() },
+        { name: '', info: info({ title: '◐ Fix the login form' }) },
+        { name: '', info: shell() },
+        { name: 'zsh', info: shell() },
+        { name: '', info: shell({ cwd: `${at}/site` }) },
+        { name: '', info: info({ title: '✳ Fix the login form' }) },
+        { name: '', info: shell() },
+        { name: 'server', info: shell({ busy: true, process: 'node', command: 'npm run dev' }) }
+      ],
+      at
+    )
+    expect(labels.map(labelText)).toEqual(['zsh', 'Claude Code · Fix the login form', 'zsh 2', 'zsh', 'site', 'Claude Code 2 · Fix the login form', 'zsh 3', 'server'])
   })
 
   it('adds an owner’s terminals up to its most urgent state', () => {

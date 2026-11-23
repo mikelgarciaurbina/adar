@@ -16,7 +16,7 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
   `agents.ts` (commits and pushes Adar did not make itself — `AgentEvent`, with the agent their Co-Authored-By trailers,
   branch prefix or folder name: `agentOf` — and `parseAgentNotice`),
   `terminal.ts` (terminals inside Adar: `TerminalInfo`, the launchers — "Claude Code" → `claude` —, the signals read from
-  a terminal's output — `scanOutput`: bell, title, folder, OSC 9/777 notifications and Adar's own `OSC 7717;adar;…` —
+  a terminal's output — `scanOutput`: bell, title, folder, the command a shell runs, OSC 9/777 notifications and Adar's own `OSC 7717;adar;…` —
   and the rules that turn them into the state a tab's dot shows: `afterSignal`, `afterInput`, `afterSeen`, `topState`),
   `review.ts` (reviewing a pull request in Adar, whatever the service: threads, reviews, Viewed marks, the timeline,
   an agent's work before its pull request — `WorkReviewRange`, `WorkReviewMark`, `WORK_FEATURES` —,
@@ -60,8 +60,9 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
     `--settings <userData>/terminal/claude-hooks.json`, hooks that append a line to `<userData>/terminal/signals`
     (`$ADAR_SIGNALS`: a hook has no terminal to print to), which the manager watches, and Codex with its terminal
     notifications on; a terminal's environment never carries an agent session Adar itself was started from), `shell.ts` (what Adar adds to zsh: `$ZDOTDIR` points at start-up files of
-    Adar's own that run the user's first and give `$ZDOTDIR` back, then report the folder with OSC 7, complete file
-    and folder names in any case and start `claude` and `codex` typed by hand the way a launcher does; history, key
+    Adar's own that run the user's first and give `$ZDOTDIR` back, then report the folder with OSC 7 and the command
+    the shell runs (`OSC 7717;adar;command;…`: shown without the variables set in front of it, and never a line that
+    starts with a space), complete file and folder names in any case and start `claude` and `codex` typed by hand the way a launcher does; history, key
     bindings and prompt stay the user's) and `ops.ts` (the `terminal*` API
     methods; none over the HTTP bridge).
     Terminals outlive the window: they end when closed, when their shell exits or when Adar quits.
@@ -157,7 +158,9 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
     `components/terminal/` — `terminalStore.ts` (one xterm.js instance per terminal, kept while it lives and moved in
     and out of the page; each owner's terminal tabs and their panes — a repository's path or `group:<id>` —, focus,
     keyboard shortcuts, notifications; the layout survives a reload in localStorage), `layout.ts` (pure: the split
-    tree), `model.ts` (pure: labels, an owner's state, `noticeFor`), `TerminalView.tsx` (the strip with terminal tabs
+    tree), `model.ts` (pure: what a terminal's tab says — `tabLabels`: an agent with the task its terminal title names,
+    the command a shell runs, an idle shell's folder or name, numbered when two would read the same —, an owner's
+    state, `noticeFor`), `TerminalView.tsx` (the strip with terminal tabs
     and split controls, the panes, find), `GroupView.tsx` (a tab group's own view: its terminals in the folder its
     repositories share — `groupFolder`, or `TabGroup.folder` — with the group's repositories on the left) and
     `parts.tsx` (`StateDot`, the status bar's word). The tab bar, the toolbar's Graph / Both / Terminal switch and the
@@ -237,7 +240,8 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
 - Never log or persist credentials; redact `user:token@` in URLs.
 - Terminals are the user's own shell: only the main window may start or write to one (never the menu bar panel, never
   the HTTP bridge), a launcher's command comes from the settings and nowhere else, and nothing read from a repository
-  or from a terminal's output is ever run or typed (signals only change a dot; their text is cleaned before it is shown).
+  or from a terminal's output is ever run or typed (signals only change a dot or a tab's words; their text is cleaned
+  before it is shown, and a command line is never logged or saved).
 
 ## Testing
 - During an edit, use `npm run test:changed` for tests affected by changes since HEAD, or keep `npm run test:watch`
