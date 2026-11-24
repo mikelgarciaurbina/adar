@@ -1,5 +1,6 @@
 // The panes of one terminal tab, pure: a tree of splits (a row puts its two sides next to each other, a column
-// one above the other), with what splitting, closing, resizing and moving between panes do to it.
+// one above the other), with what splitting, closing, resizing, moving between panes and moving a pane itself do to
+// it; and the order of an owner's terminal tabs.
 
 export type PaneTree =
   | { kind: 'pane'; id: string }
@@ -36,6 +37,63 @@ export function removePane(tree: PaneTree, id: string): PaneTree | null {
   if (!a) return b
   if (!b) return a
   return a === tree.a && b === tree.b ? tree : { ...tree, a, b }
+}
+
+/**
+ * `id` leaves its place (its neighbour there takes the room) and takes the `side` half of `target`'s place.
+ * Two panes that share a split and change places along it keep their sizes. The same tree when nothing moves.
+ */
+export function movePane(tree: PaneTree, id: string, target: string, side: Direction): PaneTree {
+  if (id === target || !hasPane(tree, id) || !hasPane(tree, target)) return tree
+  const dir = side === 'left' || side === 'right' ? 'row' : 'column'
+  const first = side === 'left' || side === 'up'
+  let ratio = 0.5
+  const shared = splitOf(tree, id, target)
+  if (shared && shared.dir === dir) {
+    const wasFirst = shared.a.kind === 'pane' && shared.a.id === id
+    if (wasFirst === first) return tree
+    const share = wasFirst ? shared.ratio : 1 - shared.ratio
+    ratio = first ? share : 1 - share
+  }
+  const rest = removePane(tree, id)
+  if (!rest) return tree
+  const moved = pane(id)
+  const place = (t: PaneTree): PaneTree => {
+    if (t.kind === 'pane') return t.id === target ? { kind: 'split', dir, ratio, a: first ? moved : t, b: first ? t : moved } : t
+    return { ...t, a: place(t.a), b: place(t.b) }
+  }
+  return place(rest)
+}
+
+/** The split whose two sides are exactly these two panes, if there is one. */
+function splitOf(tree: PaneTree, x: string, y: string): Extract<PaneTree, { kind: 'split' }> | null {
+  if (tree.kind === 'pane') return null
+  if (tree.a.kind === 'pane' && tree.b.kind === 'pane') {
+    const ids = [tree.a.id, tree.b.id]
+    return ids.includes(x) && ids.includes(y) ? tree : null
+  }
+  return splitOf(tree.a, x, y) ?? splitOf(tree.b, x, y)
+}
+
+/** The side of a box a point is nearest to; `x` and `y` are shares of its width and height (0…1). */
+export function sideAt(x: number, y: number): Direction {
+  const to: Array<[Direction, number]> = [
+    ['left', x],
+    ['right', 1 - x],
+    ['up', y],
+    ['down', 1 - y]
+  ]
+  return to.reduce((best, d) => (d[1] < best[1] ? d : best))[0]
+}
+
+/** A list with `id` moved to just before `before` (to the end when null); the same list when it is already there. */
+export function moveBefore<T extends { id: string }>(list: readonly T[], id: string, before: string | null): readonly T[] {
+  const from = list.findIndex((x) => x.id === id)
+  if (from < 0 || before === id) return list
+  const rest = list.filter((x) => x.id !== id)
+  const at = before === null ? rest.length : rest.findIndex((x) => x.id === before)
+  if (at < 0 || at === from) return list
+  return [...rest.slice(0, at), list[from], ...rest.slice(at)]
 }
 
 /** Where a split is: the turns from the root (0 = first side, 1 = second). */

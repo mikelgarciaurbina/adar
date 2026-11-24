@@ -24,6 +24,8 @@ import { addCloseGuard, useApp } from '@renderer/store/appStore'
 import {
   equalize,
   hasPane,
+  moveBefore,
+  movePane,
   neighbour,
   nudge,
   pane,
@@ -554,6 +556,41 @@ export function stepTermTab(owner: string, step: 1 | -1): void {
 
 export function renameTermTab(owner: string, tabId: string, name: string): void {
   changeTab(owner, tabId, (t) => ({ ...t, name: name.trim().slice(0, 40) }))
+}
+
+/** Put a tab just before another one of its owner (at the end when null): dragging a tab, Move Tab Left / Right. */
+export function moveTermTab(owner: string, tabId: string, before: string | null): void {
+  setWorkspace(owner, (ws) => {
+    const tabs = moveBefore(ws.tabs, tabId, before)
+    return tabs === ws.tabs ? ws : { ...ws, tabs: [...tabs] }
+  })
+}
+
+/** A tab one place to the left (-1) or right (1). */
+export function stepTermTabPlace(owner: string, tabId: string, step: 1 | -1): void {
+  const tabs = workspaceOf(owner).tabs
+  const i = tabs.findIndex((t) => t.id === tabId)
+  const to = i + step
+  if (i < 0 || to < 0 || to >= tabs.length) return
+  moveTermTab(owner, tabId, step < 0 ? tabs[to].id : (tabs[to + 1]?.id ?? null))
+}
+
+/** Put a pane on a side of another pane of its tab (dragging its header there); it keeps the keyboard. */
+export function movePaneTo(id: string, target: string, side: Direction): void {
+  const at = locate(id)
+  if (!at || !hasPane(at.tab.tree, target)) return
+  changeTab(at.owner, at.tab.id, (t) => {
+    const tree = movePane(t.tree, id, target, side)
+    return tree === t.tree ? t : { ...t, tree, focused: id, zoomed: false }
+  })
+  requestAnimationFrame(() => entries.get(id)?.term.focus())
+}
+
+/** Move a pane past the one beside it in a direction (Move Pane Left…): it lands on that side of its neighbour. */
+export function movePaneToward(id: string, dir: Direction): void {
+  const at = locate(id)
+  const target = at && neighbour(at.tab.tree, id, dir)
+  if (target) movePaneTo(id, target, dir)
 }
 
 export function moveFocus(owner: string, to: Direction | 1 | -1): void {

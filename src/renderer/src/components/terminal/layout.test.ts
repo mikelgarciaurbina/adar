@@ -1,7 +1,7 @@
 // The panes of a terminal tab: splitting, closing, resizing and moving between them.
 
 import { describe, expect, it } from 'vitest'
-import { equalize, neighbour, nudge, pane, panesOf, parseTree, removePane, setRatio, splitPane, stepPane, type PaneTree } from './layout'
+import { equalize, moveBefore, movePane, neighbour, nudge, pane, panesOf, parseTree, removePane, setRatio, sideAt, splitPane, stepPane, type PaneTree } from './layout'
 
 // a | b
 //   | -
@@ -57,6 +57,67 @@ describe('pane tree', () => {
     const row = splitPane(splitPane(pane('a'), 'a', 'b', 'row'), 'b', 'c', 'row')
     expect(equalize(setRatio(row, [], 0.8))).toMatchObject({ ratio: 1 / 3, b: { ratio: 0.5 } })
     expect(equalize(setRatio(t, [], 0.8))).toMatchObject({ ratio: 0.5, b: { ratio: 0.5 } })
+  })
+
+  it('moves a pane to a side of another one', () => {
+    // a | b, with a the narrow one: b to a's left changes their places, and each keeps its width.
+    const two = setRatio(splitPane(pane('a'), 'a', 'b', 'row'), [], 0.3)
+    expect(movePane(two, 'b', 'a', 'left')).toEqual({ kind: 'split', dir: 'row', ratio: 0.7, a: pane('b'), b: pane('a') })
+    expect(movePane(two, 'a', 'b', 'right')).toEqual({ kind: 'split', dir: 'row', ratio: 0.7, a: pane('b'), b: pane('a') })
+    // Onto the top or the bottom the split turns, in halves.
+    expect(movePane(two, 'b', 'a', 'up')).toEqual({ kind: 'split', dir: 'column', ratio: 0.5, a: pane('b'), b: pane('a') })
+    expect(movePane(two, 'b', 'a', 'down')).toEqual({ kind: 'split', dir: 'column', ratio: 0.5, a: pane('a'), b: pane('b') })
+    // Where it already is, onto itself, or a pane that is not there: nothing moves.
+    expect(movePane(two, 'b', 'a', 'right')).toBe(two)
+    expect(movePane(two, 'a', 'b', 'left')).toBe(two)
+    expect(movePane(two, 'a', 'a', 'left')).toBe(two)
+    expect(movePane(two, 'x', 'a', 'left')).toBe(two)
+    expect(movePane(two, 'a', 'x', 'left')).toBe(two)
+
+    // a | b over c: the place a pane leaves goes to its neighbour, and it shares its target's.
+    expect(panesOf(movePane(three(), 'c', 'a', 'left'))).toEqual(['c', 'a', 'b'])
+    expect(movePane(three(), 'c', 'a', 'left')).toEqual({
+      kind: 'split',
+      dir: 'row',
+      ratio: 0.5,
+      a: { kind: 'split', dir: 'row', ratio: 0.5, a: pane('c'), b: pane('a') },
+      b: pane('b')
+    })
+    expect(movePane(three(), 'a', 'c', 'down')).toEqual({
+      kind: 'split',
+      dir: 'column',
+      ratio: 0.5,
+      a: pane('b'),
+      b: { kind: 'split', dir: 'column', ratio: 0.5, a: pane('c'), b: pane('a') }
+    })
+    // b and c change places within their column.
+    expect(panesOf(movePane(three(), 'c', 'b', 'up'))).toEqual(['a', 'c', 'b'])
+    // Every pane is still there, once.
+    for (const side of ['left', 'right', 'up', 'down'] as const) expect(panesOf(movePane(three(), 'b', 'a', side)).sort()).toEqual(['a', 'b', 'c'])
+  })
+
+  it('finds the side of a pane a point is nearest to', () => {
+    expect(sideAt(0.1, 0.5)).toBe('left')
+    expect(sideAt(0.9, 0.5)).toBe('right')
+    expect(sideAt(0.5, 0.1)).toBe('up')
+    expect(sideAt(0.5, 0.95)).toBe('down')
+    expect(sideAt(0.2, 0.1)).toBe('up')
+    expect(sideAt(0.7, 0.6)).toBe('right')
+  })
+
+  it('moves a tab before another one, or to the end', () => {
+    const tabs = [{ id: 'a' }, { id: 'b' }, { id: 'c' }]
+    const ids = (list: readonly { id: string }[]) => list.map((t) => t.id).join('')
+    expect(ids(moveBefore(tabs, 'c', 'a'))).toBe('cab')
+    expect(ids(moveBefore(tabs, 'a', 'c'))).toBe('bac')
+    expect(ids(moveBefore(tabs, 'a', null))).toBe('bca')
+    expect(ids(moveBefore(tabs, 'b', 'a'))).toBe('bac')
+    // Already there, or nothing to go by: the same list.
+    expect(moveBefore(tabs, 'a', 'b')).toBe(tabs)
+    expect(moveBefore(tabs, 'c', null)).toBe(tabs)
+    expect(moveBefore(tabs, 'a', 'a')).toBe(tabs)
+    expect(moveBefore(tabs, 'x', 'a')).toBe(tabs)
+    expect(moveBefore(tabs, 'a', 'x')).toBe(tabs)
   })
 
   it('reads a stored tree, dropping the panes that are gone', () => {

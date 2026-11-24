@@ -158,10 +158,11 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
     `components/terminal/` — `terminalStore.ts` (one xterm.js instance per terminal, kept while it lives and moved in
     and out of the page; each owner's terminal tabs and their panes — a repository's path or `group:<id>` —, focus,
     keyboard shortcuts, notifications; the layout survives a reload in localStorage), `layout.ts` (pure: the split
-    tree), `model.ts` (pure: what a terminal's tab says — `tabLabels`: an agent with the task its terminal title names,
+    tree, a pane moved to a side of another one — `movePane` — and a tab moved along the strip), `model.ts` (pure: what a terminal's tab says — `tabLabels`: an agent with the task its terminal title names,
     the command a shell runs, an idle shell's folder or name, numbered when two would read the same —, an owner's
     state, `noticeFor`), `TerminalView.tsx` (the strip with terminal tabs
-    and split controls, the panes, find), `GroupView.tsx` (a tab group's own view: its terminals in the folder its
+    and split controls, the panes, find; a tab is dragged to another place on the strip and a pane by its header
+    onto a side of another pane of its tab, both also on their menus), `GroupView.tsx` (a tab group's own view: its terminals in the folder its
     repositories share — `groupFolder`, or `TabGroup.folder` — with the group's repositories on the left) and
     `parts.tsx` (`StateDot`, the status bar's word). The tab bar, the toolbar's Graph / Both / Terminal switch and the
     worktrees section show the state too. While a terminal has the keyboard, ⌘W, ⌘F and ⌘K mean close pane, find and

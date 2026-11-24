@@ -1,6 +1,7 @@
 // The terminals of one owner (a repository's tab, or a tab group): a strip with its terminal tabs and the split
 // controls, and under it the panes of the tab in front, each one a terminal. Used on its own (the Terminal view),
-// docked under the graph (Both) and as a tab group's view.
+// docked under the graph (Both) and as a tab group's view. A tab is dragged along the strip to another place, and
+// a pane by its header onto a side of another pane of its tab.
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ChevronDown, Columns2, Ellipsis, Maximize2, Minimize2, Plus, Rows2, Search, SquareTerminal, X } from 'lucide-react'
@@ -9,7 +10,7 @@ import { prompt } from '@renderer/components/common/dialogs'
 import { isMac } from '@renderer/api/client'
 import { useApp } from '@renderer/store/appStore'
 import { SHELL_LAUNCHER, STATE_LABEL, type AgentRunState, type TerminalInfo } from '@shared/terminal'
-import { panesOf, type PaneTree, type SplitPath } from './layout'
+import { hasPane, neighbour, panesOf, sideAt, type Direction, type PaneTree, type SplitPath } from './layout'
 import { labelText, shortFolder, tabLabels, terminalLabel, type TabLabel } from './model'
 import { StateDot } from './parts'
 import {
@@ -22,6 +23,9 @@ import {
   fitTerminal,
   focusTerminal,
   mountTerminal,
+  movePaneTo,
+  movePaneToward,
+  moveTermTab,
   openTerminal,
   pasteInto,
   renameTermTab,
@@ -29,6 +33,7 @@ import {
   selectTermTab,
   setOwnerFolder,
   setSplitRatio,
+  stepTermTabPlace,
   termOf,
   toggleZoom,
   useTerminals,
@@ -44,6 +49,15 @@ export function termShortcut(key: string, opts: { shift?: boolean; alt?: boolean
 }
 
 const EMPTY: Workspace = { tabs: [], active: '' }
+/** A terminal tab dragged along its strip, and a pane dragged by its header: what the drag carries is its id. */
+const TAB_MIME = 'application/x-adar-term-tab'
+const PANE_MIME = 'application/x-adar-term-pane'
+/** What is being dragged: a drag's data cannot be read until it is dropped, only its kind. */
+let dragged: { kind: 'tab' | 'pane'; id: string; owner: string } | null = null
+const drags = (e: React.DragEvent, kind: 'tab' | 'pane', owner: string): boolean =>
+  dragged?.kind === kind && dragged.owner === owner && Array.from(e.dataTransfer.types).includes(kind === 'tab' ? TAB_MIME : PANE_MIME)
+const SIDE_NAME: Record<Direction, string> = { left: 'Left', right: 'Right', up: 'Up', down: 'Down' }
+const SIDES: readonly Direction[] = ['left', 'right', 'up', 'down']
 /** Owners whose first terminal was already started for them (closing every one leaves the empty view). */
 const started = new Set<string>()
 
@@ -65,6 +79,26 @@ export function TerminalWorkspace({ owner, cwd }: { owner: string; cwd: string }
     ws.tabs.map((t) => ({ name: t.name, info: infos[t.focused] })),
     cwd
   )
+  /** The tab a dragged one would land beside, and on which side. */
+  const [tabDrop, setTabDrop] = useState<{ id: string; after: boolean } | null>(null)
+  const overTab = useCallback((id: string, after: boolean | null) => {
+    setTabDrop((d) => (after === null ? (d?.id === id ? null : d) : d && d.id === id && d.after === after ? d : { id, after }))
+  }, [])
+  // Past the last tab, on the strip itself: the end.
+  const overStrip = (e: React.DragEvent) => {
+    const last = ws.tabs.at(-1)
+    if (!last || !drags(e, 'tab', owner) || (e.target as HTMLElement).closest('.tm-tab')) return
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    overTab(last.id, true)
+  }
+  const dropOnStrip = (e: React.DragEvent) => {
+    if (!drags(e, 'tab', owner) || (e.target as HTMLElement).closest('.tm-tab')) return
+    e.preventDefault()
+    const id = e.dataTransfer.getData(TAB_MIME) || dragged?.id
+    setTabDrop(null)
+    if (id) moveTermTab(owner, id, null)
+  }
 
   useEffect(() => setOwnerFolder(owner, cwd), [owner, cwd])
 
@@ -111,9 +145,20 @@ export function TerminalWorkspace({ owner, cwd }: { owner: string; cwd: string }
   return (
     <div className="tm-root">
       <div className="tm-strip">
-        <div className="tm-tabs" role="tablist" aria-label="Terminals">
+        <div className="tm-tabs" role="tablist" aria-label="Terminals" onDragOver={overStrip} onDrop={dropOnStrip}>
           {ws.tabs.map((t, i) => (
-            <TabButton key={t.id} owner={owner} tab={t} label={labels[i]} active={t.id === tab?.id} infos={infos} />
+            <TabButton
+              key={t.id}
+              owner={owner}
+              tab={t}
+              label={labels[i]}
+              active={t.id === tab?.id}
+              infos={infos}
+              place={i === 0 ? (ws.tabs.length === 1 ? 'only' : 'first') : i === ws.tabs.length - 1 ? 'last' : 'middle'}
+              next={ws.tabs[i + 1]?.id ?? null}
+              drop={tabDrop?.id === t.id ? (tabDrop.after ? 'after' : 'before') : null}
+              onOver={overTab}
+            />
           ))}
           <button className="tm-add" title="New terminal" aria-label="New terminal: shell, or one of the launchers" onClick={(e) => showMenuBelow(e.currentTarget, launcherItems(owner, cwd))}>
             <Plus size={14} />
@@ -173,12 +218,39 @@ export function TerminalWorkspace({ owner, cwd }: { owner: string; cwd: string }
   )
 }
 
+/** Is the pointer of a drag over the second half of the element it is on? */
+const after = (e: React.DragEvent): boolean => {
+  const r = e.currentTarget.getBoundingClientRect()
+  return e.clientX > r.left + r.width / 2
+}
+
+/** The side of the element a drag's pointer is nearest to. */
+const sideOf = (e: React.DragEvent): Direction => {
+  const r = e.currentTarget.getBoundingClientRect()
+  return sideAt((e.clientX - r.left) / (r.width || 1), (e.clientY - r.top) / (r.height || 1))
+}
+
 async function renameTab(owner: string, tab: TermTab, label: TabLabel): Promise<void> {
   const name = await prompt({ title: 'Rename terminal tab', label: 'Name', defaultValue: tab.name || label.text, confirmLabel: 'Rename' })
   if (name !== null) renameTermTab(owner, tab.id, name)
 }
 
-function TabButton({ owner, tab, label, active, infos }: { owner: string; tab: TermTab; label: TabLabel; active: boolean; infos: Record<string, TerminalInfo> }) {
+interface TabButtonProps {
+  owner: string
+  tab: TermTab
+  label: TabLabel
+  active: boolean
+  infos: Record<string, TerminalInfo>
+  /** Where it is on the strip, for Move Tab Left / Right. */
+  place: 'only' | 'first' | 'middle' | 'last'
+  /** The tab after it, if any. */
+  next: string | null
+  /** A dragged tab would land on this side of it. */
+  drop: 'before' | 'after' | null
+  onOver: (id: string, after: boolean | null) => void
+}
+
+function TabButton({ owner, tab, label, active, infos, place, next, drop, onOver }: TabButtonProps) {
   const ids = panesOf(tab.tree)
   // A tab says what its most urgent pane says.
   const state = ids.reduce<AgentRunState | null>((top, id) => {
@@ -189,7 +261,34 @@ function TabButton({ owner, tab, label, active, infos }: { owner: string; tab: T
   const full = labelText(label)
   const folder = infos[tab.focused]?.cwd
   return (
-    <div className={`tm-tab${active ? ' tm-tab-active' : ''}`}>
+    <div
+      className={`tm-tab${active ? ' tm-tab-active' : ''}${drop ? ` tm-tab-drop-${drop}` : ''}`}
+      draggable
+      onDragStart={(e) => {
+        dragged = { kind: 'tab', id: tab.id, owner }
+        e.dataTransfer.setData(TAB_MIME, tab.id)
+        e.dataTransfer.effectAllowed = 'move'
+      }}
+      onDragOver={(e) => {
+        if (!drags(e, 'tab', owner)) return
+        e.preventDefault()
+        e.dataTransfer.dropEffect = 'move'
+        // Its own place is no move: no line there.
+        onOver(tab.id, dragged?.id === tab.id ? null : after(e))
+      }}
+      onDragLeave={(e) => !e.currentTarget.contains(e.relatedTarget as Node) && onOver(tab.id, null)}
+      onDrop={(e) => {
+        if (!drags(e, 'tab', owner)) return
+        e.preventDefault()
+        const id = e.dataTransfer.getData(TAB_MIME) || dragged?.id
+        onOver(tab.id, null)
+        if (id && id !== tab.id) moveTermTab(owner, id, after(e) ? next : tab.id)
+      }}
+      onDragEnd={() => {
+        dragged = null
+        onOver(tab.id, null)
+      }}
+    >
       <button
         className="tm-tab-main"
         role="tab"
@@ -201,6 +300,8 @@ function TabButton({ owner, tab, label, active, infos }: { owner: string; tab: T
         onContextMenu={(e) =>
           showContextMenu(e, [
             { label: 'Rename Tab…', onClick: () => void renameTab(owner, tab, label) },
+            { label: 'Move Tab Left', disabled: place === 'only' || place === 'first', onClick: () => stepTermTabPlace(owner, tab.id, -1) },
+            { label: 'Move Tab Right', disabled: place === 'only' || place === 'last', onClick: () => stepTermTabPlace(owner, tab.id, 1) },
             { type: 'separator' },
             { label: 'Close Tab', danger: true, onClick: () => void closeTermTab(owner, tab.id) }
           ])
@@ -266,6 +367,21 @@ function Pane({ owner, cwd, tab, id, only }: { owner: string; cwd: string; tab: 
   const dim = useApp((s) => s.settings.terminalDimUnfocused)
   const body = useRef<HTMLDivElement>(null)
   const focused = tab.focused === id
+  /** Dragged by its header; and the side of it another pane of the tab would land on. */
+  const [moving, setMoving] = useState(false)
+  const [side, setSide] = useState<Direction | null>(null)
+  const takes = (e: React.DragEvent) => drags(e, 'pane', owner) && dragged?.id !== id && hasPane(tab.tree, dragged?.id ?? '')
+  // A drag that ends anywhere else leaves no mark here.
+  useEffect(() => {
+    if (!side) return
+    const clear = () => setSide(null)
+    window.addEventListener('dragend', clear)
+    window.addEventListener('drop', clear)
+    return () => {
+      window.removeEventListener('dragend', clear)
+      window.removeEventListener('drop', clear)
+    }
+  }, [side])
 
   useEffect(() => {
     const el = body.current
@@ -294,6 +410,8 @@ function Pane({ owner, cwd, tab, id, only }: { owner: string; cwd: string; tab: 
       { label: 'Split Down', shortcut: termShortcut('D', { shift: true }), onClick: () => void openTerminal(owner, cwd, { split: 'column' }) },
       { label: tab.zoomed ? 'Show Every Pane' : 'Zoom Pane', shortcut: termShortcut('↩', { shift: true }), disabled: only && !tab.zoomed, onClick: () => toggleZoom(owner) },
       { label: 'Equalize Splits', shortcut: isMac ? '⌃⌘=' : undefined, disabled: only, onClick: () => equalizeSplits(owner) },
+      // Past the pane beside it, where there is one (dragging the header does the same, onto any pane).
+      ...(only ? [] : SIDES.filter((d) => neighbour(tab.tree, id, d)).map((d): MenuItem => ({ label: `Move Pane ${SIDE_NAME[d]}`, onClick: () => movePaneToward(id, d) }))),
       { type: 'separator' },
       { label: 'Copy', shortcut: isMac ? '⌘C' : 'Ctrl+Shift+C', disabled: !selected, onClick: () => copySelection(id) },
       { label: 'Paste', shortcut: isMac ? '⌘V' : 'Ctrl+Shift+V', onClick: () => void pasteInto(id) },
@@ -307,12 +425,40 @@ function Pane({ owner, cwd, tab, id, only }: { owner: string; cwd: string; tab: 
   const state = info?.state ?? null
   return (
     <section
-      className={`tm-pane${focused ? ' tm-pane-focused' : ''}${hasKeyboard ? ' tm-pane-keyboard' : ''}${dim && !focused && !only ? ' tm-pane-dim' : ''}`}
+      className={`tm-pane${focused ? ' tm-pane-focused' : ''}${hasKeyboard ? ' tm-pane-keyboard' : ''}${dim && !focused && !only ? ' tm-pane-dim' : ''}${moving ? ' tm-pane-moving' : ''}`}
       aria-label={`Terminal: ${terminalLabel(info)}`}
       onMouseDownCapture={() => !hasKeyboard && focusTerminal(id)}
       onContextMenu={menu}
+      onDragOver={(e) => {
+        if (!takes(e)) return
+        e.preventDefault()
+        e.dataTransfer.dropEffect = 'move'
+        const to = sideOf(e)
+        setSide((s) => (s === to ? s : to))
+      }}
+      onDragLeave={(e) => !e.currentTarget.contains(e.relatedTarget as Node) && setSide(null)}
+      onDrop={(e) => {
+        if (!takes(e)) return
+        e.preventDefault()
+        const from = e.dataTransfer.getData(PANE_MIME) || dragged?.id
+        setSide(null)
+        if (from) movePaneTo(from, id, sideOf(e))
+      }}
     >
-      <header className="tm-pane-head">
+      <header
+        className={`tm-pane-head${only ? '' : ' tm-pane-head-movable'}`}
+        draggable={!only}
+        onDragStart={(e) => {
+          dragged = { kind: 'pane', id, owner }
+          e.dataTransfer.setData(PANE_MIME, id)
+          e.dataTransfer.effectAllowed = 'move'
+          setMoving(true)
+        }}
+        onDragEnd={() => {
+          dragged = null
+          setMoving(false)
+        }}
+      >
         <span className="tm-pane-name">{terminalLabel(info)}</span>
         <span className="tm-pane-cwd" title={info?.cwd}>
           {info ? shortFolder(info.cwd) : ''}
@@ -327,6 +473,7 @@ function Pane({ owner, cwd, tab, id, only }: { owner: string; cwd: string; tab: 
         </button>
       </header>
       <div className="tm-pane-body" ref={body} />
+      {side && <div className={`tm-pane-drop tm-pane-drop-${side}`} aria-hidden="true" />}
     </section>
   )
 }
