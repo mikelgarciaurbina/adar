@@ -6,7 +6,8 @@ import path from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import { MAX_IMAGE_BYTES, openableFile, readTerminalImage } from './files'
 
-const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'adar-links-')))
+// The real path as the system gives it (on Windows the long name of a folder, not its 8.3 short one), as the code reads it.
+const dir = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'adar-links-')))
 const at = (name: string) => path.join(dir, name)
 // The smallest PNG there is: one transparent pixel.
 const PNG = Buffer.from('89504e470d0a1a0a0000000d4948445200000001000000010806000000' + '1f15c4890000000d49444154789c6360000002000001e221bc330000000049454e44ae426082', 'hex')
