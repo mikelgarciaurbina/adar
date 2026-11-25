@@ -14,6 +14,8 @@ export interface PlatformAdapter {
   pickDirectory(opts?: { title?: string; defaultPath?: string }): Promise<string | null>
   openExternal(url: string): Promise<void>
   showInFolder(path: string): Promise<void>
+  /** Open a file with its own app (the browser for a web page); absent where there is none (browser). */
+  openFile?(path: string): Promise<void>
   /** A system notification about a pull request of `repo`; a click opens it in Adar. Absent where there are none (browser). */
   notify?(repo: string, notice: PullNotice): void
   /** A system notification about a commit or push Adar did not make; a click sends an 'open-agent' event. */

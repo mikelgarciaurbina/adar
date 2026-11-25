@@ -39,6 +39,8 @@ export interface SystemServices {
   /** The terminals Adar runs; null where there are none (the browser bridge). */
   terminals: TerminalManager | null
   notifyTerminal(notice: TerminalNotice): void
+  /** Open a file with its own app; refused where the host has none (the browser bridge). */
+  openFile(path: string): Promise<void>
   askpass: AskpassService | null
   /** "2.54.0 (Apple Git-157)", or '' when git is not installed. */
   gitVersion(): Promise<string>
@@ -157,6 +159,7 @@ export function createSystemServices(
     notifyAgent: (notice) => platform.notifyAgent?.(notice),
     terminals,
     notifyTerminal: (notice) => platform.notifyTerminal?.(notice),
+    openFile: (p) => (platform.openFile ? platform.openFile(p) : Promise.reject(new Error('Files open from the desktop app only'))),
     askpass,
     gitVersion,
     async dispose() {

@@ -362,9 +362,17 @@ function TerminalSection() {
           </Select>
         </SettingRow>
         {mac && (
-          <SettingRow label="Option key as Meta" description="⌥ sends Meta (Alt) to the shell instead of typing its characters: ⌥← and ⌥→ move by words.">
-            <Switch label="Option key as Meta" checked={s.terminalOptionAsMeta} onChange={(terminalOptionAsMeta) => update({ terminalOptionAsMeta })} />
-          </SettingRow>
+          <>
+            <SettingRow label="Option key as Meta" description="⌥ sends Meta (Alt) to the shell instead of typing its characters: ⌥← and ⌥→ move by words.">
+              <Switch label="Option key as Meta" checked={s.terminalOptionAsMeta} onChange={(terminalOptionAsMeta) => update({ terminalOptionAsMeta })} />
+            </SettingRow>
+            <SettingRow
+              label="Hold a key for its accents"
+              description="As elsewhere on the Mac: hold n and press 1 for ñ. Off, a held key repeats, as vim expects. Only while the Mac’s own press and hold is on."
+            >
+              <Switch label="Hold a key for its accents" checked={s.terminalPressAndHold} onChange={(terminalPressAndHold) => update({ terminalPressAndHold })} />
+            </SettingRow>
+          </>
         )}
         <SettingRow
           label="Follow the shell’s folder and commands"

@@ -199,6 +199,12 @@ const platform: PlatformAdapter = {
   async showInFolder(path) {
     shell.showItemInFolder(path)
   },
+  async openFile(path) {
+    // Scripted runs never open the developer's apps.
+    if (CAPTURE_MODE) return void console.log(`[capture] open file ${path}`)
+    const failed = await shell.openPath(path)
+    if (failed) throw new Error(failed)
+  },
   notify(repo, notice) {
     showNotice(notice, () => {
       openInAdar(repo)
@@ -295,6 +301,9 @@ function createWindow(): void {
  * ADAR_CAPTURE_DIR (default: cwd). Results of js steps are printed to stdout. Quits when done.
  * {drop: {files: ["/abs/file"], on: "selector", hold?: true}} drags files in from outside onto the middle of an
  * element, as the system does (the page gets real files, with their paths); with `hold` they stay over it, not dropped.
+ * {cdp: [{method, params, at?, wait?}]} sends DevTools protocol commands in order, such as Input.dispatchKeyEvent for
+ * keys as the keyboard sends them (with `autoRepeat` for a held key) and Input.dispatchMouseEvent for the mouse; `at`
+ * is an expression run in the page whose result (as {x, y}) is added to the params.
  */
 async function runCaptureSteps(file: string): Promise<void> {
   const fs = await import('node:fs/promises')
@@ -310,6 +319,7 @@ async function runCaptureSteps(file: string): Promise<void> {
     panelShot?: string
     clickNotice?: boolean
     drop?: { files: string[]; on: string; hold?: boolean }
+    cdp?: Array<{ method: string; params?: Record<string, unknown>; at?: string; wait?: number }>
   }
   try {
     const list = JSON.parse(await fs.readFile(file, 'utf8')) as Step[]
@@ -346,6 +356,20 @@ async function runCaptureSteps(file: string): Promise<void> {
           console.log(`[capture] ${step.drop.hold ? 'dragged' : 'dropped'} ${step.drop.files.length} file(s) on ${step.drop.on}`)
         } catch (err) {
           console.log(`[capture] drop error: ${String(err)}`)
+        }
+      }
+      if (step.cdp) {
+        try {
+          const dbg = win.webContents.debugger
+          if (!dbg.isAttached()) dbg.attach('1.3')
+          for (const c of step.cdp) {
+            const where = c.at ? ((await win.webContents.executeJavaScript(c.at, true)) as Record<string, unknown>) : {}
+            await dbg.sendCommand(c.method, { ...c.params, ...where })
+            await new Promise((r) => setTimeout(r, c.wait ?? 30))
+          }
+          console.log(`[capture] cdp: ${step.cdp.length} command(s)`)
+        } catch (err) {
+          console.log(`[capture] cdp error: ${String(err)}`)
         }
       }
       // The menu bar panel: {"panel": true} opens it, {"panelJs"} runs in it, {"panelShot"} captures it.

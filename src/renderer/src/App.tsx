@@ -32,6 +32,7 @@ import { LeftPanel } from '@renderer/components/sidebar/LeftPanel'
 import { GroupWorkspace } from '@renderer/components/terminal/GroupView'
 import { TerminalWorkspace } from '@renderer/components/terminal/TerminalView'
 import { useTerminalSync } from '@renderer/components/terminal/terminalStore'
+import { TerminalLinkLayer } from '@renderer/components/terminal/LinkLayer'
 import { showTerminal, terminalsAvailable } from '@renderer/actions/terminal'
 import { useAutoFetch, useBackendEvents, useGlobalShortcuts, useOpenRequests, useRefreshOnFocus, useTheme } from '@renderer/hooks/useAppEffects'
 import { useActiveTab, useApp, type RepoTab } from '@renderer/store/appStore'
@@ -180,6 +181,7 @@ export function App() {
       <UpdateNotice />
       <DialogHost />
       <ContextMenuHost />
+      <TerminalLinkLayer />
       <ToastHost />
     </div>
   )

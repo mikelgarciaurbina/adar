@@ -15,6 +15,7 @@ import {
   scanOutput,
   shownCommand,
   topState,
+  typedOf,
   typedPaths,
   wslDistroOf,
   type RunState,
@@ -77,6 +78,19 @@ describe('scanOutput', () => {
     expect(shownCommand('TOKEN=abc123')).toBe('')
     expect(shownCommand('TOKEN="abc 123 npm test')).toBe('')
     expect(shownCommand(`echo ${'x'.repeat(300)}`).length).toBe(80)
+  })
+
+  it('reads what an agent says about itself with OSC 7501, as Codex does', () => {
+    expect(scan('\x1b]7501;state=working:app=codex\x07')).toEqual([{ kind: 'agent', what: 'working', message: '', app: 'codex' }])
+    expect(scan('\x1b]7501;state=blocked:app=codex:kind=permission\x07')).toEqual([{ kind: 'agent', what: 'asks', message: 'Waits for your approval', app: 'codex' }])
+    expect(scan('\x1b]7501;state=done:app=codex\x07', '\x1b]7501;state=idle:app=codex\x1b\\', '\x1b]7501;state=clear\x07')).toEqual([
+      { kind: 'agent', what: 'finished', message: '', app: 'codex' },
+      { kind: 'agent', what: 'idle', message: '', app: 'codex' },
+      { kind: 'agent', what: 'idle', message: '' }
+    ])
+    // Claude Code only asks whether the terminal takes it; states it does not know, and odd names, say nothing more.
+    expect(scan('\x1b]7501;?\x07', '\x1b]7501;state=constructor\x07', '\x1b]7501;state=thinking:app=codex\x07')).toEqual([])
+    expect(scan('\x1b]7501;state=working:app=Some App\x07')).toEqual([{ kind: 'agent', what: 'working', message: '' }])
   })
 
   it('cleans what it shows', () => {
@@ -142,6 +156,37 @@ describe('the state of a terminal', () => {
     expect(run(agent('working'), agent('asks'))).toMatchObject({ state: 'needs-you', by: 'agent' })
     expect(run(agent('working'), agent('finished'))).toMatchObject({ state: 'finished' })
     expect(run(agent('working'), agent('finished'), agent('idle'))).toBe(IDLE_RUN)
+  })
+
+  it('follows Codex through a turn and an approval, whatever its bell says', () => {
+    const run = (...chunks: string[]) => scan(...chunks).reduce(afterSignal, IDLE_RUN)
+    // It rings just before it says it is done or waits (its own notifications): what it says counts.
+    expect(run('\x1b]7501;state=working:app=codex\x07', '\x07', '\x1b]7501;state=done:app=codex\x07')).toEqual({ state: 'finished', message: '', by: 'agent' })
+    const waits = run('\x1b]7501;state=working:app=codex\x07', '\x07', '\x1b]7501;state=blocked:app=codex:kind=permission\x07')
+    expect(waits).toEqual({ state: 'needs-you', message: 'Waits for your approval', by: 'agent' })
+    // Looking at it is no answer; a key is.
+    expect(afterSeen(waits)).toBe(waits)
+    expect(afterInput(waits, 'y')).toEqual({ state: 'working', message: '', by: 'agent' })
+    // Starting up, it works a moment and then waits for a prompt.
+    expect(run('\x1b]7501;state=idle:app=codex\x07', '\x1b]7501;state=working:app=codex\x07', '\x1b]7501;state=idle:app=codex\x07')).toBe(IDLE_RUN)
+  })
+
+  it('takes no focus or mouse report for an answer', () => {
+    const asks: RunState = { state: 'needs-you', message: 'Permission to use Bash', by: 'agent' }
+    const done: RunState = { state: 'finished', message: '', by: 'agent' }
+    const bell: RunState = { state: 'needs-you', message: '', by: 'bell' }
+    // What xterm sends when the pane takes or loses the keyboard, and for the mouse, when the program asked for it.
+    for (const report of ['\x1b[I', '\x1b[O', '\x1b[O\x1b[I', '\x1b[<0;12;5M', '\x1b[<64;3;9m', '\x1b[M !!']) {
+      expect(afterInput(asks, report)).toBe(asks)
+      expect(afterInput(done, report)).toBe(done)
+      expect(afterInput(bell, report)).toBe(bell)
+    }
+    // What is typed along with a report still counts.
+    expect(afterInput(asks, '\x1b[I1')).toEqual({ state: 'working', message: '', by: 'agent' })
+    expect(afterInput(bell, '\x1b[O\r')).toBe(IDLE_RUN)
+    expect(typedOf('\x1b[Ihello\x1b[O')).toBe('hello')
+    // Keys stay: an arrow, Esc, Shift-Tab.
+    expect(typedOf('\x1b[A\x1b\x1b[Z')).toBe('\x1b[A\x1b\x1b[Z')
   })
 
   it('takes "it waits for you" only in the middle of a turn', () => {

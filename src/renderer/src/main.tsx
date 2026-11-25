@@ -5,12 +5,13 @@ import { api } from './api/client'
 import { useApp } from './store/appStore'
 import { useUpdates } from './components/update/updateStore'
 import { confirmQuit } from './components/update/restart'
+import { termOf, useTerminals } from './components/terminal/terminalStore'
 import './styles/theme.css'
 import './styles/base.css'
 import './components/common/common.css'
 
 // Debug/e2e handle (renderer-only; exposes nothing the UI cannot already do).
-;(window as unknown as { __adar: unknown }).__adar = { store: useApp, api, updates: useUpdates }
+;(window as unknown as { __adar: unknown }).__adar = { store: useApp, api, updates: useUpdates, terminals: useTerminals, term: termOf }
 // Asked by the main process before quitting (see src/main/quitGuard.ts).
 ;(window as unknown as { __adarConfirmQuit: () => Promise<boolean> }).__adarConfirmQuit = confirmQuit
 

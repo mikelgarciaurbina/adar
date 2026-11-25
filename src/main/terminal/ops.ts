@@ -1,13 +1,19 @@
-// The AdarApi methods of the terminals: thin calls into the TerminalManager, refused where there is none.
+// The AdarApi methods of the terminals: thin calls into the TerminalManager, refused where there is none (and so are
+// the files their links lead to: the browser bridge reads and opens none).
 
 import type { AdarApi } from '@shared/api'
 import { AdarError } from '@shared/errors'
 import { parseTerminalNotice, type TerminalNotice } from '@shared/terminal'
+import { openableFile, readTerminalImage } from './files'
 import type { TerminalManager } from './manager'
 
-type TerminalMethods = 'terminalOpen' | 'terminalAttach' | 'terminalWrite' | 'terminalResize' | 'terminalAck' | 'terminalSeen' | 'terminalClose' | 'terminalList' | 'notifyTerminal'
+type TerminalMethods = 'terminalOpen' | 'terminalAttach' | 'terminalWrite' | 'terminalResize' | 'terminalAck' | 'terminalSeen' | 'terminalClose' | 'terminalList' | 'terminalImage' | 'terminalOpenFile' | 'notifyTerminal'
 
-export function createTerminalOps(services: { terminals: TerminalManager | null; notifyTerminal(notice: TerminalNotice): void }): Pick<AdarApi, TerminalMethods> {
+export function createTerminalOps(services: {
+  terminals: TerminalManager | null
+  notifyTerminal(notice: TerminalNotice): void
+  openFile(path: string): Promise<void>
+}): Pick<AdarApi, TerminalMethods> {
   const need = (): TerminalManager => {
     if (!services.terminals) throw new AdarError({ message: 'Terminals are only available in the desktop app', code: 'INVALID_ARGUMENT' })
     return services.terminals
@@ -36,6 +42,14 @@ export function createTerminalOps(services: { terminals: TerminalManager | null;
     },
     async terminalList() {
       return services.terminals?.list() ?? []
+    },
+    async terminalImage(p) {
+      need()
+      return readTerminalImage(p)
+    },
+    async terminalOpenFile(p) {
+      need()
+      await services.openFile(await openableFile(p))
     },
     async notifyTerminal(raw) {
       const notice = parseTerminalNotice(raw)

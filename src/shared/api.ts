@@ -11,7 +11,7 @@
 //  - `opId` (optional) lets the renderer correlate 'progress' events.
 
 import type { AgentNotice } from './agents'
-import type { TerminalAttach, TerminalInfo, TerminalNotice, TerminalOpen } from './terminal'
+import type { TerminalAttach, TerminalImage, TerminalInfo, TerminalNotice, TerminalOpen } from './terminal'
 import type {
   AppInfo,
   AppSettings,
@@ -154,6 +154,10 @@ export interface AdarApi {
   terminalList(): Promise<TerminalInfo[]>
   /** A system notification about a terminal; clicking it sends an 'open-terminal' event. */
   notifyTerminal(notice: TerminalNotice): Promise<void>
+  /** A picture a terminal links to (full path), to show it: null when it is none, missing or too large. */
+  terminalImage(path: string): Promise<TerminalImage | null>
+  /** Open a file a terminal links to with its own app: a picture, a web page or a PDF (never a program or a script). */
+  terminalOpenFile(path: string): Promise<void>
   /**
    * A worktree's work as one comparison with its base branch: its branch's own commits and its changes not committed
    * (a snapshot tree; the worktree's index, HEAD and branches are left as they are), and how it moved on since the
@@ -450,6 +454,8 @@ export const API_METHODS = [
   'terminalSeen',
   'terminalClose',
   'terminalList',
+  'terminalImage',
+  'terminalOpenFile',
   'notifyTerminal',
   'prepareWorkReview',
   'getCommitDetails',

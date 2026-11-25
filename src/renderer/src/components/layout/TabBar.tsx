@@ -10,7 +10,7 @@ import { closeGroup, fetchGroup, newGroup, openGroup, renameGroup, setGroupColor
 import { showContextMenu, showMenuBelow, type MenuItem } from '@renderer/components/common/ContextMenu'
 import { getCommand } from '@renderer/commands'
 import { useUpdates } from '@renderer/components/update/updateStore'
-import { terminalsAvailable } from '@renderer/actions/terminal'
+import { focusTerminalSoon, terminalsAvailable } from '@renderer/actions/terminal'
 import { ownerState } from '@renderer/components/terminal/model'
 import { StateDot } from '@renderer/components/terminal/parts'
 import { useTerminals } from '@renderer/components/terminal/terminalStore'
@@ -367,7 +367,7 @@ export function TabBar() {
         ]
       },
       { label: group.collapsed ? 'Expand' : 'Collapse', onClick: () => st.updateGroup(group.id, { collapsed: !group.collapsed }) },
-      ...(terminalsAvailable ? [{ label: 'Open the Group’s Terminal', icon: <SquareTerminal size={14} />, onClick: () => st.setGroupView(groupOwner(group.id)) }] : []),
+      ...(terminalsAvailable ? [{ label: 'Open the Group’s Terminal', icon: <SquareTerminal size={14} />, onClick: () => (st.setGroupView(groupOwner(group.id)), focusTerminalSoon(groupOwner(group.id))) }] : []),
       ...moveItems(group),
       ...(openCount < group.repos.length ? [{ label: 'Open All Repositories', onClick: () => void openGroup(group.id) }] : []),
       {
@@ -623,7 +623,10 @@ function GroupTerminalButton({ group, label, front }: { group: TabGroup; label: 
       title={`The terminal of ${label}: a shell in the folder its repositories share`}
       aria-label={`Open the terminal of the group ${label}`}
       aria-pressed={front}
-      onClick={() => useApp.getState().setGroupView(front ? null : owner)}
+      onClick={() => {
+        useApp.getState().setGroupView(front ? null : owner)
+        if (!front) focusTerminalSoon(owner)
+      }}
     >
       <SquareTerminal size={13} />
       {state && <StateDot state={state} />}

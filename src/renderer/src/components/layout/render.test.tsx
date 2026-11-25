@@ -65,7 +65,7 @@ beforeEach(() => {
   const b = makeTab('/Users/me/Projects/other', 'other')
   seed({
     ready: true,
-    appInfo: { version: '0.1.0', platform: 'darwin', gitVersion: 'git version 2.47.1', homeDir: '/Users/me', isElectron: false },
+    appInfo: { version: '0.1.0', platform: 'darwin', gitVersion: 'git version 2.47.1', homeDir: '/Users/me', isElectron: false, pressAndHold: false },
     settings: { ...DEFAULT_SETTINGS, zoom: 1.1 },
     recent: [
       { path: '/Users/me/Projects/adar', name: 'adar', lastOpened: Date.now() - 3600_000 },
@@ -195,7 +195,7 @@ describe('chrome render smoke tests', () => {
     const wslTab = { ...tab, info: { ...tab.info!, wsl: { distro: 'Ubuntu', gitVersion: 'git version 2.43.0' } } }
     seed({
       tabs: [wslTab, ...useApp.getState().tabs.slice(1)],
-      appInfo: { version: '0.1.0', platform: 'win32', gitVersion: 'git version 2.45.2.windows.1', homeDir: 'C:\\Users\\me', isElectron: true }
+      appInfo: { version: '0.1.0', platform: 'win32', gitVersion: 'git version 2.45.2.windows.1', homeDir: 'C:\\Users\\me', isElectron: true, pressAndHold: false }
     })
     const html = renderToStaticMarkup(<StatusBar />)
     expect(html).toContain('git 2.43.0 (WSL)')

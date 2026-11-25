@@ -62,6 +62,12 @@ export interface TerminalOpen {
   launcher?: string
 }
 
+/** A picture a terminal links to, read to be shown in Adar: a data: URL, and its size in bytes. */
+export interface TerminalImage {
+  url: string
+  size: number
+}
+
 /** A terminal the UI starts drawing: what it is, and its recent output to paint first. */
 export interface TerminalAttach {
   info: TerminalInfo
@@ -176,8 +182,11 @@ export function typedPaths(paths: readonly string[], style: PathStyle): { text: 
 export const ADAR_OSC = '7717'
 
 export type TerminalSignal =
-  /** The agent's own hooks: working, asks (a question: it needs you), notify (it says it waits), finished, idle. */
-  | { kind: 'agent'; what: 'working' | 'asks' | 'notify' | 'finished' | 'idle'; message: string }
+  /**
+   * The agent's own word: working, asks (a question: it needs you), notify (it says it waits), finished, idle. From
+   * Claude Code's hooks, or from an agent that tells its terminal (Codex, OSC 7501; `app` says which it is).
+   */
+  | { kind: 'agent'; what: 'working' | 'asks' | 'notify' | 'finished' | 'idle'; message: string; app?: string }
   /** A bell or a desktop notification (OSC 9, OSC 777) from whatever runs there. */
   | { kind: 'attention'; message: string }
   | { kind: 'title'; title: string }
@@ -243,6 +252,29 @@ export function shownCommand(line: string): string {
   return s.slice(0, 80)
 }
 
+/**
+ * What an agent tells its terminal about itself, as Codex does: "state=working:app=codex", "state=blocked:app=codex:
+ * kind=permission" (it waits for an approval), "state=done", "state=idle", "state=clear". Claude Code only asks whether
+ * the terminal takes it ("?"), and its hooks tell Adar instead.
+ */
+export const AGENT_STATE_OSC = '7501'
+const AGENT_STATES = new Map<string, 'working' | 'asks' | 'finished' | 'idle'>([
+  ['working', 'working'],
+  ['blocked', 'asks'],
+  ['done', 'finished'],
+  ['idle', 'idle'],
+  ['clear', 'idle']
+])
+
+function agentState(body: string): TerminalSignal | null {
+  const field = (name: string): string => body.split(':').find((part) => part.startsWith(`${name}=`))?.slice(name.length + 1) ?? ''
+  const what = AGENT_STATES.get(field('state'))
+  if (!what) return null
+  const app = field('app')
+  const message = what === 'asks' && field('kind') === 'permission' ? 'Waits for your approval' : ''
+  return { kind: 'agent', what, message, ...(/^[a-z][a-z0-9_-]{0,30}$/.test(app) ? { app } : {}) }
+}
+
 function oscSignal(body: string): TerminalSignal | null {
   const semi = body.indexOf(';')
   const code = semi < 0 ? body : body.slice(0, semi)
@@ -276,6 +308,7 @@ function oscSignal(body: string): TerminalSignal | null {
     }
     if (what === 'command') return { kind: 'command', command: shownCommand(more.join(';')) }
   }
+  if (code === AGENT_STATE_OSC) return agentState(rest)
   return null
 }
 
@@ -370,8 +403,21 @@ export function afterSignal(cur: RunState, sig: TerminalSignal): RunState {
   return same(cur, next) ? cur : next
 }
 
-/** The state after the user typed into the terminal. */
-export function afterInput(cur: RunState, data: string): RunState {
+/**
+ * What a terminal sends by itself, not typed: focus reports (a program can ask to hear when its pane takes or loses
+ * the keyboard, and Claude Code and Codex do) and mouse reports.
+ */
+const REPORTS = /\x1b\[[IO]|\x1b\[<\d+;\d+;\d+[Mm]|\x1b\[M[\s\S]{3}/g
+
+/** What the user typed, in what a terminal sends: without its focus and mouse reports. */
+export function typedOf(data: string): string {
+  return data.includes('\x1b[') ? data.replace(REPORTS, '') : data
+}
+
+/** The state after the user typed into the terminal (moving to another pane or tab is no answer to anything). */
+export function afterInput(cur: RunState, sent: string): RunState {
+  const data = typedOf(sent)
+  if (!data) return cur
   if (cur.state === 'finished') return IDLE_RUN
   // An answer to what an agent asked (one key is enough for its menus): it goes on. A bell had nothing more to say.
   if (cur.state === 'needs-you' && cur.by === 'agent') return { state: 'working', message: '', by: 'agent' }

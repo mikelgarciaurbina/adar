@@ -18,6 +18,7 @@ import {
   afterSignal,
   agentOfCommand,
   cleanText,
+  typedOf,
   IDLE_RUN,
   MAX_TERMINALS,
   newScan,
@@ -81,6 +82,8 @@ interface Session {
   shell: string
   /** The name its launcher gave it, for when an agent typed by hand is gone again; '' for a plain shell, and once something was typed into the shell that took over. */
   launcherName: string
+  /** A launcher's program has not been seen in front yet: the login shell that starts it is no program of its own. */
+  starting: boolean
   replay: string
   pending: string
   timer: NodeJS.Timeout | null
@@ -417,6 +420,7 @@ export class TerminalManager {
       run: IDLE_RUN,
       shell: plan.shell,
       launcherName: launcher?.name ?? '',
+      starting: !!launcher && process.platform !== 'win32',
       replay: '',
       pending: '',
       timer: null,
@@ -463,6 +467,8 @@ export class TerminalManager {
     if (typeof data !== 'string' || data.length > MAX_WRITE) throw invalid('Invalid input')
     if (s.ended) return
     s.pty.write(data)
+    // Focus and mouse reports go to the program, but nobody typed them.
+    if (!typedOf(data)) return
     s.lastInput = Date.now()
     this.setRun(s, afterInput(s.run, data))
   }
@@ -575,6 +581,13 @@ export class TerminalManager {
     } else {
       // The shell beeps at what was just typed (nothing to complete, the start of the line): that asks for nothing.
       if (sig.kind === 'attention' && !sig.message && Date.now() - s.lastInput < (this.deps.typingBellMs ?? TYPING_BELL_MS)) return
+      if (sig.kind === 'agent') {
+        // A launcher's program said its last word (Adar's own line after it): the shell is in front from now on.
+        if (sig.what === 'idle') s.starting = false
+        // An agent that says which it is goes by its name in a shell it was typed into.
+        const agent = sig.app && sig.what !== 'idle' && !s.info.name ? agentOfCommand(sig.app) : null
+        if (agent) s.info.name = AGENT_NAMES[agent]
+      }
       this.setRun(s, afterSignal(s.run, sig))
     }
   }
@@ -630,6 +643,11 @@ export class TerminalManager {
       return
     }
     if (!name) return
+    // The login shell a launcher's program starts in: the tab keeps the program's name until it is there.
+    if (s.starting) {
+      if (name === s.shell) return
+      s.starting = false
+    }
     const busy = name !== s.shell
     if (name !== s.info.process || busy !== s.info.busy) {
       // Back at the shell: whatever ran there said its last word.

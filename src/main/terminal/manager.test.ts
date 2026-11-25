@@ -336,3 +336,97 @@ describe.skipIf(process.platform === 'win32')('TerminalManager', () => {
     expect(() => manager.write('t-none', 'x')).toThrow(/no longer running/)
   })
 })
+
+describe.skipIf(process.platform === 'win32')('TerminalManager, with a stand-in for the pseudo-terminal', () => {
+  const shellBefore = process.env.SHELL
+  let manager: TerminalManager | null = null
+  let dir = ''
+  afterEach(() => {
+    manager?.dispose()
+    manager = null
+    process.env.SHELL = shellBefore
+    if (dir) fs.rmSync(dir, { recursive: true, force: true })
+    dir = ''
+  })
+
+  /** A terminal whose program in front and output the test decides. */
+  async function open(launcher?: string) {
+    process.env.SHELL = '/bin/sh'
+    dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'adar-pty-')))
+    let output: (data: string) => void = () => undefined
+    const written: string[] = []
+    const proc = {
+      process: 'sh',
+      onData: (listener: (data: string) => void) => ((output = listener), { dispose: () => undefined }),
+      onExit: () => ({ dispose: () => undefined }),
+      write: (data: string) => void written.push(data),
+      resize: () => undefined,
+      kill: () => undefined,
+      pause: () => undefined,
+      resume: () => undefined
+    }
+    const m = new TerminalManager({
+      emit: () => undefined,
+      settings: async () => ({
+        terminalLaunchers: [{ id: 'codex', name: 'Codex', command: 'codex' }],
+        terminalAgentState: true,
+        terminalShellIntegration: false,
+        terminalCompleteAnyCase: false
+      }),
+      userDataDir: dir,
+      appVersion: '0.0.0-test',
+      load: async () => ({ spawn: () => proc }) as unknown as typeof import('node-pty'),
+      flushMs: 1,
+      typingBellMs: 60_000
+    })
+    manager = m
+    const info = await m.open({ owner: dir, cwd: dir, cols: 80, rows: 24, launcher })
+    const now = () => m.list().find((t) => t.id === info.id)!
+    return { m, proc, info, now, prints: (data: string) => output(data), written }
+  }
+
+  it('keeps a launcher’s name while its login shell starts it, and follows what Codex says', async () => {
+    const { proc, info, now, prints } = await open('codex')
+    expect(info).toMatchObject({ name: 'Codex', process: 'codex', busy: true })
+    // The login shell is in front before the program: the tab is still the program's.
+    proc.process = 'sh'
+    expect(now()).toMatchObject({ name: 'Codex', process: 'codex', busy: true })
+    proc.process = 'node'
+    expect(now()).toMatchObject({ name: 'Codex', process: 'node', busy: true })
+    // What it says about itself counts, and its bell does not.
+    prints('\x1b]7501;state=working:app=codex\x07')
+    expect(now().state).toBe('working')
+    prints('\x07\x1b]7501;state=done:app=codex\x07')
+    expect(now().state).toBe('finished')
+    // It ended (Adar's own line after it): from now on the shell in front is the shell.
+    prints('\x1b]7717;adar;idle\x07')
+    proc.process = 'sh'
+    expect(now()).toMatchObject({ process: 'sh', busy: false, state: null })
+  })
+
+  it('calls an agent typed by hand by the name it gives, and takes no focus report for an answer', async () => {
+    const { m, info, now, prints, written } = await open()
+    expect(info).toMatchObject({ name: '', busy: false })
+    prints('\x1b]7501;state=working:app=codex\x07')
+    expect(now()).toMatchObject({ name: 'Codex', state: 'working' })
+    prints('\x1b]7501;state=blocked:app=codex:kind=permission\x07')
+    expect(now()).toMatchObject({ state: 'needs-you', message: 'Waits for your approval' })
+    // The pane loses the keyboard: the program hears it, and it still waits.
+    m.write(info.id, '\x1b[O')
+    expect(written.at(-1)).toBe('\x1b[O')
+    expect(now().state).toBe('needs-you')
+    m.write(info.id, 'y')
+    expect(now().state).toBe('working')
+  })
+
+  it('takes a bell after a focus report for one of its own, and after a key for the shell’s', async () => {
+    const { m, info, now, prints } = await open()
+    m.write(info.id, '\x1b[I')
+    prints('\x07')
+    expect(now().state).toBe('needs-you')
+    m.seen(info.id)
+    m.write(info.id, 'x')
+    prints('\x07')
+    expect(now().state).toBeNull()
+  })
+})

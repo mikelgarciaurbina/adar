@@ -59,7 +59,7 @@ const info: RepoInfo = {
 
 beforeEach(() => {
   seed({
-    appInfo: { version: '0.1.0', platform: 'darwin', gitVersion: 'git version 2.47.1', homeDir: '/Users/me', isElectron: true },
+    appInfo: { version: '0.1.0', platform: 'darwin', gitVersion: 'git version 2.47.1', homeDir: '/Users/me', isElectron: true, pressAndHold: false },
     settings: { ...DEFAULT_SETTINGS },
     recent: [{ path: repo, name: 'adar', lastOpened: Date.now() }],
     tabs: [{ ...(useApp.getState().tabs[0] ?? {}), path: repo, name: 'adar', info } as AppState['tabs'][number]],
@@ -182,6 +182,7 @@ describe('ModalHost', () => {
     expect(terminal).toContain('Let agents say what they are doing')
     expect(terminal).toContain('10,000 lines')
     expect(terminal).toContain('An agent finishes its task')
+    expect(terminal).toContain('Hold a key for its accents')
     expect(render({ kind: 'settings', section: 'integrations' })).toContain('Ghostty')
     expect(render({ kind: 'settings', section: 'graph' })).toContain('Commits per page')
     const diff = render({ kind: 'settings', section: 'diff' })

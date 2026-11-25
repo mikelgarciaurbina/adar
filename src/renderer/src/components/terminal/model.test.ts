@@ -57,6 +57,17 @@ describe('terminals in the UI', () => {
     expect(taskOf(info({ command: 'claude --resume --model opus', title: 'claude --resume --mo…' }))).toBe('')
   })
 
+  it('takes Codex’s task from its title, without its folder', () => {
+    const codex = (title: string) => info({ launcher: 'codex', name: 'Codex', process: 'node', title })
+    // Its titles as it runs: the folder alone, then a spinner and the task, "Action Required" while it waits.
+    expect(taskOf(codex('landing'))).toBe('')
+    expect(taskOf(codex('⠦ Fix the login form | landing'))).toBe('Fix the login form')
+    expect(taskOf(codex('[ ! ] Action Required | Fix the login form | landing'))).toBe('Fix the login form')
+    expect(taskOf(codex('[ . ] Action Required | Fix the login form | landing'))).toBe('Fix the login form')
+    expect(taskOf(codex('Fix the login form | landing'))).toBe('Fix the login form')
+    expect(tabLabel(codex('⠦ Fix the login form | landing'), '/Users/ana/Projects/basoa/landing')).toEqual({ text: 'Codex', detail: 'Fix the login form' })
+  })
+
   it('says on a tab what goes on in it', () => {
     const at = '/Users/ana/Projects/basoa/landing'
     const shell = (over: Partial<TerminalInfo> = {}) => info({ launcher: 'shell', name: '', process: 'zsh', busy: false, ...over })

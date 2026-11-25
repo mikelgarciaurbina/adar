@@ -40,14 +40,18 @@ export function setTerminalView(path: string, view: TerminalViewMode): void {
   if (view === 'graph') delete views[path]
   else views[path] = view
   void s.updateSettings({ terminalViews: views })
-  if (view !== 'graph') focusSoon(path)
+  if (view !== 'graph') focusTerminalSoon(path)
 }
 
-/** Give the keyboard to the owner's terminal once its view is on the page. */
-function focusSoon(owner: string): void {
+/**
+ * Give the keyboard to the owner's terminal once its view is on the page; with none there yet, to the choice of what
+ * to start (Enter starts a shell).
+ */
+export function focusTerminalSoon(owner: string): void {
   setTimeout(() => {
     const id = currentTerminal(owner)
-    if (id) focusTerminal(id)
+    if (id) return focusTerminal(id)
+    document.querySelector<HTMLElement>(`.tm-empty[data-owner="${CSS.escape(owner)}"] .tm-empty-button`)?.focus()
   }, 60)
 }
 

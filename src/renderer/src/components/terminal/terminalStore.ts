@@ -7,7 +7,7 @@
 
 import { useEffect } from 'react'
 import { create } from 'zustand'
-import { Terminal, type ITheme } from '@xterm/xterm'
+import { Terminal, type IBufferLine, type ILink, type ILinkProvider, type ITheme } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { SearchAddon } from '@xterm/addon-search'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
@@ -39,6 +39,8 @@ import {
   type PaneTree,
   type SplitPath
 } from './layout'
+import { accentStep, type AccentMenu } from './accents'
+import { findPaths, linkTarget, type LinkTarget } from './links'
 import { noticeFor, shouldNotify } from './model'
 
 export interface TermTab {
@@ -67,9 +69,15 @@ interface TerminalsState {
   focus: string | null
   /** The list of running terminals was read (after a reload): the stored layout is in. */
   ready: boolean
+  /** The accents of a held letter, on offer in one terminal. */
+  accents: AccentMenu | null
+  /** The link under the pointer in a terminal, where it goes, and where the pointer came onto it (window pixels). */
+  link: { id: string; target: LinkTarget; x: number; y: number } | null
+  /** A picture a terminal links to, shown large (⌘-click on its link). */
+  viewer: { id: string; path: string } | null
 }
 
-export const useTerminals = create<TerminalsState>()(() => ({ infos: {}, workspaces: {}, focus: null, ready: false }))
+export const useTerminals = create<TerminalsState>()(() => ({ infos: {}, workspaces: {}, focus: null, ready: false, accents: null, link: null, viewer: null }))
 
 const EMPTY: Workspace = { tabs: [], active: '' }
 
@@ -231,10 +239,105 @@ function applySettings(term: Terminal, s: TermSettings): void {
   term.options.macOptionIsMeta = s.terminalOptionAsMeta
 }
 
-function openLink(event: MouseEvent, uri: string): void {
-  // Like other terminals: a plain click selects, Cmd/Ctrl-click opens.
-  if (!(isMac ? event.metaKey : event.ctrlKey)) return
-  if (/^https?:\/\//i.test(uri)) void api.openExternal(uri).catch(() => undefined)
+// ── Links ─────────────────────────────────────────────────────────────
+
+/** Like other terminals: a plain click selects (or is the program's), Cmd-click (Ctrl-click elsewhere) opens. */
+const opens = (e: MouseEvent): boolean => e.button === 0 && (isMac ? e.metaKey : e.ctrlKey)
+
+/** Where a link in a terminal goes, read against its folder. */
+function targetOf(id: string, uri: string): LinkTarget | null {
+  return linkTarget(uri, useTerminals.getState().infos[id]?.cwd ?? '', useApp.getState().appInfo?.homeDir ?? '')
+}
+
+function hoverLink(id: string, uri: string, e: MouseEvent): void {
+  const target = targetOf(id, uri)
+  useTerminals.setState({ link: target ? { id, target, x: e.clientX, y: e.clientY } : null })
+}
+
+function leaveLink(id: string): void {
+  if (useTerminals.getState().link?.id === id) useTerminals.setState({ link: null })
+}
+
+/** Open what a link of a terminal leads to: a page of the web in the browser, a picture large in Adar, a web page or a PDF with its app, any other file in its folder. */
+export function openTerminalLink(id: string, target: LinkTarget): void {
+  useTerminals.setState({ link: null })
+  const failed = (err: unknown) => toast.error(describeError(err))
+  if (target.kind === 'web') void api.openExternal(target.url).catch(failed)
+  else if (target.kind === 'image') useTerminals.setState({ viewer: { id, path: target.path } })
+  else if (target.kind === 'page') void api.terminalOpenFile(target.path).catch(failed)
+  else void api.showInFolder(target.path).catch(failed)
+}
+
+function activateLink(id: string, uri: string, e: MouseEvent): void {
+  if (!opens(e)) return
+  const target = targetOf(id, uri)
+  if (target) openTerminalLink(id, target)
+}
+
+/** A line of a terminal as text, and the cell where each of its characters is (wide ones take two). */
+function lineCells(line: IBufferLine): { text: string; cols: number[] } {
+  let text = ''
+  const cols: number[] = []
+  for (let x = 0; x < line.length; x++) {
+    const cell = line.getCell(x)
+    if (!cell || cell.getWidth() === 0) continue
+    const chars = cell.getChars() || ' '
+    for (let i = 0; i < chars.length; i++) cols.push(x)
+    text += chars
+  }
+  return { text, cols }
+}
+
+/** The paths of pictures, web pages and PDFs a terminal prints, as links (underlined while the pointer is over them). */
+function pathLinks(id: string, term: Terminal): ILinkProvider {
+  return {
+    provideLinks(y, callback) {
+      const line = term.buffer.active.getLine(y - 1)
+      if (!line) return callback(undefined)
+      const { text, cols } = lineCells(line)
+      const links: ILink[] = findPaths(text).map((m) => ({
+        range: { start: { x: cols[m.start] + 1, y }, end: { x: cols[m.end - 1] + 1, y } },
+        text: m.text,
+        decorations: { pointerCursor: true, underline: true },
+        activate: (e, uri) => activateLink(id, uri, e),
+        hover: (e, uri) => hoverLink(id, uri, e),
+        leave: () => leaveLink(id)
+      }))
+      callback(links.length ? links : undefined)
+    }
+  }
+}
+
+/**
+ * Cmd-click on a link is Adar's: the program in the terminal does not get it, even when it follows the mouse (Codex
+ * would open its own panel), and the link opens.
+ */
+function claimLinkClicks(id: string, host: HTMLElement): void {
+  let claimedAt = 0
+  host.addEventListener(
+    'mousedown',
+    (e) => {
+      const link = useTerminals.getState().link
+      if (!link || link.id !== id || !opens(e)) return
+      e.preventDefault()
+      e.stopImmediatePropagation()
+      claimedAt = Date.now()
+      openTerminalLink(id, link.target)
+    },
+    true
+  )
+  for (const type of ['mouseup', 'click'] as const) {
+    host.addEventListener(
+      type,
+      (e) => {
+        if (Date.now() - claimedAt > 1500) return
+        e.preventDefault()
+        e.stopImmediatePropagation()
+        if (type === 'click') claimedAt = 0
+      },
+      true
+    )
+  }
 }
 
 function send(id: string, data: string): void {
@@ -261,13 +364,20 @@ function createEntry(id: string): Entry {
     drawBoldTextInBrightColors: false,
     minimumContrastRatio: 3,
     theme: terminalTheme(),
-    linkHandler: { activate: openLink }
+    // Hyperlinks a program prints (OSC 8), to a file as well as to the web: see openTerminalLink.
+    linkHandler: {
+      activate: (e, uri) => activateLink(id, uri, e),
+      hover: (e, uri) => hoverLink(id, uri, e),
+      leave: () => leaveLink(id),
+      allowNonHttpProtocols: true
+    }
   })
   const fit = new FitAddon()
   const search = new SearchAddon()
   term.loadAddon(fit)
   term.loadAddon(search)
-  term.loadAddon(new WebLinksAddon(openLink))
+  term.loadAddon(new WebLinksAddon((e, uri) => activateLink(id, uri, e), { hover: (e, uri) => hoverLink(id, uri, e), leave: () => leaveLink(id) }))
+  term.registerLinkProvider(pathLinks(id, term))
   const unicode = new Unicode11Addon()
   term.loadAddon(unicode)
   term.unicode.activeVersion = '11'
@@ -275,6 +385,7 @@ function createEntry(id: string): Entry {
   const host = document.createElement('div')
   host.className = 'tm-host'
   const entry: Entry = { term, fit, search, webgl: null, host, opened: false, mounted: false, ready: false, queue: [], drawn: 0 }
+  claimLinkClicks(id, host)
   entries.set(id, entry)
 
   term.onData((data) => send(id, data))
@@ -284,7 +395,7 @@ function createEntry(id: string): Entry {
     if (!useApp.getState().settings.terminalCopyOnSelect || !term.hasSelection()) return
     void navigator.clipboard.writeText(term.getSelection()).catch(() => undefined)
   })
-  term.attachCustomKeyEventHandler((ev) => !handleKey(id, ev))
+  term.attachCustomKeyEventHandler((ev) => !accentKey(id, ev) && !handleKey(id, ev))
 
   // What it printed before this window drew it, then what follows.
   void api.terminalAttach(id).then(
@@ -344,7 +455,7 @@ export function mountTerminal(id: string, container: HTMLElement): () => void {
   // Only the terminals on screen hold a GPU context (browsers allow few).
   useGpu(entry)
   fitTerminal(id)
-  markSeenIfInView(id)
+  markSeenIfLookedAt(id)
   return () => {
     entry.mounted = false
     entry.webgl?.dispose()
@@ -366,6 +477,8 @@ export function fitTerminal(id: string): void {
 }
 
 function forget(id: string): void {
+  closeAccents(id)
+  leaveLink(id)
   const entry = entries.get(id)
   if (entry) {
     entries.delete(id)
@@ -398,10 +511,11 @@ function onFocus(id: string): void {
   if (useTerminals.getState().focus !== id) useTerminals.setState({ focus: id })
   // Elsewhere than macOS the menu's shortcuts are Ctrl-based, which a shell needs for itself.
   void terminalWindow.terminalFocusChanged(true).catch(() => undefined)
-  markSeenIfInView(id)
+  markSeenIfLookedAt(id)
 }
 
 function onBlur(id: string): void {
+  closeAccents(id)
   if (useTerminals.getState().focus === id) useTerminals.setState({ focus: null })
   void terminalWindow.terminalFocusChanged(false).catch(() => undefined)
 }
@@ -412,8 +526,12 @@ export function focusTerminal(id: string): void {
   if (!at) return
   setWorkspace(at.owner, (ws) => (ws.active === at.tab.id ? ws : { ...ws, active: at.tab.id }))
   changeTab(at.owner, at.tab.id, (t) => (t.focused === id ? t : { ...t, focused: id }))
-  // After React put its element on the page.
-  requestAnimationFrame(() => entries.get(id)?.term.focus())
+  // After React put its element on the page. The user went to it: what it said is seen (whether or not the window
+  // hears the element take focus).
+  requestAnimationFrame(() => {
+    entries.get(id)?.term.focus()
+    markSeenIfLookedAt(id)
+  })
 }
 
 /** The terminal that has the keyboard, or would take it in the owner in front. */
@@ -424,14 +542,86 @@ export function currentTerminal(owner: string | null): string | null {
   return activeTab(workspaceOf(owner))?.focused ?? null
 }
 
-/** Is this terminal on screen right now, in a window the user is looking at? */
-function inView(id: string): boolean {
+// ── Accents of a held letter ───────────────────────────────────────
+
+/** Holding a letter offers its accents: on the Mac, while its own press and hold is on and the setting too. */
+function pressAndHold(): boolean {
+  const app = useApp.getState()
+  return !!app.appInfo?.pressAndHold && app.settings.terminalPressAndHold
+}
+
+const swallow = (ev: KeyboardEvent): true => {
+  ev.preventDefault()
+  ev.stopPropagation()
+  return true
+}
+
+/** A key in a terminal, for the accents: true when it was theirs (the terminal then leaves it). */
+function accentKey(id: string, ev: KeyboardEvent): boolean {
+  const menu = useTerminals.getState().accents
+  if (!menu && (!ev.repeat || ev.type !== 'keydown')) return false
+  const step = accentStep(menu, id, ev, pressAndHold())
+  switch (step.kind) {
+    case 'pass':
+      return false
+    case 'swallow':
+      return swallow(ev)
+    case 'open':
+      useTerminals.setState({ accents: step.menu })
+      return swallow(ev)
+    case 'move':
+      useTerminals.setState((s) => (s.accents ? { accents: { ...s.accents, at: step.at } } : s))
+      return swallow(ev)
+    case 'choose':
+      chooseAccent(id, step.text)
+      return swallow(ev)
+    case 'close':
+      useTerminals.setState({ accents: null })
+      return step.pass ? false : swallow(ev)
+  }
+}
+
+/** An accent takes the place of the letter held, typed already: as in any text field of the Mac. */
+export function chooseAccent(id: string, text: string): void {
+  useTerminals.setState({ accents: null })
+  send(id, `\x7f${text}`)
+}
+
+function closeAccents(id: string): void {
+  if (useTerminals.getState().accents?.id === id) useTerminals.setState({ accents: null })
+}
+
+/** Where the character before a terminal's cursor is drawn, relative to `box` (for the accents, over it). */
+export function cursorCell(id: string, box: Element): { left: number; top: number; width: number; height: number } | null {
+  const entry = entries.get(id)
+  const screen = entry?.host.querySelector('.xterm-screen')
+  if (!entry || !screen || !entry.term.cols || !entry.term.rows) return null
+  const s = screen.getBoundingClientRect()
+  const b = box.getBoundingClientRect()
+  const buf = entry.term.buffer.active
+  const width = s.width / entry.term.cols
+  const height = s.height / entry.term.rows
+  const col = Math.max(0, buf.cursorX - 1)
+  const row = Math.min(entry.term.rows - 1, Math.max(0, buf.cursorY + buf.baseY - buf.viewportY))
+  return { left: s.left - b.left + col * width, top: s.top - b.top + row * height, width, height }
+}
+
+/** Is this terminal on screen right now, in a window the user is looking at? (Then it needs no notification.) */
+function onScreen(id: string): boolean {
   return !!entries.get(id)?.mounted && document.hasFocus() && document.visibilityState === 'visible'
 }
 
-function markSeenIfInView(id: string): void {
+/**
+ * Has the user seen what it says: on screen, and the pane of its tab they are in (alone in its tab, it is that one).
+ * With panes side by side the others keep their news (finished, a bell) until the user goes to them.
+ */
+function lookedAt(id: string): boolean {
+  return onScreen(id) && locate(id)?.tab.focused === id
+}
+
+function markSeenIfLookedAt(id: string): void {
   const info = useTerminals.getState().infos[id]
-  if (!info?.state || info.state === 'working' || !inView(id)) return
+  if (!info?.state || info.state === 'working' || !lookedAt(id)) return
   void api.terminalSeen(id).catch(() => undefined)
 }
 
@@ -786,7 +976,7 @@ function onInfo(info: TerminalInfo): void {
   const before = useTerminals.getState().infos[info.id]
   useTerminals.setState((s) => ({ infos: { ...s.infos, [info.id]: info } }))
   if (!info.state || info.state === before?.state) return
-  if (inView(info.id)) return markSeenIfInView(info.id)
+  if (onScreen(info.id)) return markSeenIfLookedAt(info.id)
   const app = useApp.getState()
   if (!shouldNotify(info, app.settings)) return
   const notice = noticeFor(info, app.tabs, app.settings.tabGroups)
@@ -848,7 +1038,7 @@ export function useTerminalSync(onOpen: (owner: string, id: string) => void): vo
   // Back in front: what finished meanwhile and is on screen has been seen.
   useEffect(() => {
     const seen = () => {
-      for (const id of entries.keys()) markSeenIfInView(id)
+      for (const id of entries.keys()) markSeenIfLookedAt(id)
     }
     window.addEventListener('focus', seen)
     return () => window.removeEventListener('focus', seen)

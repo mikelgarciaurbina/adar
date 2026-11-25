@@ -280,6 +280,172 @@
 .tm-pane-drop-down {
   inset: 50% 2px 2px 2px;
 }
+/* Over a link of a terminal: the picture it leads to, or what ⌘-click does with its file. */
+.tm-link-card {
+  position: fixed;
+  z-index: 900;
+  max-width: 360px;
+  padding: 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--bg-2);
+  box-shadow: var(--shadow-2);
+  pointer-events: none;
+}
+.tm-link-card > img {
+  display: block;
+  max-width: 340px;
+  max-height: 240px;
+  margin-bottom: 6px;
+  border-radius: 4px;
+  object-fit: contain;
+  background: var(--bg-1);
+}
+.tm-link-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-sm);
+  color: var(--text-0);
+}
+.tm-link-meta {
+  color: var(--text-3);
+}
+.tm-link-what {
+  margin-top: 2px;
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+}
+
+/* A picture large, over the window. */
+.ui-backdrop.tm-viewer {
+  align-items: center;
+  justify-content: center;
+  padding: 4vh 4vw;
+}
+.tm-viewer-frame {
+  max-width: 100%;
+  max-height: 100%;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--bg-1);
+  box-shadow: var(--shadow-2);
+  overflow: hidden;
+}
+.tm-viewer-frame > img {
+  display: block;
+  min-height: 0;
+  max-width: 92vw;
+  max-height: calc(92vh - 44px);
+  object-fit: contain;
+  background: var(--bg-0);
+}
+.tm-viewer-bar {
+  flex: none;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 8px 0 14px;
+  border-top: 1px solid var(--border);
+  font-size: var(--fs-sm);
+}
+.tm-viewer-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-0);
+  font-weight: 500;
+}
+.tm-viewer-meta {
+  flex: 1;
+  white-space: nowrap;
+  color: var(--text-3);
+  font-size: var(--fs-xs);
+}
+.tm-viewer-button,
+.tm-viewer-close {
+  flex: none;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: none;
+  color: var(--text-1);
+  font: inherit;
+  cursor: pointer;
+}
+.tm-viewer-close {
+  width: 28px;
+  justify-content: center;
+  padding: 0;
+  border-color: transparent;
+}
+.tm-viewer-button:hover,
+.tm-viewer-close:hover {
+  background: var(--bg-3);
+  color: var(--text-0);
+}
+.tm-viewer-button:focus-visible,
+.tm-viewer-close:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
+/* The accents of a held letter, over it, numbered as on the Mac. */
+.tm-accents {
+  position: absolute;
+  z-index: 7;
+  display: flex;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--bg-2);
+  box-shadow: var(--shadow-1);
+}
+.tm-accent {
+  min-width: 30px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 4px 6px 3px;
+  border: 0;
+  border-radius: 5px;
+  background: none;
+  color: var(--text-0);
+  font: inherit;
+  cursor: pointer;
+}
+.tm-accent:hover {
+  background: var(--bg-3);
+}
+.tm-accent-on,
+.tm-accent-on:hover {
+  background: var(--accent-fill);
+  color: var(--accent-text);
+}
+.tm-accent-char {
+  font-size: 17px;
+  line-height: 1.2;
+}
+.tm-accent-key {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-3);
+}
+.tm-accent-on .tm-accent-key {
+  color: inherit;
+}
+
 /* Files dragged in from outside: the whole pane takes them, and says what dropping does. */
 .tm-pane-drop-files {
   inset: 2px;
@@ -455,13 +621,17 @@
   color: var(--danger);
   white-space: nowrap;
 }
+/* No terminal yet: what to start. */
 .tm-empty {
   flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 12px;
+  gap: 4px;
+  padding: 20px 16px;
+  overflow: auto;
   color: var(--text-3);
 }
 .tm-empty-title {
@@ -469,23 +639,86 @@
   font-weight: 600;
   color: var(--text-1);
 }
+.tm-empty-folder {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+}
 .tm-empty-actions {
   display: flex;
-  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  max-width: 680px;
+  margin-top: 16px;
 }
 .tm-empty-button {
-  height: 28px;
-  padding: 0 12px;
-  border-radius: 6px;
-  border: 1px solid var(--border-strong);
-  background: none;
+  width: 200px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 10px;
+  row-gap: 3px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-1);
   color: var(--text-1);
   font: inherit;
+  text-align: left;
   cursor: pointer;
 }
 .tm-empty-button:hover {
-  background: var(--bg-3);
+  border-color: var(--border-strong);
+  background: var(--bg-2);
   color: var(--text-0);
+}
+.tm-empty-button > svg {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  color: var(--text-2);
+}
+.tm-empty-name {
+  grid-column: 2;
+  grid-row: 1;
+  font-weight: 500;
+}
+.tm-empty-key {
+  grid-column: 3;
+  grid-row: 1;
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+}
+.tm-empty-what {
+  grid-column: 2 / span 2;
+  grid-row: 2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+}
+.tm-empty-more {
+  margin-top: 12px;
+  padding: 2px 4px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--text-3);
+  font: inherit;
+  font-size: var(--fs-xs);
+  cursor: pointer;
+}
+.tm-empty-more:hover {
+  color: var(--text-1);
+}
+.tm-empty-more:focus-visible {
+  outline: 2px solid var(--focus);
 }
 
 /* ── A tab group's view ────────────────────────────────────────────────── */

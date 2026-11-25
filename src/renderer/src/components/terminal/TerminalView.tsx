@@ -3,21 +3,24 @@
 // docked under the graph (Both) and as a tab group's view. A tab is dragged along the strip to another place, and
 // a pane by its header onto a side of another pane of its tab. Files dropped on a pane type their paths there.
 
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { ChevronDown, Columns2, Ellipsis, Maximize2, Minimize2, Plus, Rows2, Search, SquareTerminal, X } from 'lucide-react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { Bot, ChevronDown, Columns2, Ellipsis, Maximize2, Minimize2, Play, Plus, Rows2, Search, SquareTerminal, X } from 'lucide-react'
 import { showContextMenu, showMenuBelow, type MenuItem } from '@renderer/components/common/ContextMenu'
 import { prompt } from '@renderer/components/common/dialogs'
 import { isMac } from '@renderer/api/client'
 import { useApp } from '@renderer/store/appStore'
-import { SHELL_LAUNCHER, STATE_LABEL, type AgentRunState, type TerminalInfo } from '@shared/terminal'
+import { agentOfCommand, SHELL_LAUNCHER, STATE_LABEL, type AgentRunState, type TerminalInfo } from '@shared/terminal'
 import { hasPane, neighbour, panesOf, sideAt, type Direction, type PaneTree, type SplitPath } from './layout'
 import { labelText, shortFolder, tabLabels, terminalLabel, type TabLabel } from './model'
+import type { AccentMenu } from './accents'
 import { StateDot } from './parts'
 import {
   clearTerminal,
   closeTerminal,
+  chooseAccent,
   closeTermTab,
   copySelection,
+  cursorCell,
   dropFiles,
   equalizeSplits,
   FIND_EVENT,
@@ -61,8 +64,6 @@ const drags = (e: React.DragEvent, kind: 'tab' | 'pane', owner: string): boolean
 const carriesFiles = (e: React.DragEvent): boolean => Array.from(e.dataTransfer.types).includes('Files')
 const SIDE_NAME: Record<Direction, string> = { left: 'Left', right: 'Right', up: 'Up', down: 'Down' }
 const SIDES: readonly Direction[] = ['left', 'right', 'up', 'down']
-/** Owners whose first terminal was already started for them (closing every one leaves the empty view). */
-const started = new Set<string>()
 
 function launcherItems(owner: string, cwd: string, split?: 'row' | 'column'): MenuItem[] {
   const launchers = useApp.getState().settings.terminalLaunchers
@@ -104,16 +105,6 @@ export function TerminalWorkspace({ owner, cwd }: { owner: string; cwd: string }
   }
 
   useEffect(() => setOwnerFolder(owner, cwd), [owner, cwd])
-
-  // The first time a view of terminals is shown, one is there.
-  useEffect(() => {
-    if (!ready || ws.tabs.length || started.has(owner)) return
-    started.add(owner)
-    void openTerminal(owner, cwd)
-  }, [ready, owner, cwd, ws.tabs.length])
-  useEffect(() => {
-    if (ws.tabs.length) started.add(owner)
-  }, [owner, ws.tabs.length])
 
   useEffect(() => {
     const open = (e: Event) => {
@@ -200,23 +191,45 @@ export function TerminalWorkspace({ owner, cwd }: { owner: string; cwd: string }
           ) : (
             <Tree owner={owner} cwd={cwd} tab={tab} node={tab.tree} at={[]} only={panes.length === 1} />
           )
-        ) : (
-          <div className="tm-empty">
-            <SquareTerminal size={28} />
-            <div className="tm-empty-title">No terminal open here</div>
-            <div className="tm-empty-actions">
-              {launcherItems(owner, cwd).map((item) =>
-                item.type === undefined || item.type === 'item' ? (
-                  <button key={item.label} className="tm-empty-button" onClick={() => void item.onClick?.()}>
-                    {item.label}
-                  </button>
-                ) : null
-              )}
-            </div>
-          </div>
-        )}
+        ) : ready ? (
+          <StartChoice owner={owner} cwd={cwd} />
+        ) : null}
         {finding && tab && <FindBar id={tab.focused} onClose={closeFind} />}
       </div>
+    </div>
+  )
+}
+
+/**
+ * Nothing runs here yet (the view was just opened, or its last terminal closed): what to start, the shell or one of
+ * the launchers of Settings › Terminal. Nothing starts until the user says which.
+ */
+export function StartChoice({ owner, cwd }: { owner: string; cwd: string }) {
+  const launchers = useApp((s) => s.settings.terminalLaunchers)
+  return (
+    <div className="tm-empty" data-owner={owner}>
+      <div className="tm-empty-title">Start a terminal</div>
+      <div className="tm-empty-folder" title={cwd}>
+        {shortFolder(cwd)}
+      </div>
+      <div className="tm-empty-actions">
+        <button className="tm-empty-button" aria-label="Start a shell" onClick={() => void openTerminal(owner, cwd, { launcher: SHELL_LAUNCHER })}>
+          <SquareTerminal size={16} />
+          <span className="tm-empty-name">Shell</span>
+          <kbd className="tm-empty-key">{termShortcut('T')}</kbd>
+          <span className="tm-empty-what">Your login shell</span>
+        </button>
+        {launchers.map((l) => (
+          <button key={l.id} className="tm-empty-button" aria-label={`Start ${l.name}`} title={l.command} onClick={() => void openTerminal(owner, cwd, { launcher: l.id })}>
+            {agentOfCommand(l.command) ? <Bot size={16} /> : <Play size={16} />}
+            <span className="tm-empty-name">{l.name}</span>
+            <code className="tm-empty-what">{l.command}</code>
+          </button>
+        ))}
+      </div>
+      <button className="tm-empty-more" onClick={() => useApp.getState().openModal({ kind: 'settings', section: 'terminal' })}>
+        Edit launchers…
+      </button>
     </div>
   )
 }
@@ -370,6 +383,7 @@ function Pane({ owner, cwd, tab, id, only }: { owner: string; cwd: string; tab: 
   const dim = useApp((s) => s.settings.terminalDimUnfocused)
   const body = useRef<HTMLDivElement>(null)
   const focused = tab.focused === id
+  const accents = useTerminals((s) => (s.accents?.id === id ? s.accents : null))
   /** Dragged by its header; and the side of it another pane of the tab would land on. */
   const [moving, setMoving] = useState(false)
   const [side, setSide] = useState<Direction | null>(null)
@@ -495,6 +509,7 @@ function Pane({ owner, cwd, tab, id, only }: { owner: string; cwd: string; tab: 
         </button>
       </header>
       <div className="tm-pane-body" ref={body} />
+      {accents && <Accents id={id} menu={accents} />}
       {side && <div className={`tm-pane-drop tm-pane-drop-${side}`} aria-hidden="true" />}
       {files && (
         <div className="tm-pane-drop tm-pane-drop-files" aria-hidden="true">
@@ -502,6 +517,45 @@ function Pane({ owner, cwd, tab, id, only }: { owner: string; cwd: string; tab: 
         </div>
       )}
     </section>
+  )
+}
+
+/**
+ * The accents of the letter held, over it: their numbers choose them, as on the Mac; so do a click, and the arrows
+ * with Enter. Esc, or any other key, leaves the letter as it was.
+ */
+function Accents({ id, menu }: { id: string; menu: AccentMenu }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [at, setAt] = useState<{ left: number; top: number } | null>(null)
+  useLayoutEffect(() => {
+    const el = ref.current
+    const box = el?.offsetParent ?? el?.parentElement
+    if (!el || !box) return
+    const w = el.offsetWidth
+    const h = el.offsetHeight
+    const cell = cursorCell(id, box)
+    if (!cell) return setAt({ left: 8, top: Math.max(4, box.clientHeight - h - 8) })
+    const left = Math.min(Math.max(4, cell.left + cell.width / 2 - w / 2), Math.max(4, box.clientWidth - w - 4))
+    const above = cell.top - h - 6
+    setAt({ left, top: above >= 4 ? above : Math.min(cell.top + cell.height + 6, Math.max(4, box.clientHeight - h - 4)) })
+  }, [id, menu.base])
+  return (
+    <div
+      ref={ref}
+      className="tm-accents"
+      role="listbox"
+      aria-label={`Accents of ${menu.base}`}
+      style={at ?? { visibility: 'hidden' }}
+      // The terminal keeps the keyboard.
+      onMouseDown={(e) => e.preventDefault()}
+    >
+      {menu.options.map((ch, i) => (
+        <button key={ch} type="button" role="option" aria-selected={i === menu.at} tabIndex={-1} className={`tm-accent${i === menu.at ? ' tm-accent-on' : ''}`} onClick={() => chooseAccent(id, ch)}>
+          <span className="tm-accent-char">{ch}</span>
+          <span className="tm-accent-key">{i + 1}</span>
+        </button>
+      ))}
+    </div>
   )
 }
 

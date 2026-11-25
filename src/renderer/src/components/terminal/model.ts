@@ -22,9 +22,17 @@ const AGENT_TITLES = new Set(['claude code', 'claude', 'codex', 'openai codex'])
 /**
  * An agent's own words for its task, from the title it gives its terminal ("✳ Fix the login form" → "Fix the login
  * form": the mark in front says it is working, which the dot already does); '' while the title only names the program.
+ * Codex adds its folder and, while it waits, "Action Required" ("[ ! ] Action Required | Fix the login form | landing"):
+ * those are left out too.
  */
 export function taskOf(info: TerminalInfo): string {
-  const task = info.title.replace(/^(?:[\p{S}\p{P}]\s+)+/u, '').trim()
+  const folders = new Set([info.cwd, info.owner].map((p) => (p.split(/[\\/]/).filter(Boolean).pop() ?? '').toLowerCase()))
+  const task = info.title
+    .replace(/^(?:[\p{S}\p{P}]\s+)+/u, '')
+    .split(' | ')
+    .map((part) => part.trim())
+    .filter((part) => part && !folders.has(part.toLowerCase()) && !/^action required$/i.test(part))
+    .join(' | ')
   const low = task.toLowerCase()
   if (!task || AGENT_TITLES.has(low)) return ''
   if ([info.name, info.process, info.command].some((own) => own && own.toLowerCase() === low)) return ''

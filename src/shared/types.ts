@@ -606,6 +606,8 @@ export interface AppSettings {
   terminalScrollback: number
   /** macOS: Option sends Meta (Alt) instead of typing its characters. */
   terminalOptionAsMeta: boolean
+  /** macOS: holding a letter offers its accents, as in the Mac's text fields (while the Mac's own is on); off, it repeats. */
+  terminalPressAndHold: boolean
   terminalCopyOnSelect: boolean
   /** Panes without focus are drawn dimmer. */
   terminalDimUnfocused: boolean
@@ -719,6 +721,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   terminalCursorBlink: true,
   terminalScrollback: 10000,
   terminalOptionAsMeta: true,
+  terminalPressAndHold: true,
   terminalCopyOnSelect: false,
   terminalDimUnfocused: true,
   terminalConfirmClose: true,
@@ -769,6 +772,8 @@ export interface AppInfo {
   homeDir: string
   /** false when running in the browser dev bridge. */
   isElectron: boolean
+  /** macOS: holding a letter offers its accents (the Mac's press and hold: on, unless turned off). */
+  pressAndHold: boolean
 }
 
 export type NodeJSPlatform = 'darwin' | 'win32' | 'linux' | string

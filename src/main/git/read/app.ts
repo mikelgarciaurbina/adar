@@ -15,6 +15,19 @@ import type { PlatformAdapter } from '../../platform'
 import type { SystemServices } from '../../system'
 import { assertRepo, expandHome, invalidArgument, notFound } from './common'
 
+/** Does the Mac offer accents when a letter is held (ApplePressAndHoldEnabled: on unless turned off)? Read once. */
+let pressAndHold: Promise<boolean> | null = null
+function macPressAndHold(): Promise<boolean> {
+  if (process.platform !== 'darwin') return Promise.resolve(false)
+  pressAndHold ??= new Promise((resolve) => {
+    execFile('/usr/bin/defaults', ['read', '-g', 'ApplePressAndHoldEnabled'], { timeout: 3000 }, (err, stdout) => {
+      // Never set: the Mac's own default, on.
+      resolve(err ? true : !/^(0|false|no)$/i.test(String(stdout).trim()))
+    })
+  })
+  return pressAndHold
+}
+
 type AppOps = Pick<
   ReadOps,
   | 'getAppInfo'
@@ -265,7 +278,8 @@ export function createAppOps(ctx: GitContext, services: SystemServices): AppOps 
         platform: process.platform,
         gitVersion: await services.gitVersion(),
         homeDir: os.homedir(),
-        isElectron: platform.isElectron
+        isElectron: platform.isElectron,
+        pressAndHold: await macPressAndHold()
       }
     },
 

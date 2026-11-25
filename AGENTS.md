@@ -16,8 +16,10 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
   `agents.ts` (commits and pushes Adar did not make itself — `AgentEvent`, with the agent their Co-Authored-By trailers,
   branch prefix or folder name: `agentOf` — and `parseAgentNotice`),
   `terminal.ts` (terminals inside Adar: `TerminalInfo`, the launchers — "Claude Code" → `claude` —, the signals read from
-  a terminal's output — `scanOutput`: bell, title, folder, the command a shell runs, OSC 9/777 notifications and Adar's own `OSC 7717;adar;…` —
-  the rules that turn them into the state a tab's dot shows: `afterSignal`, `afterInput`, `afterSeen`, `topState`,
+  a terminal's output — `scanOutput`: bell, title, folder, the command a shell runs, OSC 9/777 notifications, an agent's own
+  state (`OSC 7501;state=…:app=…`, as Codex sends it: working, blocked for an approval, done, idle) and Adar's own
+  `OSC 7717;adar;…` —, the rules that turn them into the state a tab's dot shows: `afterSignal`, `afterInput` (focus and
+  mouse reports are nobody's typing: `typedOf`), `afterSeen`, `topState`,
   and what files dropped on a terminal type: `typedPaths`, their paths as its shell reads them back whole),
   `review.ts` (reviewing a pull request in Adar, whatever the service: threads, reviews, Viewed marks, the timeline,
   an agent's work before its pull request — `WorkReviewRange`, `WorkReviewMark`, `WORK_FEATURES` —,
@@ -60,11 +62,14 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
     window; the output is read for signals and the state sent as 'terminal-info' events; Claude Code is started with
     `--settings <userData>/terminal/claude-hooks.json`, hooks that append a line to `<userData>/terminal/signals`
     (`$ADAR_SIGNALS`: a hook has no terminal to print to), which the manager watches, and Codex with its terminal
-    notifications on; a terminal's environment never carries an agent session Adar itself was started from), `shell.ts` (what Adar adds to zsh: `$ZDOTDIR` points at start-up files of
+    notifications on (Codex also tells its state with OSC 7501, which is what the dot follows; its bell then counts
+    for nothing; a launcher's tab keeps the program's name while the login shell starts it); a terminal's environment never carries an agent session Adar itself was started from), `shell.ts` (what Adar adds to zsh: `$ZDOTDIR` points at start-up files of
     Adar's own that run the user's first and give `$ZDOTDIR` back, then report the folder with OSC 7 and the command
     the shell runs (`OSC 7717;adar;command;…`: shown without the variables set in front of it, and never a line that
     starts with a space), complete file and folder names in any case and start `claude` and `codex` typed by hand the way a launcher does; history, key
-    bindings and prompt stay the user's) and `ops.ts` (the `terminal*` API
+    bindings and prompt stay the user's), `files.ts` (the files a terminal links to: a picture read to show it,
+    `terminalImage`, and `terminalOpenFile` — pictures, web pages and PDFs only, by the type of the real file behind
+    any link, never a program or a script) and `ops.ts` (the `terminal*` API
     methods; none over the HTTP bridge).
     Terminals outlive the window: they end when closed, when their shell exits or when Adar quits.
   - `menuBar.ts` — macOS menu bar extra: the tray icon (template images in `resources/tray`, drawn by
@@ -159,13 +164,23 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
     the terminal commands of the menu and the palette, and showing the terminal a notification was about.
     `components/terminal/` — `terminalStore.ts` (one xterm.js instance per terminal, kept while it lives and moved in
     and out of the page; each owner's terminal tabs and their panes — a repository's path or `group:<id>` —, focus,
-    keyboard shortcuts, notifications; the layout survives a reload in localStorage), `layout.ts` (pure: the split
+    keyboard shortcuts, notifications; what a pane says — finished, a bell — is news until the user goes to that
+    pane, its tab's focused one, so a pane on screen beside it keeps its dot; the layout survives a reload in
+    localStorage), `layout.ts` (pure: the split
     tree, a pane moved to a side of another one — `movePane` — and a tab moved along the strip), `model.ts` (pure: what a terminal's tab says — `tabLabels`: an agent with the task its terminal title names,
     the command a shell runs, an idle shell's folder or name, numbered when two would read the same —, an owner's
     state, `noticeFor`), `TerminalView.tsx` (the strip with terminal tabs
     and split controls, the panes, find; a tab is dragged to another place on the strip and a pane by its header
     onto a side of another pane of its tab, both also on their menus; files dropped on a pane from outside type
-    their paths there — `dropFiles` —, which is how an agent is handed a screenshot), `GroupView.tsx` (a tab group's own view: its terminals in the folder its
+    their paths there — `dropFiles` —, which is how an agent is handed a screenshot; with no terminal yet — the view
+    was just opened, or its last terminal closed — nothing starts on its own: `StartChoice` offers the shell and the
+    launchers, and takes the keyboard when the view is opened, `focusTerminalSoon`; links — the web, hyperlinks a
+    program prints (OSC 8) and the paths of pictures, web pages and PDFs in the text, `links.ts`, pure — show a picture
+    over its link and, with ⌘-click, open it large in Adar (`LinkLayer.tsx`), a web page or a PDF with its app and the
+    web in the browser; Adar takes that ⌘-click from the program, which keeps plain clicks; a letter held offers its accents as
+    the Mac does in its text fields — `accents.ts`, pure: the Mac's lists and what each key does meanwhile; the letter
+    typed first gives way to the one chosen — while the Mac's own press and hold is on, `AppInfo.pressAndHold`, and
+    `settings.terminalPressAndHold` too), `GroupView.tsx` (a tab group's own view: its terminals in the folder its
     repositories share — `groupFolder`, or `TabGroup.folder` — with the group's repositories on the left) and
     `parts.tsx` (`StateDot`, the status bar's word). The tab bar, the toolbar's Graph / Both / Terminal switch and the
     worktrees section show the state too. While a terminal has the keyboard, ⌘W, ⌘F and ⌘K mean close pane, find and
@@ -247,6 +262,8 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
   or from a terminal's output is ever run or typed (signals only change a dot or a tab's words; their text is cleaned
   before it is shown, and a command line is never logged or saved). Files the user drops on a terminal type their
   paths and nothing else: quoted for its shell, never a line end, and not at all when a path has control characters.
+  A link in a terminal only ever shows a picture, opens a web page, a PDF or a picture with its app, or shows a file
+  in its folder (`files.ts`): never runs anything.
 
 ## Testing
 - During an edit, use `npm run test:changed` for tests affected by changes since HEAD, or keep `npm run test:watch`
@@ -258,14 +275,18 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
   launches Electron with `<workdir>/ud` as user data and saves screenshots to `<workdir>/shots`. Steps: `{"size":[w,h]}`,
   `{"wait":ms}`, `{"js":"expr"}`, `{"jsFile":"/abs/file.js"}`, `{"shot":"name"}`, `{"drop":{"files":["/abs/file"],"on":"selector"}}`
   (files dragged in from outside and dropped on the middle of an element, with their real paths; `"hold":true` leaves
-  them over it); the menu bar panel: `{"panel":true}` opens
+  them over it), `{"cdp":[{"method":"Input.dispatchKeyEvent","params":{…},"wait":ms}]}` (DevTools protocol commands in
+  order: keys as the keyboard sends them, `autoRepeat` for a held one, and the mouse; `"at":"expr"` adds the {x, y} an
+  expression in the page returns, such as where a link is); the menu bar panel: `{"panel":true}` opens
   it, `{"panelJs":"expr"}` runs in it, `{"panelShot":"name"}` captures it. Notifications are only logged
   (`[capture] notify …`); `{"clickNotice":true}` clicks the last one. A step can stub `document.hasFocus = () => false`
   so pull request notifications are sent. Load `scripts/e2e-helpers.js` first for
-  `window.e2e` (click/type/key/drag/contextMenu/menuItem/waitFor/state/errors). `window.__adar = { store, api, updates }`.
+  `window.e2e` (click/type/key/drag/contextMenu/menuItem/waitFor/state/errors). `window.__adar = { store, api, updates,
+  terminals, term }` (`term(id)` is a terminal's xterm.js instance: its buffer, cols and rows).
   Seed `<workdir>/ud/settings.json` with `{"openTabs":["/abs/repo"],"activeTab":"/abs/repo","autoFetchMinutes":0}`.
-- Terminals in a scripted run: `window.__adar.api.terminalList()` / `terminalWrite(id, 'echo hi\\r')` drive a terminal
-  (it runs the developer's own login shell); appending `"$ADAR_TERMINAL" working` (or `asks <text>`, `notify <text>`,
+- Terminals in a scripted run: a view of terminals starts empty, so click a `.tm-empty-button` first (the first starts
+  a shell, the others the launchers); `window.__adar.api.terminalList()` / `terminalWrite(id, 'echo hi\\r')` drive a
+  terminal (it runs the developer's own login shell); appending `"$ADAR_TERMINAL" working` (or `asks <text>`, `notify <text>`,
   `finished`, `idle`) as a line to `"$ADAR_SIGNALS"` there is what Claude Code's hooks do. Started from inside an agent's
   session, a scripted run cannot sign the agents in its terminals in: check their hooks with the hooks file and a clean
   environment instead. A build made outside the project finds node-pty in the working
