@@ -293,11 +293,24 @@ function createWindow(): void {
  * Scripted e2e capture for development: ADAR_CAPTURE_STEPS points at a JSON array of
  * {wait: ms} | {js: "expression"} | {jsFile: "/abs/file.js"} | {shot: "name"} | {size: [w, h]} steps. Screenshots go to
  * ADAR_CAPTURE_DIR (default: cwd). Results of js steps are printed to stdout. Quits when done.
+ * {drop: {files: ["/abs/file"], on: "selector", hold?: true}} drags files in from outside onto the middle of an
+ * element, as the system does (the page gets real files, with their paths); with `hold` they stay over it, not dropped.
  */
 async function runCaptureSteps(file: string): Promise<void> {
   const fs = await import('node:fs/promises')
   const outDir = process.env['ADAR_CAPTURE_DIR'] || process.cwd()
-  type Step = { wait?: number; js?: string; jsFile?: string; shot?: string; size?: [number, number]; panel?: boolean; panelJs?: string; panelShot?: string; clickNotice?: boolean }
+  type Step = {
+    wait?: number
+    js?: string
+    jsFile?: string
+    shot?: string
+    size?: [number, number]
+    panel?: boolean
+    panelJs?: string
+    panelShot?: string
+    clickNotice?: boolean
+    drop?: { files: string[]; on: string; hold?: boolean }
+  }
   try {
     const list = JSON.parse(await fs.readFile(file, 'utf8')) as Step[]
     for (const step of list) {
@@ -316,6 +329,23 @@ async function runCaptureSteps(file: string): Promise<void> {
           console.log(`[capture] js → ${JSON.stringify(res)?.slice(0, 2000)}`)
         } catch (err) {
           console.log(`[capture] js error: ${String(err)}`)
+        }
+      }
+      if (step.drop) {
+        try {
+          const middle = `(() => { const r = document.querySelector(${JSON.stringify(step.drop.on)})?.getBoundingClientRect(); return r ? { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) } : null })()`
+          const at = (await win.webContents.executeJavaScript(middle, true)) as { x: number; y: number } | null
+          if (!at) throw new Error(`nothing matches ${step.drop.on}`)
+          const dbg = win.webContents.debugger
+          if (!dbg.isAttached()) dbg.attach('1.3')
+          const data = { items: [], files: step.drop.files, dragOperationsMask: 1 }
+          for (const type of step.drop.hold ? ['dragEnter', 'dragOver'] : ['dragEnter', 'dragOver', 'drop']) {
+            await dbg.sendCommand('Input.dispatchDragEvent', { type, x: at.x, y: at.y, data })
+            await new Promise((r) => setTimeout(r, 120))
+          }
+          console.log(`[capture] ${step.drop.hold ? 'dragged' : 'dropped'} ${step.drop.files.length} file(s) on ${step.drop.on}`)
+        } catch (err) {
+          console.log(`[capture] drop error: ${String(err)}`)
         }
       }
       // The menu bar panel: {"panel": true} opens it, {"panelJs"} runs in it, {"panelShot"} captures it.

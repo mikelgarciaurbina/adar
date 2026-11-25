@@ -4,6 +4,7 @@ interface AdarBridge {
   invoke(method: string, args: unknown[]): Promise<unknown>
   onEvent(listener: (event: unknown) => void): () => void
   setZoom(factor: number): void
+  pathOf(file: File): string
   platform: string
 }
 

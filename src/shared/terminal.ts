@@ -123,6 +123,53 @@ export function agentOfCommand(command: string): 'claude' | 'codex' | null {
   return null
 }
 
+// ── Files dropped on a terminal ────────────────────────────────────────────
+
+/** How the shell of a terminal takes a path: a POSIX shell, PowerShell, or a POSIX shell inside a WSL distribution. */
+export type PathStyle = { shell: 'posix' } | { shell: 'powershell' } | { shell: 'wsl'; distro: string }
+
+const WSL_SHARE = /^(?:\\\\|\/\/)(?:wsl\.localhost|wsl\$)[\\/]+([^\\/]+)(?:[\\/]+(.*))?$/i
+
+/** The distribution a \\wsl.localhost\… (or \\wsl$\…) folder is in; null for any other folder. */
+export function wslDistroOf(folder: string): string | null {
+  return WSL_SHARE.exec(folder.trim())?.[1] ?? null
+}
+
+/**
+ * A Windows path as a shell inside `distro` reaches it (the rule git follows there too, src/main/git/wsl.ts): a drive
+ * is /mnt/<drive>, a path of its own share is that path; null when it cannot (another distribution, a network share).
+ */
+export function pathInWsl(distro: string, p: string): string | null {
+  const share = WSL_SHARE.exec(p.trim())
+  const drive = /^([a-z]):(?:[\\/](.*))?$/i.exec(p)
+  if (share && share[1].toLowerCase() !== distro.toLowerCase()) return null
+  if (!share && !drive) return null
+  const parts = ((share ? share[2] : drive![2]) ?? '').split(/[\\/]+/).filter((s) => s && s !== '.')
+  if (parts.includes('..')) return null
+  return '/' + [...(share ? [] : ['mnt', drive![1].toLowerCase()]), ...parts].join('/')
+}
+
+/** Characters a POSIX shell takes as they are in a word; every other one of ASCII is written behind a backslash. */
+const POSIX_PLAIN = /[A-Za-z0-9_\-./:@%+,=~]/
+const hasControl = (s: string): boolean => /[\u0000-\u001f\u007f-\u009f]/.test(s)
+
+/**
+ * What dropping files on a terminal types: their paths as the shell there reads them back whole (a space is "\ "
+ * in a POSIX shell, as other terminals type it, and quotes in PowerShell), one after another, with a space after the
+ * last so that typing goes on. Never a line end: a path with control characters in it is left out, as is one the
+ * shell cannot reach, and `left` counts them.
+ */
+export function typedPaths(paths: readonly string[], style: PathStyle): { text: string; left: number } {
+  const words: string[] = []
+  for (const raw of paths) {
+    const p = style.shell === 'wsl' ? pathInWsl(style.distro, raw) : raw
+    if (!p || hasControl(p)) continue
+    if (style.shell === 'powershell') words.push(/^[A-Za-z0-9_\-./\\:]+$/.test(p) ? p : `'${p.replace(/'/g, "''")}'`)
+    else words.push(Array.from(p, (ch) => (ch.charCodeAt(0) > 0x7f || POSIX_PLAIN.test(ch) ? ch : `\\${ch}`)).join(''))
+  }
+  return { text: words.length ? `${words.join(' ')} ` : '', left: paths.length - words.length }
+}
+
 // ── Signals in a terminal's output ─────────────────────────────────────────
 
 /** The OSC number Adar's own messages use: ESC ] 7717 ; adar ; <what> [; <text>] BEL. */

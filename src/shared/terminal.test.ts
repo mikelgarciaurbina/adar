@@ -10,10 +10,13 @@ import {
   IDLE_RUN,
   newScan,
   parseTerminalNotice,
+  pathInWsl,
   sanitizeTerminalLaunchers,
   scanOutput,
   shownCommand,
   topState,
+  typedPaths,
+  wslDistroOf,
   type RunState,
   type TerminalSignal
 } from './terminal'
@@ -79,6 +82,48 @@ describe('scanOutput', () => {
   it('cleans what it shows', () => {
     expect(cleanText('  two\twords\x1b[31m\x00 here  ')).toBe('two words [31m here')
     expect(cleanText('x'.repeat(500)).length).toBe(200)
+  })
+})
+
+describe('files dropped on a terminal', () => {
+  it('types their paths as a POSIX shell reads them back whole', () => {
+    const posix = { shell: 'posix' } as const
+    expect(typedPaths(['/Users/ana/Desktop/shot.png'], posix)).toEqual({ text: '/Users/ana/Desktop/shot.png ', left: 0 })
+    expect(typedPaths(['/Users/ana/Desktop/Screenshot 2026-11-25 at 10.12.33.png'], posix).text).toBe('/Users/ana/Desktop/Screenshot\\ 2026-11-25\\ at\\ 10.12.33.png ')
+    // Letters of any alphabet stay as they are; what a shell would act on goes behind a backslash.
+    expect(typedPaths(["/tmp/Captura de pantalla (1) año's $HOME & `x`!.png"], posix).text).toBe("/tmp/Captura\\ de\\ pantalla\\ \\(1\\)\\ año\\'s\\ \\$HOME\\ \\&\\ \\`x\\`\\!.png ")
+    expect(typedPaths(['/tmp/a;b|c>d<e*f?g[h]{i}#j"k\\l'], posix).text).toBe('/tmp/a\\;b\\|c\\>d\\<e\\*f\\?g\\[h\\]\\{i\\}\\#j\\"k\\\\l ')
+    // Several: one after another, and typing goes on after the last.
+    expect(typedPaths(['/a/b.png', '/c d/e.txt'], posix)).toEqual({ text: '/a/b.png /c\\ d/e.txt ', left: 0 })
+  })
+
+  it('never types a line end: a path with control characters, or none, is left out', () => {
+    const posix = { shell: 'posix' } as const
+    expect(typedPaths(['', '/tmp/evil\nrm -rf x', '/tmp/esc\x1b[201~', '/tmp/c1\u009b', '/ok'], posix)).toEqual({ text: '/ok ', left: 4 })
+    expect(typedPaths([''], posix)).toEqual({ text: '', left: 1 })
+    expect(typedPaths([], posix)).toEqual({ text: '', left: 0 })
+    for (const style of [{ shell: 'posix' }, { shell: 'powershell' }, { shell: 'wsl', distro: 'Ubuntu' }] as const) {
+      expect(typedPaths(['C:\\a\r\nb', '/a\tb'], style).text).toBe('')
+    }
+  })
+
+  it('quotes for PowerShell, and turns Windows paths into the ones a WSL shell reaches', () => {
+    const ps = { shell: 'powershell' } as const
+    expect(typedPaths(['C:\\Users\\ana\\shot.png'], ps).text).toBe('C:\\Users\\ana\\shot.png ')
+    expect(typedPaths(["C:\\Users\\ana\\My Pictures\\it's.png"], ps).text).toBe("'C:\\Users\\ana\\My Pictures\\it''s.png' ")
+
+    const wsl = { shell: 'wsl', distro: 'Ubuntu' } as const
+    expect(typedPaths(['C:\\Users\\ana\\My Pictures\\shot.png', '\\\\wsl.localhost\\Ubuntu\\home\\ana\\a b.png'], wsl).text).toBe('/mnt/c/Users/ana/My\\ Pictures/shot.png /home/ana/a\\ b.png ')
+    // Another distribution's files and network shares are not there.
+    expect(typedPaths(['\\\\wsl.localhost\\Debian\\home\\ana\\a.png', '\\\\server\\share\\a.png', '/home/ana/a.png'], wsl)).toEqual({ text: '', left: 3 })
+
+    expect(wslDistroOf('\\\\wsl.localhost\\Ubuntu\\home\\ana\\repo')).toBe('Ubuntu')
+    expect(wslDistroOf('\\\\wsl$\\Ubuntu-22.04')).toBe('Ubuntu-22.04')
+    expect(wslDistroOf('C:\\code\\repo')).toBeNull()
+    expect(wslDistroOf('/home/ana/repo')).toBeNull()
+    expect(pathInWsl('Ubuntu', 'D:\\')).toBe('/mnt/d')
+    expect(pathInWsl('ubuntu', '//wsl.localhost/Ubuntu/home/ana')).toBe('/home/ana')
+    expect(pathInWsl('Ubuntu', 'C:\\a\\..\\b')).toBeNull()
   })
 })
 

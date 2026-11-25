@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer, webFrame } from 'electron'
+import { contextBridge, ipcRenderer, webFrame, webUtils } from 'electron'
 import { IPC_EVENT_CHANNEL, IPC_INVOKE_CHANNEL } from '@shared/api'
 
 // Minimal, generic bridge. The typed client lives in the renderer (api/client.ts).
@@ -13,6 +13,14 @@ const bridge = {
   },
   setZoom(factor: number): void {
     webFrame.setZoomFactor(factor)
+  },
+  /** Where a file dropped on the window is on disk; '' for one that is not a file there (dragged out of a web page). */
+  pathOf(file: File): string {
+    try {
+      return webUtils.getPathForFile(file)
+    } catch {
+      return ''
+    }
   },
   platform: process.platform
 }

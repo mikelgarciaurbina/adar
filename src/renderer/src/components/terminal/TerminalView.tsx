@@ -1,7 +1,7 @@
 // The terminals of one owner (a repository's tab, or a tab group): a strip with its terminal tabs and the split
 // controls, and under it the panes of the tab in front, each one a terminal. Used on its own (the Terminal view),
 // docked under the graph (Both) and as a tab group's view. A tab is dragged along the strip to another place, and
-// a pane by its header onto a side of another pane of its tab.
+// a pane by its header onto a side of another pane of its tab. Files dropped on a pane type their paths there.
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ChevronDown, Columns2, Ellipsis, Maximize2, Minimize2, Plus, Rows2, Search, SquareTerminal, X } from 'lucide-react'
@@ -18,6 +18,7 @@ import {
   closeTerminal,
   closeTermTab,
   copySelection,
+  dropFiles,
   equalizeSplits,
   FIND_EVENT,
   fitTerminal,
@@ -56,6 +57,8 @@ const PANE_MIME = 'application/x-adar-term-pane'
 let dragged: { kind: 'tab' | 'pane'; id: string; owner: string } | null = null
 const drags = (e: React.DragEvent, kind: 'tab' | 'pane', owner: string): boolean =>
   dragged?.kind === kind && dragged.owner === owner && Array.from(e.dataTransfer.types).includes(kind === 'tab' ? TAB_MIME : PANE_MIME)
+/** A drag that carries files (from the Finder, the desktop, another app). */
+const carriesFiles = (e: React.DragEvent): boolean => Array.from(e.dataTransfer.types).includes('Files')
 const SIDE_NAME: Record<Direction, string> = { left: 'Left', right: 'Right', up: 'Up', down: 'Down' }
 const SIDES: readonly Direction[] = ['left', 'right', 'up', 'down']
 /** Owners whose first terminal was already started for them (closing every one leaves the empty view). */
@@ -370,18 +373,23 @@ function Pane({ owner, cwd, tab, id, only }: { owner: string; cwd: string; tab: 
   /** Dragged by its header; and the side of it another pane of the tab would land on. */
   const [moving, setMoving] = useState(false)
   const [side, setSide] = useState<Direction | null>(null)
+  /** Files are being dragged over it: dropped, their paths are typed here. */
+  const [files, setFiles] = useState(false)
   const takes = (e: React.DragEvent) => drags(e, 'pane', owner) && dragged?.id !== id && hasPane(tab.tree, dragged?.id ?? '')
   // A drag that ends anywhere else leaves no mark here.
   useEffect(() => {
-    if (!side) return
-    const clear = () => setSide(null)
+    if (!side && !files) return
+    const clear = () => {
+      setSide(null)
+      setFiles(false)
+    }
     window.addEventListener('dragend', clear)
     window.addEventListener('drop', clear)
     return () => {
       window.removeEventListener('dragend', clear)
       window.removeEventListener('drop', clear)
     }
-  }, [side])
+  }, [side, files])
 
   useEffect(() => {
     const el = body.current
@@ -430,14 +438,28 @@ function Pane({ owner, cwd, tab, id, only }: { owner: string; cwd: string; tab: 
       onMouseDownCapture={() => !hasKeyboard && focusTerminal(id)}
       onContextMenu={menu}
       onDragOver={(e) => {
+        if (carriesFiles(e)) {
+          e.preventDefault()
+          e.dataTransfer.dropEffect = 'copy'
+          return setFiles(true)
+        }
         if (!takes(e)) return
         e.preventDefault()
         e.dataTransfer.dropEffect = 'move'
         const to = sideOf(e)
         setSide((s) => (s === to ? s : to))
       }}
-      onDragLeave={(e) => !e.currentTarget.contains(e.relatedTarget as Node) && setSide(null)}
+      onDragLeave={(e) => {
+        if (e.currentTarget.contains(e.relatedTarget as Node)) return
+        setSide(null)
+        setFiles(false)
+      }}
       onDrop={(e) => {
+        if (carriesFiles(e)) {
+          e.preventDefault()
+          setFiles(false)
+          return dropFiles(id, Array.from(e.dataTransfer.files), cwd)
+        }
         if (!takes(e)) return
         e.preventDefault()
         const from = e.dataTransfer.getData(PANE_MIME) || dragged?.id
@@ -474,6 +496,11 @@ function Pane({ owner, cwd, tab, id, only }: { owner: string; cwd: string; tab: 
       </header>
       <div className="tm-pane-body" ref={body} />
       {side && <div className={`tm-pane-drop tm-pane-drop-${side}`} aria-hidden="true" />}
+      {files && (
+        <div className="tm-pane-drop tm-pane-drop-files" aria-hidden="true">
+          <span>Drop to type the path here</span>
+        </div>
+      )}
     </section>
   )
 }

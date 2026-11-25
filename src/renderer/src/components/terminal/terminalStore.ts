@@ -15,8 +15,8 @@ import { WebLinksAddon } from '@xterm/addon-web-links'
 import { WebglAddon } from '@xterm/addon-webgl'
 import '@xterm/xterm/css/xterm.css'
 import type { AppSettings } from '@shared/types'
-import { isGroupOwner, SHELL_LAUNCHER, type TerminalInfo } from '@shared/terminal'
-import { api, isMac, onAdarEvent, terminalWindow } from '@renderer/api/client'
+import { isGroupOwner, SHELL_LAUNCHER, typedPaths, wslDistroOf, type PathStyle, type TerminalInfo } from '@shared/terminal'
+import { api, filePath, isMac, onAdarEvent, platform, terminalWindow } from '@renderer/api/client'
 import { confirm } from '@renderer/components/common/dialogs'
 import { toast } from '@renderer/components/common/toast'
 import { describeError } from '@shared/errors'
@@ -645,6 +645,21 @@ export async function pasteInto(id: string): Promise<void> {
 /** Type text into a terminal as if pasted (a review's notes for the agent running there). */
 export function typeInto(id: string, text: string): void {
   entries.get(id)?.term.paste(text)
+}
+
+/**
+ * Files dropped on a terminal: their paths are typed there for the user to go on from, as other terminals do (an
+ * agent takes a screenshot that way). `folder` is the one the owner's terminals start in: inside WSL, so is its shell.
+ */
+export function dropFiles(id: string, files: readonly File[], folder: string): void {
+  const distro = platform === 'win32' ? wslDistroOf(folder) : null
+  const style: PathStyle = distro ? { shell: 'wsl', distro } : platform === 'win32' ? { shell: 'powershell' } : { shell: 'posix' }
+  const { text, left } = typedPaths(files.map(filePath), style)
+  if (text) {
+    focusTerminal(id)
+    typeInto(id, text)
+  }
+  if (left) toast.info('Only files and folders on your disk can be dropped on a terminal')
 }
 
 // ── Keyboard ───────────────────────────────────────────────────────────────

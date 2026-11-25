@@ -280,6 +280,22 @@
 .tm-pane-drop-down {
   inset: 50% 2px 2px 2px;
 }
+/* Files dragged in from outside: the whole pane takes them, and says what dropping does. */
+.tm-pane-drop-files {
+  inset: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-style: dashed;
+}
+.tm-pane-drop-files > span {
+  padding: 6px 12px;
+  border-radius: 6px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  color: var(--text-0);
+  font-size: var(--fs-sm);
+}
 .tm-pane-head {
   flex: none;
   height: 27px;

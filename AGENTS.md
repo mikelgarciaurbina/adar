@@ -17,7 +17,8 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
   branch prefix or folder name: `agentOf` — and `parseAgentNotice`),
   `terminal.ts` (terminals inside Adar: `TerminalInfo`, the launchers — "Claude Code" → `claude` —, the signals read from
   a terminal's output — `scanOutput`: bell, title, folder, the command a shell runs, OSC 9/777 notifications and Adar's own `OSC 7717;adar;…` —
-  and the rules that turn them into the state a tab's dot shows: `afterSignal`, `afterInput`, `afterSeen`, `topState`),
+  the rules that turn them into the state a tab's dot shows: `afterSignal`, `afterInput`, `afterSeen`, `topState`,
+  and what files dropped on a terminal type: `typedPaths`, their paths as its shell reads them back whole),
   `review.ts` (reviewing a pull request in Adar, whatever the service: threads, reviews, Viewed marks, the timeline,
   an agent's work before its pull request — `WorkReviewRange`, `WorkReviewMark`, `WORK_FEATURES` —,
   `ReviewFeatures` — what each service lets a review do: Viewed marks of its own or kept by Adar, comments on several
@@ -106,7 +107,8 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
   - `cli.ts` / `cliPath.ts` — install/uninstall the `adar` command (symlink to `resources/bin/adar`, shipped in the
     bundle as `Contents/Resources/bin/adar`); `openRequests.ts` queues folders to open from the CLI/Dock
     (`open-file`), `--open-repo=<path>` launch args and second instances until the renderer takes them.
-- `src/preload/` — exposes `window.adarBridge` (generic invoke/onEvent/setZoom). Context isolation + sandbox.
+- `src/preload/` — exposes `window.adarBridge` (generic invoke/onEvent/setZoom, and `pathOf`: where a file dropped
+  on the window is on disk). Context isolation + sandbox.
 - `src/server/` — HTTP bridge so the renderer runs in a browser: `npm run web` → open the printed
   `http://127.0.0.1:5898/#t=<token>` URL (the token authenticates the bridge).
 - `src/renderer/src/` — UI.
@@ -162,7 +164,8 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
     the command a shell runs, an idle shell's folder or name, numbered when two would read the same —, an owner's
     state, `noticeFor`), `TerminalView.tsx` (the strip with terminal tabs
     and split controls, the panes, find; a tab is dragged to another place on the strip and a pane by its header
-    onto a side of another pane of its tab, both also on their menus), `GroupView.tsx` (a tab group's own view: its terminals in the folder its
+    onto a side of another pane of its tab, both also on their menus; files dropped on a pane from outside type
+    their paths there — `dropFiles` —, which is how an agent is handed a screenshot), `GroupView.tsx` (a tab group's own view: its terminals in the folder its
     repositories share — `groupFolder`, or `TabGroup.folder` — with the group's repositories on the left) and
     `parts.tsx` (`StateDot`, the status bar's word). The tab bar, the toolbar's Graph / Both / Terminal switch and the
     worktrees section show the state too. While a terminal has the keyboard, ⌘W, ⌘F and ⌘K mean close pane, find and
@@ -242,7 +245,8 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
 - Terminals are the user's own shell: only the main window may start or write to one (never the menu bar panel, never
   the HTTP bridge), a launcher's command comes from the settings and nowhere else, and nothing read from a repository
   or from a terminal's output is ever run or typed (signals only change a dot or a tab's words; their text is cleaned
-  before it is shown, and a command line is never logged or saved).
+  before it is shown, and a command line is never logged or saved). Files the user drops on a terminal type their
+  paths and nothing else: quoted for its shell, never a line end, and not at all when a path has control characters.
 
 ## Testing
 - During an edit, use `npm run test:changed` for tests affected by changes since HEAD, or keep `npm run test:watch`
@@ -252,7 +256,9 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
   and server-side render tests.
 - Real app, scripted: `scripts/e2e.sh <workdir> <steps.json> [--no-build]` builds into `<workdir>/out` (parallel-safe),
   launches Electron with `<workdir>/ud` as user data and saves screenshots to `<workdir>/shots`. Steps: `{"size":[w,h]}`,
-  `{"wait":ms}`, `{"js":"expr"}`, `{"jsFile":"/abs/file.js"}`, `{"shot":"name"}`; the menu bar panel: `{"panel":true}` opens
+  `{"wait":ms}`, `{"js":"expr"}`, `{"jsFile":"/abs/file.js"}`, `{"shot":"name"}`, `{"drop":{"files":["/abs/file"],"on":"selector"}}`
+  (files dragged in from outside and dropped on the middle of an element, with their real paths; `"hold":true` leaves
+  them over it); the menu bar panel: `{"panel":true}` opens
   it, `{"panelJs":"expr"}` runs in it, `{"panelShot":"name"}` captures it. Notifications are only logged
   (`[capture] notify …`); `{"clickNotice":true}` clicks the last one. A step can stub `document.hasFocus = () => false`
   so pull request notifications are sent. Load `scripts/e2e-helpers.js` first for

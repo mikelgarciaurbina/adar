@@ -139,6 +139,15 @@ export function setZoom(factor: number): void {
 export const platform: string = bridge?.platform ?? (navigator.userAgent.includes('Mac') ? 'darwin' : 'other')
 export const isMac = platform === 'darwin'
 
+/** Where a file dropped on the window is on disk; '' when it is not a file there, and in a browser. */
+export function filePath(file: File): string {
+  try {
+    return bridge?.pathOf?.(file) ?? ''
+  } catch {
+    return ''
+  }
+}
+
 let opCounter = 0
 /** Unique id for correlating 'progress' events with a long-running call. */
 export function newOpId(prefix = 'op'): string {
