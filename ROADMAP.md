@@ -71,7 +71,9 @@ files dropped on a terminal type their paths there, which is how an agent is han
 start when a terminal view opens (the shell, Claude Code, Codex or a launcher of yours) · pictures shown over their
 links and opened large with ⌘-click, web pages and PDFs opened with their app · accents with a held key, as elsewhere on
 the Mac · Codex's own working, waiting and finished states on the dot · new-commit notifications after a fetch for every
-local branch that tracks a remote.
+local branch that tracks a remote · a Markdown preview: a `.md` file read as it will look, with its outline, following
+the file while an agent writes it, opened from the Finder (Open With), `adar notes.md`, ⌘-click on its path in a
+terminal or Preview on a changed file's diff.
 
 ---
 
