@@ -79,6 +79,16 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
     (`src/renderer/menubar.html`) and new-commit notifications after a fetch (every platform). The panel's window may
     only call `MENUBAR_METHODS` and `PANEL_API_METHODS` (`src/shared/menubar.ts`), and only on repositories Adar opened
     (`openRepo` and its trust check, or the panel's `menuBarUseRepo`).
+  - `notices.ts` — every notification Adar shows (new commits, pull requests, an agent's commits, terminals) goes
+    through `Notices` (`showNotice` in `index.ts`; the menu bar asks for its own through `MenuBarDeps.notify`): never a
+    bare `new Notification`, which is collected and then answers no click. They are kept while Adar runs, what a click
+    opens (`NoticeTarget`) is written in the notification's identifier on macOS, and `restore()` picks up at start-up
+    the ones an earlier run left in Notification Center. What a click shows in the window ('open-pull', 'open-agent',
+    'open-terminal') goes through `WindowGate`: held until the page has asked for what waited for it
+    (`cliTakeOpenRequests`), as a window made by the click itself hears nothing yet. A load that begins only pauses
+    this and the open requests; 'did-navigate' (a new page) ends them, and a load that went nowhere (a navigation
+    the window refuses) resumes them with the same page. Real notifications need a signed build: development ones
+    are not delivered by macOS, so scripted runs log them and `{"clickNotice":true}` clicks the last.
   - `updater.ts` — in-app updates from GitHub Releases (check → download → verify → replace bundle → relaunch) on
     macOS; Windows and Linux builds only check, and "Download" opens the release page. When only an administrator can
     change Adar's folder (a standard account and /Applications) it asks for the password first and only the bundle swap
@@ -111,16 +121,6 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
     `refs/pull-requests/<n>/from` on Data Center, `mr/<n>` from `refs/merge-requests/<n>/head` on GitLab). Nothing talks
     to a service while its pull requests are off, and tokens never reach the renderer or the logs. The UI uses each
     provider's words (`lib/pulls.ts`: `pullNoun`, `pullRef` — "merge request !12" on GitLab, "!12" on Azure DevOps).
-  - `cli.ts` / `cliPath.ts` — install/uninstall the `adar` command (symlink to `resources/bin/adar`, shipped in the
-    bundle as `Contents/Resources/bin/adar`); `openRequests.ts` queues folders to open from the CLI/Dock
-    (`open-file`), `--open-repo=<path>` launch args and second instances until the renderer takes them.
-- `src/preload/` — exposes `window.adarBridge` (generic invoke/onEvent/setZoom, and `pathOf`: where a file dropped
-  on the window is on disk). Context isolation + sandbox.
-- `src/server/` — HTTP bridge so the renderer runs in a browser: `npm run web` → open the printed
-  `http://127.0.0.1:5898/#t=<token>` URL (the token authenticates the bridge).
-- `src/renderer/src/` — UI.
-  - `api/client.ts` — `api` (typed AdarApi proxy), `updates`, `onAdarEvent`, `newOpId`, `isMac`.
-  - `store/appStore.ts` — zustand `useApp`: tabs (`RepoTab`), selection, centre view, settings, undo/redo stacks.
   - `markdown.ts` — the Markdown preview's side of the API (the desktop app only, never the HTTP bridge):
     `readMarkdownFile` (a Markdown file by its full path, by the type of the real file behind any link; asked again with
     its version, an unchanged file is not read, which is how the preview follows a file being written), `markdownImage`
@@ -131,6 +131,16 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
     (macOS: `CFBundleDocumentTypes`, rank Alternate, so the Finder lists it under Open With; Linux: `mimeTypes`); a file
     opened with it arrives as an 'open-file' event (macOS) or a bare argument, goes through `openRequests.ts` like a
     folder, and the renderer shows its preview instead of opening a tab. Windows' installer registers nothing yet.
+  - `cli.ts` / `cliPath.ts` — install/uninstall the `adar` command (symlink to `resources/bin/adar`, shipped in the
+    bundle as `Contents/Resources/bin/adar`); `openRequests.ts` queues folders to open from the CLI/Dock
+    (`open-file`), `--open-repo=<path>` launch args and second instances until the renderer takes them.
+- `src/preload/` — exposes `window.adarBridge` (generic invoke/onEvent/setZoom, and `pathOf`: where a file dropped
+  on the window is on disk). Context isolation + sandbox.
+- `src/server/` — HTTP bridge so the renderer runs in a browser: `npm run web` → open the printed
+  `http://127.0.0.1:5898/#t=<token>` URL (the token authenticates the bridge).
+- `src/renderer/src/` — UI.
+  - `api/client.ts` — `api` (typed AdarApi proxy), `updates`, `onAdarEvent`, `newOpId`, `isMac`.
+  - `store/appStore.ts` — zustand `useApp`: tabs (`RepoTab`), selection, centre view, settings, undo/redo stacks.
   - `actions/git.tsx` — user-level git actions (confirmations, toasts, busy state, refresh, undo entries). UI code calls
     these instead of `api` for anything that mutates a repository.
   - `actions/cleanup.tsx` — "Clean up branches" (fetch with prune, then `getBranchCleanup`; delete with one undo entry for
@@ -211,16 +221,6 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
     the inbox of every open repository (a centre view; `inbox.ts` sorts it, `needsYou` is the toolbar's Reviews badge),
     `PullNews.tsx` the dot's chip in the left panel and on branch chips and the graph's marks (`useReviewMarks`), and
     `notices.ts` the notifications after each refresh while Adar is not in front (more than three become one).
-  - `commands.ts` — command registry shared by the native menu, shortcuts and the command palette.
-  - `menubar/` — the menu bar panel (its own entry, `menubar.html`): `MenuBarPanel.tsx` (project switcher, branch with
-    Pull/Push, mini graph reusing `components/graph`), pure helpers in `model.ts`.
-  - `components/` — `common` (Modal, Button, dialogs, ContextMenu, toast, Avatar, Resizer, ErrorBoundary), `layout`
-    (tabs, toolbar, status bar, welcome, logo), `graph`, `sidebar`, `details` (commit details, staging, composer),
-    `diff` (diff, blame, history; changed images in `ImageDiff.tsx`: side by side, swipe, onion skin and difference, with
-    the changed pixels and areas found in `imageCompare.ts`), `conflicts`, `rebase`, `modals`, `palette` (palette + git console), `update`.
-  - `lib/` — lane colours, formatting, ref helpers, drag & drop, keyboard helpers; `providerAvatars.ts` batches the
-    provider pictures `Avatar` asks for when Gravatar has none (`settings.providerAvatars`, only while pull requests are
-    on for the active repository).
   - `actions/markdown.tsx` — picking a Markdown file to preview and "Open Markdown Files with Adar by Default…".
     `components/markdown/` — the Markdown preview: `parse.ts` (pure, Adar's own parser, no dependency: GitHub's
     flavour into a tree — headings with their ids, nested and task lists, tables, fenced code, quotes and alerts,
@@ -233,6 +233,16 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
     toggle for a changed Markdown file: the version the diff shows, with its pictures read from that revision —
     `paths.ts`, pure). Opened by: a Markdown file opened with Adar or `adar notes.md` (`useOpenRequests`), ⌘-click on
     its path in a terminal (`links.ts`: kind 'markdown'), File → Open Markdown File…, Preview on a file's menu.
+  - `commands.ts` — command registry shared by the native menu, shortcuts and the command palette.
+  - `menubar/` — the menu bar panel (its own entry, `menubar.html`): `MenuBarPanel.tsx` (project switcher, branch with
+    Pull/Push, mini graph reusing `components/graph`), pure helpers in `model.ts`.
+  - `components/` — `common` (Modal, Button, dialogs, ContextMenu, toast, Avatar, Resizer, ErrorBoundary), `layout`
+    (tabs, toolbar, status bar, welcome, logo), `graph`, `sidebar`, `details` (commit details, staging, composer),
+    `diff` (diff, blame, history; changed images in `ImageDiff.tsx`: side by side, swipe, onion skin and difference, with
+    the changed pixels and areas found in `imageCompare.ts`), `conflicts`, `rebase`, `modals`, `palette` (palette + git console), `update`.
+  - `lib/` — lane colours, formatting, ref helpers, drag & drop, keyboard helpers; `providerAvatars.ts` batches the
+    provider pictures `Avatar` asks for when Gravatar has none (`settings.providerAvatars`, only while pull requests are
+    on for the active repository).
   - `styles/theme.css` — design tokens: the Basoa palette of the website mapped onto the app's names (dark = Gaua,
     light = Eguna). `--accent` is fern for lines, icons and text (deep fern on light surfaces); fills such as primary
     buttons use `--accent-fill` with `--accent-text` on top. Graph lanes are `--lane-1…6` (fern, moss, sea, heather,
@@ -289,6 +299,11 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
   A link in a terminal only ever shows a picture, opens a web page, a PDF or a picture with its app, or shows a file
   in its folder (`files.ts`): never runs anything.
 
+- Markdown documents are untrusted text: the preview is built from Adar's own tree (`parse.ts`), never from the
+  document's HTML (no `dangerouslySetInnerHTML`), a link never becomes an `href` (the web opens in the browser, another
+  Markdown file in the preview, any other file is only shown in its folder: never opened or run), and only Markdown
+  files and pictures are read for one, by the type of the real file.
+
 ## Testing
 - During an edit, use `npm run test:changed` for tests affected by changes since HEAD, or keep `npm run test:watch`
   running for feedback on each save. To check just the source files touched in the current edit, use
@@ -299,11 +314,6 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
   launches Electron with `<workdir>/ud` as user data and saves screenshots to `<workdir>/shots`. Steps: `{"size":[w,h]}`,
   `{"wait":ms}`, `{"js":"expr"}`, `{"jsFile":"/abs/file.js"}`, `{"shot":"name"}`, `{"drop":{"files":["/abs/file"],"on":"selector"}}`
   (files dragged in from outside and dropped on the middle of an element, with their real paths; `"hold":true` leaves
-- Markdown documents are untrusted text: the preview is built from Adar's own tree (`parse.ts`), never from the
-  document's HTML (no `dangerouslySetInnerHTML`), a link never becomes an `href` (the web opens in the browser, another
-  Markdown file in the preview, any other file is only shown in its folder: never opened or run), and only Markdown
-  files and pictures are read for one, by the type of the real file.
-
   them over it), `{"cdp":[{"method":"Input.dispatchKeyEvent","params":{…},"wait":ms}]}` (DevTools protocol commands in
   order: keys as the keyboard sends them, `autoRepeat` for a held one, and the mouse; `"at":"expr"` adds the {x, y} an
   expression in the page returns, such as where a link is); the menu bar panel: `{"panel":true}` opens
@@ -320,6 +330,9 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
   session, a scripted run cannot sign the agents in its terminals in: check their hooks with the hooks file and a clean
   environment instead. A build made outside the project finds node-pty in the working
   directory. `npm install` runs `scripts/fix-node-pty.cjs`, which restores the execute bit node-pty's macOS prebuilds lack.
+- The Markdown preview in a scripted run: `E2E_OPEN=/abs/file.md scripts/e2e.sh …` starts the app with that file, as
+  when it is opened with Adar (`.doc-sheet` is the reader, `.doc-body` the document); the diff's toggle is
+  `.diff-toggle[title^=Preview]`. The Finder's Open With and the default-app command need an installed build.
 - Fixtures: `scripts/make-fixture-repo.sh <dir> [--conflict]` (demo repo + bare origin),
   `node scripts/make-big-repo.mjs <dir> [commits] [branches]` (performance).
 - Website: `cd site && npm install && npm run dev` (http://localhost:4321/), or `npm run build && npm run preview`
@@ -330,9 +343,6 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
   organizations under it) when set (a fake API server), and `ADAR_HOSTING_LOOPBACK=1` lets a GitLab instance, GitHub
   Enterprise or Data Center server be `http://127.0.0.1:<port>`. Signing in from the browser: `ADAR_GITHUB_WEB` (github.com's
   `/login/device/code` and `/login/oauth/access_token`) and `ADAR_GITHUB_CLIENT_ID` (any id, before Adar has its own); in
-- The Markdown preview in a scripted run: `E2E_OPEN=/abs/file.md scripts/e2e.sh …` starts the app with that file, as
-  when it is opened with Adar (`.doc-sheet` is the reader, `.doc-body` the document); the diff's toggle is
-  `.diff-toggle[title^=Preview]`. The Finder's Open With and the default-app command need an installed build.
   scripted runs `openExternal` only logs the address, so the developer's browser never opens. For GitHub put a fake `gh`
   first on `PATH` (it must print a token for `gh auth token`, or exit 1 to be signed out) and point `GH_CONFIG_DIR` at a
   `hosts.yml` with `user:`; the same for `glab`. Run the app's git with `GIT_CONFIG_GLOBAL=<file>` and `GIT_CONFIG_NOSYSTEM=1`

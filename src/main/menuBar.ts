@@ -4,7 +4,7 @@
 // Notifications about new commits work on every platform; the icon and the panel only on macOS.
 
 import path from 'node:path'
-import { app, BrowserWindow, Menu, nativeImage, Notification, screen, Tray, type NativeImage, type WebContents } from 'electron'
+import { app, BrowserWindow, Menu, nativeImage, screen, Tray, type NativeImage, type WebContents } from 'electron'
 import { IPC_EVENT_CHANNEL } from '@shared/api'
 import { AdarError } from '@shared/errors'
 import { PANEL_MAX_HEIGHT, PANEL_MIN_HEIGHT, PANEL_WIDTH, type MenuBarMethod, type MenuBarState } from '@shared/menubar'
@@ -20,6 +20,8 @@ export interface MenuBarDeps {
   loadPanel(win: BrowserWindow): void
   /** Bring Adar's window to the front (creating it if needed) and, with a path, switch to that repository. */
   openInAdar(repo: string | null): void
+  /** Show a notification about a repository; a click opens it in Adar. */
+  notify(notice: { title: string; subtitle: string; body: string }, repo: string): void
   sendMenu(command: MenuCommand): void
   /** Events for the main window (settings the menu bar changed). */
   emit(event: AdarEvent): void
@@ -186,15 +188,10 @@ export class MenuBar {
   }
 
   private notify(repo: string, moved: readonly NewCommits[]): void {
-    if (!Notification.isSupported()) return
     const name = path.basename(repo)
     const group = this.settings?.tabGroups.find((g) => g.repos.includes(repo))
-    const n = new Notification({
-      title: group?.name ? `${name} · ${group.name}` : name,
-      body: newCommitsText(moved)
-    })
-    n.on('click', () => this.deps.openInAdar(repo))
-    n.show()
+    // Shown and kept by the host: a notification nothing keeps is collected, and its click then opens nothing.
+    this.deps.notify({ title: group?.name ? `${name} · ${group.name}` : name, subtitle: '', body: newCommitsText(moved) }, repo)
   }
 
   // ── Icon ────────────────────────────────────────────────────────────────

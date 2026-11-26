@@ -439,7 +439,8 @@ export const useApp = create<AppState>()((set, get) => {
         return already.path
       }
       // A repository of a group joins its group's tabs.
-      set((s) => ({ tabs: arrangeTabs([...s.tabs, { ...newTab(info.path, info.name), info }], s.settings.tabGroups), activePath: info.path }))
+      // In front, also when a tab group's own view was.
+      set((s) => ({ tabs: arrangeTabs([...s.tabs, { ...newTab(info.path, info.name), info }], s.settings.tabGroups), activePath: info.path, groupView: null }))
       persistTabs()
       void get().refreshRecent()
       await get().refresh(info.path)

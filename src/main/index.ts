@@ -15,14 +15,15 @@ import type { PlatformAdapter } from './platform'
 import { bundledCliPath } from './cliPath'
 import { cliStatus, installCli, uninstallCli } from './cli'
 import { MenuBar } from './menuBar'
-import { pauseOpenRequests, requestOpen, takeOpenRequests } from './openRequests'
+import { Notices, WindowGate, type NoticeTarget, type NoticeText } from './notices'
+import { endOpenRequests, pauseOpenRequests, requestOpen, resumeOpenRequests, takeOpenRequests } from './openRequests'
 import { bypassQuitGuard, isQuitGuardBypassed } from './quitGuard'
 import { Updater } from './updater'
 
-// Test hooks (development builds only): isolated user data dir and scripted screenshots.
 /** The installed app's bundle id on macOS (`appId` in electron-builder.yml). */
 const APP_BUNDLE_ID = 'dev.adar.gitclient'
 
+// Test hooks (development builds only): isolated user data dir and scripted screenshots.
 if (!app.isPackaged && process.env['ADAR_USER_DATA']) app.setPath('userData', process.env['ADAR_USER_DATA'])
 const CAPTURE_MODE = !app.isPackaged && !!process.env['ADAR_CAPTURE_STEPS']
 if (CAPTURE_MODE) {
@@ -88,35 +89,71 @@ app.on('open-file', (e, file) => {
 })
 for (const p of [...parseOpenRepoArgs(process.argv), ...parseMarkdownArgs(process.argv)]) requestOpen(p)
 
-/** Pull request notifications on screen. */
-const notices = new Set<Notification>()
-/** Scripted runs: what clicking the last pull request notification would do. */
+/** Scripted runs: what clicking the last notification would do. */
 let lastNotice: (() => void) | null = null
 
-/** A system notification (pull requests, agents); a click runs `open`. */
-function showNotice(notice: { title: string; subtitle: string; body: string }, open: () => void): void {
+/** What a clicked notification shows waits for a window that listens (one just created hears nothing yet). */
+const openGate = new WindowGate<AdarEvent>((event) => {
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(IPC_EVENT_CHANNEL, event)
+})
+const OPEN_EVENTS: ReadonlySet<AdarEvent['type']> = new Set(['open-pull', 'open-agent', 'open-terminal'])
+/** Counts the pages the window has had (each load, each new window): what waits for one is not given to the next. */
+let pageCount = 0
+/** The window's page is gone (a new one loads, or the window closed): nothing sent is heard until the next one asks. */
+function pageGone(): void {
+  pageCount++
+  endOpenRequests()
+  openGate.gone()
+  backend?.terminals?.detachAll()
+}
+
+/** A notification was clicked: bring Adar to the front, on what it was about. */
+function openNotice(target: NoticeTarget): void {
+  switch (target.kind) {
+    case 'repo':
+      return openInAdar(target.repo)
+    case 'pull':
+      openInAdar(target.repo)
+      return emit({ type: 'open-pull', repo: target.repo, number: target.number, view: target.view })
+    case 'agent':
+      openInAdar(null)
+      return emit({ type: 'open-agent', path: target.path, repo: target.repo, view: target.view, ...(target.sha ? { sha: target.sha } : {}) })
+    case 'terminal':
+      openInAdar(null)
+      return emit({ type: 'open-terminal', owner: target.owner, id: target.id })
+  }
+}
+
+/** Every notification Adar shows, kept so that its click arrives (see notices.ts). */
+const notices = new Notices({
+  create: ({ id, title, subtitle, body }) => {
+    const mac = process.platform === 'darwin'
+    return new Notification({
+      ...(id ? { id } : {}),
+      title,
+      ...(mac && subtitle ? { subtitle } : {}),
+      body: mac ? body : [subtitle, body].filter(Boolean).join('\n')
+    })
+  },
+  open: openNotice,
+  ids: process.platform === 'darwin',
+  history: process.platform === 'darwin' ? () => Notification.getHistory() : undefined
+})
+
+/** A system notification (new commits, pull requests, agents, terminals); a click opens `target`. */
+function showNotice(notice: NoticeText, target: NoticeTarget): void {
   // Scripted runs show nothing; a {"clickNotice": true} step clicks the last one.
   if (CAPTURE_MODE) {
     console.log(`[capture] notify ${notice.title} · ${notice.subtitle} · ${notice.body}`)
-    lastNotice = open
+    lastNotice = () => openNotice(target)
     return
   }
   if (!Notification.isSupported()) return
-  const mac = process.platform === 'darwin'
-  const n = new Notification({
-    title: notice.title,
-    ...(mac ? { subtitle: notice.subtitle } : {}),
-    body: mac ? notice.body : [notice.subtitle, notice.body].filter(Boolean).join('\n')
-  })
-  n.on('click', open)
-  // Kept until clicked or closed, so its click still arrives.
-  notices.add(n)
-  n.on('close', () => notices.delete(n))
-  if (notices.size > 30) notices.delete(notices.values().next().value!)
-  n.show()
+  notices.show(notice, target)
 }
 
 function emit(event: AdarEvent): void {
+  if (OPEN_EVENTS.has(event.type)) return openGate.emit(event)
   // A credential prompt for an operation started from the menu bar panel is answered in Adar's window.
   if (event.type === 'credential-request' && menuBar?.panelOperationRunning) {
     menuBar.hidePanel()
@@ -136,7 +173,12 @@ function emit(event: AdarEvent): void {
 /** The renderer is listening again (it asked for the open requests): deliver what waited for it. */
 function releaseHeldEvents(): void {
   const events = heldEvents.splice(0)
-  if (events.length) setTimeout(() => events.forEach(emit), 300)
+  const page = pageCount
+  // A moment later: every part of the page has its listeners by then.
+  setTimeout(() => {
+    events.forEach(emit)
+    if (page === pageCount) openGate.ready()
+  }, 300)
 }
 
 /**
@@ -195,6 +237,13 @@ const platform: PlatformAdapter = {
     const res = mainWindow ? await dialog.showOpenDialog(mainWindow, options) : await dialog.showOpenDialog(options)
     return res.canceled || res.filePaths.length === 0 ? null : res.filePaths[0]
   },
+  async pickFile(opts) {
+    const options: Electron.OpenDialogOptions = { title: opts.title, defaultPath: opts.defaultPath, filters: opts.filters, properties: ['openFile'] }
+    const res = mainWindow ? await dialog.showOpenDialog(mainWindow, options) : await dialog.showOpenDialog(options)
+    return res.canceled || res.filePaths.length === 0 ? null : res.filePaths[0]
+  },
+  // The installed app is what the system opens files with; a development build is Electron's own bundle.
+  bundleId: process.platform === 'darwin' && app.isPackaged ? APP_BUNDLE_ID : undefined,
   async openExternal(url) {
     if (!/^(https?|mailto):/i.test(url)) throw new Error(`Refusing to open non-web URL: ${url}`)
     // Scripted runs never open the developer's browser.
@@ -211,22 +260,13 @@ const platform: PlatformAdapter = {
     if (failed) throw new Error(failed)
   },
   notify(repo, notice) {
-    showNotice(notice, () => {
-      openInAdar(repo)
-      emit({ type: 'open-pull', repo, number: notice.number, view: notice.open })
-    })
+    showNotice(notice, { kind: 'pull', repo, number: notice.number, view: notice.open })
   },
   notifyAgent(notice) {
-    showNotice(notice, () => {
-      openInAdar(null)
-      emit({ type: 'open-agent', ...notice.open })
-    })
+    showNotice(notice, { kind: 'agent', ...notice.open })
   },
   notifyTerminal(notice) {
-    showNotice(notice, () => {
-      openInAdar(null)
-      emit({ type: 'open-terminal', ...notice.open })
-    })
+    showNotice(notice, { kind: 'terminal', ...notice.open })
   },
   fetch: (input, init) => net.fetch(input, init),
   // Development only (scripted e2e runs): a fake GitHub API on this machine.
@@ -237,13 +277,6 @@ const platform: PlatformAdapter = {
   gitlabCom: !app.isPackaged && /^http:\/\/127\.0\.0\.1:\d+$/.test(process.env['ADAR_GITLAB_URL'] ?? '') ? process.env['ADAR_GITLAB_URL'] : undefined,
   azureDevOps: !app.isPackaged && /^http:\/\/127\.0\.0\.1:\d+$/.test(process.env['ADAR_AZURE_URL'] ?? '') ? process.env['ADAR_AZURE_URL'] : undefined,
   allowLoopbackServers: !app.isPackaged && process.env['ADAR_HOSTING_LOOPBACK'] === '1',
-  async pickFile(opts) {
-    const options: Electron.OpenDialogOptions = { title: opts.title, defaultPath: opts.defaultPath, filters: opts.filters, properties: ['openFile'] }
-    const res = mainWindow ? await dialog.showOpenDialog(mainWindow, options) : await dialog.showOpenDialog(options)
-    return res.canceled || res.filePaths.length === 0 ? null : res.filePaths[0]
-  },
-  // The installed app is what the system opens files with; a development build is Electron's own bundle.
-  bundleId: process.platform === 'darwin' && app.isPackaged ? APP_BUNDLE_ID : undefined,
   secrets: {
     // Linux without a keyring would fall back to a hard-coded key: no better than clear text.
     available: () =>
@@ -289,15 +322,28 @@ function createWindow(): void {
 
   loadRendererPage(mainWindow, 'index')
 
-  // Open requests arriving while the page (re)loads are queued until the renderer asks for them.
+  // Open requests and what a clicked notification opens, arriving while the page (re)loads, wait until the renderer
+  // asks for them. A load that begins only pauses them: when it went nowhere (a navigation refused above) the same
+  // page is still there and they go on; a new page ('did-navigate') starts over.
   // Terminals go on without a window (or while it reloads): nothing draws them until it attaches again.
+  let sameDocument = false
   mainWindow.webContents.on('did-start-loading', () => {
+    sameDocument = true
     pauseOpenRequests()
-    backend?.terminals?.detachAll()
+    openGate.paused()
+  })
+  mainWindow.webContents.on('did-navigate', () => {
+    sameDocument = false
+    pageGone()
+  })
+  mainWindow.webContents.on('did-stop-loading', () => {
+    if (!sameDocument) return
+    sameDocument = false
+    resumeOpenRequests()
+    openGate.resumed()
   })
   mainWindow.on('closed', () => {
-    pauseOpenRequests()
-    backend?.terminals?.detachAll()
+    pageGone()
     mainWindow = null
   })
 
@@ -470,6 +516,8 @@ function buildMenu(): void {
         item('Clone Repository…', 'clone-repo', 'CmdOrCtrl+Shift+N'),
         item('Init Repository…', 'init-repo', 'CmdOrCtrl+Alt+N'),
         { type: 'separator' },
+        item('Open Markdown File…', 'open-markdown'),
+        { type: 'separator' },
         item('Close Tab', 'close-tab', 'CmdOrCtrl+W'),
         item('Next Tab', 'next-tab', 'Ctrl+Tab'),
         item('Previous Tab', 'prev-tab', 'Ctrl+Shift+Tab'),
@@ -516,8 +564,6 @@ function buildMenu(): void {
         item('Push', 'push', 'CmdOrCtrl+Shift+Up'),
         { type: 'separator' },
         item('Create Branch…', 'create-branch', 'CmdOrCtrl+B'),
-        item('Open Markdown File…', 'open-markdown'),
-        { type: 'separator' },
         item('Stash', 'stash', 'CmdOrCtrl+Shift+S'),
         item('Pop Stash', 'pop-stash', 'CmdOrCtrl+Alt+S'),
         { type: 'separator' },
@@ -612,9 +658,12 @@ app.whenReady().then(() => {
     preload: join(__dirname, '../preload/index.js'),
     loadPanel: (win) => loadRendererPage(win, 'menubar'),
     openInAdar,
+    notify: (notice, repo) => showNotice(notice, { kind: 'repo', repo }),
     sendMenu,
     emit
   })
+  // Notifications an earlier run left in Notification Center open their project again.
+  if (!CAPTURE_MODE) void notices.restore()
   void b.getSettings().then((s) => menuBar?.apply(s), () => undefined)
 
   ipcMain.handle(IPC_INVOKE_CHANNEL, (event, method: unknown, args: unknown) => {

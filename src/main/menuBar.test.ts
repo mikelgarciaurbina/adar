@@ -4,19 +4,6 @@ const notifications: Array<{ title: string; body: string; click?: () => void }> 
 const trays: Array<{ image: string; destroyed: boolean }> = []
 
 vi.mock('electron', () => {
-  class Notification {
-    private entry: { title: string; body: string; click?: () => void }
-    static isSupported = () => true
-    constructor(opts: { title: string; body: string }) {
-      this.entry = { ...opts }
-    }
-    on(event: string, fn: () => void) {
-      if (event === 'click') this.entry.click = fn
-    }
-    show() {
-      notifications.push(this.entry)
-    }
-  }
   class Tray {
     private state: { image: string; destroyed: boolean }
     constructor(image: { name: string }) {
@@ -39,7 +26,6 @@ vi.mock('electron', () => {
     Menu: { buildFromTemplate: () => ({ popup: () => undefined }) },
     // The file name without the folder (path.join uses backslashes on Windows).
     nativeImage: { createFromPath: (p: string) => ({ name: p.split(/[\\/]/).pop()!.replace('.png', ''), setTemplateImage: () => undefined }) },
-    Notification,
     screen: {},
     Tray
   }
@@ -78,6 +64,8 @@ function setup(settings: Partial<AppSettings> = {}) {
     preload: '/preload.js',
     loadPanel: () => undefined,
     openInAdar: (repo) => void opened.push(repo ?? '(window)'),
+    // The host shows the notification and keeps it; a click opens the repository.
+    notify: (notice, repo) => void notifications.push({ title: notice.title, body: notice.body, click: () => void opened.push(repo) }),
     sendMenu: () => undefined,
     emit: () => undefined
   })
