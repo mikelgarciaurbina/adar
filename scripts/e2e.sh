@@ -10,6 +10,7 @@
 # Steps format (see runCaptureSteps in src/main/index.ts):
 #   [{"size":[1440,900]}, {"wait":3000}, {"js":"document.title"}, {"shot":"01-main"}]
 # In js steps, window.__adar exposes { store (zustand useApp), api } for inspection.
+# E2E_OPEN=/abs/file.md starts the app with that Markdown file, as when it is opened with Adar: its preview shows.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 WORK="$1"; STEPS="$2"; MODE="${3:-}"
@@ -18,7 +19,7 @@ if [ "$MODE" != "--no-build" ]; then
   ./node_modules/.bin/electron-vite build --outDir "$WORK/out" >"$WORK/build.log" 2>&1 || { tail -30 "$WORK/build.log"; exit 1; }
 fi
 ADAR_USER_DATA="$WORK/ud" ADAR_CAPTURE_STEPS="$STEPS" ADAR_CAPTURE_DIR="$WORK/shots" \
-  ./node_modules/.bin/electron "$WORK/out/main/index.js" 2>&1 | grep -E "^\[capture\]|Error|error" &
+  ./node_modules/.bin/electron "$WORK/out/main/index.js" ${E2E_OPEN:+"$E2E_OPEN"} 2>&1 | grep -E "^\[capture\]|Error|error" &
 PID=$!
 # Watchdog: kill the app if the steps hang. The sleep itself is killed afterwards so it never holds stdout.
 sleep "${E2E_TIMEOUT:-180}" &

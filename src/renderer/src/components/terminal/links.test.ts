@@ -20,8 +20,13 @@ describe('paths in a line of output', () => {
     expect(findPaths('see (shot.png)')).toEqual([{ start: 5, end: 13, text: 'shot.png' }])
   })
 
-  it('leaves out what is no picture, page or PDF, or only looks like one', () => {
-    expect(paths('src/main.ts and README.md and notes.txt')).toEqual([])
+  it('finds Markdown documents, which Adar previews', () => {
+    expect(paths('Plan written to ~/.claude/plans/quiet-fox.md. See also docs/GUIDE.markdown and README.md')).toEqual(['~/.claude/plans/quiet-fox.md', 'docs/GUIDE.markdown', 'README.md'])
+    expect(paths('notes.mdx, notes.mdb, a.md/b')).toEqual(['notes.mdx'])
+  })
+
+  it('leaves out what is no picture, document, page or PDF, or only looks like one', () => {
+    expect(paths('src/main.ts and notes.txt')).toEqual([])
     expect(paths('archive.png.bak, logo.pngx, a.html/b, .png')).toEqual([])
     // Web addresses are links of their own.
     expect(paths('https://adargit.com/og.png http://x.test/a/b.html')).toEqual([])
@@ -37,7 +42,9 @@ describe('where a link goes', () => {
     expect(linkTarget('~/Desktop/informe.pdf', cwd, home)).toEqual({ kind: 'page', path: '/Users/ana/Desktop/informe.pdf' })
     expect(linkTarget('/Users/ana/My\\ Shots/a\\ b.JPG', cwd, home)).toEqual({ kind: 'image', path: '/Users/ana/My Shots/a b.JPG' })
     expect(linkTarget('file:///tmp/vista%20previa.jpg', cwd, home)).toEqual({ kind: 'image', path: '/tmp/vista previa.jpg' })
-    expect(linkTarget('file:///Users/ana/notes.md', cwd, home)).toEqual({ kind: 'file', path: '/Users/ana/notes.md' })
+    expect(linkTarget('file:///Users/ana/notes.md', cwd, home)).toEqual({ kind: 'markdown', path: '/Users/ana/notes.md' })
+    expect(linkTarget('docs/PLAN.MD', cwd, home)).toEqual({ kind: 'markdown', path: '/Users/ana/Projects/landing/docs/PLAN.MD' })
+    expect(linkTarget('file:///Users/ana/notes.txt', cwd, home)).toEqual({ kind: 'file', path: '/Users/ana/notes.txt' })
     expect(fileName('/tmp/vista previa.jpg')).toBe('vista previa.jpg')
   })
 

@@ -32,7 +32,9 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
   `serverReview`, `gitlabReview`, `azureReview` — and its activity for the dots), `remoteUrl.ts` (remote URL → web page, provider;
   `hostingOf`/`pickHostingRemote` find GitHub — github.com, signed-in GitHub Enterprise servers and github.* hosts —,
   GitLab — gitlab.com, gitlab.* hosts and signed-in instances —, bitbucket.org, Data Center and Azure DevOps remotes —
-  dev.azure.com, ssh.dev.azure.com and <org>.visualstudio.com, all as https://dev.azure.com/<org>), `groupColor.ts` (custom tab group
+  dev.azure.com, ssh.dev.azure.com and <org>.visualstudio.com, all as https://dev.azure.com/<org>), `markdown.ts` (the Markdown documents Adar
+  previews: which files they are — `isMarkdownPath` —, what the main process reads of one, and `parseMarkdownArgs`: the
+  file Windows and Linux start Adar with), `groupColor.ts` (custom tab group
   colours: hex parsing, HSV for the picker, and each theme's version of a colour — same hue and chroma in OKLCH, lightness
   moved into the range the Basoa group colours use, so names stay readable).
 - `src/main/` — Electron main process.
@@ -119,6 +121,16 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
 - `src/renderer/src/` — UI.
   - `api/client.ts` — `api` (typed AdarApi proxy), `updates`, `onAdarEvent`, `newOpId`, `isMac`.
   - `store/appStore.ts` — zustand `useApp`: tabs (`RepoTab`), selection, centre view, settings, undo/redo stacks.
+  - `markdown.ts` — the Markdown preview's side of the API (the desktop app only, never the HTTP bridge):
+    `readMarkdownFile` (a Markdown file by its full path, by the type of the real file behind any link; asked again with
+    its version, an unchanged file is not read, which is how the preview follows a file being written), `markdownImage`
+    (a picture beside the document, pictures only), `markdownLink` (where a link leads on this machine; `/docs/a.md` is
+    read from the document's repository, as GitHub reads it), `pickMarkdownFile`, and on macOS the app Markdown files
+    open with: `markdownDefaultApp` / `setMarkdownDefaultApp` (Launch Services through osascript, the installed app
+    only — `PlatformAdapter.bundleId`). Adar is declared as an app that opens Markdown files in `electron-builder.yml`
+    (macOS: `CFBundleDocumentTypes`, rank Alternate, so the Finder lists it under Open With; Linux: `mimeTypes`); a file
+    opened with it arrives as an 'open-file' event (macOS) or a bare argument, goes through `openRequests.ts` like a
+    folder, and the renderer shows its preview instead of opening a tab. Windows' installer registers nothing yet.
   - `actions/git.tsx` — user-level git actions (confirmations, toasts, busy state, refresh, undo entries). UI code calls
     these instead of `api` for anything that mutates a repository.
   - `actions/cleanup.tsx` — "Clean up branches" (fetch with prune, then `getBranchCleanup`; delete with one undo entry for
@@ -209,6 +221,18 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
   - `lib/` — lane colours, formatting, ref helpers, drag & drop, keyboard helpers; `providerAvatars.ts` batches the
     provider pictures `Avatar` asks for when Gravatar has none (`settings.providerAvatars`, only while pull requests are
     on for the active repository).
+  - `actions/markdown.tsx` — picking a Markdown file to preview and "Open Markdown Files with Adar by Default…".
+    `components/markdown/` — the Markdown preview: `parse.ts` (pure, Adar's own parser, no dependency: GitHub's
+    flavour into a tree — headings with their ids, nested and task lists, tables, fenced code, quotes and alerts,
+    links and references, front matter, and the HTML READMEs are written with read into the same tree, never kept as
+    HTML), `MarkdownView.tsx` (the tree drawn as React elements; code coloured with the diff's highlighter; links carry
+    no href and pictures on the web are not fetched — the CSP would not let them — only named; what a link does and
+    where a picture is read from is its `MarkdownHost`'s), `MarkdownReader.tsx` (a file read over the window, from
+    `markdownStore.ts`: outline, Preview / Source, Edit, links to other documents followed with Back, the file looked
+    at again every second while it is open, Esc or ⌘W to leave) and `MarkdownPreview.tsx` (the diff view's Preview
+    toggle for a changed Markdown file: the version the diff shows, with its pictures read from that revision —
+    `paths.ts`, pure). Opened by: a Markdown file opened with Adar or `adar notes.md` (`useOpenRequests`), ⌘-click on
+    its path in a terminal (`links.ts`: kind 'markdown'), File → Open Markdown File…, Preview on a file's menu.
   - `styles/theme.css` — design tokens: the Basoa palette of the website mapped onto the app's names (dark = Gaua,
     light = Eguna). `--accent` is fern for lines, icons and text (deep fern on light surfaces); fills such as primary
     buttons use `--accent-fill` with `--accent-text` on top. Graph lanes are `--lane-1…6` (fern, moss, sea, heather,
@@ -241,7 +265,7 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
 - CSS class prefixes per module: `app-` shell, `ui-` common, `tb-`/`wl-` toolbar, tabs, status bar, welcome, `sb-` left
   panel, `gr-` graph, `det-` right panel, `diff-` diff/blame/history, `cf-` conflicts, `rb-` rebase, `md-` modals,
   `pal-` palette/console, `up-` updates, `mb-` menu bar panel, `pr-` pull requests, `rl-` reflog, `rv-` review, `ib-` pull
-  request inbox, `tm-` terminals. Each module imports its own `.css` file.
+  request inbox, `tm-` terminals, `doc-` Markdown documents. Each module imports its own `.css` file.
 - Icons: `lucide-react`. Virtualised lists: `@tanstack/react-virtual`. Syntax highlighting: `highlight.js`.
 - Do not add npm dependencies without discussing it first.
 
@@ -275,6 +299,11 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
   launches Electron with `<workdir>/ud` as user data and saves screenshots to `<workdir>/shots`. Steps: `{"size":[w,h]}`,
   `{"wait":ms}`, `{"js":"expr"}`, `{"jsFile":"/abs/file.js"}`, `{"shot":"name"}`, `{"drop":{"files":["/abs/file"],"on":"selector"}}`
   (files dragged in from outside and dropped on the middle of an element, with their real paths; `"hold":true` leaves
+- Markdown documents are untrusted text: the preview is built from Adar's own tree (`parse.ts`), never from the
+  document's HTML (no `dangerouslySetInnerHTML`), a link never becomes an `href` (the web opens in the browser, another
+  Markdown file in the preview, any other file is only shown in its folder: never opened or run), and only Markdown
+  files and pictures are read for one, by the type of the real file.
+
   them over it), `{"cdp":[{"method":"Input.dispatchKeyEvent","params":{…},"wait":ms}]}` (DevTools protocol commands in
   order: keys as the keyboard sends them, `autoRepeat` for a held one, and the mouse; `"at":"expr"` adds the {x, y} an
   expression in the page returns, such as where a link is); the menu bar panel: `{"panel":true}` opens
@@ -301,6 +330,9 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
   organizations under it) when set (a fake API server), and `ADAR_HOSTING_LOOPBACK=1` lets a GitLab instance, GitHub
   Enterprise or Data Center server be `http://127.0.0.1:<port>`. Signing in from the browser: `ADAR_GITHUB_WEB` (github.com's
   `/login/device/code` and `/login/oauth/access_token`) and `ADAR_GITHUB_CLIENT_ID` (any id, before Adar has its own); in
+- The Markdown preview in a scripted run: `E2E_OPEN=/abs/file.md scripts/e2e.sh …` starts the app with that file, as
+  when it is opened with Adar (`.doc-sheet` is the reader, `.doc-body` the document); the diff's toggle is
+  `.diff-toggle[title^=Preview]`. The Finder's Open With and the default-app command need an installed build.
   scripted runs `openExternal` only logs the address, so the developer's browser never opens. For GitHub put a fake `gh`
   first on `PATH` (it must print a token for `gh auth token`, or exit 1 to be signed out) and point `GH_CONFIG_DIR` at a
   `hosts.yml` with `user:`; the same for `glab`. Run the app's git with `GIT_CONFIG_GLOBAL=<file>` and `GIT_CONFIG_NOSYSTEM=1`

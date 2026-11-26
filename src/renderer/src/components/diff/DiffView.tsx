@@ -6,13 +6,15 @@
 // and in a very narrow panel the layout, full file, history and blame move into the options menu.
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react'
-import { AlertTriangle, ChevronDown, ChevronUp, History, Minus, Plus, ScanText, Trash2, X } from 'lucide-react'
+import { AlertTriangle, ChevronDown, ChevronUp, Eye, History, Minus, Plus, ScanText, Trash2, X } from 'lucide-react'
 import { api, isMac } from '@renderer/api/client'
 import * as git from '@renderer/actions/git'
 import { Button, EmptyState, IconButton, Spinner } from '@renderer/components/common/Button'
 import { isEditableTarget } from '@renderer/lib/keys'
 import { useApp, type RepoTab } from '@renderer/store/appStore'
+import { MarkdownPreview } from '@renderer/components/markdown/MarkdownPreview'
 import { describeError } from '@shared/errors'
+import { isMarkdownPath } from '@shared/markdown'
 import { supportsPartialPatch, type HunkSelection, type PatchMode } from '@shared/patch'
 import type { DiffTarget, FileDiff, FileStatusCode, WorkingStatus } from '@shared/types'
 import { DiffBody } from './DiffBody'
@@ -71,6 +73,8 @@ export function DiffView({ tab, target, siblings }: { tab: RepoTab; target: Diff
   const [busy, setBusy] = useState(false)
   /** Position among the change blocks, reported by the text renderer. */
   const [changeNav, setChangeNav] = useState<ChangeNav | null>(null)
+  /** A Markdown file shown as it reads instead of its changes. */
+  const [preview, setPreview] = useState(false)
 
   const gen = useRef(0)
   const diffRef = useRef<FileDiff | null>(null)
@@ -315,10 +319,14 @@ export function DiffView({ tab, target, siblings }: { tab: RepoTab; target: Diff
   const modeText = diff ? modeChangeText(diff) : null
   const selCount = selected.size
   const canBlame = exists && !uncommittedNew
+  /** A Markdown file can be read as it will look. */
+  const canPreview = isMarkdownPath(path) && (!diff || (!diff.binary && !diff.tooLarge))
+  const previewing = preview && canPreview && !!diff
   /** What a very narrow bar leaves out, as the first items of its "⋯" menu. */
   const foldedItems: MenuItem[] | undefined = folded
     ? [
-        ...(textual ? [...viewMenuItems(mode, fullFile), { type: 'separator' } as MenuItem] : []),
+        ...(canPreview ? [{ label: previewing ? 'Show the changes' : 'Preview', icon: <Eye size={14} />, onClick: () => setPreview(!previewing) }, { type: 'separator' } as MenuItem] : []),
+        ...(textual && !previewing ? [...viewMenuItems(mode, fullFile), { type: 'separator' } as MenuItem] : []),
         { label: 'File history', icon: <History size={14} />, onClick: () => git.openFileHistory(repo, path) },
         { label: uncommittedNew ? 'Blame (not committed yet)' : 'Blame', icon: <ScanText size={14} />, disabled: !canBlame, onClick: () => git.openBlame(repo, path, blameRev(target)) }
       ]
@@ -339,7 +347,7 @@ export function DiffView({ tab, target, siblings }: { tab: RepoTab; target: Diff
           {loading && diff && <Spinner size="sm" />}
           {diff && !diff.binary && <ChangeStats additions={diff.additions} deletions={diff.deletions} />}
           <span className="diff-tb-sep" />
-          {changeNav && changeNav.count > 0 && (
+          {!previewing && changeNav && changeNav.count > 0 && (
             <div className="diff-nav" role="group" aria-label="Changes in this file">
               <IconButton size="sm" label={`Previous change (P or ${altKey}↑)`} disabled={changeNav.index <= 0} onClick={() => jumpChange(-1)}>
                 <ChevronUp size={15} />
@@ -357,7 +365,19 @@ export function DiffView({ tab, target, siblings }: { tab: RepoTab; target: Diff
               </IconButton>
             </div>
           )}
-          {textual && !folded && (
+          {canPreview && !folded && (
+            <button
+              type="button"
+              className={`diff-toggle${previewing ? ' diff-toggle-on' : ''}`}
+              aria-pressed={previewing}
+              title={previewing ? 'Showing the document as it reads: click to show its changes' : 'Preview: the document as it reads'}
+              onClick={() => setPreview(!previewing)}
+            >
+              <Eye size={14} />
+              <span>Preview</span>
+            </button>
+          )}
+          {textual && !folded && !previewing && (
             <>
               <ViewModeSwitch value={mode} />
               <FullFileToggle value={fullFile} />
@@ -452,6 +472,8 @@ export function DiffView({ tab, target, siblings }: { tab: RepoTab; target: Diff
           <div className="diff-center">
             <Spinner size="lg" />
           </div>
+        ) : previewing ? (
+          <MarkdownPreview repo={repo} target={target} diff={diff} />
         ) : (
           <DiffBody
             repo={repo}

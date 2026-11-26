@@ -4,6 +4,8 @@
 
 import * as git from '@renderer/actions/git'
 import { installCliCommand, uninstallCliCommand } from '@renderer/actions/cli'
+import { openMarkdownDialog, openMarkdownWithAdar } from '@renderer/actions/markdown'
+import { closeMarkdown, useMarkdown } from '@renderer/components/markdown/markdownStore'
 import { openBranchCleanup, openKeptBranches } from '@renderer/actions/cleanup'
 import { openReflog } from '@renderer/actions/reflog'
 import { openWorkReview } from '@renderer/actions/workReview'
@@ -101,6 +103,8 @@ export const COMMANDS: Command[] = [
   { id: 'clone-repo', label: 'Clone Repository…', group: 'App', shortcut: 'Mod+Shift+N', run: () => useApp.getState().openModal({ kind: 'clone' }) },
   { id: 'init-repo', label: 'Init Repository…', group: 'App', shortcut: 'Mod+Alt+N', run: () => useApp.getState().openModal({ kind: 'init' }) },
   { id: 'close-tab', label: 'Close Tab', group: 'App', shortcut: 'Mod+W', when: hasRepo, run: withRepo((r) => useApp.getState().closeTab(r)) },
+  { id: 'open-markdown', label: 'Open Markdown File…', group: 'App', when: () => isElectron, run: () => openMarkdownDialog() },
+  { id: 'markdown-default-app', label: 'Open Markdown Files with Adar by Default…', group: 'App', when: () => isElectron && platform === 'darwin', run: () => openMarkdownWithAdar() },
   { id: 'next-tab', label: 'Next Tab', group: 'App', shortcut: 'Ctrl+Tab', run: () => cycleTab(1) },
   { id: 'prev-tab', label: 'Previous Tab', group: 'App', shortcut: 'Ctrl+Shift+Tab', run: () => cycleTab(-1) },
   { id: 'settings', label: 'Settings…', group: 'App', shortcut: 'Mod+,', run: () => useApp.getState().openModal({ kind: 'settings' }) },
@@ -258,6 +262,8 @@ export function getCommand(id: string): Command | undefined {
 }
 
 export function runCommand(id: MenuCommand | string): void {
+  // A Markdown document over the window is what ⌘W closes.
+  if (id === 'close-tab' && useMarkdown.getState().doc) return closeMarkdown()
   const cmd = byId.get(terminalHasKeyboard() ? (IN_TERMINAL[id] ?? id) : id)
   if (!cmd) {
     console.warn('[adar] unknown command', id)

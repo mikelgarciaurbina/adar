@@ -35,6 +35,10 @@ no contiene código, recursos ni marca de GitKraken y no tiene relación con Git
   de cualquier commit de tu rama** desde el propio panel (con aviso y atajo de force push si ya estaba pusheado).
 - **Diffs** unificados o lado a lado, solo los cambios o el archivo completo, con resaltado de sintaxis y cambios dentro
   de la línea; diff de imágenes; historial de un archivo y *blame*.
+- **Vista previa de Markdown**: lee un `.md` como se va a ver — el plan que acaba de escribir tu agente, un README —
+  con su índice, tablas, listas de tareas y código resaltado, siguiendo el archivo mientras se escribe. Ábrelo desde el
+  Finder (*Abrir con → Adar*), con `adar notas.md`, con ⌘-clic sobre su ruta en el terminal de Adar o con *Preview* en
+  el diff de un archivo cambiado.
 - **Herramienta de conflictos** (A / B / resultado editable) y banner para continuar, saltar o abortar merges, rebases,
   cherry-picks y reverts.
 - **Rebase interactivo visual**: pick, reword, edit, squash, fixup, drop y reordenar arrastrando.
@@ -103,6 +107,7 @@ Abre un repositorio en Adar desde la terminal, como `code .` o el `gk` de GitKra
 adar              # el repositorio de la carpeta actual
 adar ~/code/app   # cualquier carpeta dentro de un repositorio
 adar ~/code/shop  # una carpeta con varios repositorios: los abre como grupo de pestañas
+adar docs/plan.md # un archivo Markdown: muestra su vista previa
 ```
 
 Instala el comando una vez desde **Adar → Install Command Line Tool…** (o *Settings → Integrations*). Enlaza `adar`

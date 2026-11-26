@@ -12,6 +12,10 @@ export interface PlatformAdapter {
   /** Directory for settings.json / recents.json. */
   userDataDir: string
   pickDirectory(opts?: { title?: string; defaultPath?: string }): Promise<string | null>
+  /** Native picker for one file; absent where there is none (browser). */
+  pickFile?(opts: { title: string; defaultPath?: string; filters: Array<{ name: string; extensions: string[] }> }): Promise<string | null>
+  /** macOS: the bundle id of the installed app, which the system can open files with; absent in development builds and elsewhere. */
+  bundleId?: string
   openExternal(url: string): Promise<void>
   showInFolder(path: string): Promise<void>
   /** Open a file with its own app (the browser for a web page); absent where there is none (browser). */

@@ -6,6 +6,7 @@ import { MENUBAR_METHODS, PANEL_API_METHODS, type MenuBarMethod } from '@shared/
 import type { AppSettings, MenuCommand, AdarEvent, RepoInfo } from '@shared/types'
 import { UPDATE_METHODS, type UpdateMethod } from '@shared/update'
 import { CLI_METHODS, parseOpenRepoArgs, type CliMethod } from '@shared/cli'
+import { parseMarkdownArgs } from '@shared/markdown'
 import { TERMINAL_WINDOW_METHODS } from '@shared/terminal'
 import { toErrorPayload } from '@shared/errors'
 import { createBackend, type Backend } from './backend'
@@ -19,6 +20,9 @@ import { bypassQuitGuard, isQuitGuardBypassed } from './quitGuard'
 import { Updater } from './updater'
 
 // Test hooks (development builds only): isolated user data dir and scripted screenshots.
+/** The installed app's bundle id on macOS (`appId` in electron-builder.yml). */
+const APP_BUNDLE_ID = 'dev.adar.gitclient'
+
 if (!app.isPackaged && process.env['ADAR_USER_DATA']) app.setPath('userData', process.env['ADAR_USER_DATA'])
 const CAPTURE_MODE = !app.isPackaged && !!process.env['ADAR_CAPTURE_STEPS']
 if (CAPTURE_MODE) {
@@ -74,14 +78,15 @@ function focusMainWindow(): void {
   if (process.platform === 'darwin') app.focus({ steal: true })
 }
 
-// Folders to open from outside: Finder/Dock/`adar` CLI (macOS "open documents" event, delivered
-// before or after launch) and `--open-repo=<path>` launch arguments.
+// Folders and Markdown files to open from outside: Finder/Dock/`adar` CLI (macOS "open documents" event, delivered
+// before or after launch), `--open-repo=<path>` launch arguments, and the Markdown file Windows and Linux start Adar
+// with when it is opened with it. The renderer opens a folder as a tab and shows a Markdown file's preview.
 app.on('open-file', (e, file) => {
   e.preventDefault()
   requestOpen(file)
   focusMainWindow()
 })
-for (const p of parseOpenRepoArgs(process.argv)) requestOpen(p)
+for (const p of [...parseOpenRepoArgs(process.argv), ...parseMarkdownArgs(process.argv)]) requestOpen(p)
 
 /** Pull request notifications on screen. */
 const notices = new Set<Notification>()
@@ -232,6 +237,13 @@ const platform: PlatformAdapter = {
   gitlabCom: !app.isPackaged && /^http:\/\/127\.0\.0\.1:\d+$/.test(process.env['ADAR_GITLAB_URL'] ?? '') ? process.env['ADAR_GITLAB_URL'] : undefined,
   azureDevOps: !app.isPackaged && /^http:\/\/127\.0\.0\.1:\d+$/.test(process.env['ADAR_AZURE_URL'] ?? '') ? process.env['ADAR_AZURE_URL'] : undefined,
   allowLoopbackServers: !app.isPackaged && process.env['ADAR_HOSTING_LOOPBACK'] === '1',
+  async pickFile(opts) {
+    const options: Electron.OpenDialogOptions = { title: opts.title, defaultPath: opts.defaultPath, filters: opts.filters, properties: ['openFile'] }
+    const res = mainWindow ? await dialog.showOpenDialog(mainWindow, options) : await dialog.showOpenDialog(options)
+    return res.canceled || res.filePaths.length === 0 ? null : res.filePaths[0]
+  },
+  // The installed app is what the system opens files with; a development build is Electron's own bundle.
+  bundleId: process.platform === 'darwin' && app.isPackaged ? APP_BUNDLE_ID : undefined,
   secrets: {
     // Linux without a keyring would fall back to a hard-coded key: no better than clear text.
     available: () =>
@@ -504,6 +516,8 @@ function buildMenu(): void {
         item('Push', 'push', 'CmdOrCtrl+Shift+Up'),
         { type: 'separator' },
         item('Create Branch…', 'create-branch', 'CmdOrCtrl+B'),
+        item('Open Markdown File…', 'open-markdown'),
+        { type: 'separator' },
         item('Stash', 'stash', 'CmdOrCtrl+Shift+S'),
         item('Pop Stash', 'pop-stash', 'CmdOrCtrl+Alt+S'),
         { type: 'separator' },
@@ -566,7 +580,11 @@ if (!gotLock) app.quit()
 app.on('second-instance', (_e, argv, _cwd, additionalData) => {
   // A second launch (e.g. `Adar --open-repo=/path`) forwards its folders here, then exits.
   const fromData = (additionalData as { openRepo?: unknown } | null)?.openRepo
-  const paths = new Set([...parseOpenRepoArgs(argv), ...(Array.isArray(fromData) ? parseOpenRepoArgs(fromData.map((p) => `--open-repo=${String(p)}`)) : [])])
+  const paths = new Set([
+    ...parseOpenRepoArgs(argv),
+    ...parseMarkdownArgs(argv),
+    ...(Array.isArray(fromData) ? parseOpenRepoArgs(fromData.map((p) => `--open-repo=${String(p)}`)) : [])
+  ])
   for (const p of paths) requestOpen(p)
   focusMainWindow()
 })

@@ -123,6 +123,19 @@ describe.skipIf(process.platform === 'win32')('adar script', () => {
     expect(run([path.join(repo, 'file.txt')], { ADAR_APP: app }).stdout.trim()).toBe(`open -a ${app} ${repo} --args --open-repo=${repo}`)
   })
 
+  it('opens a Markdown file as itself, for Adar to preview', () => {
+    const app = path.join(temp('adar-fake-'), 'Adar.app')
+    mkdirSync(app, { recursive: true })
+    const repo = execFileSync('/bin/sh', ['-c', 'cd "$1" && pwd -P', 'sh', temp('adar docs ')], { encoding: 'utf8' }).trim()
+    writeFileSync(path.join(repo, 'my plan.md'), '# Plan')
+    mkdirSync(path.join(repo, 'notes.md'))
+    const file = path.join(repo, 'my plan.md')
+    expect(run([file], { ADAR_APP: app }).stdout.trim()).toBe(`open -a ${app} ${file} --args --open-repo=${file}`)
+    expect(run(['my plan.md'], { ADAR_APP: app }, repo).stdout.trim()).toBe(`open -a ${app} ${file} --args --open-repo=${file}`)
+    // A folder named like one is a folder.
+    expect(run(['notes.md'], { ADAR_APP: app }, repo).stdout.trim()).toBe(`open -a ${app} ${repo}/notes.md --args --open-repo=${repo}/notes.md`)
+  })
+
   it('finds the app bundle it lives in through a PATH symlink', () => {
     const base = temp('adar-bundle-')
     const res = path.join(base, 'Adar.app', 'Contents', 'Resources', 'bin')

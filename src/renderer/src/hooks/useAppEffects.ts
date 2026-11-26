@@ -5,9 +5,11 @@ import { useEffect } from 'react'
 import { cli, isElectron, onAdarEvent } from '@renderer/api/client'
 import { openRepoAt, silentFetch } from '@renderer/actions/git'
 import { openFromNotice } from '@renderer/actions/review'
+import { openMarkdown } from '@renderer/components/markdown/markdownStore'
 import { runCommand } from '@renderer/commands'
 import { isEditableTarget, isMod } from '@renderer/lib/keys'
 import { getActiveTab, useApp, type RefreshScope } from '@renderer/store/appStore'
+import { isMarkdownPath } from '@shared/markdown'
 
 /** Coalesce repo-changed events per repo into one refresh. */
 const pending = new Map<string, { scopes: Set<RefreshScope>; timer: ReturnType<typeof setTimeout> }>()
@@ -192,6 +194,8 @@ export function useOpenRequests(): void {
     let cancelled = false
     let chain = Promise.resolve()
     const open = (p: string) => {
+      // A Markdown file (opened with Adar from the Finder, or `adar notes.md`) shows its preview; a folder opens as a tab.
+      if (isMarkdownPath(p)) return openMarkdown(p)
       chain = chain.then(() => openRepoAt(p).then(() => undefined, () => undefined))
     }
     // Listen first, then take the queue, so nothing falls between the two.

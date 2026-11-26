@@ -7,6 +7,7 @@ import {
   ClipboardCopy,
   Copy,
   ExternalLink,
+  Eye,
   FileDiff,
   FolderOpen,
   Minus,
@@ -19,10 +20,18 @@ import {
 import * as actions from '@renderer/actions/git'
 import type { MenuItem } from '@renderer/components/common/ContextMenu'
 import { markResolvedAndAdvance } from '@renderer/components/conflicts/resolveFlow'
+import { openMarkdown } from '@renderer/components/markdown/markdownStore'
+import { isMarkdownPath } from '@shared/markdown'
 import type { DiffTarget, FileChange } from '@shared/types'
 import { escapeGitignore, ignoreOptions } from './ignore'
 
 const ICON = 14
+
+/** A Markdown file that is in the working tree can be read as it looks. */
+function previewItem(repo: string, file: FileChange): MenuItem[] {
+  if (!isMarkdownPath(file.path) || file.status === 'deleted') return []
+  return [{ label: 'Preview', icon: <Eye size={ICON} />, onClick: () => openMarkdown(actions.absPath(repo, file.path)) }]
+}
 
 /** Menu for files of a commit / stash / comparison. `rev` is the revision used for blame. */
 export function readOnlyFileMenu(
@@ -107,6 +116,7 @@ export function wipFileMenu(ctx: WipMenuContext): MenuItem[] {
 
   items.push(
     { type: 'separator' },
+    ...previewItem(repo, file),
     {
       label: 'Open file',
       icon: <ExternalLink size={ICON} />,

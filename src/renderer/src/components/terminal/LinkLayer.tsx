@@ -79,7 +79,9 @@ function LinkCard({ target, x, y }: { target: Exclude<LinkTarget, { kind: 'web' 
   const what =
     target.kind === 'image'
       ? `${CLICK} to see it large`
-      : target.kind === 'page'
+      : target.kind === 'markdown'
+        ? `${CLICK} to read it in Adar`
+        : target.kind === 'page'
         ? /\.html?$/i.test(name)
           ? `${CLICK} to open it in your browser`
           : `${CLICK} to open it`

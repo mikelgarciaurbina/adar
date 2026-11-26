@@ -41,6 +41,7 @@ import {
 } from './layout'
 import { accentStep, type AccentMenu } from './accents'
 import { findPaths, linkTarget, type LinkTarget } from './links'
+import { openMarkdown } from '@renderer/components/markdown/markdownStore'
 import { noticeFor, shouldNotify } from './model'
 
 export interface TermTab {
@@ -258,12 +259,13 @@ function leaveLink(id: string): void {
   if (useTerminals.getState().link?.id === id) useTerminals.setState({ link: null })
 }
 
-/** Open what a link of a terminal leads to: a page of the web in the browser, a picture large in Adar, a web page or a PDF with its app, any other file in its folder. */
+/** Open what a link of a terminal leads to: a page of the web in the browser, a picture large in Adar, a Markdown document's preview, a web page or a PDF with its app, any other file in its folder. */
 export function openTerminalLink(id: string, target: LinkTarget): void {
   useTerminals.setState({ link: null })
   const failed = (err: unknown) => toast.error(describeError(err))
   if (target.kind === 'web') void api.openExternal(target.url).catch(failed)
   else if (target.kind === 'image') useTerminals.setState({ viewer: { id, path: target.path } })
+  else if (target.kind === 'markdown') openMarkdown(target.path, { terminal: id })
   else if (target.kind === 'page') void api.terminalOpenFile(target.path).catch(failed)
   else void api.showInFolder(target.path).catch(failed)
 }

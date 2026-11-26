@@ -41,6 +41,10 @@ branding and is not affiliated with GitKraken or Axosoft.
   any commit on your branch** in place (with a warning and a force-push shortcut when it was already pushed).
 - **Diffs** unified or side by side, changed hunks or the full file, syntax highlighting and intra-line changes;
   image diffs; file history and blame.
+- **Markdown preview**: read a `.md` file as it will look — a plan your agent just wrote, a README — with its outline,
+  tables, task lists and highlighted code, following the file while it is being written. Open one from the Finder
+  (*Open With → Adar*), with `adar notes.md`, with ⌘-click on its path in Adar's terminal, or with *Preview* on a
+  changed file's diff.
 - **Merge conflict tool** (A / B / editable output) and a banner to continue, skip or abort merges, rebases,
   cherry-picks and reverts.
 - **Visual interactive rebase**: pick, reword, edit, squash, fixup, drop and drag to reorder.
@@ -107,6 +111,7 @@ Open a repository in Adar from your terminal, like `code .` or GitKraken's `gk`:
 adar              # the repository of the current folder
 adar ~/code/app   # any folder inside a repository
 adar ~/code/shop  # a folder holding several repositories: opens them as a tab group
+adar docs/plan.md # a Markdown file: shows its preview
 ```
 
 Install the command once from **Adar → Install Command Line Tool…** (or *Settings → Integrations*). It links

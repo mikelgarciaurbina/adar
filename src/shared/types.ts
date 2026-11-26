@@ -956,6 +956,7 @@ export const MENU_COMMANDS = [
   'focus-branch-filter',
   'open-repo-path',
   'open-repo-wsl',
+  'open-markdown',
   'stage-all',
   'commit',
   'about',

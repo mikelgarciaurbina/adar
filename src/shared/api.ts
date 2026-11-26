@@ -63,6 +63,7 @@ import type {
   RepoPullRequests
 } from './hosting'
 import type { PullNotice, PullReviewData, ReviewAction, ReviewRange, WorkReviewRange } from './review'
+import type { MarkdownFile, MarkdownLink } from './markdown'
 
 export interface AdarApi {
   // ── App / system ────────────────────────────────────────────────────────
@@ -89,6 +90,23 @@ export interface AdarApi {
   findRepositories(path: string): Promise<FoundRepo[]>
   /** Reply to a 'credential-request' event. null cancels the git command. */
   answerCredentialRequest(id: string, value: string | null): Promise<void>
+
+  // ── Markdown documents (the desktop app only) ───────────────────────────
+  /**
+   * A Markdown file to preview, by its full path. Null when `unless` is still its version: the preview asks again to
+   * follow a file that is being written. Rejects for anything that is not a Markdown file.
+   */
+  readMarkdownFile(path: string, opts?: { unless?: string }): Promise<MarkdownFile | null>
+  /** A picture the document at `doc` shows, by the address it gives, as a data: URL; null when there is none to show. */
+  markdownImage(doc: string, src: string): Promise<string | null>
+  /** Where a link of the document at `doc` leads, when it is a file or folder on this machine; null otherwise. */
+  markdownLink(doc: string, href: string): Promise<MarkdownLink | null>
+  /** Native file picker for a Markdown file. Resolves null when cancelled. */
+  pickMarkdownFile(opts?: { defaultPath?: string }): Promise<string | null>
+  /** macOS, installed app: whether Markdown files open with Adar by default; null where Adar cannot tell or change it. */
+  markdownDefaultApp(): Promise<boolean | null>
+  /** macOS, installed app: make Adar the app Markdown files open with (what the Finder's "Change All…" does). */
+  setMarkdownDefaultApp(): Promise<void>
 
   // ── Repository lifecycle ────────────────────────────────────────────────
   /**
@@ -431,6 +449,12 @@ export const API_METHODS = [
   'removeRecentRepo',
   'findRepositories',
   'answerCredentialRequest',
+  'readMarkdownFile',
+  'markdownImage',
+  'markdownLink',
+  'pickMarkdownFile',
+  'markdownDefaultApp',
+  'setMarkdownDefaultApp',
   'openRepo',
   'trustRepo',
   'closeRepo',
