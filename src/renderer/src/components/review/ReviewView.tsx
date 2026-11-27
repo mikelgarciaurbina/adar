@@ -5,10 +5,12 @@
 // changes not committed against the base branch, with notes for the agent (WorkReviewPanel on the right).
 
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowLeft, Bot, Check, ChevronDown, ChevronRight, Circle, ExternalLink, FileCode2, GitCommitHorizontal, GitPullRequest, MessageSquare, PencilLine, RefreshCw, Search, Sparkles } from 'lucide-react'
+import { ArrowLeft, Bot, Check, ChevronDown, ChevronRight, Circle, ExternalLink, FileCode2, GitCommitHorizontal, GitPullRequest, MessageSquare, PencilLine, RefreshCw, Search, Sparkles, SquarePen } from 'lucide-react'
 import * as git from '@renderer/actions/git'
 import { openWebPage } from '@renderer/actions/pulls'
 import { commentOnConversation, keyOf, loadReview, REVIEW_PAGE, setViewed } from '@renderer/actions/review'
+import { editFromDiff } from '@renderer/actions/editor'
+import { lineOfChange } from '@renderer/components/editor/model'
 import { loadWorkReview } from '@renderer/actions/workReview'
 import { api, onAdarEvent } from '@renderer/api/client'
 import { Button, EmptyState, IconButton, Spinner } from '@renderer/components/common/Button'
@@ -465,6 +467,18 @@ function FileBody(props: {
           <input type="checkbox" checked={props.viewed} onChange={(e) => void setViewed(repo, id, file.path, e.target.checked)} />
           Viewed
         </label>
+        {/* The work of this very worktree: the file on disk is the one reviewed, so a small fix can be made by hand. */}
+        {id === 'work' && file.status !== 'deleted' && (
+          <Button
+            size="sm"
+            variant="ghost"
+            icon={<SquarePen size={14} />}
+            title="Edit this file in Adar, at its first change"
+            onClick={() => void editFromDiff(repo, file.path, diff ? lineOfChange(diff.hunks, -1) : undefined)}
+          >
+            Edit
+          </Button>
+        )}
         {props.next && (
           <Button size="sm" variant="ghost" title="Next file (N)" onClick={() => props.onNext(props.next!)}>
             Next file

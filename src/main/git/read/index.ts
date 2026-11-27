@@ -13,6 +13,7 @@ import { createWorktreeReadOps } from './worktrees'
 import { createAgentOps } from '../../system/activity'
 import { createTerminalOps } from '../../terminal/ops'
 import { createMarkdownOps } from '../../markdown'
+import { createFileOps } from '../../files'
 import { createRepoOps } from './repo'
 import { createStatusOps } from './status'
 import { createWorkReviewOps } from './workReview'
@@ -42,6 +43,7 @@ export function createReadOps(ctx: GitContext, services: SystemServices): ReadOp
     ...createAgentOps(services),
     ...createTerminalOps(services),
     ...createMarkdownOps(ctx.platform),
+    ...createFileOps(ctx),
     ...createWorkReviewOps(rctx),
     ...createStatusOps(rctx),
     ...createDiffOps(rctx),

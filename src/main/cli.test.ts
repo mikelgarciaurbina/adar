@@ -113,25 +113,29 @@ describe.skipIf(process.platform === 'win32')('adar script', () => {
   const run = (args: string[], env: Record<string, string>, cwd?: string) =>
     spawnSync('/bin/sh', [SCRIPT, ...args], { env: { PATH: '/usr/bin:/bin', HOME: os.tmpdir(), ADAR_CLI_DRY_RUN: '1', ...env }, cwd, encoding: 'utf8' })
 
-  it('opens the current directory, a given folder or the folder of a file', () => {
+  it('opens the current directory or a given folder', () => {
     const app = path.join(temp('adar-fake-'), 'Adar.app')
     mkdirSync(app, { recursive: true })
     const repo = execFileSync('/bin/sh', ['-c', 'cd "$1" && pwd -P', 'sh', temp('adar repo ')], { encoding: 'utf8' }).trim()
-    writeFileSync(path.join(repo, 'file.txt'), 'x')
     expect(run([], { ADAR_APP: app }, repo).stdout.trim()).toBe(`open -a ${app} ${repo} --args --open-repo=${repo}`)
     expect(run([repo], { ADAR_APP: app }).stdout.trim()).toBe(`open -a ${app} ${repo} --args --open-repo=${repo}`)
-    expect(run([path.join(repo, 'file.txt')], { ADAR_APP: app }).stdout.trim()).toBe(`open -a ${app} ${repo} --args --open-repo=${repo}`)
   })
 
-  it('opens a Markdown file as itself, for Adar to preview', () => {
+  it('opens a file as itself, for Adar to preview or edit', () => {
     const app = path.join(temp('adar-fake-'), 'Adar.app')
     mkdirSync(app, { recursive: true })
     const repo = execFileSync('/bin/sh', ['-c', 'cd "$1" && pwd -P', 'sh', temp('adar docs ')], { encoding: 'utf8' }).trim()
     writeFileSync(path.join(repo, 'my plan.md'), '# Plan')
+    writeFileSync(path.join(repo, '.env'), 'A=1')
+    mkdirSync(path.join(repo, 'src'))
+    writeFileSync(path.join(repo, 'src', 'main.ts'), 'x')
     mkdirSync(path.join(repo, 'notes.md'))
     const file = path.join(repo, 'my plan.md')
     expect(run([file], { ADAR_APP: app }).stdout.trim()).toBe(`open -a ${app} ${file} --args --open-repo=${file}`)
     expect(run(['my plan.md'], { ADAR_APP: app }, repo).stdout.trim()).toBe(`open -a ${app} ${file} --args --open-repo=${file}`)
+    // Any file, by its real path, wherever it is asked from.
+    expect(run(['.env'], { ADAR_APP: app }, repo).stdout.trim()).toBe(`open -a ${app} ${repo}/.env --args --open-repo=${repo}/.env`)
+    expect(run(['../src/main.ts'], { ADAR_APP: app }, path.join(repo, 'src')).stdout.trim()).toBe(`open -a ${app} ${repo}/src/main.ts --args --open-repo=${repo}/src/main.ts`)
     // A folder named like one is a folder.
     expect(run(['notes.md'], { ADAR_APP: app }, repo).stdout.trim()).toBe(`open -a ${app} ${repo}/notes.md --args --open-repo=${repo}/notes.md`)
   })

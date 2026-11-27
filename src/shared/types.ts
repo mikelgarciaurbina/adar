@@ -960,7 +960,9 @@ export const MENU_COMMANDS = [
   'stage-all',
   'commit',
   'about',
-  'whats-new'
+  'whats-new',
+  'show-files',
+  'open-file'
 ] as const
 
 export type MenuCommand = (typeof MENU_COMMANDS)[number]

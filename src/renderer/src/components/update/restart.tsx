@@ -9,6 +9,7 @@ import { api, isElectron, updates } from '@renderer/api/client'
 import { confirm } from '@renderer/components/common/dialogs'
 import { toast } from '@renderer/components/common/toast'
 import { unsavedConflictEdits } from '@renderer/components/conflicts/editorCache'
+import { unsavedFileLines } from '@renderer/actions/editor'
 import { basename, pluralize } from '@renderer/lib/format'
 import { useApp, type AppState } from '@renderer/store/appStore'
 import type { ManualInstall } from '@shared/update'
@@ -39,7 +40,7 @@ async function terminalsLost(): Promise<string[]> {
 
 /** True when it is fine to restart now: nothing would be lost, or the user agreed. */
 export async function confirmRestartForUpdate(): Promise<boolean> {
-  const lost = [...workLostOnRestart(useApp.getState(), unsavedConflictEdits()), ...(await terminalsLost())]
+  const lost = [...workLostOnRestart(useApp.getState(), unsavedConflictEdits()), ...unsavedFileLines(), ...(await terminalsLost())]
   if (!lost.length) return true
   return confirm({
     title: 'Restart Adar to update?',
@@ -125,7 +126,7 @@ export async function startUpdate(): Promise<void> {
 
 /** Cmd+Q / quitting: ask before interrupting running git operations or losing unsaved work. */
 export async function confirmQuit(): Promise<boolean> {
-  const lost = [...workLostOnRestart(useApp.getState(), unsavedConflictEdits()), ...(await terminalsLost())]
+  const lost = [...workLostOnRestart(useApp.getState(), unsavedConflictEdits()), ...unsavedFileLines(), ...(await terminalsLost())]
   if (!lost.length) return true
   return confirm({
     title: 'Quit Adar?',

@@ -64,6 +64,7 @@ import type {
 } from './hosting'
 import type { PullNotice, PullReviewData, ReviewAction, ReviewRange, WorkReviewRange } from './review'
 import type { MarkdownFile, MarkdownLink } from './markdown'
+import type { FileListing, FolderEntry, PathKind, SavedFile, TextFile, TextFileSave } from './files'
 
 export interface AdarApi {
   // ── App / system ────────────────────────────────────────────────────────
@@ -90,6 +91,27 @@ export interface AdarApi {
   findRepositories(path: string): Promise<FoundRepo[]>
   /** Reply to a 'credential-request' event. null cancels the git command. */
   answerCredentialRequest(id: string, value: string | null): Promise<void>
+
+  // ── Files edited in Adar ────────────────────────────────────────────────
+  /** The files of a repository's working tree, for the file tree and the palette: tracked, untracked and ignored. */
+  listFiles(repo: string): Promise<FileListing>
+  /** What is in a folder of the repository whose content `listFiles` does not give (an ignored one). */
+  listFolder(repo: string, dir: string): Promise<FolderEntry[]>
+  /**
+   * A file to edit, by its full path (the desktop app only). Null when `unless` is still its version: the editor asks
+   * again to notice what something else writes. With `root`, the file must be inside that repository. Rejects for a
+   * link, Git's own files, and whatever is not UTF-8 text.
+   */
+  readTextFile(path: string, opts?: { root?: string; unless?: string }): Promise<TextFile | null>
+  /**
+   * Write a file's text back (the desktop app only). Rejects with CONFLICT when the file is no longer the version the
+   * editor started from, unless the save says to write over it.
+   */
+  saveTextFile(path: string, save: TextFileSave): Promise<SavedFile>
+  /** What a path handed to Adar is (the desktop app only): a folder, a Markdown document, another file, or nothing. */
+  pathKind(path: string): Promise<PathKind>
+  /** Native picker for any file, to open it in Adar (the desktop app only). Null when cancelled. */
+  pickFile(opts?: { defaultPath?: string }): Promise<string | null>
 
   // ── Markdown documents (the desktop app only) ───────────────────────────
   /**
@@ -449,6 +471,12 @@ export const API_METHODS = [
   'removeRecentRepo',
   'findRepositories',
   'answerCredentialRequest',
+  'listFiles',
+  'listFolder',
+  'readTextFile',
+  'saveTextFile',
+  'pathKind',
+  'pickFile',
   'readMarkdownFile',
   'markdownImage',
   'markdownLink',

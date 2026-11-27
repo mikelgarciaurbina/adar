@@ -1,23 +1,8 @@
 // Context menus of the right panel file lists.
 
-import {
-  ArchiveRestore,
-  Ban,
-  CircleCheck,
-  ClipboardCopy,
-  Copy,
-  ExternalLink,
-  Eye,
-  FileDiff,
-  FolderOpen,
-  Minus,
-  Plus,
-  RotateCcwClock,
-  ScanText,
-  TriangleAlert,
-  Undo2
-} from 'lucide-react'
+import { ArchiveRestore, Ban, CircleCheck, ClipboardCopy, Copy, ExternalLink, Eye, FileDiff, FolderOpen, Minus, Plus, RotateCcwClock, ScanText, SquarePen, TriangleAlert, Undo2 } from 'lucide-react'
 import * as actions from '@renderer/actions/git'
+import { editFromDiff } from '@renderer/actions/editor'
 import type { MenuItem } from '@renderer/components/common/ContextMenu'
 import { markResolvedAndAdvance } from '@renderer/components/conflicts/resolveFlow'
 import { openMarkdown } from '@renderer/components/markdown/markdownStore'
@@ -47,7 +32,8 @@ export function readOnlyFileMenu(
     { label: 'File history', icon: <RotateCcwClock size={ICON} />, onClick: () => actions.openFileHistory(repo, file.path) },
     { label: 'Blame', icon: <ScanText size={ICON} />, onClick: () => actions.openBlame(repo, file.path, rev) },
     { type: 'separator' },
-    { label: 'Open file', icon: <ExternalLink size={ICON} />, onClick: () => actions.openInEditor(actions.absPath(repo, file.path)) },
+    { label: 'Edit', icon: <SquarePen size={ICON} />, onClick: () => void editFromDiff(repo, file.path) },
+    { label: 'Open in your editor', icon: <ExternalLink size={ICON} />, onClick: () => actions.openInEditor(actions.absPath(repo, file.path)) },
     { label: 'Show in folder', icon: <FolderOpen size={ICON} />, onClick: () => actions.showInFolder(actions.absPath(repo, file.path)) },
     { type: 'separator' },
     { label: 'Copy path', icon: <Copy size={ICON} />, onClick: () => actions.copyText(file.path, 'Path copied') },
@@ -117,8 +103,9 @@ export function wipFileMenu(ctx: WipMenuContext): MenuItem[] {
   items.push(
     { type: 'separator' },
     ...previewItem(repo, file),
+    { label: 'Edit', icon: <SquarePen size={ICON} />, disabled: file.status === 'deleted', onClick: () => void editFromDiff(repo, file.path) },
     {
-      label: 'Open file',
+      label: 'Open in your editor',
       icon: <ExternalLink size={ICON} />,
       disabled: file.status === 'deleted',
       onClick: () => actions.openInEditor(actions.absPath(repo, file.path))
@@ -175,7 +162,7 @@ export function conflictMenu(repo: string, path: string): MenuItem[] {
     { label: 'Resolve conflict…', icon: <TriangleAlert size={ICON} />, onClick: () => actions.openConflict(repo, path) },
     { label: 'Mark as resolved', icon: <CircleCheck size={ICON} />, onClick: () => markResolvedAndAdvance(repo, path) },
     { type: 'separator' },
-    { label: 'Open file', icon: <ExternalLink size={ICON} />, onClick: () => actions.openInEditor(actions.absPath(repo, path)) },
+    { label: 'Open in your editor', icon: <ExternalLink size={ICON} />, onClick: () => actions.openInEditor(actions.absPath(repo, path)) },
     { label: 'Show in folder', icon: <FolderOpen size={ICON} />, onClick: () => actions.showInFolder(actions.absPath(repo, path)) },
     { label: 'File history', icon: <RotateCcwClock size={ICON} />, onClick: () => actions.openFileHistory(repo, path) },
     { type: 'separator' },

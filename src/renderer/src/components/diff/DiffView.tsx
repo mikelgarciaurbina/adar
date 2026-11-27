@@ -6,9 +6,11 @@
 // and in a very narrow panel the layout, full file, history and blame move into the options menu.
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react'
-import { AlertTriangle, ChevronDown, ChevronUp, Eye, History, Minus, Plus, ScanText, Trash2, X } from 'lucide-react'
+import { AlertTriangle, ChevronDown, ChevronUp, Eye, History, Minus, Plus, ScanText, SquarePen, Trash2, X } from 'lucide-react'
 import { api, isMac } from '@renderer/api/client'
 import * as git from '@renderer/actions/git'
+import { editFromDiff } from '@renderer/actions/editor'
+import { lineOfChange } from '@renderer/components/editor/model'
 import { Button, EmptyState, IconButton, Spinner } from '@renderer/components/common/Button'
 import { isEditableTarget } from '@renderer/lib/keys'
 import { useApp, type RepoTab } from '@renderer/store/appStore'
@@ -322,11 +324,14 @@ export function DiffView({ tab, target, siblings }: { tab: RepoTab; target: Diff
   /** A Markdown file can be read as it will look. */
   const canPreview = isMarkdownPath(path) && (!diff || (!diff.binary && !diff.tooLarge))
   const previewing = preview && canPreview && !!diff
+  /** Edit the file in Adar, at the change the view is on (the first one from the top of the file). */
+  const edit = () => void editFromDiff(repo, path, diff && textual ? lineOfChange(diff.hunks, changeNav?.index ?? -1) : undefined)
   /** What a very narrow bar leaves out, as the first items of its "⋯" menu. */
   const foldedItems: MenuItem[] | undefined = folded
     ? [
         ...(canPreview ? [{ label: previewing ? 'Show the changes' : 'Preview', icon: <Eye size={14} />, onClick: () => setPreview(!previewing) }, { type: 'separator' } as MenuItem] : []),
         ...(textual && !previewing ? [...viewMenuItems(mode, fullFile), { type: 'separator' } as MenuItem] : []),
+        ...(exists ? [{ label: 'Edit', icon: <SquarePen size={14} />, onClick: edit } as MenuItem] : []),
         { label: 'File history', icon: <History size={14} />, onClick: () => git.openFileHistory(repo, path) },
         { label: uncommittedNew ? 'Blame (not committed yet)' : 'Blame', icon: <ScanText size={14} />, disabled: !canBlame, onClick: () => git.openBlame(repo, path, blameRev(target)) }
       ]
@@ -386,6 +391,11 @@ export function DiffView({ tab, target, siblings }: { tab: RepoTab; target: Diff
           )}
           {!folded && (
             <>
+              {exists && (
+                <Button size="sm" variant="ghost" className="diff-tb-btn" icon={<SquarePen size={14} />} onClick={edit} title="Edit this file in Adar, at this change">
+                  Edit
+                </Button>
+              )}
               <Button
                 size="sm"
                 variant="ghost"

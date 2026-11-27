@@ -45,6 +45,13 @@ branding and is not affiliated with GitKraken or Axosoft.
   tables, task lists and highlighted code, following the file while it is being written. Open one from the Finder
   (*Open With → Adar*), with `adar notes.md`, with ⌘-click on its path in Adar's terminal, or with *Preview* on a
   changed file's diff.
+- **Edit files in Adar**: a quick fix, a `.env` your agent will not touch, a line you spotted while reviewing — without
+  opening another editor. The *Files* view has the repository's tree on the left (ignored files included), the file
+  in the middle and the changes panel on the right, so you edit, save, see it among the changes and commit. Open a
+  file from *Edit* on its diff, by name in the palette (⌘P), with ⌘-click on a path your agent printed
+  (`src/main/index.ts:120` opens at that line) or with *Open With → Adar* from the Finder. Syntax colours, find and
+  replace, several cursors; a file an agent rewrites meanwhile is never written over without telling you. It is an
+  editor, not an IDE: no completion, no language server.
 - **Merge conflict tool** (A / B / editable output) and a banner to continue, skip or abort merges, rebases,
   cherry-picks and reverts.
 - **Visual interactive rebase**: pick, reword, edit, squash, fixup, drop and drag to reorder.
@@ -112,6 +119,7 @@ adar              # the repository of the current folder
 adar ~/code/app   # any folder inside a repository
 adar ~/code/shop  # a folder holding several repositories: opens them as a tab group
 adar docs/plan.md # a Markdown file: shows its preview
+adar src/app.ts   # any other file of text: opens it to edit
 ```
 
 Install the command once from **Adar → Install Command Line Tool…** (or *Settings → Integrations*). It links

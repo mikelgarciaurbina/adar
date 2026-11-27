@@ -33,27 +33,3 @@ export interface MarkdownLink {
   /** The part after `#`, without it ('' when there is none). */
   anchor: string
 }
-
-/**
- * Bare command-line arguments that are Markdown files: how Windows and Linux hand over a file opened with Adar, as its
- * full path or (Linux file managers) as a `file://` address of this machine.
- */
-export function parseMarkdownArgs(argv: readonly string[]): string[] {
-  const out: string[] = []
-  for (const raw of argv.slice(1)) {
-    if (typeof raw !== 'string' || raw.startsWith('-') || raw.includes('\0')) continue
-    let arg = raw
-    if (/^file:\/\/\//i.test(arg)) {
-      try {
-        arg = decodeURIComponent(new URL(arg).pathname)
-      } catch {
-        continue
-      }
-      if (arg.includes('\0')) continue
-    }
-    // Absolute paths only: /home/me/notes.md, C:\notes\plan.md, \\server\share\plan.md.
-    if (!/^(?:\/|[a-zA-Z]:[\\/]|\\\\)/.test(arg) || !isMarkdownPath(arg)) continue
-    if (!out.includes(arg)) out.push(arg)
-  }
-  return out
-}

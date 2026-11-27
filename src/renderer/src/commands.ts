@@ -5,6 +5,8 @@
 import * as git from '@renderer/actions/git'
 import { installCliCommand, uninstallCliCommand } from '@renderer/actions/cli'
 import { openMarkdownDialog, openMarkdownWithAdar } from '@renderer/actions/markdown'
+import { closeFiles, closeSheet, openFileDialog, toggleFiles } from '@renderer/actions/editor'
+import { editorKey, useEditor } from '@renderer/components/editor/editorStore'
 import { closeMarkdown, useMarkdown } from '@renderer/components/markdown/markdownStore'
 import { openBranchCleanup, openKeptBranches } from '@renderer/actions/cleanup'
 import { openReflog } from '@renderer/actions/reflog'
@@ -103,6 +105,7 @@ export const COMMANDS: Command[] = [
   { id: 'clone-repo', label: 'Clone Repository…', group: 'App', shortcut: 'Mod+Shift+N', run: () => useApp.getState().openModal({ kind: 'clone' }) },
   { id: 'init-repo', label: 'Init Repository…', group: 'App', shortcut: 'Mod+Alt+N', run: () => useApp.getState().openModal({ kind: 'init' }) },
   { id: 'close-tab', label: 'Close Tab', group: 'App', shortcut: 'Mod+W', when: hasRepo, run: withRepo((r) => useApp.getState().closeTab(r)) },
+  { id: 'open-file', label: 'Open File…', group: 'App', when: () => isElectron, run: () => openFileDialog() },
   { id: 'open-markdown', label: 'Open Markdown File…', group: 'App', when: () => isElectron, run: () => openMarkdownDialog() },
   { id: 'markdown-default-app', label: 'Open Markdown Files with Adar by Default…', group: 'App', when: () => isElectron && platform === 'darwin', run: () => openMarkdownWithAdar() },
   { id: 'next-tab', label: 'Next Tab', group: 'App', shortcut: 'Ctrl+Tab', run: () => cycleTab(1) },
@@ -207,6 +210,7 @@ export const COMMANDS: Command[] = [
       setTimeout(() => window.dispatchEvent(new Event(FOCUS_FILTER_EVENT)), 0)
     }
   },
+  { id: 'show-files', label: 'Edit Files', group: 'View', shortcut: 'Mod+Shift+E', when: hasRepo, run: withRepo((r) => toggleFiles(r)) },
   { id: 'show-graph', label: 'Show Graph', group: 'View', when: hasRepo, run: withRepo((r) => git.showGraph(r)) },
   { id: 'toggle-left-panel', label: 'Toggle Left Panel', group: 'View', shortcut: 'Mod+J', run: () => useApp.getState().toggleLeft() },
   { id: 'toggle-right-panel', label: 'Toggle Right Panel', group: 'View', shortcut: 'Mod+K', run: () => useApp.getState().toggleRight() },
@@ -261,9 +265,29 @@ export function getCommand(id: string): Command | undefined {
   return byId.get(id)
 }
 
+/**
+ * While an editor has the keyboard, these shortcuts of the git and terminal sides mean the editor's own (as in any
+ * editor): ⌘F finds in the file, ⌘D selects the next occurrence, ⌘] and ⌘[ indent. The editor takes those keys
+ * itself when the page sees them first; this is for when the menu does.
+ */
+const IN_EDITOR: Record<string, Parameters<typeof editorKey>[0]> = {
+  'search-commits': 'find',
+  'terminal-split-right': 'next-occurrence',
+  'terminal-next-pane': 'indent',
+  'terminal-prev-pane': 'outdent'
+}
+
 export function runCommand(id: MenuCommand | string): void {
-  // A Markdown document over the window is what ⌘W closes.
-  if (id === 'close-tab' && useMarkdown.getState().doc) return closeMarkdown()
+  if (id === 'close-tab') {
+    // What is over the window is what ⌘W closes: a file being edited there, a Markdown document.
+    if (useEditor.getState().sheet) return void closeSheet()
+    if (useMarkdown.getState().doc) return closeMarkdown()
+    // Then the Files view of the tab in front (its text stays), unless a terminal has the keyboard.
+    const tab = getActiveTab()
+    if (tab?.center.kind === 'files' && !useApp.getState().groupView && !terminalHasKeyboard()) return closeFiles(tab.path)
+  }
+  const inEditor = IN_EDITOR[id]
+  if (inEditor && editorKey(inEditor)) return
   const cmd = byId.get(terminalHasKeyboard() ? (IN_TERMINAL[id] ?? id) : id)
   if (!cmd) {
     console.warn('[adar] unknown command', id)

@@ -39,6 +39,13 @@ no contiene código, recursos ni marca de GitKraken y no tiene relación con Git
   con su índice, tablas, listas de tareas y código resaltado, siguiendo el archivo mientras se escribe. Ábrelo desde el
   Finder (*Abrir con → Adar*), con `adar notas.md`, con ⌘-clic sobre su ruta en el terminal de Adar o con *Preview* en
   el diff de un archivo cambiado.
+- **Editar archivos en Adar**: un arreglo rápido, un `.env` que tu agente no quiere tocar, una línea que has visto al
+  revisar — sin abrir otro editor. La vista *Files* tiene el árbol del repositorio a la izquierda (con los archivos
+  ignorados), el archivo en el centro y el panel de cambios a la derecha: editas, guardas, lo ves entre los cambios y
+  haces commit. Abre un archivo con *Edit* en su diff, por su nombre en la paleta (⌘P), con ⌘-clic sobre una ruta que
+  haya impreso tu agente (`src/main/index.ts:120` abre en esa línea) o con *Abrir con → Adar* desde el Finder. Colores
+  de sintaxis, buscar y reemplazar, varios cursores; un archivo que un agente reescribe mientras tanto nunca se
+  sobrescribe sin avisarte. Es un editor, no un IDE: sin autocompletado ni servidor de lenguaje.
 - **Herramienta de conflictos** (A / B / resultado editable) y banner para continuar, saltar o abortar merges, rebases,
   cherry-picks y reverts.
 - **Rebase interactivo visual**: pick, reword, edit, squash, fixup, drop y reordenar arrastrando.
@@ -108,6 +115,7 @@ adar              # el repositorio de la carpeta actual
 adar ~/code/app   # cualquier carpeta dentro de un repositorio
 adar ~/code/shop  # una carpeta con varios repositorios: los abre como grupo de pestañas
 adar docs/plan.md # un archivo Markdown: muestra su vista previa
+adar src/app.ts   # cualquier otro archivo de texto: lo abre para editar
 ```
 
 Instala el comando una vez desde **Adar → Install Command Line Tool…** (o *Settings → Integrations*). Enlaza `adar`

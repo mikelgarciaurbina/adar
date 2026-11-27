@@ -1,4 +1,5 @@
 import { StrictMode } from 'react'
+import { textOf, useEditor, viewOf } from '@renderer/components/editor/editorStore'
 import { createRoot } from 'react-dom/client'
 import { App } from './App'
 import { api } from './api/client'
@@ -11,7 +12,7 @@ import './styles/base.css'
 import './components/common/common.css'
 
 // Debug/e2e handle (renderer-only; exposes nothing the UI cannot already do).
-;(window as unknown as { __adar: unknown }).__adar = { store: useApp, api, updates: useUpdates, terminals: useTerminals, term: termOf }
+;(window as unknown as { __adar: unknown }).__adar = { store: useApp, api, updates: useUpdates, terminals: useTerminals, term: termOf, editor: useEditor, editorText: textOf, editorView: viewOf }
 // Asked by the main process before quitting (see src/main/quitGuard.ts).
 ;(window as unknown as { __adarConfirmQuit: () => Promise<boolean> }).__adarConfirmQuit = confirmQuit
 

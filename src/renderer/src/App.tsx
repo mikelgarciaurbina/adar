@@ -34,6 +34,8 @@ import { TerminalWorkspace } from '@renderer/components/terminal/TerminalView'
 import { useTerminalSync } from '@renderer/components/terminal/terminalStore'
 import { TerminalLinkLayer } from '@renderer/components/terminal/LinkLayer'
 import { MarkdownReader } from '@renderer/components/markdown/MarkdownReader'
+import { FilesView } from '@renderer/components/editor/FilesView'
+import { FileSheet } from '@renderer/components/editor/FileSheet'
 import { showTerminal, terminalsAvailable } from '@renderer/actions/terminal'
 import { useAutoFetch, useBackendEvents, useGlobalShortcuts, useOpenRequests, useRefreshOnFocus, useTheme } from '@renderer/hooks/useAppEffects'
 import { useActiveTab, useApp, type RepoTab } from '@renderer/store/appStore'
@@ -59,6 +61,8 @@ function CenterPanel({ tab }: { tab: RepoTab }) {
       return <ReviewView key="work" tab={tab} view={view} />
     case 'inbox':
       return <InboxView tab={tab} />
+    case 'files':
+      return <FilesView tab={tab} view={view} />
     default:
       return <CommitGraph tab={tab} />
   }
@@ -70,9 +74,9 @@ function RepoWorkspace({ tab }: { tab: RepoTab }) {
   const leftWidth = useApp((s) => s.settings.leftPanelWidth)
   const rightWidth = useApp((s) => s.settings.rightPanelWidth)
   const updateSettings = useApp((s) => s.updateSettings)
-  // A review has its own file list on the left; the inbox spans the window.
+  // A review has its own file list on the left, and so has the Files view (its tree); the inbox spans the window.
   const wide = tab.center.kind === 'inbox'
-  const left = !leftCollapsed && tab.center.kind !== 'review' && tab.center.kind !== 'work-review' && !wide
+  const left = !leftCollapsed && tab.center.kind !== 'review' && tab.center.kind !== 'work-review' && tab.center.kind !== 'files' && !wide
   const right = !rightCollapsed && !wide
   // What the tab shows: the graph, the terminal, or the graph with the terminal docked under it.
   const view = useApp((s) => (terminalsAvailable ? (s.settings.terminalViews[tab.path] ?? 'graph') : 'graph'))
@@ -184,6 +188,7 @@ export function App() {
       <ContextMenuHost />
       <TerminalLinkLayer />
       <MarkdownReader />
+      <FileSheet />
       <ToastHost />
     </div>
   )

@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync, mkdirSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { app, BrowserWindow, dialog, ipcMain, Menu, net, Notification, safeStorage, shell, type MenuItemConstructorOptions } from 'electron'
 import { IPC_EVENT_CHANNEL, IPC_INVOKE_CHANNEL, type InvokeResponse } from '@shared/api'
@@ -6,7 +6,7 @@ import { MENUBAR_METHODS, PANEL_API_METHODS, type MenuBarMethod } from '@shared/
 import type { AppSettings, MenuCommand, AdarEvent, RepoInfo } from '@shared/types'
 import { UPDATE_METHODS, type UpdateMethod } from '@shared/update'
 import { CLI_METHODS, parseOpenRepoArgs, type CliMethod } from '@shared/cli'
-import { parseMarkdownArgs } from '@shared/markdown'
+import { parsePathArgs } from '@shared/files'
 import { TERMINAL_WINDOW_METHODS } from '@shared/terminal'
 import { toErrorPayload } from '@shared/errors'
 import { createBackend, type Backend } from './backend'
@@ -79,15 +79,25 @@ function focusMainWindow(): void {
   if (process.platform === 'darwin') app.focus({ steal: true })
 }
 
-// Folders and Markdown files to open from outside: Finder/Dock/`adar` CLI (macOS "open documents" event, delivered
-// before or after launch), `--open-repo=<path>` launch arguments, and the Markdown file Windows and Linux start Adar
-// with when it is opened with it. The renderer opens a folder as a tab and shows a Markdown file's preview.
+// Folders and files to open from outside: Finder/Dock/`adar` CLI (macOS "open documents" event, delivered before or
+// after launch), `--open-repo=<path>` launch arguments, and the file Windows and Linux start Adar with when it is
+// opened with it. The renderer opens a folder as a tab, shows a Markdown file's preview and any other file to edit.
+/** The files among the bare arguments of a launch (an unpackaged run's first argument is Adar's own script). */
+function fileArgs(argv: readonly string[]): string[] {
+  return parsePathArgs(app.isPackaged ? argv : argv.slice(1)).filter((p) => {
+    try {
+      return statSync(p).isFile()
+    } catch {
+      return false
+    }
+  })
+}
 app.on('open-file', (e, file) => {
   e.preventDefault()
   requestOpen(file)
   focusMainWindow()
 })
-for (const p of [...parseOpenRepoArgs(process.argv), ...parseMarkdownArgs(process.argv)]) requestOpen(p)
+for (const p of [...parseOpenRepoArgs(process.argv), ...fileArgs(process.argv)]) requestOpen(p)
 
 /** Scripted runs: what clicking the last notification would do. */
 let lastNotice: (() => void) | null = null
@@ -516,6 +526,7 @@ function buildMenu(): void {
         item('Clone Repository…', 'clone-repo', 'CmdOrCtrl+Shift+N'),
         item('Init Repository…', 'init-repo', 'CmdOrCtrl+Alt+N'),
         { type: 'separator' },
+        item('Open File…', 'open-file'),
         item('Open Markdown File…', 'open-markdown'),
         { type: 'separator' },
         item('Close Tab', 'close-tab', 'CmdOrCtrl+W'),
@@ -543,6 +554,7 @@ function buildMenu(): void {
       label: 'View',
       submenu: [
         item('Refresh', 'refresh', 'CmdOrCtrl+R'),
+        item('Edit Files', 'show-files', 'CmdOrCtrl+Shift+E'),
         { type: 'separator' },
         item('Toggle Left Panel', 'toggle-left-panel', 'CmdOrCtrl+J'),
         item('Filter Branches', 'focus-branch-filter', 'CmdOrCtrl+Alt+F'),
@@ -628,7 +640,7 @@ app.on('second-instance', (_e, argv, _cwd, additionalData) => {
   const fromData = (additionalData as { openRepo?: unknown } | null)?.openRepo
   const paths = new Set([
     ...parseOpenRepoArgs(argv),
-    ...parseMarkdownArgs(argv),
+    ...fileArgs(argv),
     ...(Array.isArray(fromData) ? parseOpenRepoArgs(fromData.map((p) => `--open-repo=${String(p)}`)) : [])
   ])
   for (const p of paths) requestOpen(p)

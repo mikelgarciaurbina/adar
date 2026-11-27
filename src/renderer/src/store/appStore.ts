@@ -54,6 +54,11 @@ export type CenterView =
   | { kind: 'work-review'; mode: ReviewMode; tab: ReviewTab; path?: string }
   /** The pull requests of every open repository, what waits for the user first. */
   | { kind: 'inbox' }
+  /**
+   * The repository's files, to edit one in Adar: the tree, and the file at `path` (relative to the repository) when
+   * one is open. `back` is the view it was opened from (a diff), which closing it returns to.
+   */
+  | { kind: 'files'; path?: string; back?: CenterView }
 
 export type ReviewMode = 'all' | 'since'
 export type ReviewTab = 'files' | 'conversation' | 'commits'

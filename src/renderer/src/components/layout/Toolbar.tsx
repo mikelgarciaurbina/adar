@@ -10,6 +10,7 @@ import {
   Archive,
   ChevronDown,
   Code,
+  FileCode2,
   FolderOpen,
   GitBranchPlus,
   GitGraph,
@@ -28,6 +29,8 @@ import {
 } from 'lucide-react'
 import { isMac } from '@renderer/api/client'
 import { setTerminalView, terminalsAvailable } from '@renderer/actions/terminal'
+import { toggleFiles } from '@renderer/actions/editor'
+import { useEditor } from '@renderer/components/editor/editorStore'
 import { ownerCount, ownerState } from '@renderer/components/terminal/model'
 import { StateDot } from '@renderer/components/terminal/parts'
 import { useTerminals } from '@renderer/components/terminal/terminalStore'
@@ -132,6 +135,25 @@ function ReviewsButton({ repo }: { repo: string }) {
         badge={badgeCount(count)}
         className={shown ? 'tb-tool-on' : undefined}
         onClick={() => (shown ? git.showGraph(repo) : openInbox())}
+      />
+    </>
+  )
+}
+
+/** The repository's files, to edit one in Adar; a dot while a file has text that was not saved. */
+function FilesButton({ repo }: { repo: string }) {
+  const shown = useApp((s) => s.tabs.find((t) => t.path === repo)?.center.kind === 'files')
+  const unsaved = useEditor((s) => Object.values(s.docs).some((d) => d.repo === repo && d.dirty))
+  return (
+    <>
+      <span className="tb-tool-sep" aria-hidden="true" />
+      <ToolButton
+        icon={<FileCode2 size={18} />}
+        label="Files"
+        title={withShortcut(unsaved ? 'Edit this repository’s files (a file has changes that were not saved)' : 'Edit this repository’s files', 'show-files')}
+        dot={unsaved}
+        className={shown ? 'tb-tool-on' : undefined}
+        onClick={() => toggleFiles(repo)}
       />
     </>
   )
@@ -361,6 +383,7 @@ export function Toolbar({ tab }: { tab: RepoTab }) {
           onClick={() => void git.popStash(repo)}
         />
         <ReviewsButton repo={repo} />
+        <FilesButton repo={repo} />
       </div>
 
       <div className="tb-toolbar-right">

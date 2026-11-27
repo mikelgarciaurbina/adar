@@ -1,5 +1,6 @@
 // Command palette (Mod+P): fuzzy search over registered commands plus dynamic
-// entries (checkout branches, switch tabs, open recent repos, open diffs).
+// entries (checkout branches, switch tabs, open recent repos, open diffs) and, by
+// name, the files of the repository in front, to edit one in Adar.
 
 import { useDeferredValue, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
@@ -8,6 +9,7 @@ import {
   Archive,
   Cloud,
   Eye,
+  FileCode2,
   FileDiff,
   FileWarning,
   FolderClock,
@@ -20,17 +22,23 @@ import {
   SquareTerminal
 } from 'lucide-react'
 import * as git from '@renderer/actions/git'
+import { editFile } from '@renderer/actions/editor'
+import { loadFiles, useFileLists } from '@renderer/components/editor/fileList'
+import { findFiles } from '@renderer/components/editor/model'
 import { openGroup } from '@renderer/actions/groups'
 import { COMMANDS, runCommand, type Command } from '@renderer/commands'
 import { tildify } from '@renderer/components/layout/chrome'
 import { shortcutLabel } from '@renderer/lib/keys'
 import { getActiveTab, useApp } from '@renderer/store/appStore'
 import type { DiffTarget } from '@shared/types'
-import { fuzzyFilter, highlightSegments } from './fuzzy'
+import { fuzzyFilter, highlightSegments, type FuzzyResult } from './fuzzy'
 import { loadStringList, writeJson } from './history'
 import './palette.css'
 
 const MAX_RESULTS = 50
+/** The most files a query lists, and how many of them may go before the commands. */
+const MAX_FILES = 20
+const FILES_FIRST = 5
 const RECENT_KEY = 'adar.palette.recent'
 const RECENT_LIMIT = 8
 
@@ -234,11 +242,45 @@ function PalettePanel() {
   // The selected values above are only change signals for rebuilding the snapshot.
   const entries = useMemo(() => buildEntries(), [refsVersion, statusVersion, tabsCount, recent])
 
+  // The files of the repository in front, by name: listed when the palette opens (and kept for the next time).
+  const repo = useApp((s) => (s.groupView ? null : s.activePath))
+  const listing = useFileLists((s) => (repo ? s.repos[repo]?.listing : null) ?? null)
+  useEffect(() => {
+    if (repo) void loadFiles(repo)
+  }, [repo])
+
   const results = useMemo(() => {
     const q = deferredQuery.trim()
     const pool = q ? entries : entries.filter((e) => e.idle)
-    return fuzzyFilter(pool, q, (e) => e.label, MAX_RESULTS)
-  }, [entries, deferredQuery])
+    const commands = fuzzyFilter(pool, q, (e) => e.label, MAX_RESULTS)
+    if (!q || !repo || !listing) return commands
+    const lower = q.toLowerCase()
+    const strong: FuzzyResult<Entry>[] = []
+    const others: FuzzyResult<Entry>[] = []
+    for (const file of findFiles(listing, q, MAX_FILES)) {
+      const cut = file.path.lastIndexOf('/') + 1
+      const name = file.path.slice(cut)
+      const result: FuzzyResult<Entry> = {
+        item: {
+          id: `file:${file.path}`,
+          label: name,
+          group: file.ignored ? 'Ignored file' : 'File',
+          detail: cut ? file.path.slice(0, cut - 1) : undefined,
+          detailIsPath: true,
+          icon: <FileCode2 size={14} />,
+          run: () => void editFile(repo, file.path)
+        },
+        score: file.score,
+        indexes: file.indexes.filter((i) => i >= cut).map((i) => i - cut)
+      }
+      // A name that starts with what was typed is very likely what is looked for.
+      if (name.toLowerCase().startsWith(lower)) strong.push(result)
+      else others.push(result)
+    }
+    // Typed like a file ("user.ts", "src/us"): the files come first. Otherwise only the ones whose name starts so.
+    if (/[./]/.test(q)) return [...strong, ...others, ...commands]
+    return [...strong.slice(0, FILES_FIRST), ...commands, ...strong.slice(FILES_FIRST), ...others]
+  }, [entries, deferredQuery, repo, listing])
 
   useEffect(() => {
     setActive(0)
@@ -324,7 +366,7 @@ function PalettePanel() {
         </div>
         <div ref={listRef} id="pal-results" className={`pal-results${stale ? ' pal-stale' : ''}`} role="listbox">
           {results.length === 0 ? (
-            <div className="pal-empty">No matching commands</div>
+            <div className="pal-empty">Nothing by that name</div>
           ) : (
             results.map((r, i) => {
               const e = r.item

@@ -1,0 +1,566 @@
+/* Editing files in Adar: the Files view (ed-view: the tree and the file), one file open to edit (ed-pane: its bar,
+   what there is to say about it, the editor, the status line), the find bar and the sheet over the window. The
+   editor's own looks are in cm.ts, written with the same tokens. */
+
+/* ── The Files view ──────────────────────────────────────────────────────────────────────────────────────────── */
+
+.ed-view {
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  background: var(--bg-0);
+}
+
+.ed-view-tree {
+  flex: none;
+  min-width: 0;
+  display: flex;
+  background: var(--bg-1);
+}
+
+.ed-view-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+}
+
+/* ── The tree ────────────────────────────────────────────────────────────────────────────────────────────────── */
+
+.ed-tree {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.ed-tree-head {
+  flex: none;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 6px 0 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-2);
+}
+
+.ed-tree-search {
+  flex: none;
+  color: var(--text-3);
+}
+
+.ed-tree-field {
+  flex: 1;
+  min-width: 0;
+  height: 26px;
+  border: 0;
+  outline: 0;
+  background: none;
+  color: var(--text-0);
+  font: inherit;
+  font-size: var(--fs-sm);
+}
+.ed-tree-field::placeholder {
+  color: var(--text-3);
+}
+
+.ed-tree-tool {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-2);
+  cursor: pointer;
+}
+.ed-tree-tool:hover {
+  background: var(--bg-3);
+  color: var(--text-0);
+}
+
+.ed-tree-rows {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 4px 0;
+  outline: 0;
+}
+
+.ed-tree-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  color: var(--text-2);
+  font-size: var(--fs-sm);
+}
+.ed-tree-failed {
+  color: var(--danger);
+}
+
+.ed-tree-foot {
+  flex: none;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  border-top: 1px solid var(--border);
+  color: var(--text-3);
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.ed-row {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 10px 0 8px;
+  color: var(--text-1);
+  font-size: var(--fs-md);
+  line-height: 1;
+  white-space: nowrap;
+  cursor: default;
+}
+.ed-row:hover {
+  background: var(--bg-3);
+}
+.ed-row-active {
+  background: var(--bg-3);
+}
+.ed-tree-rows:focus-visible .ed-row-active {
+  box-shadow: inset 0 0 0 1px var(--focus);
+}
+.ed-row-current,
+.ed-row-current:hover {
+  background: var(--bg-4);
+  color: var(--text-0);
+}
+
+.ed-row-twist {
+  flex: none;
+  width: 13px;
+  height: 13px;
+  display: grid;
+  place-items: center;
+  color: var(--text-3);
+}
+
+.ed-row-icon {
+  flex: none;
+  color: var(--text-3);
+}
+.ed-row-current .ed-row-icon {
+  color: var(--accent);
+}
+
+.ed-row-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ed-row-name mark {
+  background: none;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.ed-row-folder {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  direction: rtl;
+  text-align: left;
+  color: var(--text-3);
+  font-size: var(--fs-sm);
+}
+
+/* What git ignores (a .env, node_modules): there, and quieter. */
+.ed-row-ignored .ed-row-name,
+.ed-row-ignored .ed-row-icon,
+.ed-row-special .ed-row-name {
+  color: var(--text-3);
+}
+.ed-row-ignored.ed-row-current .ed-row-name {
+  color: var(--text-1);
+}
+
+.ed-row-mark {
+  flex: none;
+  margin-left: auto;
+  padding-left: 6px;
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+}
+
+.ed-row-holds {
+  flex: none;
+  margin-left: auto;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--c-modified);
+  opacity: 0.7;
+}
+
+.ed-row-unsaved,
+.ed-bar-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-0);
+}
+.ed-row-unsaved {
+  margin-left: 2px;
+}
+
+/* ── One file open to edit ───────────────────────────────────────────────────────────────────────────────────── */
+
+.ed-pane {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-0);
+}
+
+.ed-bar {
+  flex: none;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 6px 0 8px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-2);
+  font-size: var(--fs-md);
+}
+
+.ed-bar-file {
+  flex: 0 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding-left: 4px;
+  white-space: nowrap;
+}
+.ed-bar-dot {
+  margin-right: 8px;
+}
+
+/* The folders give way first: the file's name is what must stay ("src/comp…/File.tsx"). */
+.ed-bar-folder {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-2);
+}
+.ed-bar-sep {
+  flex: none;
+  color: var(--text-2);
+}
+.ed-bar-name {
+  flex: none;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-0);
+  font-weight: 600;
+}
+
+.ed-bar-fill {
+  flex: 1;
+}
+
+.ed-badge {
+  flex: none;
+  padding: 1px 7px;
+  border-radius: 99px;
+  background: var(--bg-4);
+  color: var(--text-1);
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+}
+.ed-badge-news {
+  background: var(--accent-soft);
+  color: var(--accent);
+  animation: ui-fade 0.15s var(--ease);
+}
+
+.ed-save {
+  flex: none;
+}
+
+.ed-notice {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px 8px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-1);
+  color: var(--text-1);
+  font-size: var(--fs-sm);
+}
+.ed-notice > svg {
+  flex: none;
+  color: var(--text-2);
+}
+.ed-notice-warn {
+  background: var(--warning-soft);
+}
+.ed-notice-warn > svg {
+  color: var(--warning);
+}
+.ed-notice-text {
+  flex: 1;
+  min-width: 0;
+  line-height: 1.4;
+}
+.ed-notice-text strong {
+  color: var(--text-0);
+  font-weight: 600;
+}
+.ed-notice .ui-btn {
+  flex: none;
+}
+
+.ed-failed {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  overflow: auto;
+}
+.ed-failed-why {
+  max-width: 460px;
+  overflow-wrap: anywhere;
+}
+.ed-failed-actions {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 14px;
+}
+.ed-hint {
+  color: var(--text-3);
+}
+
+/* ── The editor ──────────────────────────────────────────────────────────────────────────────────────────────── */
+
+.ed-code {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  /* What the editor's own rules (cm.ts) are drawn with. */
+  --ed-active-line: color-mix(in srgb, var(--text-0) 4%, transparent);
+  --ed-same-word: color-mix(in srgb, var(--text-0) 10%, transparent);
+}
+
+.ed-code-host {
+  flex: 1;
+  min-height: 0;
+  /* The editor's text is selected and typed like any text. */
+  user-select: text;
+  cursor: text;
+}
+.ed-code-host .cm-editor {
+  height: 100%;
+}
+
+.ed-code-wait {
+  position: absolute;
+  inset: 0 0 24px;
+  display: grid;
+  place-items: center;
+  background: var(--bg-0);
+}
+
+@keyframes ed-flash {
+  from {
+    background-color: var(--accent-soft);
+    box-shadow: inset 2px 0 0 var(--accent);
+  }
+  60% {
+    background-color: var(--accent-soft);
+    box-shadow: inset 2px 0 0 var(--accent);
+  }
+  to {
+    background-color: transparent;
+    box-shadow: inset 2px 0 0 transparent;
+  }
+}
+
+.ed-status {
+  flex: none;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 14px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-1);
+  color: var(--text-3);
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.ed-status-at {
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+.ed-status-fill {
+  flex: 1;
+}
+
+/* ── Find and replace ────────────────────────────────────────────────────────────────────────────────────────── */
+
+.ed-find {
+  position: absolute;
+  top: 8px;
+  right: 18px;
+  z-index: 5;
+  display: flex;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 4px 4px 4px 2px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg-2);
+  box-shadow: var(--shadow-1);
+}
+
+.ed-find-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ed-find-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 26px;
+}
+
+.ed-find-input {
+  width: 210px;
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  outline: 0;
+  background: var(--bg-input);
+  color: var(--text-0);
+  font: inherit;
+  font-size: var(--fs-sm);
+}
+.ed-find-input:focus {
+  border-color: var(--focus);
+}
+.ed-find-input[aria-invalid='true'] {
+  border-color: var(--danger);
+}
+
+.ed-find-toggle,
+.ed-find-button,
+.ed-find-fold {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-2);
+  cursor: pointer;
+}
+.ed-find-fold {
+  height: 26px;
+  width: 20px;
+}
+.ed-find-toggle:hover,
+.ed-find-button:hover:not(:disabled),
+.ed-find-fold:hover {
+  background: var(--bg-4);
+  color: var(--text-0);
+}
+.ed-find-button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.ed-find-on,
+.ed-find-on:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.ed-find-count {
+  min-width: 68px;
+  padding: 0 6px;
+  color: var(--text-2);
+  font-size: var(--fs-xs);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  white-space: nowrap;
+}
+.ed-find-none {
+  color: var(--danger);
+}
+
+.ed-find-text {
+  flex: none;
+  height: 24px;
+  padding: 0 9px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg-3);
+  color: var(--text-0);
+  font: inherit;
+  font-size: var(--fs-sm);
+  cursor: pointer;
+}
+.ed-find-text:hover:not(:disabled) {
+  background: var(--bg-4);
+}
+.ed-find-text:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* ── The sheet over the window ───────────────────────────────────────────────────────────────────────────────── */
+
+.ui-backdrop.ed-sheet-back {
+  align-items: stretch;
+  padding: 24px;
+}
+
+.ed-sheet {
+  width: min(1180px, 100%);
+  min-width: 0;
+  display: flex;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--bg-0);
+  box-shadow: var(--shadow-2);
+  overflow: hidden;
+}

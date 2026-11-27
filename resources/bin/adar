@@ -2,17 +2,17 @@
 # adar — open a Git repository in Adar (https://github.com/mikelgarciaurbina/adar)
 #
 #   adar            open the repository of the current directory
-#   adar <path>     open the repository containing <path>
+#   adar <folder>   open the repository containing <folder>
 #                   (a folder holding several repositories opens them as a tab group)
-#   adar <file.md>  show the preview of a Markdown file
+#   adar <file>     open a file in Adar: a Markdown document's preview, any other file of text to edit
 #
 # Installed by Adar → Install Command Line Tool… as a link to Adar.app/Contents/Resources/bin/adar.
 
 case "${1:-}" in
   -h|--help)
-    echo "usage: adar [path]   open the Git repository containing path (default: current directory) in Adar"
-    echo "                     a folder holding several repositories opens them as a tab group"
-    echo "       adar file.md  show the preview of a Markdown file in Adar"
+    echo "usage: adar [folder]  open the Git repository containing folder (default: current directory) in Adar"
+    echo "                      a folder holding several repositories opens them as a tab group"
+    echo "       adar file      open a file in Adar: the preview of a Markdown document, any other text file to edit"
     exit 0
     ;;
 esac
@@ -34,7 +34,7 @@ esac
 if [ -d "$target" ]; then
   dir=$(cd -P -- "$target" >/dev/null && pwd -P && echo .) || exit 1
 elif [ -e "$target" ]; then
-  # A file: open the repository of its folder.
+  # A file: its folder first, to name the file by its real path.
   parent=$(dirname -- "$target" && echo .)
   parent=${parent%?.}
   dir=$(cd -P -- "$parent" >/dev/null && pwd -P && echo .) || exit 1
@@ -44,14 +44,10 @@ else
 fi
 dir=${dir%?.}
 
-# A Markdown file is opened as itself: Adar shows its preview.
+# A file is opened as itself: Adar shows a Markdown document's preview and opens any other file of text to edit.
 if [ ! -d "$target" ]; then
-  case $target in
-    *.md|*.MD|*.markdown|*.mdown|*.mkd|*.mkdn|*.mdx)
-      name=$(basename -- "$target" && echo .)
-      dir=$dir/${name%??}
-      ;;
-  esac
+  name=$(basename -- "$target" && echo .)
+  dir=$dir/${name%??}
 fi
 
 # Find Adar.app: the bundle this script belongs to (following the PATH symlink), then the usual places.
@@ -83,6 +79,6 @@ if [ -n "${ADAR_CLI_DRY_RUN:-}" ]; then
   printf '%s\n' "open -a $app $dir --args --open-repo=$dir"
   exit 0
 fi
-# Hand the folder to Adar (launching it if needed); a running Adar opens it in a new tab. The
+# Hand the folder or the file to Adar (launching it if needed); a running Adar opens a folder in a new tab. The
 # --open-repo argument covers a fresh launch whose "open documents" event goes astray.
 exec /usr/bin/open -a "$app" "$dir" --args "--open-repo=$dir"

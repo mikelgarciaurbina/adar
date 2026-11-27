@@ -81,6 +81,8 @@ function LinkCard({ target, x, y }: { target: Exclude<LinkTarget, { kind: 'web' 
       ? `${CLICK} to see it large`
       : target.kind === 'markdown'
         ? `${CLICK} to read it in Adar`
+        : target.kind === 'code'
+          ? `${CLICK} to edit it in Adar${target.line ? `, at line ${target.line}` : ''}`
         : target.kind === 'page'
         ? /\.html?$/i.test(name)
           ? `${CLICK} to open it in your browser`

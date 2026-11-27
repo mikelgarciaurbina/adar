@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, ArrowLeft, Code, Eye, FileText, FolderOpen, ListTree, SquarePen, X } from 'lucide-react'
 import { api, isMac } from '@renderer/api/client'
+import { editMarkdown } from '@renderer/actions/editor'
 import { Button, EmptyState, IconButton, Spinner } from '@renderer/components/common/Button'
 import { toast } from '@renderer/components/common/toast'
 import { focusTerminal } from '@renderer/components/terminal/terminalStore'
@@ -204,7 +205,7 @@ function Reader({ doc }: { doc: OpenDocument }) {
               <ListTree size={15} />
             </IconButton>
           )}
-          <Button size="sm" variant="ghost" className="doc-bar-btn" icon={<SquarePen size={14} />} title="Open it in your editor" onClick={() => void api.openInEditor(path).catch(failed)}>
+          <Button size="sm" variant="ghost" className="doc-bar-btn" icon={<SquarePen size={14} />} title="Edit it in Adar" onClick={() => void editMarkdown(path)}>
             Edit
           </Button>
           <Button size="sm" variant="ghost" className="doc-bar-btn" icon={<FolderOpen size={14} />} title={isMac ? 'Show it in the Finder' : 'Show it in its folder'} onClick={() => void api.showInFolder(path).catch(failed)}>

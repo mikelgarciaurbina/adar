@@ -40,6 +40,32 @@ mac:
         LSHandlerRank: Alternate
         LSItemContentTypes:
           - net.daringfireball.markdown
+      # Text and code: Adar opens them to edit. "Alternate" lists Adar under the Finder's "Open With" and takes no
+      # file from the app it opens with. By type for what macOS knows as text (.txt, .json, .xml, .yaml, scripts, the
+      # sources of the languages it knows)...
+      - CFBundleTypeName: Text document
+        CFBundleTypeRole: Editor
+        LSHandlerRank: Alternate
+        LSItemContentTypes:
+          - public.text
+          - public.plain-text
+          - public.source-code
+          - public.script
+          - public.shell-script
+          - public.json
+          - public.xml
+          - public.yaml
+          - public.css
+          - public.html
+          - public.comma-separated-values-text
+          - com.netscape.javascript-source
+      # ...and by extension for what it knows as something else, or not at all (a .ts file is a video to macOS, a
+      # .toml has no type). A document type with content types ignores its extensions, hence two of them.
+      - CFBundleTypeName: Source file
+        CFBundleTypeRole: Editor
+        LSHandlerRank: Alternate
+        CFBundleTypeExtensions:
+          [ts, tsx, mts, cts, jsx, mjs, cjs, jsonc, json5, vue, svelte, astro, toml, ini, cfg, conf, env, properties, lock, sql, graphql, gql, proto, kt, kts, rs, go, tf, hcl, gradle, dart, lua, scala, ex, exs, scss, sass, less, log, patch, diff]
     # The type macOS gives .md files, declared for a system where no other app has.
     UTImportedTypeDeclarations:
       - UTTypeIdentifier: net.daringfireball.markdown
@@ -82,7 +108,9 @@ linux:
   category: Development
   synopsis: Fast, visual Git client
   maintainer: Mikel García <mikelgarciaurbina@gmail.com>
-  # Markdown files: file managers list Adar under "Open with" (it shows their preview).
+  # Markdown files: file managers list Adar under "Open with" (it shows their preview). Not text and code: on some
+  # desktops the last application installed for text/plain becomes the one every text file opens with. Any file can
+  # still be opened with Adar by choosing it under "Open with".
   mimeTypes:
     - text/markdown
   # AppImage names the architecture x86_64, deb amd64.

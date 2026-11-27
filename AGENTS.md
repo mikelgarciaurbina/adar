@@ -4,7 +4,7 @@ Guide for contributors and coding agents. "Adar" means "branch" in Basque (the a
 settings migrate from `~/Library/Application Support/Rama`).
 
 Electron 44 + electron-vite 6 + React 19 + TypeScript 7 + zustand (terminals: xterm.js in the renderer, node-pty in the
-main process). The backend shells out to the system `git`
+main process; the file editor: CodeMirror 6, loaded the first time a file is opened). The backend shells out to the system `git`
 binary, so it works with every repository the user's git can access (SSH keys, Keychain, credential helpers,
 private hosts). Clean-room implementation: never copy GitKraken code, assets or branding. MIT licensed.
 
@@ -33,8 +33,10 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
   `hostingOf`/`pickHostingRemote` find GitHub — github.com, signed-in GitHub Enterprise servers and github.* hosts —,
   GitLab — gitlab.com, gitlab.* hosts and signed-in instances —, bitbucket.org, Data Center and Azure DevOps remotes —
   dev.azure.com, ssh.dev.azure.com and <org>.visualstudio.com, all as https://dev.azure.com/<org>), `markdown.ts` (the Markdown documents Adar
-  previews: which files they are — `isMarkdownPath` —, what the main process reads of one, and `parseMarkdownArgs`: the
-  file Windows and Linux start Adar with), `groupColor.ts` (custom tab group
+  previews: which files they are — `isMarkdownPath` — and what the main process reads of one), `files.ts` (the files
+  Adar edits itself: what the main process lists of a repository — `FileListing` —, reads of one file — `TextFile`,
+  with the version a save names — and is sent to save; `isGitInternal`, `splitPosition` for `index.ts:120:7`, and
+  `parsePathArgs`: the files Windows and Linux start Adar with), `groupColor.ts` (custom tab group
   colours: hex parsing, HSV for the picker, and each theme's version of a colour — same hue and chroma in OKLCH, lightness
   moved into the range the Basoa group colours use, so names stay readable).
 - `src/main/` — Electron main process.
@@ -131,9 +133,23 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
     (macOS: `CFBundleDocumentTypes`, rank Alternate, so the Finder lists it under Open With; Linux: `mimeTypes`); a file
     opened with it arrives as an 'open-file' event (macOS) or a bare argument, goes through `openRequests.ts` like a
     folder, and the renderer shows its preview instead of opening a tab. Windows' installer registers nothing yet.
+  - `files.ts` — the files Adar edits itself (`createFileOps`): `listFiles` (a repository's working tree as git
+    knows it: tracked files that are there, untracked ones, ignored files — a .env — and, by name only, ignored
+    folders and repositories inside), `listFolder` (one of those folders, read when the tree opens it),
+    `readTextFile` / `saveTextFile` (a file by its full path, anywhere, or inside the repository given as `root`;
+    the desktop app only), `pathKind` (what a path handed to Adar is: a folder, a Markdown document, another file)
+    and `pickFile`. A version is `<hash>.<size>.<time>`: asked again with it, a file with the same size and time is
+    not read; a save names the version it started from and is refused (CONFLICT) when the content is another one.
+    Text is written in place (permissions stay) and only as UTF-8; a file that is not UTF-8 text is not opened. Adar
+    is declared as an app that opens text and code in `electron-builder.yml` on macOS only (by content type for what
+    the system knows as text, by extension for the rest — a .ts is a video to macOS —, rank Alternate, so it is listed
+    under Open With and never takes a file from the app it opens with); Linux and Windows register nothing for them
+    (on some Linux desktops the last app installed for text/plain becomes every text file's), and such a file
+    arrives as a Markdown one does.
   - `cli.ts` / `cliPath.ts` — install/uninstall the `adar` command (symlink to `resources/bin/adar`, shipped in the
-    bundle as `Contents/Resources/bin/adar`); `openRequests.ts` queues folders to open from the CLI/Dock
-    (`open-file`), `--open-repo=<path>` launch args and second instances until the renderer takes them.
+    bundle as `Contents/Resources/bin/adar`; `adar <folder>` opens its repository, `adar <file>` the file itself);
+    `openRequests.ts` queues folders and files to open from the CLI/Dock (`open-file`), `--open-repo=<path>` launch
+    args and second instances until the renderer takes them (`openPath` in `actions/editor.tsx` opens each by what it is).
 - `src/preload/` — exposes `window.adarBridge` (generic invoke/onEvent/setZoom, and `pathOf`: where a file dropped
   on the window is on disk). Context isolation + sandbox.
 - `src/server/` — HTTP bridge so the renderer runs in a browser: `npm run web` → open the printed
@@ -228,11 +244,36 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
     HTML), `MarkdownView.tsx` (the tree drawn as React elements; code coloured with the diff's highlighter; links carry
     no href and pictures on the web are not fetched — the CSP would not let them — only named; what a link does and
     where a picture is read from is its `MarkdownHost`'s), `MarkdownReader.tsx` (a file read over the window, from
-    `markdownStore.ts`: outline, Preview / Source, Edit, links to other documents followed with Back, the file looked
-    at again every second while it is open, Esc or ⌘W to leave) and `MarkdownPreview.tsx` (the diff view's Preview
+    `markdownStore.ts`: outline, Preview / Source, Edit — which gives way to Adar's editor —, links to other documents
+    followed with Back, the file looked at again every second while it is open, Esc or ⌘W to leave) and `MarkdownPreview.tsx` (the diff view's Preview
     toggle for a changed Markdown file: the version the diff shows, with its pictures read from that revision —
     `paths.ts`, pure). Opened by: a Markdown file opened with Adar or `adar notes.md` (`useOpenRequests`), ⌘-click on
     its path in a terminal (`links.ts`: kind 'markdown'), File → Open Markdown File…, Preview on a file's menu.
+  - `actions/editor.tsx` — editing files in Adar: a file of a repository open in a tab is edited in that tab's Files
+    view (`editFile`, a centre view: `{ kind: 'files', path?, back? }`; the window's left panel gives way to the
+    view's tree and the changes panel stays on the right), any other file in a sheet over the window (`openFile`,
+    `FileSheet.tsx`); `openPath` opens what Adar is handed from outside by what it is; `settle` asks before text
+    that was not saved is left for good (another file of the view, the sheet, the tab — a close guard —, quitting:
+    `unsavedFileLines`), while leaving the Files view keeps its text. Opened by: the toolbar's Files button and
+    ⌘⇧E, a file's name in the palette (`findFiles`), Edit on a diff (at the change in view: `lineOfChange`), on a
+    file of the review of the worktree's own work (not of a pull request, whose branch may not be the one checked
+    out) and on the file menus, ⌘-click on a path in a terminal (`links.ts`: kind 'code', with its `:line:column`), a file
+    opened with Adar, File → Open File…, Edit in the Markdown reader.
+    `components/editor/` — `cm.ts` (all of CodeMirror that Adar uses, a lazy chunk: the state of a file's text, the
+    theme and the token colours written with Adar's tokens — the diff's colours, `HighlightStyle` —, languages by
+    file name from `@codemirror/language-data` plus Adar's own parser for KEY=value files, find and replace driven
+    from `FindBar.tsx`; no completion, no linting: Adar edits text, it does not understand code), `editorStore.ts`
+    (`useEditor`: what the page shows of each open file — `EditorDoc` — and, outside the store, its CodeMirror state,
+    kept while the file is open whether or not it is on screen; `openDoc`, `saveDoc`, `checkDisk` — a file is looked
+    at on disk every 1.5 s while shown: text without changes follows what an agent wrote, text with changes is kept
+    and says the file changed under it, `keepMine` / `reloadDoc` —; line endings and a byte order mark are given
+    back on save; text that was not saved lives in memory only), `fileList.ts` (each repository's listing, listed
+    again when the working tree gains or loses a file), `model.ts` (pure: the tree — `buildTree`, `visibleRows` —,
+    `findFiles`, `detectIndent`, `lineOfChange`), `FileTree.tsx` (the tree: it finds and opens, it does not create,
+    rename or move), `FilesView.tsx`, `EditorPane.tsx` (one file: its bar, what there is to say about it, the
+    editor) and `CodeEditor.tsx`. While an editor has the keyboard, ⌘F, ⌘D, ⌘] and ⌘[ are its own (CodeMirror takes
+    them before the menu; `IN_EDITOR` in `commands.ts` is for when the menu does), and ⌘W closes the sheet or the
+    Files view before the tab.
   - `commands.ts` — command registry shared by the native menu, shortcuts and the command palette.
   - `menubar/` — the menu bar panel (its own entry, `menubar.html`): `MenuBarPanel.tsx` (project switcher, branch with
     Pull/Push, mini graph reusing `components/graph`), pure helpers in `model.ts`.
@@ -275,9 +316,12 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
 - CSS class prefixes per module: `app-` shell, `ui-` common, `tb-`/`wl-` toolbar, tabs, status bar, welcome, `sb-` left
   panel, `gr-` graph, `det-` right panel, `diff-` diff/blame/history, `cf-` conflicts, `rb-` rebase, `md-` modals,
   `pal-` palette/console, `up-` updates, `mb-` menu bar panel, `pr-` pull requests, `rl-` reflog, `rv-` review, `ib-` pull
-  request inbox, `tm-` terminals, `doc-` Markdown documents. Each module imports its own `.css` file.
+  request inbox, `tm-` terminals, `doc-` Markdown documents, `ed-` the file editor and its tree. Each module imports
+  its own `.css` file.
 - Icons: `lucide-react`. Virtualised lists: `@tanstack/react-virtual`. Syntax highlighting: `highlight.js`.
-- Do not add npm dependencies without discussing it first.
+- Do not add npm dependencies without discussing it first. A library only the renderer uses goes in
+  `devDependencies` (Vite bundles it; electron-builder would ship a `dependencies` entry a second time, unbundled,
+  inside the app): CodeMirror is there.
 
 ## Safety rules (keep them when changing code)
 - Spawn git only through `GitContext` with argument arrays — never a shell. Reject user-supplied names/refs that start
@@ -296,8 +340,16 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
   or from a terminal's output is ever run or typed (signals only change a dot or a tab's words; their text is cleaned
   before it is shown, and a command line is never logged or saved). Files the user drops on a terminal type their
   paths and nothing else: quoted for its shell, never a line end, and not at all when a path has control characters.
-  A link in a terminal only ever shows a picture, opens a web page, a PDF or a picture with its app, or shows a file
-  in its folder (`files.ts`): never runs anything.
+  A link in a terminal only ever shows a picture, opens a web page, a PDF or a picture with its app, shows a Markdown
+  document's preview, opens a file of text in Adar's editor, or shows a file in its folder (`terminal/files.ts`):
+  never runs anything.
+- Files edited in Adar (`src/main/files.ts`): only a regular file is read or written, never through a link (a link
+  is refused and names the file it leads to; the folders above it may be links, and with a repository given the real
+  file must still be inside it); Git's own files — anything inside a `.git` folder, hooks and config included — are
+  never opened; a save is refused when the file is no longer the version the editor started from, and nothing is
+  written over without the editor having seen it; reading and saving are the desktop app's, never the HTTP bridge or
+  the menu bar panel. A file's text is never logged, and text that was not saved is never written anywhere
+  (localStorage included): a .env is a file like another. The editor shows and writes text: it never runs a file.
 
 - Markdown documents are untrusted text: the preview is built from Adar's own tree (`parse.ts`), never from the
   document's HTML (no `dangerouslySetInnerHTML`), a link never becomes an `href` (the web opens in the browser, another
@@ -321,7 +373,9 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
   (`[capture] notify …`); `{"clickNotice":true}` clicks the last one. A step can stub `document.hasFocus = () => false`
   so pull request notifications are sent. Load `scripts/e2e-helpers.js` first for
   `window.e2e` (click/type/key/drag/contextMenu/menuItem/waitFor/state/errors). `window.__adar = { store, api, updates,
-  terminals, term }` (`term(id)` is a terminal's xterm.js instance: its buffer, cols and rows).
+  terminals, term, editor, editorText, editorView }` (`term(id)` is a terminal's xterm.js instance: its buffer, cols
+  and rows; `editor` is the files open to edit — `useEditor` —, `editorText(path)` a file's text as the editor has it
+  and `editorView(path)` its CodeMirror view, by the file's full path).
   Seed `<workdir>/ud/settings.json` with `{"openTabs":["/abs/repo"],"activeTab":"/abs/repo","autoFetchMinutes":0}`.
 - Terminals in a scripted run: a view of terminals starts empty, so click a `.tm-empty-button` first (the first starts
   a shell, the others the launchers); `window.__adar.api.terminalList()` / `terminalWrite(id, 'echo hi\\r')` drive a
@@ -333,6 +387,13 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
 - The Markdown preview in a scripted run: `E2E_OPEN=/abs/file.md scripts/e2e.sh …` starts the app with that file, as
   when it is opened with Adar (`.doc-sheet` is the reader, `.doc-body` the document); the diff's toggle is
   `.diff-toggle[title^=Preview]`. The Finder's Open With and the default-app command need an installed build.
+- The file editor in a scripted run: `setCenter(repo, { kind: 'files', path: 'src/a.ts' })` on the store (or the
+  toolbar's Files button and a click on an `.ed-row`) shows a file; `E2E_OPEN=/abs/file.json` starts the app with a
+  file that is in no open repository, which opens in the sheet (`.ed-sheet`). Give the editor the keyboard with
+  `editorView(path).focus()`, then type with `Input.insertText` and press keys (⌘S: `"modifiers":4`) through `cdp`
+  steps; `.ed-find` is the find bar, `.ed-notice` what the file says (it changed on disk), `.ed-bar-dot` text that
+  was not saved. `api.saveTextFile` from a step stands in for an agent writing the file. A run keeps the settings
+  it ends with: a step that closes the tab leaves the next run without one, so seed `settings.json` again.
 - Fixtures: `scripts/make-fixture-repo.sh <dir> [--conflict]` (demo repo + bare origin),
   `node scripts/make-big-repo.mjs <dir> [commits] [branches]` (performance).
 - Website: `cd site && npm install && npm run dev` (http://localhost:4321/), or `npm run build && npm run preview`

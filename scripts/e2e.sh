@@ -10,7 +10,8 @@
 # Steps format (see runCaptureSteps in src/main/index.ts):
 #   [{"size":[1440,900]}, {"wait":3000}, {"js":"document.title"}, {"shot":"01-main"}]
 # In js steps, window.__adar exposes { store (zustand useApp), api } for inspection.
-# E2E_OPEN=/abs/file.md starts the app with that Markdown file, as when it is opened with Adar: its preview shows.
+# E2E_OPEN=/abs/file starts the app with that file, as when it is opened with Adar: a Markdown file's preview shows,
+# any other file of text opens to edit.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 WORK="$1"; STEPS="$2"; MODE="${3:-}"
