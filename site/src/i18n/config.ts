@@ -12,10 +12,12 @@ export const LOCALE_INFO: Record<Locale, { name: string; short: string; og: stri
   eu: { name: 'Euskara', short: 'EU', og: 'eu_ES', intl: 'eu' },
 };
 
-export type PageKey = 'home' | 'agents' | 'roadmap' | 'design';
+export type PageKey = 'home' | 'agents' | 'terminal' | 'roadmap' | 'design';
 export const ROUTES: Record<PageKey, Record<Locale, string>> = {
   home: { en: '', es: 'es', eu: 'eu' },
   agents: { en: 'agents', es: 'es/agentes', eu: 'eu/agenteak' },
+  // Running Claude Code and Codex in Adar's terminal: the products' names stay, the word between them is each language's.
+  terminal: { en: 'claude-code-and-codex', es: 'es/claude-code-y-codex', eu: 'eu/claude-code-eta-codex' },
   roadmap: { en: 'roadmap', es: 'es/hoja-de-ruta', eu: 'eu/bide-orria' },
   design: { en: 'design', es: 'es/diseno', eu: 'eu/diseinua' },
 };
@@ -31,6 +33,8 @@ export const ANCHORS = {
   later: { en: 'later', es: 'mas-adelante', eu: 'geroago' },
   shipped: { en: 'shipped', es: 'publicado', eu: 'argitaratua' },
   loop: { en: 'loop', es: 'ciclo', eu: 'zikloa' },
+  how: { en: 'how-it-works', es: 'como-funciona', eu: 'nola-dabilen' },
+  editor: { en: 'editor', es: 'editor', eu: 'editorea' },
   logo: { en: 'logo', es: 'logo', eu: 'logoa' },
   color: { en: 'color', es: 'color', eu: 'kolorea' },
 } satisfies Record<string, Record<Locale, string>>;

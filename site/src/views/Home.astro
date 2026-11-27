@@ -303,6 +303,7 @@ const jsonLd = JSON.stringify({
                 {['working', 'needs', 'done'].map((state, i) => <li><b class={`st st--${state}`}></b>{t.branches.terminalStates[i]}</li>)}
               </ul>
               <p class="tmx-note">{t.branches.terminalNote}</p>
+              <a class="feat__link" href={pageUrl('terminal', lang)}>{t.branches.terminalLink}<Icon name="arrow-right" size={16} /></a>
             </div>
           </article>
 
@@ -423,6 +424,48 @@ const jsonLd = JSON.stringify({
             <div class="feat__body">
               <h3><Icon name="inbox" /><Fragment set:html={t.branches.inbox[0]} /></h3>
               <p set:html={t.branches.inbox[1]} />
+            </div>
+          </article>
+
+          <article class="feat feat--editor card tilt spotlight reveal" data-animate>
+            <div class="feat__art" aria-hidden="true" data-nosnippet>
+              <div class="edx">
+                <div class="edx__bar">
+                  <b class="edx__dot"></b>
+                  <span class="edx__path">src/lib/<strong>rates.ts</strong></span>
+                  <span class="edx__save">Save<kbd>⌘S</kbd></span>
+                </div>
+                <div class="edx__main">
+                  <ul class="edx__tree">
+                    <li><Icon name="folder" />src</li>
+                    <li style="--d:1"><Icon name="folder" />lib</li>
+                    <li style="--d:2" class="is-on"><i class="edx__file"></i>rates.ts<b>M</b></li>
+                    <li style="--d:2"><i class="edx__file"></i>rooms.ts</li>
+                    <li style="--d:1"><i class="edx__file"></i>main.ts</li>
+                    <li class="is-ignored"><i class="edx__file"></i>.env</li>
+                    <li><i class="edx__file"></i>package.json</li>
+                  </ul>
+                  <ol class="edx__code">
+                    <li style="--i:0"><span class="k">export function</span> <span class="f">nightly</span>(rate: <span class="t">Rate</span>) &#123;</li>
+                    <li style="--i:1">&nbsp;&nbsp;<span class="k">const</span> tax = rate.base * <span class="n">0.1</span></li>
+                    <li style="--i:2" class="is-edit">&nbsp;&nbsp;<span class="k">return</span> <span class="f">round</span>(rate.base + tax)<i class="edx__caret"></i></li>
+                    <li style="--i:3">&#125;</li>
+                    <li style="--i:4"></li>
+                    <li style="--i:5"><span class="c">// Rooms held for ten minutes</span></li>
+                    <li style="--i:6"><span class="k">export const</span> HOLD = <span class="n">600</span></li>
+                  </ol>
+                </div>
+                <div class="edx__from"><Icon name="terminal" /><span><b>src/lib/rates.ts:3</b>⌘-click in the terminal</span></div>
+              </div>
+            </div>
+            <div class="feat__body">
+              <h3><Icon name="code" /><Fragment set:html={t.branches.editor[0]} /></h3>
+              <p set:html={t.branches.editor[1]} />
+              <ul class="edx-ways">
+                {t.branches.editorWays.map((way) => <li set:html={way} />)}
+              </ul>
+              <p class="edx-note">{t.branches.editorNote}</p>
+              <a class="feat__link" href={pageUrl('terminal', lang, 'editor')}>{t.branches.editorLink}<Icon name="arrow-right" size={16} /></a>
             </div>
           </article>
 

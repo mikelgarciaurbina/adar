@@ -298,7 +298,9 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
   release through the deploy hook in `release.yml` (secret `CLOUDFLARE_DEPLOY_HOOK`). `src/views/` has the landing
   (`Home.astro`; the 3D scene is hand-written WebGL2 in `src/scripts/branches.js`), `Agents.astro` (working with AI
   coding agents and Adar, step by step, with screenshots of the review view and the inbox from `src/assets`; only
-  what Adar already does), `Roadmap.astro` (renders the
+  what Adar already does), `Terminal.astro` (running Claude Code and Codex in Adar's terminal, and the editor for the
+  small fix: `/claude-code-and-codex`, `/es/claude-code-y-codex`, `/eu/claude-code-eta-codex`; made of the agents
+  page's parts, with two screenshots of the app), `Roadmap.astro` (renders the
   repository's `ROADMAP.md` and the GitHub Releases at build time — `src/lib/roadmap.ts`, `src/lib/releases.ts`) and
   `Design.astro` (the Basoa design system); `src/pages/404.astro` is the trilingual not-found page. Shared layout/nav/footer/icon in `src/layouts` and
   `src/components`; tokens in `src/styles/tokens.css` (also published as `/tokens.css`); fonts self-hosted; build
@@ -308,7 +310,7 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
   Always link with `url()` from `src/lib/url.ts` (respects the base).
   The site is in English (root), Spanish (`/es`) and Basque (`/eu`) with localized slugs and anchors (`src/i18n/config.ts`:
   routes, anchors, `pageUrl()`). Pages in `src/pages/` are thin wrappers around the templates in `src/views/`; all copy lives
-  in `src/i18n/` (`ui.ts` shared, `home.ts`, `agents.ts`, `roadmap.ts`, `design.ts`), and strings for scripts reach them through the
+  in `src/i18n/` (`ui.ts` shared, `home.ts`, `agents.ts`, `terminal.ts`, `roadmap.ts`, `design.ts`), and strings for scripts reach them through the
   layout's `#i18n` JSON (`t()` in `site.js`). Add every new string in all three languages. Illustrations of the app stay in
   English (its interface is English); ROADMAP.md items and release notes are shown as written.
 
@@ -399,6 +401,13 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
   `node scripts/make-big-repo.mjs <dir> [commits] [branches]` (performance).
 - Website: `cd site && npm install && npm run dev` (http://localhost:4321/), or `npm run build && npm run preview`
   to check the static output. Add `?capture` to a URL to keep WebGL frames readable by screenshot tools.
+- The website's screenshots of the app (`site/src/assets`, 1440 x 880) are the real app in a scripted run on a demo
+  repository: run `scripts/e2e.sh` with `HOME=<workdir>/home` and the repository at `<workdir>/home/Projects/<name>`,
+  so the status bar says `~/Projects/<name>` (a terminal's header shortens only `/Users/…` and `/home/…`: tidy its
+  text in a step), `ADAR_VERSION_OVERRIDE=<version>` for the version it shows and a `.zshrc` there for a short
+  prompt. Agents in them are stand-ins: `terminalLaunchers` in the seeded settings pointing at scripts named
+  `claude` and `codex` that print a session, set the terminal's title and append `"$ADAR_TERMINAL" working` or
+  `asks <text>` to `"$ADAR_SIGNALS"`, then wait (`exec cat`). Never the real programs.
 - Pull requests without touching GitHub, GitLab, Bitbucket or Azure DevOps: unpackaged builds send API calls to
   `ADAR_GITHUB_API=http://127.0.0.1:<port>` / `ADAR_BITBUCKET_API=http://127.0.0.1:<port>` / `ADAR_GITLAB_URL=http://127.0.0.1:<port>`
   (gitlab.com's stand-in; its API under `/api/v4`) / `ADAR_AZURE_URL=http://127.0.0.1:<port>` (dev.azure.com's stand-in;

@@ -1,0 +1,135 @@
+---
+// "Claude Code and Codex inside Adar", in any of the site's languages: how to run those agents in Adar's terminal,
+// step by step, and the editor for the small fix, with only what Adar already does and the app as it looks (a demo
+// repository; what the agents say in it is staged). Copy: i18n/terminal.ts. It shares the agents page's parts (ag-).
+import Base from '../layouts/Base.astro';
+import Icon from '../components/Icon.astro';
+import { Picture } from 'astro:assets';
+import terminalShot from '../assets/terminal.png';
+import editorShot from '../assets/editor.png';
+import '../styles/home.css';
+import '../styles/agents.css';
+import '../styles/terminal.css';
+import { REPO_URL, url } from '../lib/url';
+import { anchor, pageUrl, type Locale } from '../i18n/config';
+import { terminal } from '../i18n/terminal';
+
+interface Props { lang: Locale }
+const { lang } = Astro.props;
+const t = terminal[lang];
+// Each step in a lane colour, as branches are drawn in the app.
+const LANES = [1, 2, 3, 4, 5, 6];
+// Where each note points in the screenshot: the view switch, the terminals' tabs, the split and the status bar.
+const NOTES = [
+  { x: 88, y: 1.4, right: true },
+  { x: 3, y: 54 },
+  { x: 52, y: 87 },
+  { x: 47, y: 93.5, right: true },
+];
+---
+<Base lang={lang} page="terminal" title={t.meta.title} description={t.meta.description} ogTitle={t.meta.ogTitle} ogDescription={t.meta.ogDescription}>
+  <main id="main" tabindex="-1">
+    <section class="ag-hero tx-hero" aria-labelledby="tx-title">
+      <div class="wrap ag-hero__inner">
+        <p class="eyebrow rise">{t.hero.eyebrow}</p>
+        <h1 id="tx-title" class="rise" style="--delay:80ms" set:html={t.hero.title} />
+        <p class="ag-hero__lede rise" style="--delay:160ms">{t.hero.lede}</p>
+        <div class="ag-hero__ctas rise" style="--delay:240ms">
+          <a class="btn btn--primary btn--lg" href={pageUrl('home', lang, 'download')}><Icon name="download" />{t.hero.download}</a>
+          <a class="btn btn--ghost btn--lg" href={`#${anchor('how', lang)}`}><Icon name="arrow-down" />{t.hero.howItWorks}</a>
+        </div>
+      </div>
+      <div class="wrap">
+        <figure class="shot ag-shot is-flat rise" style="--delay:320ms">
+          <div class="shot__glow" aria-hidden="true"></div>
+          <div class="shot__frame">
+            <div class="shot__bar" aria-hidden="true"><i></i><i></i><i></i><span>{t.shot.bar}</span></div>
+            <Picture src={terminalShot} formats={['avif', 'webp']} widths={[720, 1080, 1440]} sizes="(max-width: 1240px) calc(100vw - 32px), 1180px"
+              loading="eager" fetchpriority="high" decoding="async" alt={t.shot.alt} />
+          </div>
+          <figcaption class="shot__notes">
+            {NOTES.map((n, i) => (
+              <span class={`shot__note${n.right ? ' shot__note--r' : ''}`} style={`--x:${n.x}%;--y:${n.y}%`} set:html={t.shot.notes[i]} />
+            ))}
+          </figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="section ag-loop" id={anchor('how', lang)} aria-labelledby="how-title">
+      <div class="wrap">
+        <header class="section-head section-head--center">
+          <p class="eyebrow">{t.steps.eyebrow}</p>
+          <h2 id="how-title" set:html={t.steps.title} />
+          <p>{t.steps.text}</p>
+        </header>
+        <ol class="ag-steps">
+          {t.steps.items.map(([title, text, word], i) => (
+            <li class="ag-step card reveal" style={`--delay:${(i % 3) * 70}ms;--c:var(--lane-${LANES[i]})`}>
+              <span class="ag-step__n mono" aria-hidden="true">{String(i + 1).padStart(2, '0')}</span>
+              <h3>{title}</h3>
+              <p set:html={text} />
+              <span class="ag-step__ui mono" lang="en">{word}</span>
+            </li>
+          ))}
+        </ol>
+      </div>
+    </section>
+
+    <section class="section tx-editor" id={anchor('editor', lang)} aria-labelledby="editor-title">
+      <div class="wrap">
+        <header class="section-head section-head--center">
+          <p class="eyebrow">{t.editor.eyebrow}</p>
+          <h2 id="editor-title" set:html={t.editor.title} />
+          <p>{t.editor.text}</p>
+        </header>
+        <figure class="shot ag-shot reveal">
+          <div class="shot__frame">
+            <div class="shot__bar" aria-hidden="true"><i></i><i></i><i></i><span>{t.editor.bar}</span></div>
+            <Picture src={editorShot} formats={['avif', 'webp']} widths={[720, 1080, 1440]} sizes="(max-width: 1240px) calc(100vw - 32px), 1180px"
+              loading="lazy" decoding="async" alt={t.editor.alt} />
+          </div>
+          <figcaption class="ag-caption" set:html={t.editor.caption} />
+        </figure>
+        <div class="ag-next__grid tx-points">
+          {t.editor.items.map(([title, text], i) => (
+            <article class="ag-soon card reveal" style={`--delay:${i * 60}ms`}>
+              <h3>{title}</h3>
+              <p set:html={text} />
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+
+    <section class="section ag-yours" aria-labelledby="review-title">
+      <div class="wrap ag-yours__grid">
+        <div class="reveal">
+          <h2 id="review-title" set:html={t.review.title} />
+          <p>{t.review.text}</p>
+          <a class="ag-next__link" href={pageUrl('agents', lang)}>{t.review.link}<Icon name="arrow-right" size={16} /></a>
+        </div>
+        <ul class="ticks ag-ticks reveal" style="--delay:80ms">
+          {['folder', 'eye', 'pull-request', 'bell'].map((icon, i) => <li><Icon name={icon} /><span>{t.review.ticks[i]}</span></li>)}
+        </ul>
+      </div>
+    </section>
+
+    <section class="section ag-cta" aria-labelledby="cta-title">
+      <div class="wrap ag-cta__inner reveal">
+        <img src={url('assets/adar-mark.svg')} width="56" height="56" alt="" aria-hidden="true">
+        <h2 id="cta-title" set:html={t.cta.title} />
+        <p>{t.cta.text}</p>
+        <div class="ag-hero__ctas">
+          <a class="btn btn--primary btn--lg" href={pageUrl('home', lang, 'download')}><Icon name="download" />{t.cta.download}</a>
+          <a class="btn btn--ghost btn--lg" href={REPO_URL}><Icon name="star" />{t.cta.github}<span class="btn__meta" data-gh="stars"></span></a>
+        </div>
+        <p class="tx-legal">{t.legal}</p>
+      </div>
+    </section>
+  </main>
+</Base>
+
+<script>
+  import '../scripts/site.js';
+</script>

@@ -18,7 +18,7 @@ export const ui = {
     footer: {
       about: 'A fast, visual Git client for every repository. Free and open source, made in Euskal Herria.',
       product: 'Product', project: 'Project', brand: 'Brand',
-      features: 'Features', agents: 'AI agents', download: 'Download', changelog: 'Changelog', roadmap: 'Roadmap',
+      features: 'Features', agents: 'AI agents', terminal: 'Claude Code & Codex', download: 'Download', changelog: 'Changelog', roadmap: 'Roadmap',
       github: 'GitHub', issues: 'Issues', contributing: 'Contributing', security: 'Security',
       design: 'Design system', logo: 'Logo', colour: 'Colour', license: 'MIT license',
       legal: 'Mikel García · MIT. Inspired by GitKraken’s UX; an independent project, not affiliated with GitKraken or Axosoft.',
@@ -44,7 +44,7 @@ export const ui = {
     footer: {
       about: 'Un cliente de Git visual y rápido para cualquier repositorio. Gratis y de código abierto, hecho en Euskal Herria.',
       product: 'Producto', project: 'Proyecto', brand: 'Marca',
-      features: 'Funciones', agents: 'Agentes de IA', download: 'Descarga', changelog: 'Novedades', roadmap: 'Hoja de ruta',
+      features: 'Funciones', agents: 'Agentes de IA', terminal: 'Claude Code y Codex', download: 'Descarga', changelog: 'Novedades', roadmap: 'Hoja de ruta',
       github: 'GitHub', issues: 'Issues', contributing: 'Contribuir', security: 'Seguridad',
       design: 'Sistema de diseño', logo: 'Logo', colour: 'Color', license: 'Licencia MIT',
       legal: 'Mikel García · MIT. Inspirado en la experiencia de uso de GitKraken; es un proyecto independiente, sin relación con GitKraken ni con Axosoft.',
@@ -70,7 +70,7 @@ export const ui = {
     footer: {
       about: 'Edozein biltegitarako Git bezero bisual eta azkarra. Doakoa eta kode irekikoa, Euskal Herrian egina.',
       product: 'Produktua', project: 'Proiektua', brand: 'Marka',
-      features: 'Ezaugarriak', agents: 'AA agenteak', download: 'Deskarga', changelog: 'Berritasunak', roadmap: 'Bide-orria',
+      features: 'Ezaugarriak', agents: 'AA agenteak', terminal: 'Claude Code eta Codex', download: 'Deskarga', changelog: 'Berritasunak', roadmap: 'Bide-orria',
       github: 'GitHub', issues: 'Issue-ak', contributing: 'Laguntzea', security: 'Segurtasuna',
       design: 'Diseinu-sistema', logo: 'Logoa', colour: 'Kolorea', license: 'MIT lizentzia',
       legal: 'Mikel García · MIT. GitKrakenen erabilera-esperientzian oinarritua; proiektu independentea da, GitKraken eta Axosoft-ekin loturarik gabea.',
