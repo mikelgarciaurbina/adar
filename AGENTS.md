@@ -319,9 +319,10 @@ private hosts). Clean-room implementation: never copy GitKraken code, assets or 
   request inbox, `tm-` terminals, `doc-` Markdown documents, `ed-` the file editor and its tree. Each module imports
   its own `.css` file.
 - Icons: `lucide-react`. Virtualised lists: `@tanstack/react-virtual`. Syntax highlighting: `highlight.js`.
-- Do not add npm dependencies without discussing it first. A library only the renderer uses goes in
-  `devDependencies` (Vite bundles it; electron-builder would ship a `dependencies` entry a second time, unbundled,
-  inside the app): CodeMirror is there.
+- Do not add npm dependencies without discussing it first. `dependencies` holds only what the main process loads from
+  `node_modules` when the app runs (node-pty): electron-builder copies every entry there into the app as it is.
+  Whatever Vite bundles, which is every library of the renderer (React, zustand, xterm.js, CodeMirror, highlight.js,
+  lucide), goes in `devDependencies`; listed as a dependency it would travel twice.
 
 ## Safety rules (keep them when changing code)
 - Spawn git only through `GitContext` with argument arrays — never a shell. Reject user-supplied names/refs that start
